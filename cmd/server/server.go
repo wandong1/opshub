@@ -16,8 +16,18 @@ import (
 	dataPkg "github.com/ydcloud-dy/opshub/internal/data"
 	"github.com/ydcloud-dy/opshub/internal/server"
 	"github.com/ydcloud-dy/opshub/internal/service"
+	rbacmodel "github.com/ydcloud-dy/opshub/internal/biz/rbac"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// 全局变量，用于在服务器生命周期内保持连接
+var (
+	globalData  *dataPkg.Data
+	globalRedis *dataPkg.Redis
+	globalHTTPServer *server.HTTPServer
 )
 
 var Cmd = &cobra.Command{
@@ -92,14 +102,14 @@ func runServer() (*conf.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("初始化数据层失败: %w", err)
 	}
-	defer data.Close()
+	globalData = data // 保存到全局变量，防止被垃圾回收
 
 	// 初始化Redis
 	redis, err := dataPkg.NewRedis(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("初始化Redis失败: %w", err)
 	}
-	defer redis.Close()
+	globalRedis = redis // 保存到全局变量
 
 	// 初始化业务层
 	biz := biz.NewBiz(data, redis)
@@ -107,8 +117,19 @@ func runServer() (*conf.Config, error) {
 	// 初始化服务层
 	svc := service.NewService(biz)
 
+	// 自动迁移数据库表
+	if err := autoMigrate(data.DB()); err != nil {
+		return nil, fmt.Errorf("数据库迁移失败: %w", err)
+	}
+
+	// 初始化默认数据
+	if err := initDefaultData(data.DB()); err != nil {
+		return nil, fmt.Errorf("初始化默认数据失败: %w", err)
+	}
+
 	// 初始化HTTP服务器
-	httpServer := server.NewHTTPServer(cfg, svc)
+	httpServer := server.NewHTTPServer(cfg, svc, data.DB())
+	globalHTTPServer = httpServer // 保存到全局变量
 
 	// 启动服务器
 	go func() {
@@ -123,9 +144,125 @@ func runServer() (*conf.Config, error) {
 	return cfg, nil
 }
 
+// autoMigrate 自动迁移数据库表
+func autoMigrate(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&rbacmodel.SysUser{},
+		&rbacmodel.SysRole{},
+		&rbacmodel.SysDepartment{},
+		&rbacmodel.SysMenu{},
+		&rbacmodel.SysUserRole{},
+		&rbacmodel.SysRoleMenu{},
+	)
+}
+
+// initDefaultData 初始化默认数据
+func initDefaultData(db *gorm.DB) error {
+	// 检查是否已有管理员用户
+	var count int64
+	db.Model(&rbacmodel.SysUser{}).Where("username = ?", "admin").Count(&count)
+	if count > 0 {
+		return nil // 已存在管理员，无需初始化
+	}
+
+	appLogger.Info("开始初始化默认数据...")
+
+	// 创建默认部门
+	dept := &rbacmodel.SysDepartment{
+		Name:     "总公司",
+		Code:     "HQ",
+		ParentID: 0,
+		Sort:     0,
+		Status:   1,
+	}
+	if err := db.Create(dept).Error; err != nil {
+		return fmt.Errorf("创建默认部门失败: %w", err)
+	}
+
+	// 创建管理员角色
+	adminRole := &rbacmodel.SysRole{
+		Name:        "超级管理员",
+		Code:        "admin",
+		Description: "系统超级管理员，拥有所有权限",
+		Sort:        0,
+		Status:      1,
+	}
+	if err := db.Create(adminRole).Error; err != nil {
+		return fmt.Errorf("创建管理员角色失败: %w", err)
+	}
+
+	// 创建管理员用户（密码：123456）
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("加密密码失败: %w", err)
+	}
+
+	adminUser := &rbacmodel.SysUser{
+		Username:    "admin",
+		Password:    string(hashedPassword),
+		RealName:    "系统管理员",
+		Email:       "admin@opshub.com",
+		Status:      1,
+		DepartmentID: dept.ID,
+	}
+	if err := db.Create(adminUser).Error; err != nil {
+		return fmt.Errorf("创建管理员用户失败: %w", err)
+	}
+
+	// 为管理员分配角色
+	if err := db.Exec("INSERT INTO sys_user_role (user_id, role_id) VALUES (?, ?)",
+		adminUser.ID, adminRole.ID).Error; err != nil {
+		return fmt.Errorf("分配管理员角色失败: %w", err)
+	}
+
+	// 创建默认菜单
+	menus := []*rbacmodel.SysMenu{
+		{Name: "系统管理", Code: "system", Type: 1, ParentID: 0, Path: "/system", Icon: "Setting", Sort: 1, Visible: 1, Status: 1},
+		{Name: "用户管理", Code: "users", Type: 2, ParentID: 0, Path: "/users", Component: "system/Users", Icon: "User", Sort: 1, Visible: 1, Status: 1},
+		{Name: "角色管理", Code: "roles", Type: 2, ParentID: 0, Path: "/roles", Component: "system/Roles", Icon: "UserFilled", Sort: 2, Visible: 1, Status: 1},
+		{Name: "部门管理", Code: "departments", Type: 2, ParentID: 0, Path: "/departments", Component: "system/Departments", Icon: "OfficeBuilding", Sort: 3, Visible: 1, Status: 1},
+		{Name: "菜单管理", Code: "menus", Type: 2, ParentID: 0, Path: "/menus", Component: "system/Menus", Icon: "Menu", Sort: 4, Visible: 1, Status: 1},
+	}
+
+	for _, menu := range menus {
+		if err := db.Create(menu).Error; err != nil {
+			return fmt.Errorf("创建默认菜单失败: %w", err)
+		}
+		// 为管理员角色分配所有菜单权限
+		db.Exec("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRole.ID, menu.ID)
+	}
+
+	appLogger.Info("默认数据初始化完成")
+	appLogger.Info("默认管理员账号: admin")
+	appLogger.Info("默认管理员密码: 123456")
+
+	return nil
+}
+
 func stopServer(ctx context.Context, cfg *conf.Config) error {
 	appLogger.Info("服务正在关闭...")
-	// 这里可以添加更多的清理逻辑
+
+	// 停止HTTP服务器
+	if globalHTTPServer != nil {
+		if err := globalHTTPServer.Stop(ctx); err != nil {
+			appLogger.Error("停止HTTP服务器失败", zap.Error(err))
+		}
+	}
+
+	// 关闭数据库连接
+	if globalData != nil {
+		if err := globalData.Close(); err != nil {
+			appLogger.Error("关闭数据库连接失败", zap.Error(err))
+		}
+	}
+
+	// 关闭Redis连接
+	if globalRedis != nil {
+		if err := globalRedis.Close(); err != nil {
+			appLogger.Error("关闭Redis连接失败", zap.Error(err))
+		}
+	}
+
 	return nil
 }
 

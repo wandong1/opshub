@@ -67,6 +67,15 @@ func Error(c *gin.Context, err error) {
 	})
 }
 
+// ErrorCode 错误响应(带状态码和消息) - 简化版本
+func ErrorCode(c *gin.Context, httpStatus int, message string) {
+	c.JSON(httpStatus, Response{
+		Code:      httpStatus, // 使用HTTP状态码作为错误码
+		Message:   message,
+		Timestamp: time.Now().Unix(),
+	})
+}
+
 // ErrorWithData 错误响应(带数据)
 func ErrorWithData(c *gin.Context, err error, data any) {
 	var appErr *appError.AppError

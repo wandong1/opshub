@@ -31,9 +31,10 @@ func NewData(c *conf.Config) (*Data, error) {
 
 // newMySQL 创建 MySQL 连接
 func newMySQL(cfg conf.DatabaseConfig) (*gorm.DB, error) {
-	// GORM 配置
+	// GORM 配置 - 禁用外键约束
 	gormConfig := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent), // 使用自定义日志
+		Logger: logger.Default.LogMode(logger.Info), // 显示所有SQL
+		DisableForeignKeyConstraintWhenMigrating: true, // 迁移时不创建外键约束
 	}
 
 	// 连接数据库
@@ -41,6 +42,9 @@ func newMySQL(cfg conf.DatabaseConfig) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// 禁用外键检查（只在当前会话）
+	db.Exec("SET FOREIGN_KEY_CHECKS = 0;")
 
 	// 获取底层 sql.DB
 	sqlDB, err := db.DB()

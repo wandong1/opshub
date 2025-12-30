@@ -1,0 +1,58 @@
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
+
+const request = axios.create({
+  baseURL: '/',
+  timeout: 10000
+})
+
+// 请求拦截器
+request.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 响应拦截器
+request.interceptors.response.use(
+  (response) => {
+    const res = response.data
+    // 检查业务状态码
+    if (res.code !== 0 && res.code !== 200) {
+      // 只在非登录接口的情况下自动显示错误消息
+      // 登录接口的错误由调用方处理,避免重复提示
+      if (!response.config.url.includes('/login')) {
+        ElMessage.error(res.message || '请求失败')
+      }
+      return Promise.reject(new Error(res.message || '请求失败'))
+    }
+    // 返回实际数据
+    return res.data
+  },
+  (error) => {
+    if (error.response?.status === 401) {
+      // 只在非登录请求时自动跳转到登录页
+      if (!error.config?.url?.includes('/login')) {
+        ElMessage.error('未登录或登录已过期')
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+      } else {
+        // 登录接口的401错误,返回错误信息给调用方处理
+        const errorMsg = error.response?.data?.message || '用户名或密码错误'
+        return Promise.reject(new Error(errorMsg))
+      }
+    } else {
+      ElMessage.error(error.response?.data?.message || error.message || '网络错误')
+    }
+    return Promise.reject(error)
+  }
+)
+
+export default request

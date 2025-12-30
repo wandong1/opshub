@@ -17,11 +17,12 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Mode      string `mapstructure:"mode"`       // debug, release, test
-	HttpPort  int    `mapstructure:"http_port"`
-	RPCPort   int    `mapstructure:"rpc_port"`
+	Mode       string `mapstructure:"mode"`         // debug, release, test
+	HttpPort   int    `mapstructure:"http_port"`
+	RPCPort    int    `mapstructure:"rpc_port"`
 	ReadTimeout  int  `mapstructure:"read_timeout"`  // 毫秒
 	WriteTimeout int  `mapstructure:"write_timeout"` // 毫秒
+	JWTSecret  string `mapstructure:"jwt_secret"`    // JWT密钥
 }
 
 // DatabaseConfig 数据库配置
