@@ -124,7 +124,13 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => {
+  // 如果路由 meta 中指定了 activeMenu，使用指定的菜单路径
+  if (route.meta?.activeMenu) {
+    return route.meta.activeMenu as string
+  }
+  return route.path
+})
 const currentRoute = computed(() => route)
 const menuList = ref<any[]>([])
 const defaultOpeneds = ref<string[]>([])

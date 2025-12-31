@@ -17,6 +17,7 @@ export interface PluginRouteConfig {
     icon?: string
     hidden?: boolean
     permission?: string
+    activeMenu?: string
   }
   children?: PluginRouteConfig[]
 }

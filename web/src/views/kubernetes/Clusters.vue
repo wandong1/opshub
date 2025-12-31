@@ -89,7 +89,11 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column prop="alias" label="别名" width="150" />
+      <el-table-column label="别名" width="150">
+        <template #default="{ row }">
+          {{ row.alias || '-' }}
+        </template>
+      </el-table-column>
       <el-table-column prop="version" label="版本" width="180">
         <template #default="{ row }">
           <span style="display: flex; align-items: center; gap: 6px;">
@@ -511,7 +515,8 @@ const loadClusters = async () => {
   loading.value = true
   try {
     const data = await getClusterList()
-    clusterList.value = data || []
+    // 强制刷新：使用新数组替换旧数组
+    clusterList.value = [...(data || [])]
   } catch (error) {
     console.error(error)
     ElMessage.error('获取集群列表失败')

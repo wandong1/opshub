@@ -147,7 +147,7 @@ class KubernetesPlugin implements Plugin {
             path: 'clusters/:id',
             name: 'K8sClusterDetail',
             component: () => import('@/views/kubernetes/ClusterDetail.vue'),
-            meta: { title: '集群详情' },
+            meta: { title: '集群详情', activeMenu: '/kubernetes/clusters' },
           },
           {
             path: 'nodes',
