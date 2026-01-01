@@ -119,6 +119,7 @@ export interface NodeInfo {
   age: string
   version: string
   internalIP: string
+  externalIP?: string
   osImage: string
   kernelVersion: string
   containerRuntime: string
@@ -194,6 +195,21 @@ export interface StorageInfo {
   name: string
   provisioner: string
   reclaimPolicy: string
+}
+
+export interface EventInfo {
+  type: string          // 事件类型: Normal, Warning
+  reason: string        // 原因
+  message: string       // 消息
+  source: string        // 来源
+  count: number         // 次数
+  firstTimestamp: string
+  lastTimestamp: string // 最后发生时间
+  involvedObject: {
+    kind: string
+    name: string
+    namespace?: string
+  }
 }
 
 export interface ClusterComponentInfo {
@@ -282,6 +298,17 @@ export function getClusterComponentInfo(clusterId: number) {
 }
 
 /**
+ * 获取集群事件列表
+ */
+export function getClusterEvents(clusterId: number, namespace?: string) {
+  return request<EventInfo[]>({
+    url: '/api/v1/plugins/kubernetes/resources/events',
+    method: 'get',
+    params: { clusterId, namespace }
+  })
+}
+
+/**
  * 生成集群 KubeConfig 凭据
  */
 export function generateKubeConfig(clusterId: number, username: string) {
@@ -300,6 +327,17 @@ export function revokeKubeConfig(clusterId: number, username: string) {
     url: '/api/v1/plugins/kubernetes/clusters/kubeconfig',
     method: 'delete',
     data: { clusterId, username }
+  })
+}
+
+/**
+ * 完全吊销用户凭据（删除 SA、RoleBinding 和数据库记录）
+ */
+export function revokeCredentialFully(clusterId: number, serviceAccount: string, username: string) {
+  return request({
+    url: '/api/v1/plugins/kubernetes/clusters/kubeconfig/revoke',
+    method: 'delete',
+    data: { clusterId, serviceAccount, username }
   })
 }
 
@@ -358,8 +396,10 @@ export function getNamespaceRoles(clusterId: number, namespace: string) {
  * 获取角色详情
  */
 export function getRoleDetail(clusterId: number, namespace: string, roleName: string) {
+  // 当 namespace 为空时（集群角色），使用 'cluster' 代替空字符串避免双斜杠问题
+  const ns = namespace || 'cluster'
   return request<RoleDetail>({
-    url: `/api/v1/plugins/kubernetes/roles/${namespace}/${roleName}`,
+    url: `/api/v1/plugins/kubernetes/roles/${ns}/${roleName}`,
     method: 'get',
     params: { clusterId }
   })
@@ -449,8 +489,10 @@ export function getAvailableUsers(keyword: string, page: number, pageSize: numbe
  * 删除角色
  */
 export function deleteRole(clusterId: number, namespace: string, roleName: string) {
+  // 当 namespace 为空时（集群角色），使用 'cluster' 代替空字符串避免双斜杠问题
+  const ns = namespace || 'cluster'
   return request({
-    url: `/api/v1/plugins/kubernetes/roles/${namespace}/${roleName}`,
+    url: `/api/v1/plugins/kubernetes/roles/${ns}/${roleName}`,
     method: 'delete',
     params: { clusterId }
   })
@@ -502,5 +544,31 @@ export function getServiceAccountKubeConfig(clusterId: number, serviceAccount: s
     url: '/api/v1/plugins/kubernetes/clusters/kubeconfig/sa',
     method: 'post',
     data: { clusterId, serviceAccount }
+  })
+}
+
+// ==================== 用户角色绑定 ====================
+
+export interface UserRoleBinding {
+  id: number
+  clusterId: number
+  clusterName: string
+  userId: number
+  username: string
+  realName: string
+  roleName: string
+  roleNamespace: string
+  roleType: 'ClusterRole' | 'Role'
+  createdAt: string
+}
+
+/**
+ * 获取用户的所有K8s角色绑定
+ */
+export function getUserRoleBindings(clusterId: number, userId?: number) {
+  return request<UserRoleBinding[]>({
+    url: '/api/v1/plugins/kubernetes/role-bindings/user-bindings',
+    method: 'get',
+    params: { clusterId, userId }
   })
 }

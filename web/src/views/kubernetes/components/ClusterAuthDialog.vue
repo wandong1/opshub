@@ -1,311 +1,130 @@
 <template>
-  <div class="cluster-users-content" v-if="modelValue">
-    <el-alert
-      title="凭据用户管理"
-      type="info"
-      :closable="false"
-      style="margin-bottom: 20px;"
-    >
-      <template #default>
-        <div>管理已创建凭据的用户及其角色权限（每个用户只显示最新的有效凭据）</div>
-      </template>
-    </el-alert>
-
-    <!-- 已创建的凭据用户列表 -->
-    <div class="credentials-section">
-      <div class="section-header">
-        <h4>已创建的凭据</h4>
-        <el-button
-          type="primary"
-          size="small"
-          @click="handleRefresh"
-          :icon="Refresh"
-          :loading="loading"
-        >
-          刷新
-        </el-button>
+  <div class="cluster-auth-content" v-if="modelValue">
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <div class="page-info">
+        <div class="info-icon">
+          <el-icon><User /></el-icon>
+        </div>
+        <div class="info-text">
+          <div class="info-title">已申请凭据的用户</div>
+          <div class="info-desc">共 {{ uniqueCredentialUsers.length }} 位用户已申请该集群的 kubeconfig 访问凭据</div>
+        </div>
       </div>
+      <el-button @click="handleRefresh" :loading="loading">
+        <el-icon><Refresh /></el-icon>
+        刷新
+      </el-button>
+    </div>
 
+    <!-- 用户表格 -->
+    <div class="table-wrapper">
       <el-table
         :data="uniqueCredentialUsers"
-        border
-        stripe
         v-loading="loading"
-        :height="500"
-        :max-height="600"
-        style="width: 100%"
+        class="user-table"
+        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
       >
-        <el-table-column prop="username" label="用户名" width="180">
+        <el-table-column width="60">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <el-icon color="#409EFF" :size="20"><User /></el-icon>
-              <div>
-                <div style="font-weight: 500; font-size: 14px;">{{ row.username }}</div>
-                <div style="font-size: 12px; color: #909399;" v-if="row.realName">{{ row.realName }}</div>
-              </div>
+            <div class="table-avatar">
+              <el-icon><User /></el-icon>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="serviceAccount" label="ServiceAccount" min-width="220">
+        <el-table-column prop="realName" label="用户名" min-width="120">
           <template #default="{ row }">
-            <el-tag type="info" size="default" style="font-family: 'Courier New', monospace; font-size: 13px;">
-              {{ row.serviceAccount }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="namespace" label="命名空间" width="140">
-          <template #default="{ row }">
-            <el-tag type="success" size="default">{{ row.namespace }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="180">
-          <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <el-icon color="#909399" :size="16"><Clock /></el-icon>
-              <span style="font-size: 13px;">{{ formatDate(row.createdAt) }}</span>
+            <div class="user-cell">
+              <div class="user-name">{{ row.realName || row.username }}</div>
+              <div class="user-username">@{{ row.username }}</div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right" align="center">
+        <el-table-column prop="serviceAccount" label="ServiceAccount" min-width="180">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <el-tooltip content="查看凭据" placement="top">
-                <el-button
-                  type="success"
-                  :icon="Document"
-                  circle
-                  size="small"
-                  @click="handleViewCredential(row)"
-                />
-              </el-tooltip>
-              <el-tooltip content="角色授权" placement="top">
-                <el-button
-                  type="primary"
-                  :icon="Lock"
-                  circle
-                  size="small"
-                  @click="handleManageRoles(row)"
-                />
-              </el-tooltip>
-              <el-tooltip content="吊销凭据" placement="top">
-                <el-button
-                  type="danger"
-                  :icon="Delete"
-                  circle
-                  size="small"
-                  @click="handleRevoke(row)"
-                />
-              </el-tooltip>
+            <span class="mono-text">{{ row.serviceAccount }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="namespace" label="命名空间" width="150">
+          <template #default="{ row }">
+            <span class="mono-text">{{ row.namespace }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="申请时间" width="170">
+          <template #default="{ row }">
+            <span class="time-text">{{ formatDate(row.createdAt) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template #default>
+            <el-tag type="success" effect="plain" size="small">已授权</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right">
+          <template #default="{ row }">
+            <div class="table-actions">
+              <el-button link class="action-view" @click="handleViewCredential(row)" title="查看凭据">
+                <el-icon><Document /></el-icon>
+              </el-button>
+              <el-button link class="action-revoke" @click="handleRevoke(row)" title="吊销">
+                <el-icon><Delete /></el-icon>
+              </el-button>
             </div>
           </template>
         </el-table-column>
       </el-table>
-
-      <el-empty v-if="!loading && !uniqueCredentialUsers.length" description="暂无凭据，请先在连接标签页申请凭据" />
     </div>
 
-    <!-- 角色授权对话框 -->
-    <el-dialog
-      v-model="showRoleDialog"
-      :title="`角色授权 - ${currentUser?.username}`"
-      width="900px"
-      append-to-body
-    >
-      <el-tabs v-model="roleDialogTab" type="border-card">
-        <!-- 集群角色 -->
-        <el-tab-pane label="集群角色" name="cluster">
-          <div class="role-auth-content">
-            <div class="role-section">
-              <h4>选择角色</h4>
-              <el-select
-                v-model="selectedClusterRole"
-                placeholder="请选择集群角色"
-                filterable
-                style="width: 100%"
-                @change="handleClusterRoleChange"
-              >
-                <el-option
-                  v-for="role in clusterRoles"
-                  :key="role.name"
-                  :label="role.name"
-                  :value="role.name"
-                />
-              </el-select>
-            </div>
+    <el-empty
+      v-if="!loading && !uniqueCredentialUsers.length"
+      description="暂无用户申请凭据"
+      :image-size="100"
+    />
 
-            <div class="user-section" v-if="selectedClusterRole">
-              <div class="section-header">
-                <h4>已绑定角色</h4>
-                <el-tag :type="isRoleBound ? 'success' : 'info'" size="large">
-                  {{ isRoleBound ? '已绑定' : '未绑定' }}
-                </el-tag>
-              </div>
-              <el-button
-                v-if="!isRoleBound"
-                type="primary"
-                @click="handleBindRole"
-                :loading="bindLoading"
-                style="margin-top: 12px;"
-              >
-                绑定此角色
-              </el-button>
-              <el-button
-                v-else
-                type="danger"
-                @click="handleUnbindRole"
-                :loading="bindLoading"
-                style="margin-top: 12px;"
-              >
-                解绑此角色
-              </el-button>
-            </div>
-
-            <div class="role-detail" v-if="selectedClusterRole && currentClusterRoleDetail">
-              <el-divider />
-              <h4>角色权限</h4>
-              <el-tree
-                :data="permissionTree"
-                :props="treeProps"
-                :default-expand-all="false"
-                node-key="id"
-                max-height="200"
-              >
-                <template #default="{ node, data }">
-                  <span class="tree-node">
-                    <el-icon v-if="data.type === 'apiGroup'" color="#409EFF"><Folder /></el-icon>
-                    <el-icon v-else-if="data.type === 'resource'" color="#67C23A"><Document /></el-icon>
-                    <el-icon v-else-if="data.type === 'verb'" color="#E6A23C"><Operation /></el-icon>
-                    <span class="node-label">{{ data.label }}</span>
-                    <el-tag v-if="data.type === 'verb'" size="small" type="info">{{ data.value }}</el-tag>
-                  </span>
-                </template>
-              </el-tree>
-            </div>
-          </div>
-        </el-tab-pane>
-
-        <!-- 命名空间角色 -->
-        <el-tab-pane label="命名空间角色" name="namespace">
-          <div class="role-auth-content">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <div class="role-section">
-                  <h4>选择命名空间</h4>
-                  <el-select
-                    v-model="selectedNamespace"
-                    placeholder="请选择命名空间"
-                    filterable
-                    style="width: 100%"
-                    @change="handleNamespaceChange"
-                  >
-                    <el-option
-                      v-for="ns in namespaces"
-                      :key="ns.name"
-                      :label="ns.name"
-                      :value="ns.name"
-                    />
-                  </el-select>
-                </div>
-              </el-col>
-              <el-col :span="12">
-                <div class="role-section">
-                  <h4>选择角色</h4>
-                  <el-select
-                    v-model="selectedNamespaceRole"
-                    placeholder="请选择角色"
-                    filterable
-                    style="width: 100%"
-                    :disabled="!selectedNamespace"
-                    @change="handleNamespaceRoleChange"
-                  >
-                    <el-option
-                      v-for="role in namespaceRoles"
-                      :key="role.name"
-                      :label="role.name"
-                      :value="role.name"
-                    />
-                  </el-select>
-                </div>
-              </el-col>
-            </el-row>
-
-            <div class="user-section" v-if="selectedNamespaceRole">
-              <div class="section-header">
-                <h4>角色状态</h4>
-                <el-tag :type="isNsRoleBound ? 'success' : 'info'" size="large">
-                  {{ isNsRoleBound ? '已绑定' : '未绑定' }}
-                </el-tag>
-              </div>
-              <el-button
-                v-if="!isNsRoleBound"
-                type="primary"
-                @click="handleBindNsRole"
-                :loading="bindLoading"
-                style="margin-top: 12px;"
-              >
-                绑定此角色
-              </el-button>
-              <el-button
-                v-else
-                type="danger"
-                @click="handleUnbindNsRole"
-                :loading="bindLoading"
-                style="margin-top: 12px;"
-              >
-                解绑此角色
-              </el-button>
-            </div>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-    </el-dialog>
-
-    <!-- KubeConfig查看对话框 -->
+    <!-- KubeConfig 查看对话框 -->
     <el-dialog
       v-model="showKubeConfigDialog"
-      title="查看KubeConfig凭据"
+      title="查看 KubeConfig 凭据"
       width="800px"
       append-to-body
     >
-      <div class="kubeconfig-content">
-        <el-alert
-          title="凭据信息"
-          type="info"
-          :closable="false"
-          style="margin-bottom: 16px;"
-        >
-          <template #default>
-            <div>用户: <strong>{{ currentUser?.username }}</strong></div>
-            <div>ServiceAccount: <strong>{{ currentUser?.serviceAccount }}</strong></div>
-          </template>
-        </el-alert>
+      <div class="kubeconfig-dialog">
+        <div class="kubeconfig-info">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="用户名">{{ currentUser?.username }}</el-descriptions-item>
+            <el-descriptions-item label="真实姓名">{{ currentUser?.realName }}</el-descriptions-item>
+            <el-descriptions-item label="ServiceAccount">{{ currentUser?.serviceAccount }}</el-descriptions-item>
+            <el-descriptions-item label="命名空间">{{ currentUser?.namespace }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
 
-        <div class="kubeconfig-actions" style="margin-bottom: 12px; display: flex; gap: 8px;">
-          <el-button
-            type="primary"
-            size="small"
-            @click="handleCopyKubeConfig"
-            :icon="Document"
-          >
-            复制到剪贴板
+        <div class="kubeconfig-actions">
+          <el-button type="primary" @click="handleCopyKubeConfig">
+            <el-icon><DocumentCopy /></el-icon>
+            复制
           </el-button>
-          <el-button
-            type="success"
-            size="small"
-            @click="handleDownloadKubeConfig"
-          >
-            下载文件
+          <el-button @click="handleDownloadKubeConfig">
+            <el-icon><Download /></el-icon>
+            下载
           </el-button>
         </div>
 
-        <el-input
-          v-model="currentKubeConfig"
-          type="textarea"
-          :rows="20"
-          readonly
-          placeholder="KubeConfig内容"
-          style="font-family: 'Courier New', monospace; font-size: 12px;"
-        />
+        <div class="code-editor-wrapper">
+          <div class="line-numbers">
+            <div v-for="n in configLineCount" :key="n" class="line-number">{{ n }}</div>
+          </div>
+          <textarea
+            v-model="currentKubeConfig"
+            class="code-textarea"
+            readonly
+            spellcheck="false"
+          ></textarea>
+        </div>
+
+        <div class="code-tip">
+          <el-icon><Warning /></el-icon>
+          <span>此凭据文件包含您的集群访问权限，请妥善保管，不要泄露给他人</span>
+        </div>
       </div>
     </el-dialog>
   </div>
@@ -315,17 +134,19 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Folder, Document, Operation, Lock, Delete, User, Clock, Refresh
+  User,
+  Refresh,
+  FolderOpened,
+  Document,
+  DocumentCopy,
+  Download,
+  Delete,
+  Warning
 } from '@element-plus/icons-vue'
 import {
-  getClusterRoles,
-  getNamespacesForRoles,
-  getNamespaceRoles,
-  getRoleDetail,
-  getRoleBoundUsers,
-  bindUserToRole,
-  unbindUserFromRole,
   getServiceAccountKubeConfig,
+  getClusterCredentialUsers,
+  revokeCredentialFully,
   type Cluster,
   type CredentialUser
 } from '@/api/kubernetes'
@@ -340,79 +161,49 @@ const props = defineProps<Props>()
 const emit = defineEmits(['update:modelValue', 'refresh'])
 
 const loading = ref(false)
-const showRoleDialog = ref(false)
 const showKubeConfigDialog = ref(false)
 const currentUser = ref<any>(null)
 const currentKubeConfig = ref('')
-const roleDialogTab = ref('cluster')
+const configLineCount = ref(1)
 
-// 角色相关
-const clusterRoles = ref<any[]>([])
-const namespaces = ref<{ name: string; podCount: number }[]>([])
-const namespaceRoles = ref<any[]>([])
-const selectedClusterRole = ref('')
-const selectedNamespace = ref('')
-const selectedNamespaceRole = ref('')
-const currentClusterRoleDetail = ref<any>(null)
-const permissionTree = ref<any[]>([])
-const bindLoading = ref(false)
-const isRoleBound = ref(false)
-const isNsRoleBound = ref(false)
-
-const treeProps = {
-  children: 'children',
-  label: 'label'
-}
-
-// 计算属性：每个用户只显示最新的凭据
+// 去重的用户列表
 const uniqueCredentialUsers = computed(() => {
-  if (!props.credentialUsers || props.credentialUsers.length === 0) {
-    return []
-  }
-
-  // 按用户名分组，取每个用户最新的凭据
-  const userMap = new Map<string, CredentialUser>()
-
+  if (!props.credentialUsers || props.credentialUsers.length === 0) return []
+  const userMap = new Map<number, CredentialUser>()
   props.credentialUsers.forEach(user => {
-    const existing = userMap.get(user.username)
+    const existing = userMap.get(user.userId)
     if (!existing || new Date(user.createdAt) > new Date(existing.createdAt)) {
-      userMap.set(user.username, user)
+      userMap.set(user.userId, user)
     }
   })
-
-  return Array.from(userMap.values()).sort((a, b) => {
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  })
+  return Array.from(userMap.values()).sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
 })
 
-// 刷新凭据列表
-const handleRefresh = async () => {
+// 监听 kubeconfig 内容变化
+watch(currentKubeConfig, () => {
+  configLineCount.value = currentKubeConfig.value.split('\n').length || 1
+})
+
+// 方法
+const handleRefresh = () => {
   emit('refresh')
   ElMessage.success('刷新成功')
-}
-
-const handleManageRoles = (user: any) => {
-  currentUser.value = user
-  showRoleDialog.value = true
-  roleDialogTab.value = 'cluster'
-  loadClusterRoles()
-  loadNamespaces()
-  checkRoleBinding()
 }
 
 const handleViewCredential = async (user: any) => {
   try {
     if (!props.cluster) return
-
     currentUser.value = user
-
-    // 调用API获取该ServiceAccount的kubeconfig
+    loading.value = true
     const result = await getServiceAccountKubeConfig(props.cluster.id, user.serviceAccount)
-
     currentKubeConfig.value = result.kubeconfig
     showKubeConfigDialog.value = true
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取kubeconfig失败')
+    ElMessage.error(error.response?.data?.message || '获取 kubeconfig 失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -420,7 +211,7 @@ const handleCopyKubeConfig = async () => {
   try {
     await navigator.clipboard.writeText(currentKubeConfig.value)
     ElMessage.success('复制成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('复制失败')
   }
 }
@@ -430,7 +221,7 @@ const handleDownloadKubeConfig = () => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `kubeconfig-${currentUser?.username || 'user'}.yaml`
+  a.download = `kubeconfig-${currentUser?.username || 'user'}-${props.cluster?.name || 'cluster'}.yaml`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -441,196 +232,28 @@ const handleDownloadKubeConfig = () => {
 const handleRevoke = async (user: any) => {
   try {
     await ElMessageBox.confirm(
-      `确定要吊销用户 "${user.username}" 的凭据吗？`,
+      `确定要吊销用户 "${user.realName || user.username}" 的凭据吗？\n\n吊销将同时删除：\n• K8s 中的 ServiceAccount\n• 所有相关的 RoleBinding\n• 数据库中的凭据记录\n\n吊销后用户将无法访问该集群！`,
       '确认吊销',
       {
         type: 'warning',
         confirmButtonText: '确定',
-        cancelButtonText: '取消'
+        cancelButtonText: '取消',
+        dangerouslyUseHTMLString: true
       }
     )
 
-    // TODO: 调用吊销凭据API
+    if (!props.cluster) return
+
+    loading.value = true
+    await revokeCredentialFully(props.cluster.id, user.serviceAccount, user.username)
     ElMessage.success('吊销成功')
     emit('refresh')
-  } catch (error) {
+  } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('吊销失败')
+      ElMessage.error(error.response?.data?.message || '吊销失败')
     }
-  }
-}
-
-const loadClusterRoles = async () => {
-  if (!props.cluster) return
-  try {
-    const roles = await getClusterRoles(props.cluster.id)
-    clusterRoles.value = roles
-  } catch (error) {
-    ElMessage.error('加载集群角色失败')
-  }
-}
-
-const loadNamespaces = async () => {
-  if (!props.cluster) return
-  try {
-    const nsList = await getNamespacesForRoles(props.cluster.id)
-    namespaces.value = nsList
-  } catch (error) {
-    ElMessage.error('加载命名空间失败')
-  }
-}
-
-const loadNamespaceRoles = async () => {
-  if (!props.cluster || !selectedNamespace.value) return
-  try {
-    const roles = await getNamespaceRoles(props.cluster.id, selectedNamespace.value)
-    namespaceRoles.value = roles
-  } catch (error) {
-    ElMessage.error('加载命名空间角色失败')
-  }
-}
-
-const handleClusterRoleChange = async () => {
-  if (!selectedClusterRole.value) return
-  try {
-    const detail = await getRoleDetail(
-      props.cluster.id,
-      '',
-      selectedClusterRole.value
-    )
-    currentClusterRoleDetail.value = detail
-    permissionTree.value = buildPermissionTree(detail.rules || [])
-    await checkRoleBinding()
-  } catch (error) {
-    ElMessage.error('加载角色详情失败')
-  }
-}
-
-const handleNamespaceChange = () => {
-  selectedNamespaceRole.value = ''
-  namespaceRoles.value = []
-  isNsRoleBound.value = false
-}
-
-const handleNamespaceRoleChange = async () => {
-  if (!selectedNamespaceRole.value) return
-  await checkNsRoleBinding()
-}
-
-const checkRoleBinding = async () => {
-  if (!props.cluster || !currentUser.value || !selectedClusterRole.value) return
-
-  try {
-    const users = await getRoleBoundUsers(
-      props.cluster.id,
-      selectedClusterRole.value,
-      ''
-    )
-    isRoleBound.value = users.some((u: any) => u.username === currentUser.value.username)
-  } catch (error) {
-    // 角色未绑定
-    isRoleBound.value = false
-  }
-}
-
-const checkNsRoleBinding = async () => {
-  if (!props.cluster || !currentUser.value || !selectedNamespaceRole.value) return
-
-  try {
-    const users = await getRoleBoundUsers(
-      props.cluster.id,
-      selectedNamespaceRole.value,
-      selectedNamespace.value
-    )
-    isNsRoleBound.value = users.some((u: any) => u.username === currentUser.value.username)
-  } catch (error) {
-    isNsRoleBound.value = false
-  }
-}
-
-const handleBindRole = async () => {
-  if (!props.cluster || !currentUser.value || !selectedClusterRole.value) return
-
-  try {
-    bindLoading.value = true
-    await bindUserToRole({
-      clusterId: props.cluster.id,
-      userId: currentUser.value.userId || 8, // TODO: 使用实际的用户ID
-      roleName: selectedClusterRole.value,
-      roleNamespace: '',
-      roleType: 'ClusterRole'
-    })
-
-    ElMessage.success('绑定成功')
-    await checkRoleBinding()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '绑定失败')
   } finally {
-    bindLoading.value = false
-  }
-}
-
-const handleUnbindRole = async () => {
-  if (!props.cluster || !currentUser.value || !selectedClusterRole.value) return
-
-  try {
-    bindLoading.value = true
-    await unbindUserFromRole({
-      clusterId: props.cluster.id,
-      userId: currentUser.value.userId || 8,
-      roleName: selectedClusterRole.value,
-      roleNamespace: ''
-    })
-
-    ElMessage.success('解绑成功')
-    await checkRoleBinding()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '解绑失败')
-  } finally {
-    bindLoading.value = false
-  }
-}
-
-const handleBindNsRole = async () => {
-  if (!props.cluster || !currentUser.value || !selectedNamespaceRole.value) return
-
-  try {
-    bindLoading.value = true
-    await bindUserToRole({
-      clusterId: props.cluster.id,
-      userId: currentUser.value.userId || 8,
-      roleName: selectedNamespaceRole.value,
-      roleNamespace: selectedNamespace.value,
-      roleType: 'Role'
-    })
-
-    ElMessage.success('绑定成功')
-    await checkNsRoleBinding()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '绑定失败')
-  } finally {
-    bindLoading.value = false
-  }
-}
-
-const handleUnbindNsRole = async () => {
-  if (!props.cluster || !currentUser.value || !selectedNamespaceRole.value) return
-
-  try {
-    bindLoading.value = true
-    await unbindUserFromRole({
-      clusterId: props.cluster.id,
-      userId: currentUser.value.userId || 8,
-      roleName: selectedNamespaceRole.value,
-      roleNamespace: selectedNamespace.value
-    })
-
-    ElMessage.success('解绑成功')
-    await checkNsRoleBinding()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '解绑失败')
-  } finally {
-    bindLoading.value = false
+    loading.value = false
   }
 }
 
@@ -639,130 +262,248 @@ const formatDate = (dateStr: string) => {
   const date = new Date(dateStr)
   return date.toLocaleString('zh-CN')
 }
-
-const buildPermissionTree = (rules: any[]) => {
-  const tree: any[] = []
-  rules.forEach((rule, index) => {
-    const apiGroups = rule.apiGroups || ['']
-    apiGroups.forEach((apiGroup: string, groupIndex: number) => {
-      const apiGroupNode = {
-        id: `apiGroup-${index}-${groupIndex}`,
-        type: 'apiGroup',
-        label: apiGroup || 'core',
-        children: [] as any[]
-      }
-      const resources = rule.resources || []
-      resources.forEach((resource: string, resIndex: number) => {
-        const resourceNode = {
-          id: `resource-${index}-${groupIndex}-${resIndex}`,
-          type: 'resource',
-          label: resource,
-          children: [] as any[]
-        }
-        const verbs = rule.verbs || ['*']
-        verbs.forEach((verb: string, vIndex: number) => {
-          const verbLabel = verb === '*' ? '所有操作' : verb
-          resourceNode.children.push({
-            id: `verb-${index}-${groupIndex}-${resIndex}-${vIndex}`,
-            type: 'verb',
-            label: '操作',
-            value: verbLabel
-          })
-        })
-        apiGroupNode.children.push(resourceNode)
-      })
-      tree.push(apiGroupNode)
-    })
-  })
-  return tree
-}
-
 </script>
 
 <style scoped lang="scss">
-.cluster-users-content {
-  .credentials-section {
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding: 12px 16px;
-      background: #f5f7fa;
-      border-radius: 4px;
+.cluster-auth-content {
+  padding: 0;
+}
 
-      h4 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: #303133;
-      }
-    }
+/* 操作栏 */
+.action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border-radius: 12px;
+  border: 1px solid #d4af37;
+}
 
-    // 优化表格样式
-    :deep(.el-table) {
-      font-size: 14px;
+.page-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 
-      th {
-        background-color: #f5f7fa;
-        font-weight: 600;
-        color: #606266;
-      }
+.info-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  border: 1px solid #d4af37;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d4af37;
+  font-size: 20px;
+  flex-shrink: 0;
+}
 
-      td {
-        padding: 12px 0;
-      }
+.info-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #d4af37;
+}
+
+.info-desc {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 表格容器 */
+.table-wrapper {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.user-table {
+  width: 100%;
+
+  :deep(.el-table__body-wrapper) {
+    border-radius: 0 0 12px 12px;
+  }
+
+  :deep(.el-table__row) {
+    transition: background-color 0.2s ease;
+
+    &:hover {
+      background-color: #f8fafc !important;
     }
   }
 
-  .role-auth-content {
-    .role-section {
-      margin-bottom: 20px;
-      h4 {
-        margin: 0 0 12px 0;
-        font-size: 14px;
-        font-weight: 500;
-        color: #333;
-      }
-    }
+  :deep(.el-table__cell) {
+    padding: 12px 0;
+  }
+}
 
-    .user-section {
-      margin-bottom: 20px;
-      .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-        h4 {
-          margin: 0;
-          font-size: 14px;
-          font-weight: 500;
-          color: #333;
-        }
-      }
-    }
+/* 表格头像 */
+.table-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  border: 1px solid #d4af37;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d4af37;
+  font-size: 16px;
+  margin: 0 auto;
+}
 
-    .role-detail {
-      h4 {
-        margin: 0 0 12px 0;
-        font-size: 14px;
-        font-weight: 500;
-        color: #333;
-      }
-    }
+/* 用户单元格 */
+.user-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.user-username {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 单行文本 */
+.mono-text {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #606266;
+}
+
+.time-text {
+  font-size: 13px;
+  color: #909399;
+}
+
+.namespace-tag {
+  max-width: 160px;
+}
+
+.namespace-text {
+  display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  line-height: 1.5;
+}
+
+/* 表格操作 */
+.table-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.action-view {
+  color: #000;
+  font-weight: 500;
+
+  &:hover {
+    color: #d4af37;
   }
 
-  .tree-node {
+  // 当只有图标时的样式
+  &:has(> .el-icon:only-child) {
+    :deep(.el-icon) {
+      margin-right: 0;
+    }
+  }
+}
+
+.action-revoke {
+  color: #f56c6c;
+
+  &:hover {
+    color: #f56c6c;
+    background-color: #fef0f0;
+  }
+}
+
+/* KubeConfig 对话框 */
+.kubeconfig-dialog {
+  .kubeconfig-info {
+    margin-bottom: 20px;
+  }
+
+  .kubeconfig-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .code-editor-wrapper {
+    display: flex;
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #282c34;
+  }
+
+  .line-numbers {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 8px;
+    background-color: #21252b;
+    border-right: 1px solid #3e4451;
+    user-select: none;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  .line-number {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #5c6370;
+    min-height: 20.8px;
+  }
+
+  .code-textarea {
+    flex: 1;
+    min-height: 350px;
+    padding: 12px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #abb2bf;
+    background-color: #282c34;
+    border: none;
+    outline: none;
+    resize: vertical;
+  }
+
+  .code-tip {
     display: flex;
     align-items: center;
-    gap: 6px;
-    .node-label {
-      font-size: 14px;
-    }
-  }
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #fef0f0;
+    border-radius: 6px;
+    color: #f56c6c;
+    font-size: 13px;
 
-  :deep(.el-tree-node__content) {
-    padding: 4px 0;
+    :deep(.el-icon) {
+      font-size: 16px;
+    }
   }
 }
 </style>

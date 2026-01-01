@@ -13,8 +13,8 @@ type UserKubeConfig struct {
 	Namespace      string    `gorm:"size:255;default:'default'" json:"namespace"`
 	IsActive       bool      `gorm:"default:1" json:"isActive"`
 	CreatedBy      uint64    `gorm:"not null" json:"createdBy"`
-	CreatedAt      time.Time `json:"createdAt"`
-	RevokedAt      *time.Time `json:"revokedAt"`
+	CreatedAt      time.Time `gorm:"type:datetime" json:"createdAt"`
+	RevokedAt      *time.Time `gorm:"type:datetime" json:"revokedAt"`
 }
 
 // TableName 指定表名

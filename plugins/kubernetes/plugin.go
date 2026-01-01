@@ -7,6 +7,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/ydcloud-dy/opshub/internal/plugin"
+	"github.com/ydcloud-dy/opshub/plugins/kubernetes/model"
 	"github.com/ydcloud-dy/opshub/plugins/kubernetes/server"
 )
 
@@ -47,11 +48,18 @@ func (p *Plugin) Author() string {
 func (p *Plugin) Enable(db *gorm.DB) error {
 	p.db = db
 
-	// 检查表是否已存在
-	if !db.Migrator().HasTable(&Cluster{}) {
-		// 表不存在，执行自动迁移
-		if err := db.AutoMigrate(&Cluster{}); err != nil {
-			return err
+	// 自动迁移所有插件相关的表
+	models := []interface{}{
+		&Cluster{},
+		&model.K8sUserRoleBinding{},
+		&model.UserKubeConfig{},
+	}
+
+	for _, m := range models {
+		if !db.Migrator().HasTable(m) {
+			if err := db.AutoMigrate(m); err != nil {
+				return err
+			}
 		}
 	}
 

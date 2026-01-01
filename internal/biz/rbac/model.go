@@ -9,10 +9,10 @@ import (
 // SysUser 用户表
 type SysUser struct {
 	gorm.Model
-	Username    string         `gorm:"type:varchar(50);uniqueIndex;not null;comment:用户名" json:"username"`
-	Password    string         `gorm:"type:varchar(255);not null;comment:密码" json:"-"`
+	Username    string         `gorm:"type:varchar(50);not null;comment:用户名" json:"username"`
+	Password    string         `gorm:"type:varchar(255);not null;comment:密码" json:"password,omitempty"`
 	RealName    string         `gorm:"type:varchar(50);comment:真实姓名" json:"realName"`
-	Email       string         `gorm:"type:varchar(100);uniqueIndex;comment:邮箱" json:"email"`
+	Email       string         `gorm:"type:varchar(100);comment:邮箱" json:"email"`
 	Phone       string         `gorm:"type:varchar(20);comment:手机号" json:"phone"`
 	Avatar      string         `gorm:"type:varchar(255);comment:头像" json:"avatar"`
 	Status      int            `gorm:"type:tinyint;default:1;comment:状态 1:启用 0:禁用" json:"status"`

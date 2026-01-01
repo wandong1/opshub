@@ -277,6 +277,79 @@
         </el-card>
       </div>
     </div>
+
+    <!-- 节点信息 -->
+    <el-card shadow="hover" class="modern-card full-width-card">
+      <template #header>
+        <div class="card-title-section">
+          <el-icon class="card-icon" :size="20" color="#D4AF37"><Monitor /></el-icon>
+          <span class="card-title">节点信息</span>
+          <span class="node-count">{{ nodeList.length }}个节点</span>
+        </div>
+      </template>
+      <el-table
+        :data="nodeList"
+        stripe
+        style="width: 100%"
+        v-loading="nodesLoading"
+      >
+        <el-table-column prop="name" label="节点名称" min-width="150" />
+        <el-table-column label="角色" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getNodeRoleType(row.roles)" size="small">
+              {{ row.roles || 'Worker' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'Ready' ? 'success' : 'danger'" size="small">
+              {{ row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="internalIP" label="内部IP" width="150" />
+        <el-table-column prop="externalIP" label="外部IP" width="150">
+          <template #default="{ row }">
+            {{ row.externalIP || '无' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="version" label="K8s版本" width="120" />
+        <el-table-column prop="osImage" label="操作系统" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="age" label="创建时间" width="180" />
+      </el-table>
+    </el-card>
+
+    <!-- 最近事件 -->
+    <el-card shadow="hover" class="modern-card full-width-card">
+      <template #header>
+        <div class="card-title-section">
+          <el-icon class="card-icon" :size="20" color="#D4AF37"><Document /></el-icon>
+          <span class="card-title">最近事件</span>
+          <span class="event-count">最近50条</span>
+        </div>
+      </template>
+      <el-table
+        :data="eventList"
+        stripe
+        style="width: 100%"
+        v-loading="eventsLoading"
+        :empty-text="'No Data'"
+      >
+        <el-table-column label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.type === 'Normal' ? 'success' : 'warning'" size="small">
+              {{ row.type }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="reason" label="原因" width="150" show-overflow-tooltip />
+        <el-table-column prop="message" label="消息" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="source" label="来源" width="200" show-overflow-tooltip />
+        <el-table-column prop="count" label="次数" width="80" align="center" />
+        <el-table-column prop="lastTimestamp" label="最后发生时间" width="180" />
+      </el-table>
+    </el-card>
   </div>
 </template>
 
@@ -300,17 +373,22 @@ import {
   Setting,
   Folder,
   CircleCheck,
-  Refresh
+  Refresh,
+  Document
 } from '@element-plus/icons-vue'
 import {
   getClusterDetail,
   getClusterStats,
   getClusterNetworkInfo,
   getClusterComponentInfo,
+  getNodes,
+  getClusterEvents,
   type Cluster,
   type ClusterStats,
   type ClusterNetworkInfo,
-  type ClusterComponentInfo
+  type ClusterComponentInfo,
+  type NodeInfo,
+  type EventInfo
 } from '@/api/kubernetes'
 
 const route = useRoute()
@@ -349,6 +427,11 @@ const componentInfo = ref<ClusterComponentInfo>({
   },
   storage: []
 })
+
+const nodeList = ref<NodeInfo[]>([])
+const eventList = ref<EventInfo[]>([])
+const nodesLoading = ref(false)
+const eventsLoading = ref(false)
 
 // 快速统计卡片数据
 const quickStats = computed(() => [
@@ -394,7 +477,9 @@ const loadClusterDetail = async () => {
     await Promise.all([
       loadClusterStats(),
       loadNetworkInfo(),
-      loadComponentInfo()
+      loadComponentInfo(),
+      loadNodes(),
+      loadEvents()
     ])
   } catch (error: any) {
     ElMessage.error(error.response?.data?.message || '获取集群信息失败')
@@ -450,6 +535,34 @@ const loadComponentInfo = async () => {
   }
 }
 
+// 加载节点列表
+const loadNodes = async () => {
+  nodesLoading.value = true
+  try {
+    const data = await getNodes(clusterId.value)
+    nodeList.value = data || []
+  } catch (error: any) {
+    console.error('加载节点信息失败:', error)
+    // 不显示错误消息，避免干扰用户体验
+  } finally {
+    nodesLoading.value = false
+  }
+}
+
+// 加载事件列表
+const loadEvents = async () => {
+  eventsLoading.value = true
+  try {
+    const data = await getClusterEvents(clusterId.value)
+    eventList.value = data || []
+  } catch (error: any) {
+    console.error('加载事件信息失败:', error)
+    // 不显示错误消息，避免干扰用户体验
+  } finally {
+    eventsLoading.value = false
+  }
+}
+
 // 格式化字节数
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 B'
@@ -500,6 +613,15 @@ const getProviderText = (provider: string) => {
     aws: 'AWS EKS'
   }
   return providerMap[provider] || provider
+}
+
+// 获取节点角色类型
+const getNodeRoleType = (roles: string) => {
+  if (!roles) return 'info'
+  if (roles.toLowerCase().includes('master') || roles.toLowerCase().includes('control-plane')) {
+    return 'danger'
+  }
+  return 'info'
 }
 
 onMounted(() => {
@@ -723,7 +845,23 @@ onMounted(() => {
       font-weight: 600;
       color: #303133;
     }
+
+    .node-count,
+    .event-count {
+      margin-left: auto;
+      font-size: 13px;
+      color: #909399;
+      background: #f5f7fa;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
   }
+}
+
+/* 全宽卡片 */
+.full-width-card {
+  grid-column: 1 / -1;
+  margin-bottom: 20px;
 }
 
 /* 资源使用率 */

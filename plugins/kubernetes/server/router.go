@@ -30,6 +30,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 		clusters.POST("/clusters/kubeconfig/sa", clusterHandler.GetServiceAccountKubeConfig)
 		clusters.POST("/clusters/kubeconfig", clusterHandler.GenerateKubeConfig)
 		clusters.DELETE("/clusters/kubeconfig", clusterHandler.RevokeKubeConfig)
+		clusters.DELETE("/clusters/kubeconfig/revoke", clusterHandler.RevokeCredentialFully)
 		clusters.GET("/clusters/kubeconfig/existing", clusterHandler.GetExistingKubeConfig)
 
 		// 资源查询
@@ -42,6 +43,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 		clusters.GET("/resources/stats", resourceHandler.GetClusterStats)
 		clusters.GET("/resources/network", resourceHandler.GetClusterNetworkInfo)
 		clusters.GET("/resources/components", resourceHandler.GetClusterComponentInfo)
+		clusters.GET("/resources/events", resourceHandler.ListEvents)
 
 		// 角色管理
 		clusters.GET("/roles/cluster", roleHandler.ListClusterRoles)
@@ -56,6 +58,7 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 		clusters.GET("/role-bindings/users", roleBindingHandler.GetRoleBoundUsers)
 		clusters.GET("/role-bindings/available-users", roleBindingHandler.GetAvailableUsers)
 		clusters.GET("/role-bindings/user-roles", roleBindingHandler.GetUserClusterRoles)
+		clusters.GET("/role-bindings/user-bindings", roleBindingHandler.GetUserRoleBindings)
 		clusters.GET("/role-bindings/credential-users", roleBindingHandler.GetClusterCredentialUsers)
 	}
 }

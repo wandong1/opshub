@@ -11,7 +11,7 @@
         class="el-menu-vertical"
         router
         background-color="#001529"
-        text-color="hsla(0,0%,100%,.65)"
+        text-color="#fff"
         active-text-color="#fff"
         unique-opened
       >
@@ -45,7 +45,7 @@
         <el-dropdown trigger="click" @command="handleUserCommand">
           <div class="user-info-wrapper">
             <div class="user-avatar">
-              <el-avatar :size="40" :src="userStore.userInfo?.avatar || ''">
+              <el-avatar :size="40" :src="avatarUrl" :key="userStore.avatarTimestamp">
                 <el-icon><UserFilled /></el-icon>
               </el-avatar>
             </div>
@@ -131,6 +131,20 @@ const activeMenu = computed(() => {
   }
   return route.path
 })
+
+// 头像URL - 添加时间戳破坏缓存
+const avatarUrl = computed(() => {
+  const avatar = userStore.userInfo?.avatar || ''
+  if (!avatar) return ''
+
+  // 如果是base64图片，直接返回
+  if (avatar.startsWith('data:')) return avatar
+
+  // 添加时间戳参数破坏浏览器缓存（使用 store 中的时间戳）
+  const separator = avatar.includes('?') ? '&' : '?'
+  return `${avatar}${separator}t=${userStore.avatarTimestamp}`
+})
+
 const currentRoute = computed(() => route)
 const menuList = ref<any[]>([])
 const defaultOpeneds = ref<string[]>([])
@@ -542,7 +556,27 @@ onMounted(async () => {
   border-right: none !important;
   background-color: #000000 !important;
   flex: 1 1 auto;
-  overflow: visible; /* 不显示滚动条 */
+  overflow-y: auto; /* 允许垂直滚动 */
+  overflow-x: hidden; /* 隐藏水平滚动 */
+}
+
+/* 自定义滚动条样式 */
+.el-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.el-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.el-menu::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  transition: background-color 0.3s;
+}
+
+.el-menu::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
 /* 覆盖 Element Plus 菜单样式 */
@@ -551,7 +585,7 @@ onMounted(async () => {
 }
 
 :deep(.el-menu-item) {
-  color: hsla(0, 0%, 100%, 0.65) !important;
+  color: #fff !important;
   background-color: transparent !important;
   font-size: 16px !important;
   padding-left: 20px !important; /* 从24px改为20px,往左移 */
@@ -582,7 +616,7 @@ onMounted(async () => {
 
 /* 子菜单标题样式 */
 :deep(.el-sub-menu__title) {
-  color: hsla(0, 0%, 100%, 0.65) !important;
+  color: #fff !important;
   background-color: transparent !important;
   font-size: 16px !important;
   padding-left: 20px !important; /* 从24px改为20px,往左移 */

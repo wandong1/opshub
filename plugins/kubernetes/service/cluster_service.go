@@ -21,6 +21,11 @@ import (
 	"github.com/ydcloud-dy/opshub/plugins/kubernetes/model"
 )
 
+const (
+	// OpsHubAuthNamespace OpsHub 认证专用命名空间
+	OpsHubAuthNamespace = "opshub-auth"
+)
+
 // ClusterService 集群服务层
 type ClusterService struct {
 	clusterBiz *biz.ClusterBiz
@@ -371,7 +376,7 @@ func (s *ClusterService) GenerateUserKubeConfig(ctx context.Context, clusterID u
 		ClusterID:      uint64(clusterID),
 		UserID:         uint64(userID),
 		ServiceAccount: uniqueUsername,
-		Namespace:      "default",
+		Namespace:      OpsHubAuthNamespace,
 		IsActive:       true,
 		CreatedBy:      uint64(userID),
 	}
@@ -436,55 +441,95 @@ func (s *ClusterService) GenerateKubeConfigForSA(clientset *kubernetes.Clientset
 
 // generateKubeConfigForServiceAccount 为现有的ServiceAccount生成kubeconfig
 func (s *ClusterService) generateKubeConfigForServiceAccount(clientset *kubernetes.Clientset, cluster *models.Cluster, saName string) (string, error) {
-	// 使用 ServiceAccount 的 TokenRequest API 获取临时 token
+	ctx := context.TODO()
+
+	// 尝试从新命名空间获取 token
 	expiration := int64(86400 * 365) // 1年有效期
-	tr, err := clientset.CoreV1().ServiceAccounts("default").CreateToken(context.TODO(), saName, &authenticationv1.TokenRequest{
+	tr, err := clientset.CoreV1().ServiceAccounts(OpsHubAuthNamespace).CreateToken(ctx, saName, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
 			ExpirationSeconds: &expiration,
 		},
 	}, metav1.CreateOptions{})
 
+	var targetNamespace string
 	if err != nil {
-		// 如果 TokenRequest 失败，尝试查找现有的 Secret
-		var secretName string
-		secrets, err := clientset.CoreV1().Secrets("default").List(context.TODO(), metav1.ListOptions{})
-		if err == nil {
-			for _, secret := range secrets.Items {
-				if strings.HasPrefix(secret.Name, saName+"-token") {
-					secretName = secret.Name
-					break
-				}
-			}
-		}
-
-		if secretName == "" {
-			return "", fmt.Errorf("获取 Token 失败且未找到现有 Secret: %w", err)
-		}
-
-		secret, err := clientset.CoreV1().Secrets("default").Get(context.TODO(), secretName, metav1.GetOptions{})
+		// 新命名空间失败，尝试旧的 default 命名空间（兼容旧数据）
+		tr, err = clientset.CoreV1().ServiceAccounts("default").CreateToken(ctx, saName, &authenticationv1.TokenRequest{
+			Spec: authenticationv1.TokenRequestSpec{
+				ExpirationSeconds: &expiration,
+			},
+		}, metav1.CreateOptions{})
 		if err != nil {
-			return "", fmt.Errorf("获取 Secret 失败: %w", err)
+			// 两个命名空间都失败，尝试查找 Secret
+			targetNamespace = s.findServiceAccountNamespace(ctx, clientset, saName)
+			if targetNamespace == "" {
+				return "", fmt.Errorf("未找到 ServiceAccount: %s", saName)
+			}
+		} else {
+			targetNamespace = "default"
 		}
+	} else {
+		targetNamespace = OpsHubAuthNamespace
+	}
 
-		token, ok := secret.Data["token"]
-		if !ok {
-			return "", fmt.Errorf("Secret 中缺少 Token")
-		}
-
-		kubeConfig, err := s.generateKubeConfigContent(clientset, cluster, saName, string(token))
+	// 如果通过 TokenRequest 成功获取了 token
+	if tr != nil && err == nil {
+		token := tr.Status.Token
+		kubeConfig, err := s.generateKubeConfigContent(clientset, cluster, saName, token)
 		if err != nil {
 			return "", err
 		}
 		return kubeConfig, nil
 	}
 
-	// 使用 TokenRequest 返回的 token
-	token := tr.Status.Token
-	kubeConfig, err := s.generateKubeConfigContent(clientset, cluster, saName, token)
+	// TokenRequest 失败，尝试查找现有的 Secret
+	var secretName string
+	secrets, err := clientset.CoreV1().Secrets(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err == nil {
+		for _, secret := range secrets.Items {
+			if strings.HasPrefix(secret.Name, saName+"-token") {
+				secretName = secret.Name
+				break
+			}
+		}
+	}
+
+	if secretName == "" {
+		return "", fmt.Errorf("获取 Token 失败且未找到现有 Secret")
+	}
+
+	secret, err := clientset.CoreV1().Secrets(targetNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("获取 Secret 失败: %w", err)
+	}
+
+	token, ok := secret.Data["token"]
+	if !ok {
+		return "", fmt.Errorf("Secret 中缺少 Token")
+	}
+
+	kubeConfig, err := s.generateKubeConfigContent(clientset, cluster, saName, string(token))
 	if err != nil {
 		return "", err
 	}
 	return kubeConfig, nil
+}
+
+// findServiceAccountNamespace 查找 ServiceAccount 所在的命名空间
+func (s *ClusterService) findServiceAccountNamespace(ctx context.Context, clientset *kubernetes.Clientset, saName string) string {
+	// 先检查新命名空间
+	_, err := clientset.CoreV1().ServiceAccounts(OpsHubAuthNamespace).Get(ctx, saName, metav1.GetOptions{})
+	if err == nil {
+		return OpsHubAuthNamespace
+	}
+
+	// 再检查旧命名空间
+	_, err = clientset.CoreV1().ServiceAccounts("default").Get(ctx, saName, metav1.GetOptions{})
+	if err == nil {
+		return "default"
+	}
+
+	return ""
 }
 
 // RevokeUserKubeConfig 吊销用户的 KubeConfig 凭据
@@ -513,20 +558,31 @@ func (s *ClusterService) RevokeUserKubeConfig(ctx context.Context, clusterID uin
 
 // createKubeConfigForUser 创建用户专用的 KubeConfig
 func (s *ClusterService) createKubeConfigForUser(clientset *kubernetes.Clientset, cluster *models.Cluster, username string) (string, string, error) {
+	ctx := context.TODO()
+
+	// 确保 OpsHub 认证命名空间存在
+	if err := s.ensureOpsHubAuthNamespace(ctx, clientset); err != nil {
+		return "", "", fmt.Errorf("确保命名空间存在失败: %w", err)
+	}
+
 	// ServiceAccount名称直接使用 opshub-{username}
 	saName := fmt.Sprintf("opshub-%s", username)
 
 	// 检查ServiceAccount是否已存在
-	_, err := clientset.CoreV1().ServiceAccounts("default").Get(context.TODO(), saName, metav1.GetOptions{})
+	_, err := clientset.CoreV1().ServiceAccounts(OpsHubAuthNamespace).Get(ctx, saName, metav1.GetOptions{})
 	if err != nil {
 		// ServiceAccount不存在，创建新的
 		if k8serrors.IsNotFound(err) {
 			sa := &v1.ServiceAccount{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: saName,
+					Labels: map[string]string{
+						"opshub.ydcloud-dy.com/created-by": "opshub",
+						"opshub.ydcloud-dy.com/username":  username,
+					},
 				},
 			}
-			_, err = clientset.CoreV1().ServiceAccounts("default").Create(context.TODO(), sa, metav1.CreateOptions{})
+			_, err = clientset.CoreV1().ServiceAccounts(OpsHubAuthNamespace).Create(ctx, sa, metav1.CreateOptions{})
 			if err != nil {
 				return "", "", fmt.Errorf("创建 ServiceAccount 失败: %w", err)
 			}
@@ -538,12 +594,15 @@ func (s *ClusterService) createKubeConfigForUser(clientset *kubernetes.Clientset
 				crb := &rbacv1.ClusterRoleBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: rbName,
+						Labels: map[string]string{
+							"opshub.ydcloud-dy.com/managed-by": "opshub",
+						},
 					},
 					Subjects: []rbacv1.Subject{
 						{
 							Kind:      "ServiceAccount",
 							Name:      saName,
-							Namespace: "default",
+							Namespace: OpsHubAuthNamespace,
 						},
 					},
 					RoleRef: rbacv1.RoleRef{
@@ -552,7 +611,7 @@ func (s *ClusterService) createKubeConfigForUser(clientset *kubernetes.Clientset
 						APIGroup: "rbac.authorization.k8s.io",
 					},
 				}
-				_, err = clientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), crb, metav1.CreateOptions{})
+				_, err = clientset.RbacV1().ClusterRoleBindings().Create(ctx, crb, metav1.CreateOptions{})
 				if err != nil {
 					return "", "", fmt.Errorf("创建 ClusterRoleBinding 失败: %w", err)
 				}
@@ -566,7 +625,7 @@ func (s *ClusterService) createKubeConfigForUser(clientset *kubernetes.Clientset
 	// 使用 ServiceAccount 的 Token 创建请求
 	// 通过创建 TokenRequest API 获取临时 token
 	expiration := int64(86400 * 365) // 1年有效期
-	tr, err := clientset.CoreV1().ServiceAccounts("default").CreateToken(context.TODO(), saName, &authenticationv1.TokenRequest{
+	tr, err := clientset.CoreV1().ServiceAccounts(OpsHubAuthNamespace).CreateToken(ctx, saName, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
 			ExpirationSeconds: &expiration,
 		},
@@ -575,7 +634,7 @@ func (s *ClusterService) createKubeConfigForUser(clientset *kubernetes.Clientset
 	if err != nil {
 		// 如果 TokenRequest 失败，尝试查找现有的 Secret
 		var secretName string
-		secrets, err := clientset.CoreV1().Secrets("default").List(context.TODO(), metav1.ListOptions{})
+		secrets, err := clientset.CoreV1().Secrets(OpsHubAuthNamespace).List(ctx, metav1.ListOptions{})
 		if err == nil {
 			for _, secret := range secrets.Items {
 				if strings.HasPrefix(secret.Name, saName+"-token") {
@@ -589,7 +648,7 @@ func (s *ClusterService) createKubeConfigForUser(clientset *kubernetes.Clientset
 			return "", "", fmt.Errorf("获取 Token 失败且未找到现有 Secret: %w", err)
 		}
 
-		secret, err := clientset.CoreV1().Secrets("default").Get(context.TODO(), secretName, metav1.GetOptions{})
+		secret, err := clientset.CoreV1().Secrets(OpsHubAuthNamespace).Get(ctx, secretName, metav1.GetOptions{})
 		if err != nil {
 			return "", "", fmt.Errorf("获取 Secret 失败: %w", err)
 		}
@@ -797,3 +856,131 @@ func (s *ClusterService) getClusterCACert(clientset *kubernetes.Clientset) (stri
 	return "", fmt.Errorf("无法获取集群 CA 证书")
 }
 
+// RevokeCredentialFully 完全吊销用户凭据（删除 SA、RoleBinding 和数据库记录）
+func (s *ClusterService) RevokeCredentialFully(ctx context.Context, clusterID uint, serviceAccount, username string) error {
+	// 获取集群的 clientset
+	clientset, err := s.clusterBiz.GetClusterClientset(ctx, clusterID)
+	if err != nil {
+		return fmt.Errorf("获取K8s客户端失败: %w", err)
+	}
+
+	// 1. 删除所有相关的 ClusterRoleBindings（检查两个命名空间）
+	crbs, err := clientset.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+	if err == nil {
+		for _, crb := range crbs.Items {
+			// 检查是否有 Subject 引用了这个 ServiceAccount（支持两个命名空间）
+			for _, subject := range crb.Subjects {
+				if subject.Kind == "ServiceAccount" && subject.Name == serviceAccount &&
+					(subject.Namespace == OpsHubAuthNamespace || subject.Namespace == "default") {
+					fmt.Printf("DEBUG: Deleting ClusterRoleBinding %s\n", crb.Name)
+					_ = clientset.RbacV1().ClusterRoleBindings().Delete(ctx, crb.Name, metav1.DeleteOptions{})
+					break
+				}
+			}
+		}
+	}
+
+	// 2. 删除所有命名空间中的 RoleBindings（检查两个命名空间）
+	namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err == nil {
+		for _, ns := range namespaces.Items {
+			rbs, err := clientset.RbacV1().RoleBindings(ns.Name).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				continue
+			}
+			for _, rb := range rbs.Items {
+				// 检查是否有 Subject 引用了这个 ServiceAccount（支持两个命名空间）
+				for _, subject := range rb.Subjects {
+					if subject.Kind == "ServiceAccount" && subject.Name == serviceAccount &&
+						(subject.Namespace == OpsHubAuthNamespace || subject.Namespace == "default") {
+						fmt.Printf("DEBUG: Deleting RoleBinding %s/%s\n", ns.Name, rb.Name)
+						_ = clientset.RbacV1().RoleBindings(ns.Name).Delete(ctx, rb.Name, metav1.DeleteOptions{})
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// 3. 删除 ServiceAccount（先尝试新命名空间，再尝试旧命名空间）
+	deleted := false
+	err = clientset.CoreV1().ServiceAccounts(OpsHubAuthNamespace).Delete(ctx, serviceAccount, metav1.DeleteOptions{})
+	if err == nil {
+		deleted = true
+		fmt.Printf("DEBUG: Deleted ServiceAccount %s from %s\n", serviceAccount, OpsHubAuthNamespace)
+	} else if !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("删除 ServiceAccount 失败: %w", err)
+	}
+
+	// 如果新命名空间没找到，尝试从旧命名空间删除
+	if !deleted {
+		err = clientset.CoreV1().ServiceAccounts("default").Delete(ctx, serviceAccount, metav1.DeleteOptions{})
+		if err != nil && !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("删除 ServiceAccount 失败: %w", err)
+		}
+		if err == nil {
+			fmt.Printf("DEBUG: Deleted ServiceAccount %s from default\n", serviceAccount)
+		}
+	}
+
+	// 4. 获取用户ID
+	var user struct {
+		ID uint64
+	}
+	err = s.db.Table("sys_user").Select("id").Where("username = ?", username).First(&user).Error
+	if err != nil {
+		// 如果找不到用户，只删除SA即可
+		return nil
+	}
+
+	// 5. 删除数据库记录 - k8s_user_kube_configs
+	s.db.Where("cluster_id = ? AND user_id = ? AND service_account = ?", clusterID, user.ID, serviceAccount).
+		Delete(&model.UserKubeConfig{})
+
+	// 6. 删除数据库记录 - k8s_user_role_bindings
+	s.db.Table("k8s_user_role_bindings").
+		Where("cluster_id = ? AND user_id = ?", clusterID, user.ID).
+		Delete(&model.K8sUserRoleBinding{})
+
+	return nil
+}
+
+// ensureOpsHubAuthNamespace 确保 OpsHub 认证命名空间存在
+func (s *ClusterService) ensureOpsHubAuthNamespace(ctx context.Context, clientset *kubernetes.Clientset) error {
+	nsClient := clientset.CoreV1().Namespaces()
+
+	// 检查命名空间是否已存在
+	_, err := nsClient.Get(ctx, OpsHubAuthNamespace, metav1.GetOptions{})
+	if err == nil {
+		// 已存在，直接返回
+		return nil
+	}
+
+	if !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("检查命名空间失败: %w", err)
+	}
+
+	// 创建新的命名空间
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: OpsHubAuthNamespace,
+			Labels: map[string]string{
+				"name":                                 "opshub-auth",
+				"opshub.ydcloud-dy.com/purpose":        "authentication",
+				"opshub.ydcloud-dy.com/managed-by":     "opshub",
+				"opshub.ydcloud-dy.com/namespace-type": "system",
+			},
+			Annotations: map[string]string{
+				"description": "OpsHub user authentication namespace - managed by OpsHub, do not modify manually",
+			},
+		},
+	}
+
+	_, err = nsClient.Create(ctx, ns, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("创建命名空间失败: %w", err)
+	}
+
+	fmt.Printf("DEBUG: Created namespace %s\n", OpsHubAuthNamespace)
+	return nil
+}

@@ -18,7 +18,7 @@
           >
             <el-form-item label="头像">
               <div class="avatar-section">
-                <el-avatar :size="100" :src="profileForm.avatar">
+                <el-avatar :size="100" :src="avatarUrl" :key="avatarKey">
                   <el-icon><UserFilled /></el-icon>
                 </el-avatar>
                 <el-upload
@@ -113,8 +113,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, FormInstance } from 'element-plus'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { ElMessage, type FormInstance } from 'element-plus'
 import { UserFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { updateUser, changePassword } from '@/api/user'
@@ -126,6 +126,9 @@ const activeTab = ref('basic')
 const updateLoading = ref(false)
 const passwordLoading = ref(false)
 const uploadLoading = ref(false)
+
+// 用于强制刷新头像组件的 key
+const avatarKey = ref(Date.now())
 
 const profileFormRef = ref<FormInstance>()
 const passwordFormRef = ref<FormInstance>()
@@ -154,7 +157,7 @@ const profileRules = {
   phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }]
 }
 
-const validateConfirmPassword = (rule: any, value: any, callback: any) => {
+const validateConfirmPassword = (_rule: any, value: any, callback: any) => {
   if (value !== passwordForm.newPassword) {
     callback(new Error('两次输入的密码不一致'))
   } else {
@@ -205,6 +208,19 @@ const loadUserInfo = async () => {
   }
 }
 
+// 头像URL - 添加时间戳破坏缓存
+const avatarUrl = computed(() => {
+  const avatar = userStore.userInfo?.avatar || ''
+  if (!avatar) return ''
+
+  // 如果是base64图片，直接返回
+  if (avatar.startsWith('data:')) return avatar
+
+  // 添加时间戳参数破坏浏览器缓存（使用 store 中的时间戳）
+  const separator = avatar.includes('?') ? '&' : '?'
+  return `${avatar}${separator}t=${userStore.avatarTimestamp}`
+})
+
 // 上传前校验
 const beforeAvatarUpload: UploadProps['beforeUpload'] = (file) => {
   const isImage = file.type.startsWith('image/')
@@ -230,22 +246,38 @@ const handleAvatarUpload = async (options: any) => {
     // 上传图片到服务器
     const uploadRes: any = await uploadAvatar(file)
     console.log('上传响应:', uploadRes)
+    console.log('上传返回的 data:', uploadRes.data)
 
     if (uploadRes.code === 0 && uploadRes.data) {
-      const avatarUrl = uploadRes.data.url || uploadRes.data
-      console.log('头像URL:', avatarUrl)
+      // 获取服务器返回的头像路径
+      const serverPath = uploadRes.data.url || uploadRes.data
+      console.log('[Profile] 服务器返回的路径:', serverPath)
 
-      // 更新用户头像
-      const updateRes: any = await updateUserAvatar(avatarUrl)
-      console.log('更新头像响应:', updateRes)
+      // 更新用户头像到服务器（保存相对路径）
+      await updateUserAvatar(serverPath)
+      console.log('[Profile] 头像已保存到数据库')
 
-      // 更新表单中的头像
-      profileForm.avatar = avatarUrl
+      // 立即更新 store 中的头像，触发所有组件更新
+      userStore.updateAvatar(serverPath)
+      console.log('[Profile] store 已更新，avatar:', userStore.userInfo?.avatar)
+      console.log('[Profile] avatarTimestamp:', userStore.avatarTimestamp)
 
-      // 重新获取用户信息,同步到全局store
-      await userStore.getProfile()
+      // 等待 DOM 更新
+      await nextTick()
+
+      // 强制刷新组件（通过改变 key）
+      avatarKey.value = Date.now()
+      console.log('[Profile] avatarKey 已更新:', avatarKey.value)
+      console.log('[Profile] 计算后的 avatarUrl:', avatarUrl.value)
 
       ElMessage.success('头像上传成功')
+
+      // 延迟刷新完整的用户信息（避免覆盖刚更新的头像）
+      setTimeout(() => {
+        userStore.getProfile().then(() => {
+          console.log('[Profile] 完整用户信息刷新完成')
+        })
+      }, 500)
     } else {
       throw new Error(uploadRes.message || '上传失败')
     }
@@ -274,6 +306,15 @@ const handleUpdateProfile = async () => {
         ElMessage.success('保存成功')
         // 重新获取用户信息
         await userStore.getProfile()
+        // 更新表单数据
+        if (userStore.userInfo) {
+          profileForm.id = userStore.userInfo.ID || userStore.userInfo.id
+          profileForm.username = userStore.userInfo.username
+          profileForm.realName = userStore.userInfo.realName || ''
+          profileForm.email = userStore.userInfo.email || ''
+          profileForm.phone = userStore.userInfo.phone || ''
+          profileForm.avatar = userStore.userInfo.avatar || ''
+        }
       } catch (error) {
         console.error(error)
         ElMessage.error('保存失败')

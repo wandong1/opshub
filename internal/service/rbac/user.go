@@ -73,6 +73,9 @@ func (s *UserService) Login(c *gin.Context) {
 		return
 	}
 
+	// 清空密码字段，防止返回给前端
+	user.Password = ""
+
 	// 更新最后登录时间
 	_ = s.userUseCase.Update(c.Request.Context(), user)
 
@@ -123,6 +126,9 @@ func (s *UserService) GetProfile(c *gin.Context) {
 		return
 	}
 
+	// 清空密码字段，防止返回给前端
+	user.Password = ""
+
 	response.Success(c, user)
 }
 
@@ -166,6 +172,9 @@ func (s *UserService) CreateUser(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败: "+err.Error())
 		return
 	}
+
+	// 清空密码字段，防止返回给前端
+	req.Password = ""
 
 	response.Success(c, req)
 }
@@ -226,6 +235,9 @@ func (s *UserService) GetUser(c *gin.Context) {
 		return
 	}
 
+	// 清空密码字段，防止返回给前端
+	user.Password = ""
+
 	response.Success(c, user)
 }
 
@@ -239,6 +251,11 @@ func (s *UserService) ListUsers(c *gin.Context) {
 	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "查询失败: "+err.Error())
 		return
+	}
+
+	// 清空所有用户的密码字段，防止返回给前端
+	for _, user := range users {
+		user.Password = ""
 	}
 
 	response.Success(c, gin.H{

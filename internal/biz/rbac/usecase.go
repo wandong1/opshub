@@ -53,12 +53,12 @@ func (uc *UserUseCase) AssignRoles(ctx context.Context, userID uint, roleIDs []u
 func (uc *UserUseCase) ValidatePassword(ctx context.Context, username, password string) (*SysUser, error) {
 	user, err := uc.userRepo.GetByUsername(ctx, username)
 	if err != nil {
-		return nil, errors.New("用户不存在")
+		return nil, errors.New("用户名或密码错误")
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return nil, errors.New("密码错误")
+		return nil, errors.New("用户名或密码错误")
 	}
 
 	return user, nil

@@ -415,6 +415,50 @@ func (h *ClusterHandler) RevokeKubeConfig(c *gin.Context) {
 	})
 }
 
+// RevokeCredentialFully 完全吊销用户凭据（删除 SA、RoleBinding 和数据库记录）
+// @Summary 完全吊销凭据
+// @Description 删除 ServiceAccount、所有相关 RoleBinding 和数据库记录
+// @Tags Kubernetes/Cluster
+// @Accept json
+// @Produce json
+// @Param request body service.RevokeCredentialRequest true "集群ID、ServiceAccount 和用户名"
+// @Success 200 {object} Response
+// @Router /api/v1/plugins/kubernetes/clusters/kubeconfig/revoke [delete]
+func (h *ClusterHandler) RevokeCredentialFully(c *gin.Context) {
+	var req struct {
+		ClusterID      uint   `json:"clusterId" binding:"required"`
+		ServiceAccount string `json:"serviceAccount" binding:"required"`
+		Username       string `json:"username" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	err := h.clusterService.RevokeCredentialFully(
+		c.Request.Context(),
+		req.ClusterID,
+		req.ServiceAccount,
+		req.Username,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "吊销凭据失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "吊销成功",
+	})
+}
+
 // GetServiceAccountKubeConfig 根据ServiceAccount名称获取KubeConfig
 // @Summary 根据ServiceAccount获取KubeConfig
 // @Description 为指定的ServiceAccount生成KubeConfig凭据

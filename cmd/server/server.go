@@ -17,6 +17,8 @@ import (
 	"github.com/ydcloud-dy/opshub/internal/server"
 	"github.com/ydcloud-dy/opshub/internal/service"
 	rbacmodel "github.com/ydcloud-dy/opshub/internal/biz/rbac"
+	"github.com/ydcloud-dy/opshub/plugins/kubernetes/data/models"
+	k8smodel "github.com/ydcloud-dy/opshub/plugins/kubernetes/model"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -146,14 +148,54 @@ func runServer() (*conf.Config, error) {
 
 // autoMigrate 自动迁移数据库表
 func autoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	// 自动迁移表结构
+	if err := db.AutoMigrate(
 		&rbacmodel.SysUser{},
 		&rbacmodel.SysRole{},
 		&rbacmodel.SysDepartment{},
 		&rbacmodel.SysMenu{},
 		&rbacmodel.SysUserRole{},
 		&rbacmodel.SysRoleMenu{},
-	)
+		// Kubernetes 集群相关表
+		&models.Cluster{},
+		&k8smodel.UserKubeConfig{},
+		&k8smodel.K8sUserRoleBinding{},
+	); err != nil {
+		return err
+	}
+
+	// 为用户表创建虚拟列和唯一索引
+	// 问题：MySQL 唯一索引中多个 NULL 值被认为是不同的，无法正确约束
+	// 解决：使用虚拟列 is_deleted (0=未删除, 1=已删除) 来创建唯一索引
+
+	// 1. 检查并添加虚拟列 is_deleted
+	var columnExists bool
+	db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_user' AND COLUMN_NAME = 'is_deleted'").Scan(&columnExists)
+
+	if !columnExists {
+		// 虚拟列不存在，添加它
+		if err := db.Exec("ALTER TABLE sys_user ADD COLUMN is_deleted TINYINT(1) GENERATED ALWAYS AS (CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END) STORED").Error; err != nil {
+			appLogger.Warn("添加虚拟列失败", zap.Error(err))
+		} else {
+			appLogger.Info("成功添加虚拟列 is_deleted")
+		}
+	}
+
+	// 2. 删除旧的索引
+	db.Exec("DROP INDEX idx_username_deleted_at ON sys_user")
+	db.Exec("DROP INDEX idx_email_deleted_at ON sys_user")
+	db.Exec("DROP INDEX idx_username_email_deleted_at ON sys_user")
+
+	// 3. 创建新的唯一索引：用户名 + 邮箱 + is_deleted
+	// 这样未删除的记录 (is_deleted=0) 中，username + email 的组合必须唯一
+	// 已删除的记录 (is_deleted=1) 不会阻止新记录创建
+	if err := db.Exec("CREATE UNIQUE INDEX idx_username_email_is_deleted ON sys_user(username, email, is_deleted)").Error; err != nil {
+		appLogger.Warn("创建用户名邮箱唯一索引失败", zap.Error(err))
+	} else {
+		appLogger.Info("成功创建用户名邮箱联合唯一索引")
+	}
+
+	return nil
 }
 
 // initDefaultData 初始化默认数据
@@ -217,7 +259,8 @@ func initDefaultData(db *gorm.DB) error {
 
 	// 创建默认菜单
 	menus := []*rbacmodel.SysMenu{
-		{Name: "系统管理", Code: "system", Type: 1, ParentID: 0, Path: "/system", Icon: "Setting", Sort: 1, Visible: 1, Status: 1},
+		{Name: "首页", Code: "dashboard", Type: 2, ParentID: 0, Path: "/dashboard", Component: "Dashboard", Icon: "HomeFilled", Sort: 0, Visible: 1, Status: 1},
+		{Name: "系统管理", Code: "system", Type: 1, ParentID: 0, Path: "/system", Icon: "Setting", Sort: 100, Visible: 1, Status: 1},
 		{Name: "用户管理", Code: "users", Type: 2, ParentID: 0, Path: "/users", Component: "system/Users", Icon: "User", Sort: 1, Visible: 1, Status: 1},
 		{Name: "角色管理", Code: "roles", Type: 2, ParentID: 0, Path: "/roles", Component: "system/Roles", Icon: "UserFilled", Sort: 2, Visible: 1, Status: 1},
 		{Name: "部门管理", Code: "departments", Type: 2, ParentID: 0, Path: "/departments", Component: "system/Departments", Icon: "OfficeBuilding", Sort: 3, Visible: 1, Status: 1},

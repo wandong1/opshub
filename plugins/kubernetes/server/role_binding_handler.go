@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -71,6 +72,10 @@ func (h *RoleBindingHandler) BindUserToRole(c *gin.Context) {
 		return
 	}
 
+	// 打印调试信息
+	fmt.Printf("DEBUG: BindUserToRole - ClusterID: %d, UserID: %d, RoleName: %s, RoleNamespace: %s, RoleType: %s, BoundBy: %d\n",
+		req.ClusterID, req.UserID, req.RoleName, req.RoleNamespace, req.RoleType, currentUserID)
+
 	// 绑定角色
 	err := h.roleBindingService.BindUserRole(
 		c.Request.Context(),
@@ -83,6 +88,7 @@ func (h *RoleBindingHandler) BindUserToRole(c *gin.Context) {
 	)
 
 	if err != nil {
+		fmt.Printf("ERROR: BindUserRole failed: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": "绑定失败: " + err.Error(),
@@ -380,5 +386,70 @@ func (h *RoleBindingHandler) GetClusterCredentialUsers(c *gin.Context) {
 		"code":    0,
 		"message": "success",
 		"data":    users,
+	})
+}
+
+// GetUserRoleBindings 获取用户的所有K8s角色绑定
+// @Summary 获取用户的所有K8s角色绑定
+// @Description 获取指定集群中所有用户（或指定用户）的K8s角色绑定列表
+// @Tags Kubernetes/RoleBinding
+// @Accept json
+// @Produce json
+// @Param clusterId query int true "集群ID"
+// @Param userId query int false "用户ID（可选，不传则返回所有用户）"
+// @Success 200 {object} Response
+// @Router /api/v1/plugins/kubernetes/role-bindings/user-bindings [get]
+func (h *RoleBindingHandler) GetUserRoleBindings(c *gin.Context) {
+	clusterIdStr := c.Query("clusterId")
+	userIdStr := c.Query("userId")
+
+	if clusterIdStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少必需参数 clusterId",
+		})
+		return
+	}
+
+	clusterID, err := strconv.ParseUint(clusterIdStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	var userID *uint64
+	if userIdStr != "" {
+		parsedUserID, err := strconv.ParseUint(userIdStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "无效的用户ID",
+			})
+			return
+		}
+		userID = &parsedUserID
+	}
+
+	bindings, err := h.roleBindingService.GetUserRoleBindings(
+		c.Request.Context(),
+		clusterID,
+		userID,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取角色绑定失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    bindings,
 	})
 }

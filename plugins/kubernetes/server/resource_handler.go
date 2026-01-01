@@ -33,6 +33,7 @@ type NodeInfo struct {
 	Age             string   `json:"age"`
 	Version         string   `json:"version"`
 	InternalIP      string   `json:"internalIP"`
+	ExternalIP      string   `json:"externalIP,omitempty"`
 	OSImage         string   `json:"osImage"`
 	KernelVersion   string   `json:"kernelVersion"`
 	ContainerRuntime string  `json:"containerRuntime"`
@@ -152,6 +153,25 @@ type StorageInfo struct {
 	ReclaimPolicy string `json:"reclaimPolicy"` // 回收策略
 }
 
+// EventInfo 事件信息
+type EventInfo struct {
+	Type           string `json:"type"`           // 事件类型: Normal, Warning
+	Reason         string `json:"reason"`         // 原因
+	Message        string `json:"message"`        // 消息
+	Source         string `json:"source"`         // 来源
+	Count          int32  `json:"count"`          // 次数
+	FirstTimestamp string `json:"firstTimestamp"` // 首次发生时间
+	LastTimestamp  string `json:"lastTimestamp"`  // 最后发生时间
+	InvolvedObject InvolvedObjectInfo `json:"involvedObject"` // 关联对象
+}
+
+// InvolvedObjectInfo 关联对象信息
+type InvolvedObjectInfo struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
 // ListNodes 获取节点列表
 func (h *ResourceHandler) ListNodes(c *gin.Context) {
 	clusterIDStr := c.Query("clusterId")
@@ -205,11 +225,12 @@ func (h *ResourceHandler) ListNodes(c *gin.Context) {
 			}
 		}
 
-		// 获取InternalIP
+		// 获取IP地址（InternalIP 和 ExternalIP）
 		for _, addr := range node.Status.Addresses {
 			if addr.Type == v1.NodeInternalIP {
 				nodeInfo.InternalIP = addr.Address
-				break
+			} else if addr.Type == v1.NodeExternalIP {
+				nodeInfo.ExternalIP = addr.Address
 			}
 		}
 
@@ -1038,5 +1059,91 @@ func (h *ResourceHandler) GetClusterComponentInfo(c *gin.Context) {
 		"code":    0,
 		"message": "success",
 		"data":    componentInfo,
+	})
+}
+
+// ListEvents 获取事件列表
+func (h *ResourceHandler) ListEvents(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Query("namespace")
+
+	clientset, err := h.clusterService.GetCachedClientset(c.Request.Context(), uint(clusterID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群连接失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 构建ListOptions，限制返回50条事件
+	listOptions := metav1.ListOptions{
+		Limit: 50,
+	}
+
+	var events *v1.EventList
+	if namespace != "" {
+		// 获取指定命名空间的事件
+		events, err = clientset.CoreV1().Events(namespace).List(c.Request.Context(), listOptions)
+	} else {
+		// 获取所有命名空间的事件
+		events, err = clientset.CoreV1().Events("").List(c.Request.Context(), listOptions)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取事件列表失败: " + err.Error(),
+		})
+		return
+	}
+
+	eventInfos := make([]EventInfo, 0, len(events.Items))
+	for _, event := range events.Items {
+		// 获取来源信息
+		source := event.Source.Component
+		if event.Source.Host != "" {
+			source = source + " (" + event.Source.Host + ")"
+		}
+
+		eventInfo := EventInfo{
+			Type:    event.Type,
+			Reason:  event.Reason,
+			Message: event.Message,
+			Source:  source,
+			Count:   event.Count,
+			InvolvedObject: InvolvedObjectInfo{
+				Kind:      event.InvolvedObject.Kind,
+				Name:      event.InvolvedObject.Name,
+				Namespace: event.InvolvedObject.Namespace,
+			},
+		}
+
+		// 格式化时间
+		if !event.FirstTimestamp.IsZero() {
+			eventInfo.FirstTimestamp = event.FirstTimestamp.Format("2006-01-02 15:04:05")
+		}
+		if !event.LastTimestamp.IsZero() {
+			eventInfo.LastTimestamp = event.LastTimestamp.Format("2006-01-02 15:04:05")
+		} else if !event.EventTime.IsZero() {
+			eventInfo.LastTimestamp = event.EventTime.Format("2006-01-02 15:04:05")
+		}
+
+		eventInfos = append(eventInfos, eventInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    eventInfos,
 	})
 }

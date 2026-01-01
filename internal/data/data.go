@@ -9,6 +9,8 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/ydcloud-dy/opshub/internal/conf"
+	// 导入 MySQL 驱动，确保 time.Time 类型正确处理
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // Data 数据层
@@ -35,6 +37,10 @@ func newMySQL(cfg conf.DatabaseConfig) (*gorm.DB, error) {
 	gormConfig := &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info), // 显示所有SQL
 		DisableForeignKeyConstraintWhenMigrating: true, // 迁移时不创建外键约束
+		NowFunc: func() time.Time {
+			// 使用本地时区，确保时间字段正确处理
+			return time.Now().Local()
+		},
 	}
 
 	// 连接数据库
