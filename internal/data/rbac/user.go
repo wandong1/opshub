@@ -39,13 +39,15 @@ func (r *userRepo) GetByID(ctx context.Context, id uint) (*rbac.SysUser, error) 
 
 func (r *userRepo) GetByUsername(ctx context.Context, username string) (*rbac.SysUser, error) {
 	var user rbac.SysUser
-	// 先不加Preload，测试是否是Preload导致的问题
-	err := r.db.WithContext(ctx).Where("username = ?", username).First(&user).Error
+	// 直接使用 Preload 加载关联数据
+	err := r.db.WithContext(ctx).
+		Preload("Department").
+		Preload("Roles").
+		Where("username = ?", username).
+		First(&user).Error
 	if err != nil {
 		return &user, err
 	}
-	// 如果找到用户，再加载关联数据
-	r.db.WithContext(ctx).Preload("Department").Preload("Roles").First(&user, user.ID)
 	return &user, nil
 }
 
