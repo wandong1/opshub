@@ -60,3 +60,60 @@ const update = () => {
   emit('update', { ...localContainer })
 }
 </script>
+
+<style scoped>
+.el-row {
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e8e8e8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.el-col {
+  padding: 0 8px;
+}
+
+.el-form-item {
+  margin-bottom: 0;
+}
+
+.el-form-item :deep(.el-form-item__label) {
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.el-input :deep(.el-input__wrapper) {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.el-input :deep(.el-input__wrapper:hover) {
+  border-color: #d4af37;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
+}
+
+.el-input :deep(.el-input__wrapper.is-focus) {
+  border-color: #d4af37;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
+}
+
+.el-input :deep(.el-input__prefix) {
+  color: #d4af37;
+}
+
+.el-input :deep(.el-input__prefix-inner) {
+  color: #d4af37;
+}
+
+.el-select :deep(.el-input__wrapper) {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+}
+</style>

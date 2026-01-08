@@ -76,7 +76,8 @@ const emit = defineEmits<{
 
 <style scoped>
 .spec-content-wrapper {
-  padding: 24px 32px;
+  padding: 0;
+  background: transparent;
 }
 
 .spec-content-header {

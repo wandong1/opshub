@@ -1,8 +1,8 @@
 <template>
   <div class="node-selector-wrapper">
-    <div class="scheduling-type-section">
-      <label class="section-label">调度类型</label>
-      <el-radio-group v-model="formData.schedulingType" class="scheduling-type-radio">
+    <!-- 调度类型选择 -->
+    <div class="scheduling-type-content">
+      <el-radio-group v-model="localSchedulingType" class="scheduling-type-radio" @change="handleSchedulingTypeChange">
         <el-radio value="any" class="scheduling-radio-item">
           <span class="radio-label">任意可用节点</span>
         </el-radio>
@@ -13,18 +13,22 @@
           <span class="radio-label">调度规则匹配</span>
         </el-radio>
       </el-radio-group>
+      <div class="scheduling-type-tip">
+        当前选择: {{ getSchedulingTypeLabel(localSchedulingType) }} | 规则数量: {{ formData.matchRules?.length || 0 }}
+      </div>
     </div>
 
     <!-- 指定节点 -->
-    <div v-if="formData.schedulingType === 'specified'" class="node-config-section">
+    <div v-if="localSchedulingType === 'specified'" class="node-config-section">
       <div class="form-grid-row">
         <div class="form-grid-item">
           <label class="form-grid-label">节点名称</label>
           <el-select
-            v-model="formData.specifiedNode"
+            v-model="localSpecifiedNode"
             placeholder="请选择节点"
             class="grid-input"
             filterable
+            @change="handleSpecifiedNodeChange"
           >
             <el-option
               v-for="node in nodeList"
@@ -38,7 +42,7 @@
     </div>
 
     <!-- 调度规则匹配 -->
-    <div v-if="formData.schedulingType === 'match'" class="match-rules-section">
+    <div v-if="localSchedulingType === 'match'" class="match-rules-section">
       <div class="match-rules-header">
         <span>根据节点标签匹配调度规则</span>
         <el-button type="primary" :icon="Plus" size="small" @click="emit('addMatchRule')">添加规则</el-button>
@@ -103,6 +107,7 @@
 
 <script setup lang="ts">
 import { Plus, Delete } from '@element-plus/icons-vue'
+import { ref, watch, nextTick } from 'vue'
 
 interface MatchRule {
   key: string
@@ -125,32 +130,91 @@ const props = defineProps<{
 const emit = defineEmits<{
   addMatchRule: []
   removeMatchRule: [index: number]
+  update: [data: { schedulingType: string; specifiedNode: string }]
 }>()
+
+// 本地状态
+const localSchedulingType = ref(props.formData.schedulingType || 'any')
+const localSpecifiedNode = ref(props.formData.specifiedNode || '')
+
+// 监听 props 变化
+watch(() => props.formData, (newData) => {
+  console.log('🔍 NodeSelector 收到数据:', {
+    schedulingType: newData.schedulingType,
+    specifiedNode: newData.specifiedNode,
+    matchRules: newData.matchRules,
+    matchRulesLength: newData.matchRules?.length || 0
+  })
+  localSchedulingType.value = newData.schedulingType || 'any'
+  localSpecifiedNode.value = newData.specifiedNode || ''
+}, { immediate: true, deep: true })
+
+// 处理调度类型变化
+const handleSchedulingTypeChange = async (newType: string) => {
+  console.log('🔍 ====== 调度类型变化 ======')
+  console.log('🔍 新的调度类型:', newType)
+  console.log('🔍 变化前的 localSpecifiedNode:', localSpecifiedNode.value)
+  console.log('🔍 当前的 matchRules:', props.formData.matchRules)
+
+  // 如果切换到非"指定节点"类型，清空指定节点
+  if (newType !== 'specified') {
+    localSpecifiedNode.value = ''
+  }
+
+  // 等待 DOM 更新后再 emit
+  await nextTick()
+
+  console.log('🔍 变化后的 localSpecifiedNode:', localSpecifiedNode.value)
+  console.log('🔍 准备 emit update 事件:', {
+    schedulingType: newType,
+    specifiedNode: localSpecifiedNode.value
+  })
+
+  // 通知父组件更新
+  emit('update', {
+    schedulingType: newType,
+    specifiedNode: localSpecifiedNode.value
+  })
+}
+
+// 处理指定节点变化
+const handleSpecifiedNodeChange = (node: string) => {
+  console.log('🔍 ====== 指定节点变化 ======')
+  console.log('🔍 新的指定节点:', node)
+
+  // 通知父组件更新
+  emit('update', {
+    schedulingType: localSchedulingType.value,
+    specifiedNode: node
+  })
+}
+
+// 获取调度类型标签
+const getSchedulingTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    'any': '任意可用节点',
+    'specified': '指定节点',
+    'match': '调度规则匹配'
+  }
+  return labels[type] || type
+}
+
 </script>
 
 <style scoped>
 .node-selector-wrapper {
-  padding: 24px 32px;
-  background: #fff;
+  padding: 0;
+  background: transparent;
 }
 
-.scheduling-type-section {
-  margin-bottom: 32px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #e4e7ed;
-}
-
-.section-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: #303133;
-  margin-bottom: 16px;
+.scheduling-type-content {
+  margin-bottom: 20px;
 }
 
 .scheduling-type-radio {
   display: flex;
   gap: 16px;
+  margin-bottom: 12px;
 }
 
 .scheduling-radio-item {
@@ -178,6 +242,12 @@ const emit = defineEmits<{
   font-size: 14px;
   font-weight: 500;
   color: #303133;
+}
+
+.scheduling-type-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
 }
 
 .node-config-section {

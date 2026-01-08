@@ -1,10 +1,11 @@
 <template>
   <div class="spec-content-wrapper">
-    <div class="spec-content-header">
-      <h3>网络配置</h3>
-      <p>配置 Pod 的网络设置</p>
-    </div>
-    <div class="spec-content">
+    <div class="info-panel">
+      <div class="panel-header">
+        <span class="panel-icon">🌐</span>
+        <span class="panel-title">网络配置</span>
+      </div>
+      <div class="panel-content">
       <div class="network-config-form">
         <div class="config-form-section">
           <div class="form-section-title">
@@ -97,6 +98,7 @@
           </div>
         </div>
       </div>
+      </div>
     </div>
   </div>
 </template>
@@ -134,7 +136,39 @@ const emit = defineEmits<{
 
 <style scoped>
 .spec-content-wrapper {
-  padding: 24px 32px;
+  padding: 0;
+  background: transparent;
+}
+
+.info-panel {
+  background: #fff;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  background: #d4af37;
+  border-bottom: 1px solid #d4af37;
+}
+
+.panel-icon {
+  font-size: 18px;
+  margin-right: 8px;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  flex: 1;
+}
+
+.panel-content {
+  padding: 16px;
+  background: #ffffff;
 }
 
 .spec-content-header {

@@ -16,9 +16,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,12 +36,14 @@ import (
 // ResourceHandler Kubernetes资源处理器
 type ResourceHandler struct {
 	clusterService *service.ClusterService
+	db             *gorm.DB
 }
 
 // NewResourceHandler 创建资源处理器
-func NewResourceHandler(clusterService *service.ClusterService) *ResourceHandler {
+func NewResourceHandler(clusterService *service.ClusterService, db *gorm.DB) *ResourceHandler {
 	return &ResourceHandler{
 		clusterService: clusterService,
+		db:             db,
 	}
 }
 
@@ -223,6 +227,17 @@ type StorageInfo struct {
 	Name          string `json:"name"`          // 存储名称
 	Provisioner   string `json:"provisioner"`   // Provisioner
 	ReclaimPolicy string `json:"reclaimPolicy"` // 回收策略
+}
+
+// NetworkPolicyInfo 网络策略信息
+type NetworkPolicyInfo struct {
+	Name      string            `json:"name"`      // 名称
+	Namespace string            `json:"namespace"` // 命名空间
+	NetworkID string            `json:"networkID"` // 网络ID (UID)
+	Type      string            `json:"type"`      // 类型
+	Status    string            `json:"status"`    // 状态
+	Age       string            `json:"age"`       // 创建时间
+	Labels    map[string]string `json:"labels"`    // 标签
 }
 
 // EventInfo 事件信息
@@ -3189,7 +3204,10 @@ func (h *ResourceHandler) GetWorkloads(c *gin.Context) {
 func (h *ResourceHandler) convertDeploymentToWorkload(deploy *appsv1.Deployment) WorkloadInfo {
 	// 计算 Pod 数量
 	readyPods := deploy.Status.ReadyReplicas
-	desiredPods := deploy.Status.Replicas
+	desiredPods := int32(0)
+	if deploy.Spec.Replicas != nil {
+		desiredPods = *deploy.Spec.Replicas
+	}
 
 	// 获取镜像和资源信息
 	var images []string
@@ -3220,7 +3238,10 @@ func (h *ResourceHandler) convertDeploymentToWorkload(deploy *appsv1.Deployment)
 // convertStatefulSetToWorkload 将 StatefulSet 转换为 WorkloadInfo
 func (h *ResourceHandler) convertStatefulSetToWorkload(sts *appsv1.StatefulSet) WorkloadInfo {
 	readyPods := sts.Status.ReadyReplicas
-	desiredPods := sts.Status.Replicas
+	desiredPods := int32(0)
+	if sts.Spec.Replicas != nil {
+		desiredPods = *sts.Spec.Replicas
+	}
 
 	var images []string
 	var requests, limits *ResourceInfo
@@ -3676,6 +3697,169 @@ func (h *ResourceHandler) UpdateWorkloadYAML(c *gin.Context) {
 	})
 }
 
+// UpdateWorkloadRequest 更新工作负载请求（所有参数在请求体中）
+// UpdateWorkloadRequest 直接接收 Kubernetes 对象
+// 从 URL 参数获取 cluster、namespace、type、name，请求体直接是 Kubernetes 对象
+type UpdateWorkloadRequest struct {
+	// 这些字段从 URL 参数获取，不在请求体中
+	Cluster  string
+	Namespace string
+	Type     string
+	Name     string
+	// WorkloadData 是请求体，直接是 Kubernetes 对象
+	WorkloadData map[string]interface{}
+}
+
+// UpdateWorkload 更新工作负载
+// URL 参数: cluster, namespace, type, name
+// 请求体: 直接是 Kubernetes 对象（Deployment、StatefulSet 等）
+func (h *ResourceHandler) UpdateWorkload(c *gin.Context) {
+	// 从 URL 参数获取基本信息
+	cluster := c.Query("cluster")
+	namespace := c.Query("namespace")
+	workloadType := c.Query("type")
+	name := c.Query("name")
+
+	if cluster == "" || namespace == "" || workloadType == "" || name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少必要参数: cluster, namespace, type, name",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	fmt.Printf("🔍 DEBUG [UpdateWorkload]: cluster=%s, namespace=%s, name=%s, type=%s, userID=%d\n",
+		cluster, namespace, name, workloadType, currentUserID)
+
+	// 根据集群名称获取集群ID（查询数据库）
+	var clusterID int
+	err := h.db.Raw("SELECT id FROM k8s_clusters WHERE name = ? AND created_by = ? LIMIT 1", cluster, currentUserID).Scan(&clusterID).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群信息失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 直接从请求体读取 Kubernetes 对象
+	var yamlData map[string]interface{}
+	if err := c.ShouldBindJSON(&yamlData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证资源名称
+	if metadata, ok := yamlData["metadata"].(map[string]interface{}); ok {
+		if yamlName, ok := metadata["name"].(string); ok && yamlName != name {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "YAML中的资源名称与URL参数中的不一致",
+			})
+			return
+		}
+		if yamlNamespace, ok := metadata["namespace"].(string); ok && yamlNamespace != namespace {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "YAML中的命名空间与请求中的不一致",
+			})
+			return
+		}
+	}
+
+	// 转换为JSON用于PATCH
+	patchData, err := json.Marshal(yamlData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "序列化Patch数据失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 根据类型更新资源
+	switch workloadType {
+	case "Deployment":
+		_, err := clientset.AppsV1().Deployments(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "更新Deployment失败: " + err.Error(),
+			})
+			return
+		}
+	case "StatefulSet":
+		_, err := clientset.AppsV1().StatefulSets(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "更新StatefulSet失败: " + err.Error(),
+			})
+			return
+		}
+	case "DaemonSet":
+		_, err := clientset.AppsV1().DaemonSets(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "更新DaemonSet失败: " + err.Error(),
+			})
+			return
+		}
+	case "Job":
+		_, err := clientset.BatchV1().Jobs(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "更新Job失败: " + err.Error(),
+			})
+			return
+		}
+	case "CronJob":
+		_, err := clientset.BatchV1().CronJobs(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "更新CronJob失败: " + err.Error(),
+			})
+			return
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "不支持的工作负载类型: " + workloadType,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true, // 告诉前端需要刷新列表
+		},
+	})
+}
+
 // cleanWorkloadForYAML 清理工作负载对象用于YAML输出
 func cleanWorkloadForYAML(obj interface{}, workloadType string) map[string]interface{} {
 	// 转换为 map 以便控制 YAML 序列化
@@ -3744,4 +3928,2359 @@ func cleanMetadata(meta metav1.ObjectMeta) map[string]interface{} {
 	// 不包含 managedFields、resourceVersion、uid、generation 等字段
 
 	return metadata
+}
+
+// ==================== Service 相关 ====================
+
+// ServiceInfo 服务信息
+type ServiceInfo struct {
+	Name            string            `json:"name"`            // 服务名称
+	Namespace       string            `json:"namespace"`       // 命名空间
+	Type            string            `json:"type"`            // 服务类型: ClusterIP, NodePort, LoadBalancer, ExternalName
+	ClusterIP       string            `json:"clusterIP"`       // Cluster IP 地址
+	ExternalIP      string            `json:"externalIP"`      // External IP 地址
+	Ports           []ServicePortInfo `json:"ports"`           // 端口列表
+	Selector        map[string]string `json:"selector"`        // Pod 选择器
+	SessionAffinity string            `json:"sessionAffinity"` // 会话亲和性
+	Age             string            `json:"age"`             // 创建时间
+	Labels          map[string]string `json:"labels"`          // 标签
+	Endpoints       int               `json:"endpoints"`       // 端点数量
+}
+
+// ServicePortInfo 服务端口信息
+type ServicePortInfo struct {
+	Name       string `json:"name"`       // 端口名称
+	Protocol   string `json:"protocol"`   // 协议: TCP, UDP, SCTP
+	Port       int32  `json:"port"`       // 服务端口
+	TargetPort string `json:"targetPort"` // 目标端口
+	NodePort   int32  `json:"nodePort"`   // NodePort (仅 NodePort 类型)
+}
+
+// ListServices 获取服务列表
+func (h *ResourceHandler) ListServices(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+
+	// 获取当前用户 ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	// 使用用户凭据获取 clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群连接失败: " + err.Error(),
+		})
+		return
+	}
+
+	services, err := clientset.CoreV1().Services(namespace).List(c.Request.Context(), metav1.ListOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "服务")
+		return
+	}
+
+	// 获取 Endpoints 用于统计端点数量
+	endpointsMap := make(map[string]int)
+	endpoints, err := clientset.CoreV1().Endpoints(namespace).List(c.Request.Context(), metav1.ListOptions{})
+	if err == nil {
+		for _, ep := range endpoints.Items {
+			readyCount := 0
+			for _, subset := range ep.Subsets {
+				readyCount += len(subset.Addresses)
+			}
+			endpointsMap[ep.Name] = readyCount
+		}
+	}
+
+	serviceInfos := make([]ServiceInfo, 0, len(services.Items))
+	for _, svc := range services.Items {
+		// 确保 labels 不为 nil
+		labels := svc.Labels
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		// 确保 selector 不为 nil
+		selector := svc.Spec.Selector
+		if selector == nil {
+			selector = make(map[string]string)
+		}
+
+		// 获取 External IP
+		externalIP := ""
+		if len(svc.Spec.ExternalIPs) > 0 {
+			externalIP = svc.Spec.ExternalIPs[0]
+		} else if svc.Spec.Type == v1.ServiceTypeLoadBalancer && len(svc.Status.LoadBalancer.Ingress) > 0 {
+			if svc.Status.LoadBalancer.Ingress[0].IP != "" {
+				externalIP = svc.Status.LoadBalancer.Ingress[0].IP
+			} else if svc.Status.LoadBalancer.Ingress[0].Hostname != "" {
+				externalIP = svc.Status.LoadBalancer.Ingress[0].Hostname
+			}
+		}
+
+		// 转换端口信息
+		portInfos := make([]ServicePortInfo, 0, len(svc.Spec.Ports))
+		for _, port := range svc.Spec.Ports {
+			targetPort := ""
+			if port.TargetPort.Type == intstr.Int {
+				targetPort = strconv.Itoa(int(port.TargetPort.IntVal))
+			} else {
+				targetPort = port.TargetPort.StrVal
+			}
+
+			portInfo := ServicePortInfo{
+				Name:       port.Name,
+				Protocol:   string(port.Protocol),
+				Port:       port.Port,
+				TargetPort: targetPort,
+				NodePort:   port.NodePort,
+			}
+			portInfos = append(portInfos, portInfo)
+		}
+
+		serviceInfo := ServiceInfo{
+			Name:            svc.Name,
+			Namespace:       svc.Namespace,
+			Type:            string(svc.Spec.Type),
+			ClusterIP:       svc.Spec.ClusterIP,
+			ExternalIP:      externalIP,
+			Ports:           portInfos,
+			Selector:        selector,
+			SessionAffinity: string(svc.Spec.SessionAffinity),
+			Age:             calculateAge(svc.CreationTimestamp.Time),
+			Labels:          labels,
+			Endpoints:       endpointsMap[svc.Name],
+		}
+
+		serviceInfos = append(serviceInfos, serviceInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    serviceInfos,
+	})
+}
+
+// GetServiceYAML 获取服务 YAML
+func (h *ResourceHandler) GetServiceYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	svc, err := clientset.CoreV1().Services(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "服务")
+		return
+	}
+
+	// 清理对象用于 YAML 输出
+	cleanedSvc := cleanServiceForYAML(svc)
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"items": cleanedSvc,
+		},
+	})
+}
+
+// UpdateServiceYAMLRequest 更新服务 YAML 请求
+// UpdateServiceYAMLRequest 更新服务请求
+type UpdateServiceYAMLRequest struct {
+	ClusterID int                    `json:"clusterId" binding:"required"`
+	Data      map[string]interface{} `json:"-" binding:"required"`
+}
+
+// UpdateServiceYAML 更新服务 YAML
+func (h *ResourceHandler) UpdateServiceYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 直接绑定请求体到 map[string]interface{}
+	var jsonData map[string]interface{}
+	if err := c.ShouldBindJSON(&jsonData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 提取 clusterId
+	clusterIDFloat, ok := jsonData["clusterId"].(float64)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 clusterId 字段",
+		})
+		return
+	}
+	clusterID := int(clusterIDFloat)
+
+	// 删除 clusterId 字段，剩余的就是 Kubernetes 资源数据
+	delete(jsonData, "clusterId")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证资源名称
+	if metadata, ok := jsonData["metadata"].(map[string]interface{}); ok {
+		if jsonName, ok := metadata["name"].(string); ok && jsonName != name {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "资源名称与URL中的不一致",
+			})
+			return
+		}
+		if jsonNamespace, ok := metadata["namespace"].(string); ok && jsonNamespace != namespace {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "命名空间与URL中的不一致",
+			})
+			return
+		}
+	}
+
+	// 转换为 JSON 用于 PATCH
+	patchData, err := json.Marshal(jsonData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "序列化Patch数据失败: " + err.Error(),
+		})
+		return
+	}
+
+	_, err = clientset.CoreV1().Services(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "服务")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// CreateServiceRequest 创建服务请求
+type CreateServiceRequest struct {
+	ClusterID int                      `json:"clusterId" binding:"required"`
+	Namespace string                   `json:"namespace" binding:"required"`
+	Name      string                   `json:"name" binding:"required"`
+	Type      string                   `json:"type" binding:"required"`
+	ClusterIP string                   `json:"clusterIP"`
+	Ports     []ServicePortCreateInfo  `json:"ports" binding:"required"`
+	Selector  map[string]string        `json:"selector"`
+	SessionAffinity string             `json:"sessionAffinity"`
+}
+
+// ServicePortCreateInfo 端口创建信息
+type ServicePortCreateInfo struct {
+	Name       string `json:"name"`
+	Protocol   string `json:"protocol" binding:"required"`
+	Port       int32  `json:"port" binding:"required"`
+	TargetPort string `json:"targetPort"`
+	NodePort   int32  `json:"nodePort"`
+}
+
+// CreateService 创建服务
+func (h *ResourceHandler) CreateService(c *gin.Context) {
+	namespace := c.Param("namespace")
+
+	var req CreateServiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 构建 Service 对象
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: namespace,
+		},
+		Spec: v1.ServiceSpec{
+			Type:            v1.ServiceType(req.Type),
+			ClusterIP:       req.ClusterIP,
+			Selector:        req.Selector,
+			SessionAffinity: v1.ServiceAffinity(req.SessionAffinity),
+		},
+	}
+
+	// 如果 ClusterIP 为 "None"，设置为 Headless Service
+	if req.Type == "ClusterIP" && req.ClusterIP == "None" {
+		svc.Spec.ClusterIP = "None"
+	}
+
+	// 转换端口信息
+	for _, port := range req.Ports {
+		servicePort := v1.ServicePort{
+			Name:     port.Name,
+			Protocol: v1.Protocol(port.Protocol),
+			Port:     port.Port,
+		}
+
+		// 解析 TargetPort
+		if port.TargetPort != "" {
+			// 尝试解析为数字
+			if portNum, err := strconv.Atoi(port.TargetPort); err == nil {
+				servicePort.TargetPort = intstr.FromInt(portNum)
+			} else {
+				servicePort.TargetPort = intstr.FromString(port.TargetPort)
+			}
+		} else {
+			// 默认使用 Port
+			servicePort.TargetPort = intstr.FromInt(int(port.Port))
+		}
+
+		// NodePort 只有 NodePort 类型才需要设置
+	 if req.Type == "NodePort" && port.NodePort > 0 {
+			servicePort.NodePort = port.NodePort
+		}
+
+		svc.Spec.Ports = append(svc.Spec.Ports, servicePort)
+	}
+
+	// 创建 Service
+	_, err = clientset.CoreV1().Services(namespace).Create(c.Request.Context(), svc, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "服务")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteServiceRequest 删除服务请求
+type DeleteServiceRequest struct {
+	ClusterID int `json:"clusterId" binding:"required"`
+}
+
+// DeleteService 删除服务
+func (h *ResourceHandler) DeleteService(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	var req DeleteServiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.CoreV1().Services(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "服务")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// cleanServiceForYAML 清理 Service 对象用于 YAML 输出
+func cleanServiceForYAML(svc *v1.Service) map[string]interface{} {
+	result := make(map[string]interface{})
+	result["apiVersion"] = "v1"
+	result["kind"] = "Service"
+	result["metadata"] = cleanMetadata(svc.ObjectMeta)
+	result["spec"] = svc.Spec
+	return result
+}
+
+// ==================== Ingress 相关 ====================
+
+// IngressInfo Ingress 信息
+type IngressInfo struct {
+	Name         string            `json:"name"`         // Ingress 名称
+	Namespace    string            `json:"namespace"`    // 命名空间
+	Hosts        []string          `json:"hosts"`        // 主机名列表
+	Paths        []IngressPathInfo `json:"paths"`        // 路径列表
+	TLS          []IngressTLSInfo  `json:"tls"`          // TLS 配置
+	IngressClass string            `json:"ingressClass"` // Ingress Class
+	Age          string            `json:"age"`          // 创建时间
+	Labels       map[string]string `json:"labels"`       // 标签
+	Addresses    []string          `json:"addresses"`    // IP 地址列表
+}
+
+// IngressPathInfo Ingress 路径信息
+type IngressPathInfo struct {
+	Host    string `json:"host"`    // 主机名
+	Path    string `json:"path"`    // 路径
+	PathType string `json:"pathType"` // 路径类型
+	Service string `json:"service"` // 服务名称
+	Port    int32  `json:"port"`    // 服务端口
+}
+
+// IngressTLSInfo TLS 配置
+type IngressTLSInfo struct {
+	Hosts      []string `json:"hosts"`      // 主机名列表
+	SecretName string   `json:"secretName"` // Secret 名称
+}
+
+// ListIngresses 获取 Ingress 列表
+func (h *ResourceHandler) ListIngresses(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+
+	// 获取当前用户 ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	// 使用用户凭据获取 clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群连接失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取 Ingress（使用 networking.k8s.io/v1）
+	ingresses, err := clientset.NetworkingV1().Ingresses(namespace).List(c.Request.Context(), metav1.ListOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Ingress")
+		return
+	}
+
+	ingressInfos := make([]IngressInfo, 0, len(ingresses.Items))
+	for _, ing := range ingresses.Items {
+		// 确保 labels 不为 nil
+		labels := ing.Labels
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		// 获取主机名列表
+		hosts := make([]string, 0)
+		for _, rule := range ing.Spec.Rules {
+			if rule.Host != "" {
+				hosts = append(hosts, rule.Host)
+			}
+		}
+
+		// 获取路径信息
+		paths := make([]IngressPathInfo, 0)
+		for _, rule := range ing.Spec.Rules {
+			if rule.HTTP != nil {
+				for _, path := range rule.HTTP.Paths {
+					serviceName := ""
+					servicePort := int32(0)
+					if path.Backend.Service != nil {
+						serviceName = path.Backend.Service.Name
+						if path.Backend.Service.Port.Number > 0 {
+							servicePort = path.Backend.Service.Port.Number
+						}
+					}
+
+					pathInfo := IngressPathInfo{
+						Host:     rule.Host,
+						Path:     path.Path,
+						PathType: string(*path.PathType),
+						Service:  serviceName,
+						Port:     servicePort,
+					}
+					paths = append(paths, pathInfo)
+				}
+			}
+		}
+
+		// 获取 TLS 配置
+		tlsInfos := make([]IngressTLSInfo, 0, len(ing.Spec.TLS))
+		for _, tls := range ing.Spec.TLS {
+			tlsInfo := IngressTLSInfo{
+				Hosts:      tls.Hosts,
+				SecretName: tls.SecretName,
+			}
+			tlsInfos = append(tlsInfos, tlsInfo)
+		}
+
+		// 获取 IngressClass
+		ingressClass := ""
+		if ing.Spec.IngressClassName != nil {
+			ingressClass = *ing.Spec.IngressClassName
+		}
+
+		// 获取地址
+		addresses := make([]string, 0)
+		for _, addr := range ing.Status.LoadBalancer.Ingress {
+			if addr.IP != "" {
+				addresses = append(addresses, addr.IP)
+			} else if addr.Hostname != "" {
+				addresses = append(addresses, addr.Hostname)
+			}
+		}
+
+		ingressInfo := IngressInfo{
+			Name:         ing.Name,
+			Namespace:    ing.Namespace,
+			Hosts:        hosts,
+			Paths:        paths,
+			TLS:          tlsInfos,
+			IngressClass: ingressClass,
+			Age:          calculateAge(ing.CreationTimestamp.Time),
+			Labels:       labels,
+			Addresses:    addresses,
+		}
+
+		ingressInfos = append(ingressInfos, ingressInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    ingressInfos,
+	})
+}
+
+// GetIngressYAML 获取 Ingress YAML
+func (h *ResourceHandler) GetIngressYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	ing, err := clientset.NetworkingV1().Ingresses(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Ingress")
+		return
+	}
+
+	// 清理对象用于 YAML 输出
+	cleanedIngs := cleanIngressForYAML(ing)
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"items": cleanedIngs,
+		},
+	})
+}
+
+// UpdateIngressYAML 更新 Ingress YAML
+func (h *ResourceHandler) UpdateIngressYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 直接绑定请求体到 map[string]interface{}
+	var jsonData map[string]interface{}
+	if err := c.ShouldBindJSON(&jsonData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 提取 clusterId
+	clusterIDFloat, ok := jsonData["clusterId"].(float64)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 clusterId 字段",
+		})
+		return
+	}
+	clusterID := int(clusterIDFloat)
+
+	// 删除 clusterId 字段，剩余的就是 Kubernetes 资源数据
+	delete(jsonData, "clusterId")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证资源名称
+	if metadata, ok := jsonData["metadata"].(map[string]interface{}); ok {
+		if jsonName, ok := metadata["name"].(string); ok && jsonName != name {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "资源名称与URL中的不一致",
+			})
+			return
+		}
+		if jsonNamespace, ok := metadata["namespace"].(string); ok && jsonNamespace != namespace {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "命名空间与URL中的不一致",
+			})
+			return
+		}
+	}
+
+	// 转换为 JSON 用于 PATCH
+	patchData, err := json.Marshal(jsonData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "序列化Patch数据失败: " + err.Error(),
+		})
+		return
+	}
+
+	_, err = clientset.NetworkingV1().Ingresses(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Ingress")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// CreateIngressRequest 创建 Ingress 请求
+type CreateIngressRequest struct {
+	ClusterID     int                   `json:"clusterId" binding:"required"`
+	Namespace     string                `json:"namespace" binding:"required"`
+	Name          string                `json:"name" binding:"required"`
+	IngressClass  string                `json:"ingressClass"`
+	Rules         []IngressRuleCreate   `json:"rules" binding:"required"`
+	TLS           []IngressTLSCreate    `json:"tls"`
+}
+
+// IngressRuleCreate Ingress 规则创建信息
+type IngressRuleCreate struct {
+	Host  string                 `json:"host"`
+	Paths []IngressPathCreate    `json:"paths" binding:"required"`
+}
+
+// IngressPathCreate Ingress 路径创建信息
+type IngressPathCreate struct {
+	Path     string `json:"path" binding:"required"`
+	PathType string `json:"pathType" binding:"required"`
+	Service  string `json:"service" binding:"required"`
+	Port     int32  `json:"port" binding:"required"`
+}
+
+// IngressTLSCreate TLS 创建信息
+type IngressTLSCreate struct {
+	Hosts      []string `json:"hosts"`
+	SecretName string   `json:"secretName"`
+}
+
+// CreateIngress 创建 Ingress
+func (h *ResourceHandler) CreateIngress(c *gin.Context) {
+	namespace := c.Param("namespace")
+
+	var req CreateIngressRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 构建 Ingress 对象
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: namespace,
+		},
+	}
+
+	// 设置 IngressClass
+	if req.IngressClass != "" {
+		ing.Spec.IngressClassName = &req.IngressClass
+	}
+
+	// 转换规则
+	for _, rule := range req.Rules {
+		ingressRule := networkingv1.IngressRule{
+			Host: rule.Host,
+		}
+
+		if len(rule.Paths) > 0 {
+			httpRule := &networkingv1.HTTPIngressRuleValue{
+				Paths: make([]networkingv1.HTTPIngressPath, 0, len(rule.Paths)),
+			}
+
+			for _, path := range rule.Paths {
+				pathType := networkingv1.PathType(path.PathType)
+				ingressPath := networkingv1.HTTPIngressPath{
+					Path:     path.Path,
+					PathType: &pathType,
+					Backend: networkingv1.IngressBackend{
+						Service: &networkingv1.IngressServiceBackend{
+							Name: path.Service,
+							Port: networkingv1.ServiceBackendPort{
+								Number: path.Port,
+							},
+						},
+					},
+				}
+				httpRule.Paths = append(httpRule.Paths, ingressPath)
+			}
+
+			ingressRule.HTTP = httpRule
+		}
+
+		ing.Spec.Rules = append(ing.Spec.Rules, ingressRule)
+	}
+
+	// 转换 TLS
+	for _, tls := range req.TLS {
+		ingressTLS := networkingv1.IngressTLS{
+			Hosts:      tls.Hosts,
+			SecretName: tls.SecretName,
+		}
+		ing.Spec.TLS = append(ing.Spec.TLS, ingressTLS)
+	}
+
+	// 创建 Ingress
+	_, err = clientset.NetworkingV1().Ingresses(namespace).Create(c.Request.Context(), ing, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Ingress")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteIngress 删除 Ingress
+func (h *ResourceHandler) DeleteIngress(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	var req DeleteServiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.NetworkingV1().Ingresses(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Ingress")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// cleanIngressForYAML 清理 Ingress 对象用于 YAML 输出
+func cleanIngressForYAML(ing *networkingv1.Ingress) map[string]interface{} {
+	result := make(map[string]interface{})
+	result["apiVersion"] = "networking.k8s.io/v1"
+	result["kind"] = "Ingress"
+	result["metadata"] = cleanMetadata(ing.ObjectMeta)
+	result["spec"] = ing.Spec
+	return result
+}
+
+// ==================== Endpoints 相关 ====================
+
+// EndpointsInfo 端点信息
+type EndpointsInfo struct {
+	Name      string                `json:"name"`      // 端点名称（与 Service 同名）
+	Namespace string                `json:"namespace"` // 命名空间
+	Subsets   []EndpointSubsetInfo  `json:"subsets"`   // 端点子集
+	Age       string                `json:"age"`       // 创建时间
+	Labels    map[string]string     `json:"labels"`    // 标签
+}
+
+// EndpointSubsetInfo 端点子集信息
+type EndpointSubsetInfo struct {
+	Addresses    []EndpointAddressInfo `json:"addresses"`    // 地址列表
+	NotReadyAddresses []EndpointAddressInfo `json:"notReadyAddresses"` // 未就绪地址
+	Ports        []EndpointPortInfo    `json:"ports"`        // 端口列表
+}
+
+// EndpointAddressInfo 端点地址信息
+type EndpointAddressInfo struct {
+	IP        string `json:"ip"`        // IP 地址
+	Hostname  string `json:"hostname"`  // 主机名
+	NodeName  string `json:"nodeName"`  // 节点名称
+	TargetRef string `json:"targetRef"` // 关联的 Pod 名称
+	Ready     bool   `json:"ready"`     // 是否就绪
+}
+
+// EndpointPortInfo 端点端口信息
+type EndpointPortInfo struct {
+	Name     string `json:"name"`     // 端口名称
+	Protocol string `json:"protocol"` // 协议
+	Port     int32  `json:"port"`     // 端口号
+}
+
+// ListEndpoints 获取端点列表
+func (h *ResourceHandler) ListEndpoints(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+
+	// 获取当前用户 ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	// 使用用户凭据获取 clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群连接失败: " + err.Error(),
+		})
+		return
+	}
+
+	endpoints, err := clientset.CoreV1().Endpoints(namespace).List(c.Request.Context(), metav1.ListOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "端点")
+		return
+	}
+
+	endpointsInfos := make([]EndpointsInfo, 0, len(endpoints.Items))
+	for _, ep := range endpoints.Items {
+		// 确保 labels 不为 nil
+		labels := ep.Labels
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		// 转换子集信息
+		subsets := make([]EndpointSubsetInfo, 0, len(ep.Subsets))
+		for _, subset := range ep.Subsets {
+			subsetInfo := EndpointSubsetInfo{
+				Addresses:    make([]EndpointAddressInfo, 0, len(subset.Addresses)),
+				NotReadyAddresses: make([]EndpointAddressInfo, 0, len(subset.NotReadyAddresses)),
+				Ports:        make([]EndpointPortInfo, 0, len(subset.Ports)),
+			}
+
+			// 转换就绪地址
+			for _, addr := range subset.Addresses {
+				nodeName := ""
+				if addr.NodeName != nil {
+					nodeName = *addr.NodeName
+				}
+				addrInfo := EndpointAddressInfo{
+					IP:       addr.IP,
+					Hostname: addr.Hostname,
+					NodeName: nodeName,
+					Ready:    true,
+				}
+				if addr.TargetRef != nil {
+					addrInfo.TargetRef = addr.TargetRef.Name
+				}
+				subsetInfo.Addresses = append(subsetInfo.Addresses, addrInfo)
+			}
+
+			// 转换未就绪地址
+			for _, addr := range subset.NotReadyAddresses {
+				nodeName := ""
+				if addr.NodeName != nil {
+					nodeName = *addr.NodeName
+				}
+				addrInfo := EndpointAddressInfo{
+					IP:       addr.IP,
+					Hostname: addr.Hostname,
+					NodeName: nodeName,
+					Ready:    false,
+				}
+				if addr.TargetRef != nil {
+					addrInfo.TargetRef = addr.TargetRef.Name
+				}
+				subsetInfo.NotReadyAddresses = append(subsetInfo.NotReadyAddresses, addrInfo)
+			}
+
+			// 转换端口
+			for _, port := range subset.Ports {
+				portInfo := EndpointPortInfo{
+					Name:     port.Name,
+					Protocol: string(port.Protocol),
+					Port:     port.Port,
+				}
+				subsetInfo.Ports = append(subsetInfo.Ports, portInfo)
+			}
+
+			subsets = append(subsets, subsetInfo)
+		}
+
+		endpointsInfo := EndpointsInfo{
+			Name:      ep.Name,
+			Namespace: ep.Namespace,
+			Subsets:   subsets,
+			Age:       calculateAge(ep.CreationTimestamp.Time),
+			Labels:    labels,
+		}
+
+		endpointsInfos = append(endpointsInfos, endpointsInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    endpointsInfos,
+	})
+}
+
+// GetEndpointsDetail 获取端点详情
+func (h *ResourceHandler) GetEndpointsDetail(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	ep, err := clientset.CoreV1().Endpoints(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "端点")
+		return
+	}
+
+	// 转换为前端格式
+	// (复用 ListEndpoints 中的转换逻辑)
+	// ...
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    ep,
+	})
+}
+
+// ==================== NetworkPolicy 相关 ====================
+
+// NetworkPolicyDetailInfo 网络策略详情
+type NetworkPolicyDetailInfo struct {
+	Name        string              `json:"name"`        // 策略名称
+	Namespace   string              `json:"namespace"`   // 命名空间
+	PodSelector map[string]string   `json:"podSelector"` // Pod 选择器
+	Ingress     []PolicyRuleInfo    `json:"ingress"`     // 入站规则
+	Egress      []PolicyRuleInfo    `json:"egress"`      // 出站规则
+	Age         string              `json:"age"`         // 创建时间
+	Labels      map[string]string   `json:"labels"`      // 标签
+}
+
+// PolicyRuleInfo 策略规则
+type PolicyRuleInfo struct {
+	Ports []PolicyPortInfo `json:"ports"` // 端口
+	From  []PolicyPeerInfo `json:"from"`  // 来源 (入站)
+	To    []PolicyPeerInfo `json:"to"`    // 目标 (出站)
+}
+
+// PolicyPortInfo 策略端口
+type PolicyPortInfo struct {
+	Protocol string `json:"protocol"` // 协议
+	Port     string `json:"port"`     // 端口号/范围
+}
+
+// PolicyPeerInfo 策略对端
+type PolicyPeerInfo struct {
+	PodSelector       map[string]string `json:"podSelector"`       // Pod 选择器
+	NamespaceSelector map[string]string `json:"namespaceSelector"` // 命名空间选择器
+	IPBlock           *IPBlockInfo       `json:"ipBlock"`           // IP 块
+}
+
+// IPBlockInfo IP 块
+type IPBlockInfo struct {
+	CIDR   string   `json:"cidr"`   // CIDR 表示
+	Except []string `json:"except"` // 排除的 IP
+}
+
+// ListNetworkPolicies 获取网络策略列表
+func (h *ResourceHandler) ListNetworkPolicies(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+
+	// 获取当前用户 ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	// 使用用户凭据获取 clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群连接失败: " + err.Error(),
+		})
+		return
+	}
+
+	policies, err := clientset.NetworkingV1().NetworkPolicies(namespace).List(c.Request.Context(), metav1.ListOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "网络策略")
+		return
+	}
+
+	policyInfos := make([]NetworkPolicyDetailInfo, 0, len(policies.Items))
+	for _, np := range policies.Items {
+		// 确保 labels 不为 nil
+		labels := np.Labels
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		// 转换 Pod 选择器
+		podSelector := make(map[string]string)
+		if np.Spec.PodSelector.MatchLabels != nil {
+			podSelector = np.Spec.PodSelector.MatchLabels
+		}
+
+		// 转换入站规则
+		ingressRules := make([]PolicyRuleInfo, 0, len(np.Spec.Ingress))
+		for _, rule := range np.Spec.Ingress {
+			ruleInfo := PolicyRuleInfo{}
+
+			// 转换端口
+			for _, port := range rule.Ports {
+				portInfo := PolicyPortInfo{}
+				if port.Protocol != nil {
+					portInfo.Protocol = string(*port.Protocol)
+				}
+				if port.Port != nil {
+					if port.Port.Type == intstr.Int {
+						portInfo.Port = strconv.Itoa(int(port.Port.IntVal))
+					} else {
+						portInfo.Port = port.Port.StrVal
+					}
+				}
+				ruleInfo.Ports = append(ruleInfo.Ports, portInfo)
+			}
+
+			// 转换来源
+			for _, from := range rule.From {
+				peerInfo := PolicyPeerInfo{}
+				if from.PodSelector != nil {
+					peerInfo.PodSelector = from.PodSelector.MatchLabels
+				}
+				if from.NamespaceSelector != nil {
+					peerInfo.NamespaceSelector = from.NamespaceSelector.MatchLabels
+				}
+				if from.IPBlock != nil {
+					peerInfo.IPBlock = &IPBlockInfo{
+						CIDR:   from.IPBlock.CIDR,
+						Except: from.IPBlock.Except,
+					}
+				}
+				ruleInfo.From = append(ruleInfo.From, peerInfo)
+			}
+
+			ingressRules = append(ingressRules, ruleInfo)
+		}
+
+		// 转换出站规则
+		egressRules := make([]PolicyRuleInfo, 0, len(np.Spec.Egress))
+		for _, rule := range np.Spec.Egress {
+			ruleInfo := PolicyRuleInfo{}
+
+			// 转换端口
+			for _, port := range rule.Ports {
+				portInfo := PolicyPortInfo{}
+				if port.Protocol != nil {
+					portInfo.Protocol = string(*port.Protocol)
+				}
+				if port.Port != nil {
+					if port.Port.Type == intstr.Int {
+						portInfo.Port = strconv.Itoa(int(port.Port.IntVal))
+					} else {
+						portInfo.Port = port.Port.StrVal
+					}
+				}
+				ruleInfo.Ports = append(ruleInfo.Ports, portInfo)
+			}
+
+			// 转换目标
+			for _, to := range rule.To {
+				peerInfo := PolicyPeerInfo{}
+				if to.PodSelector != nil {
+					peerInfo.PodSelector = to.PodSelector.MatchLabels
+				}
+				if to.NamespaceSelector != nil {
+					peerInfo.NamespaceSelector = to.NamespaceSelector.MatchLabels
+				}
+				if to.IPBlock != nil {
+					peerInfo.IPBlock = &IPBlockInfo{
+						CIDR:   to.IPBlock.CIDR,
+						Except: to.IPBlock.Except,
+					}
+				}
+				ruleInfo.To = append(ruleInfo.To, peerInfo)
+			}
+
+			egressRules = append(egressRules, ruleInfo)
+		}
+
+		policyInfo := NetworkPolicyDetailInfo{
+			Name:        np.Name,
+			Namespace:   np.Namespace,
+			PodSelector: podSelector,
+			Ingress:     ingressRules,
+			Egress:      egressRules,
+			Age:         calculateAge(np.CreationTimestamp.Time),
+			Labels:      labels,
+		}
+
+		policyInfos = append(policyInfos, policyInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    policyInfos,
+	})
+}
+
+// GetNetworkPolicyYAML 获取网络策略 YAML
+func (h *ResourceHandler) GetNetworkPolicyYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	np, err := clientset.NetworkingV1().NetworkPolicies(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "网络策略")
+		return
+	}
+
+	// 清理对象用于 YAML 输出
+	cleanedNp := cleanNetworkPolicyForYAML(np)
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"items": cleanedNp,
+		},
+	})
+}
+
+// UpdateNetworkPolicyYAML 更新网络策略 YAML
+func (h *ResourceHandler) UpdateNetworkPolicyYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 直接绑定请求体到 map[string]interface{}
+	var jsonData map[string]interface{}
+	if err := c.ShouldBindJSON(&jsonData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 提取 clusterId
+	clusterIDFloat, ok := jsonData["clusterId"].(float64)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 clusterId 字段",
+		})
+		return
+	}
+	clusterID := int(clusterIDFloat)
+
+	// 删除 clusterId 字段，剩余的就是 Kubernetes 资源数据
+	delete(jsonData, "clusterId")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证资源名称
+	if metadata, ok := jsonData["metadata"].(map[string]interface{}); ok {
+		if jsonName, ok := metadata["name"].(string); ok && jsonName != name {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "资源名称与URL中的不一致",
+			})
+			return
+		}
+		if jsonNamespace, ok := metadata["namespace"].(string); ok && jsonNamespace != namespace {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": "命名空间与URL中的不一致",
+			})
+			return
+		}
+	}
+
+	// 转换为 JSON 用于 PATCH
+	patchData, err := json.Marshal(jsonData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "序列化Patch数据失败: " + err.Error(),
+		})
+		return
+	}
+
+	_, err = clientset.NetworkingV1().NetworkPolicies(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "网络策略")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteNetworkPolicy 删除网络策略
+func (h *ResourceHandler) DeleteNetworkPolicy(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	var req DeleteServiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.NetworkingV1().NetworkPolicies(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "网络策略")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// cleanNetworkPolicyForYAML 清理 NetworkPolicy 对象用于 YAML 输出
+func cleanNetworkPolicyForYAML(np *networkingv1.NetworkPolicy) map[string]interface{} {
+	result := make(map[string]interface{})
+	result["apiVersion"] = "networking.k8s.io/v1"
+	result["kind"] = "NetworkPolicy"
+	result["metadata"] = cleanMetadata(np.ObjectMeta)
+	result["spec"] = np.Spec
+	return result
+}
+// CreateNamespaceRequest 创建命名空间请求
+type CreateNamespaceRequest struct {
+	YAML string `json:"yaml" binding:"required"`
+}
+
+// UpdateNamespaceYAMLRequest 更新命名空间YAML请求
+type UpdateNamespaceYAMLRequest struct {
+	ClusterID int    `json:"clusterId" binding:"required"`
+	YAML      string `json:"yaml" binding:"required"`
+}
+
+
+// CreateNamespace 创建命名空间
+func (h *ResourceHandler) CreateNamespace(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	var req CreateNamespaceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	// 解析 YAML
+	var namespace v1.Namespace
+	if err := yaml.Unmarshal([]byte(req.YAML), &namespace); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 创建命名空间
+	_, err = clientset.CoreV1().Namespaces().Create(c.Request.Context(), &namespace, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "命名空间")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// GetNamespaceYAML 获取命名空间YAML
+func (h *ResourceHandler) GetNamespaceYAML(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespaceName := c.Param("namespaceName")
+	if namespaceName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "命名空间名称不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	namespace, err := clientset.CoreV1().Namespaces().Get(c.Request.Context(), namespaceName, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "命名空间")
+		return
+	}
+
+	// 清理对象用于 YAML 输出
+	cleaned := cleanNamespaceForYAML(namespace)
+	yamlBytes, err := yaml.Marshal(cleaned)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "序列化 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"yaml": string(yamlBytes),
+		},
+	})
+}
+
+// UpdateNamespaceYAML 更新命名空间YAML
+func (h *ResourceHandler) UpdateNamespaceYAML(c *gin.Context) {
+	namespaceName := c.Param("namespaceName")
+	if namespaceName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "命名空间名称不能为空",
+		})
+		return
+	}
+
+	var req UpdateNamespaceYAMLRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var namespace v1.Namespace
+	if err := yaml.Unmarshal([]byte(req.YAML), &namespace); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保名称一致
+	namespace.Name = namespaceName
+
+	// 更新命名空间
+	_, err = clientset.CoreV1().Namespaces().Update(c.Request.Context(), &namespace, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "命名空间")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteNamespace 删除命名空间
+func (h *ResourceHandler) DeleteNamespace(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespaceName := c.Param("namespaceName")
+	if namespaceName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "命名空间名称不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.CoreV1().Namespaces().Delete(c.Request.Context(), namespaceName, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "命名空间")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// cleanNamespaceForYAML 清理 Namespace 对象用于 YAML 输出
+func cleanNamespaceForYAML(ns *v1.Namespace) map[string]interface{} {
+	result := make(map[string]interface{})
+	result["apiVersion"] = "v1"
+	result["kind"] = "Namespace"
+	result["metadata"] = cleanMetadata(ns.ObjectMeta)
+	return result
+}
+
+// ==================== ConfigMap 相关 ====================
+
+// ConfigMapInfo ConfigMap 信息
+type ConfigMapInfo struct {
+	Name       string            `json:"name"`       // ConfigMap 名称
+	Namespace  string            `json:"namespace"`  // 命名空间
+	DataCount  int               `json:"dataCount"`  // 数据项数量
+	Age        string            `json:"age"`        // 创建时间
+	CreatedAt  string            `json:"createdAt"`  // 创建时间（完整格式）
+	Labels     map[string]string `json:"labels"`     // 标签
+}
+
+// ListConfigMaps 获取 ConfigMap 列表
+func (h *ResourceHandler) ListConfigMaps(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+
+	// 获取当前用户 ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	// 使用用户凭据获取 clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群连接失败: " + err.Error(),
+		})
+		return
+	}
+
+	configMaps, err := clientset.CoreV1().ConfigMaps(namespace).List(c.Request.Context(), metav1.ListOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ConfigMap")
+		return
+	}
+
+	configMapInfos := make([]ConfigMapInfo, 0, len(configMaps.Items))
+	for _, cm := range configMaps.Items {
+		// 确保 labels 不为 nil
+		labels := cm.Labels
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		configMapInfo := ConfigMapInfo{
+			Name:      cm.Name,
+			Namespace: cm.Namespace,
+			DataCount: len(cm.Data),
+			Age:       calculateAge(cm.CreationTimestamp.Time),
+			CreatedAt: cm.CreationTimestamp.Format("2006-01-02 15:04:05"),
+			Labels:    labels,
+		}
+
+		configMapInfos = append(configMapInfos, configMapInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    configMapInfos,
+	})
+}
+
+// GetConfigMapYAML 获取 ConfigMap YAML
+func (h *ResourceHandler) GetConfigMapYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	configMap, err := clientset.CoreV1().ConfigMaps(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ConfigMap")
+		return
+	}
+
+	// 转换为 YAML
+	yamlData, err := yaml.Marshal(configMap)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "YAML 转换失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"yaml": string(yamlData),
+		},
+	})
+}
+
+// UpdateConfigMapYAML 更新 ConfigMap YAML
+func (h *ResourceHandler) UpdateConfigMapYAML(c *gin.Context) {
+	var req struct {
+		ClusterID int    `json:"clusterId"`
+		YAML      string `json:"yaml"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var configMap v1.ConfigMap
+	if err := yaml.Unmarshal([]byte(req.YAML), &configMap); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保名称一致
+	configMap.Name = name
+	configMap.Namespace = namespace
+
+	// 更新 ConfigMap
+	_, err = clientset.CoreV1().ConfigMaps(namespace).Update(c.Request.Context(), &configMap, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ConfigMap")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteConfigMap 删除 ConfigMap
+func (h *ResourceHandler) DeleteConfigMap(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.CoreV1().ConfigMaps(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ConfigMap")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// ==================== Secret 相关 ====================
+
+// SecretInfo Secret 信息
+type SecretInfo struct {
+	Name       string            `json:"name"`       // Secret 名称
+	Namespace  string            `json:"namespace"`  // 命名空间
+	Type       string            `json:"type"`       // Secret 类型
+	DataCount  int               `json:"dataCount"`  // 数据项数量
+	Age        string            `json:"age"`        // 创建时间
+	Labels     map[string]string `json:"labels"`     // 标签
+}
+
+// ListSecrets 获取 Secret 列表
+func (h *ResourceHandler) ListSecrets(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+
+	// 获取当前用户 ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	// 使用用户凭据获取 clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群连接失败: " + err.Error(),
+		})
+		return
+	}
+
+	secrets, err := clientset.CoreV1().Secrets(namespace).List(c.Request.Context(), metav1.ListOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Secret")
+		return
+	}
+
+	secretInfos := make([]SecretInfo, 0, len(secrets.Items))
+	for _, s := range secrets.Items {
+		// 确保 labels 不为 nil
+		labels := s.Labels
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		secretInfo := SecretInfo{
+			Name:      s.Name,
+			Namespace: s.Namespace,
+			Type:      string(s.Type),
+			DataCount: len(s.Data),
+			Age:       calculateAge(s.CreationTimestamp.Time),
+			Labels:    labels,
+		}
+
+		secretInfos = append(secretInfos, secretInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    secretInfos,
+	})
+}
+
+// GetSecretYAML 获取 Secret YAML
+func (h *ResourceHandler) GetSecretYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Secret")
+		return
+	}
+
+	// 转换为 YAML
+	yamlData, err := yaml.Marshal(secret)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "YAML 转换失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"yaml": string(yamlData),
+		},
+	})
+}
+
+// UpdateSecretYAML 更新 Secret YAML
+func (h *ResourceHandler) UpdateSecretYAML(c *gin.Context) {
+	var req struct {
+		ClusterID int    `json:"clusterId"`
+		YAML      string `json:"yaml"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var secret v1.Secret
+	if err := yaml.Unmarshal([]byte(req.YAML), &secret); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保名称一致
+	secret.Name = name
+	secret.Namespace = namespace
+
+	// 更新 Secret
+	_, err = clientset.CoreV1().Secrets(namespace).Update(c.Request.Context(), &secret, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Secret")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteSecret 删除 Secret
+func (h *ResourceHandler) DeleteSecret(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.CoreV1().Secrets(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Secret")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
 }

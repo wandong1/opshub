@@ -54,6 +54,19 @@
           </el-select>
         </div>
 
+        <!-- 拓扑键（仅Pod亲和性） -->
+        <div v-if="editingAffinityRule.type.includes('pod')" class="config-form-section">
+          <label class="form-label">拓扑键 (Topology Key)</label>
+          <el-input
+            v-model="editingAffinityRule.topologyKey"
+            placeholder="例如: kubernetes.io/hostname, topology.kubernetes.io/zone"
+            class="full-width-input"
+          />
+          <div class="form-tip">
+            常用拓扑键：kubernetes.io/hostname（节点）、topology.kubernetes.io/zone（可用区）、topology.kubernetes.io/region（区域）
+          </div>
+        </div>
+
         <!-- 优先级 -->
         <div class="config-form-section">
           <label class="form-label">优先级</label>
@@ -147,6 +160,10 @@
             <span class="detail-label">Namespaces:</span>
             <span class="detail-value">{{ rule.namespaces.join(', ') }}</span>
           </div>
+          <div class="rule-detail-row" v-if="rule.topologyKey && rule.type.includes('pod')">
+            <span class="detail-label">拓扑键:</span>
+            <span class="detail-value">{{ rule.topologyKey }}</span>
+          </div>
           <div class="rule-detail-row">
             <span class="detail-label">优先级:</span>
             <span class="detail-value">{{ rule.priority }}</span>
@@ -181,6 +198,7 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 interface AffinityRule {
   type: 'podAffinity' | 'podAntiAffinity' | 'nodeAffinity' | 'nodeAntiAffinity'
   namespaces?: string[]
+  topologyKey?: string
   priority: 'Required' | 'Preferred'
   weight?: number
   matchExpressions: { key: string; operator: string; valueStr: string }[]
@@ -207,8 +225,8 @@ const emit = defineEmits<{
 
 <style scoped>
 .affinity-wrapper {
-  padding: 24px 32px;
-  background: #fff;
+  padding: 0;
+  background: transparent;
   height: 100%;
   overflow: hidden;
   display: flex;
@@ -309,6 +327,17 @@ const emit = defineEmits<{
 
 .full-width-input {
   width: 100%;
+}
+
+.form-tip {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #e7f3ff;
+  border-left: 3px solid #409eff;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.5;
 }
 
 .section-header {

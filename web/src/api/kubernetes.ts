@@ -700,3 +700,454 @@ export function syncAllClustersStatus() {
     method: 'post'
   })
 }
+
+/**
+ * 更新工作负载
+ * 请求体直接是 Kubernetes 对象，参数通过 URL 查询参数传递
+ */
+export interface UpdateWorkloadParams {
+  cluster: string
+  namespace: string
+  type: string
+  name: string
+  yaml: string
+}
+
+export function updateWorkload(params: UpdateWorkloadParams) {
+  // 将 YAML 字符串解析为对象
+  const kubernetesObject = JSON.parse(params.yaml)
+
+  return request({
+    url: '/api/v1/plugins/kubernetes/workloads/update',
+    method: 'post',
+    params: {
+      cluster: params.cluster,
+      namespace: params.namespace,
+      type: params.type,
+      name: params.name
+    },
+    data: kubernetesObject  // 直接发送 Kubernetes 对象，而不是包装在请求体中
+  })
+}
+
+// ==================== 网络资源相关 ====================
+
+// -------------------- Service --------------------
+
+export interface ServicePort {
+  name?: string
+  protocol: string
+  port: number
+  targetPort?: string
+  nodePort?: number
+}
+
+export interface ServiceInfo {
+  name: string
+  namespace: string
+  type: 'ClusterIP' | 'NodePort' | 'LoadBalancer' | 'ExternalName'
+  clusterIP: string
+  externalIP: string
+  ports: ServicePort[]
+  selector: Record<string, string>
+  sessionAffinity: string
+  age: string
+  labels: Record<string, string>
+  endpoints: number
+}
+
+/**
+ * 获取服务列表
+ */
+export function getServices(clusterId: number, namespace?: string) {
+  return request<ServiceInfo[]>({
+    url: '/api/v1/plugins/kubernetes/resources/services',
+    method: 'get',
+    params: { clusterId, namespace }
+  })
+}
+
+/**
+ * 获取服务 YAML
+ */
+export function getServiceYAML(clusterId: number, namespace: string, name: string) {
+  return request<{ items: Record<string, any> }>({
+    url: `/api/v1/plugins/kubernetes/resources/services/${namespace}/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 更新服务 YAML
+ */
+export function updateServiceYAML(clusterId: number, namespace: string, name: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/services/${namespace}/${name}/yaml`,
+    method: 'put',
+    data: { clusterId, ...data }
+  })
+}
+
+/**
+ * 创建服务
+ */
+export function createService(clusterId: number, namespace: string, data: {
+  name: string
+  type: string
+  clusterIP?: string
+  ports: ServicePort[]
+  selector?: Record<string, string>
+  sessionAffinity?: string
+}) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/services/${namespace}/${data.name}`,
+    method: 'post',
+    data: { clusterId, namespace, ...data }
+  })
+}
+
+/**
+ * 删除服务
+ */
+export function deleteService(clusterId: number, namespace: string, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/services/${namespace}/${name}`,
+    method: 'delete',
+    data: { clusterId }
+  })
+}
+
+// -------------------- Ingress --------------------
+
+export interface IngressPath {
+  host: string
+  path: string
+  pathType: string
+  service: string
+  port: number
+}
+
+export interface IngressTLS {
+  hosts: string[]
+  secretName: string
+}
+
+export interface IngressInfo {
+  name: string
+  namespace: string
+  hosts: string[]
+  paths: IngressPath[]
+  tls: IngressTLS[]
+  ingressClass: string
+  age: string
+  labels: Record<string, string>
+  addresses: string[]
+}
+
+/**
+ * 获取 Ingress 列表
+ */
+export function getIngresses(clusterId: number, namespace?: string) {
+  return request<IngressInfo[]>({
+    url: '/api/v1/plugins/kubernetes/resources/ingresses',
+    method: 'get',
+    params: { clusterId, namespace }
+  })
+}
+
+/**
+ * 获取 Ingress YAML
+ */
+export function getIngressYAML(clusterId: number, namespace: string, name: string) {
+  return request<{ items: Record<string, any> }>({
+    url: `/api/v1/plugins/kubernetes/resources/ingresses/${namespace}/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 更新 Ingress YAML
+ */
+export function updateIngressYAML(clusterId: number, namespace: string, name: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/ingresses/${namespace}/${name}/yaml`,
+    method: 'put',
+    data: { clusterId, ...data }
+  })
+}
+
+/**
+ * 创建 Ingress
+ */
+export function createIngress(clusterId: number, namespace: string, data: {
+  name: string
+  ingressClass?: string
+  rules: Array<{
+    host?: string
+    paths: Array<{
+      path: string
+      pathType: string
+      service: string
+      port: number
+    }>
+  }>
+  tls?: Array<{
+    hosts: string[]
+    secretName: string
+  }>
+}) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/ingresses/${namespace}/${data.name}`,
+    method: 'post',
+    data: { clusterId, namespace, ...data }
+  })
+}
+
+/**
+ * 删除 Ingress
+ */
+export function deleteIngress(clusterId: number, namespace: string, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/ingresses/${namespace}/${name}`,
+    method: 'delete',
+    data: { clusterId }
+  })
+}
+
+// -------------------- Endpoints --------------------
+
+export interface EndpointAddress {
+  ip: string
+  hostname?: string
+  nodeName?: string
+  targetRef?: string
+  ready: boolean
+}
+
+export interface EndpointPort {
+  name?: string
+  protocol: string
+  port: number
+}
+
+export interface EndpointSubset {
+  addresses: EndpointAddress[]
+  notReadyAddresses: EndpointAddress[]
+  ports: EndpointPort[]
+}
+
+export interface EndpointsInfo {
+  name: string
+  namespace: string
+  subsets: EndpointSubset[]
+  age: string
+  labels: Record<string, string>
+}
+
+/**
+ * 获取端点列表
+ */
+export function getEndpoints(clusterId: number, namespace?: string) {
+  return request<EndpointsInfo[]>({
+    url: '/api/v1/plugins/kubernetes/resources/endpoints',
+    method: 'get',
+    params: { clusterId, namespace }
+  })
+}
+
+/**
+ * 获取端点详情
+ */
+export function getEndpointsDetail(clusterId: number, namespace: string, name: string) {
+  return request<EndpointsInfo>({
+    url: `/api/v1/plugins/kubernetes/resources/endpoints/${namespace}/${name}`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+// -------------------- NetworkPolicy --------------------
+
+export interface PolicyPort {
+  protocol?: string
+  port?: string | number
+}
+
+export interface PolicyPeer {
+  podSelector?: Record<string, string>
+  namespaceSelector?: Record<string, string>
+  ipBlock?: {
+    cidr: string
+    except?: string[]
+  }
+}
+
+export interface PolicyRule {
+  ports: PolicyPort[]
+  from?: PolicyPeer[]
+  to?: PolicyPeer[]
+}
+
+export interface NetworkPolicyDetailInfo {
+  name: string
+  namespace: string
+  podSelector: Record<string, string>
+  ingress: PolicyRule[]
+  egress: PolicyRule[]
+  age: string
+  labels: Record<string, string>
+}
+
+/**
+ * 获取网络策略列表
+ */
+export function getNetworkPolicies(clusterId: number, namespace?: string) {
+  return request<NetworkPolicyDetailInfo[]>({
+    url: '/api/v1/plugins/kubernetes/resources/networkpolicies',
+    method: 'get',
+    params: { clusterId, namespace }
+  })
+}
+
+/**
+ * 获取网络策略 YAML
+ */
+export function getNetworkPolicyYAML(clusterId: number, namespace: string, name: string) {
+  return request<{ items: Record<string, any> }>({
+    url: `/api/v1/plugins/kubernetes/resources/networkpolicies/${namespace}/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 更新网络策略 YAML
+ */
+export function updateNetworkPolicyYAML(clusterId: number, namespace: string, name: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/networkpolicies/${namespace}/${name}/yaml`,
+    method: 'put',
+    data: { clusterId, ...data }
+  })
+}
+
+/**
+ * 删除网络策略
+ */
+export function deleteNetworkPolicy(clusterId: number, namespace: string, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/networkpolicies/${namespace}/${name}`,
+    method: 'delete',
+    data: { clusterId }
+  })
+}
+
+// ==================== ConfigMaps ====================
+
+export interface ConfigMapInfo {
+  name: string
+  namespace: string
+  dataCount: number
+  age: string
+  createdAt?: string
+}
+
+/**
+ * 获取 ConfigMap 列表
+ */
+export function getConfigMaps(clusterId: number, namespace?: string) {
+  return request<ConfigMapInfo[]>({
+    url: '/api/v1/plugins/kubernetes/resources/configmaps',
+    method: 'get',
+    params: { clusterId, namespace }
+  })
+}
+
+/**
+ * 获取 ConfigMap YAML
+ */
+export function getConfigMapYAML(clusterId: number, namespace: string, name: string) {
+  return request<{ items: Record<string, any> }>({
+    url: `/api/v1/plugins/kubernetes/resources/configmaps/${namespace}/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 更新 ConfigMap YAML
+ */
+export function updateConfigMapYAML(clusterId: number, namespace: string, name: string, yaml: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/configmaps/${namespace}/${name}/yaml`,
+    method: 'put',
+    data: { clusterId, yaml }
+  })
+}
+
+/**
+ * 删除 ConfigMap
+ */
+export function deleteConfigMap(clusterId: number, namespace: string, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/configmaps/${namespace}/${name}`,
+    method: 'delete',
+    data: { clusterId }
+  })
+}
+
+// ==================== Secrets ====================
+
+export interface SecretInfo {
+  name: string
+  namespace: string
+  type: string
+  dataCount: number
+  age: string
+}
+
+/**
+ * 获取 Secret 列表
+ */
+export function getSecrets(clusterId: number, namespace?: string) {
+  return request<SecretInfo[]>({
+    url: '/api/v1/plugins/kubernetes/resources/secrets',
+    method: 'get',
+    params: { clusterId, namespace }
+  })
+}
+
+/**
+ * 获取 Secret YAML
+ */
+export function getSecretYAML(clusterId: number, namespace: string, name: string) {
+  return request<{ items: Record<string, any> }>({
+    url: `/api/v1/plugins/kubernetes/resources/secrets/${namespace}/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 更新 Secret YAML
+ */
+export function updateSecretYAML(clusterId: number, namespace: string, name: string, yaml: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/secrets/${namespace}/${name}/yaml`,
+    method: 'put',
+    data: { clusterId, yaml }
+  })
+}
+
+/**
+ * 删除 Secret
+ */
+export function deleteSecret(clusterId: number, namespace: string, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/secrets/${namespace}/${name}`,
+    method: 'delete',
+    data: { clusterId }
+  })
+}

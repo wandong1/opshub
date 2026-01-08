@@ -1,61 +1,95 @@
 <template>
   <div class="scaling-strategy-wrapper">
     <div class="strategy-section">
-      <el-radio-group v-model="formData.strategyType" class="strategy-radio">
+      <label class="section-label">更新策略</label>
+      <el-radio-group v-model="localFormData.strategyType" @change="handleUpdate" class="strategy-radio">
         <el-radio value="RollingUpdate" class="strategy-radio-item">
-          <span class="radio-label">滚动升级</span>
+          <span class="radio-label">滚动升级 (RollingUpdate)</span>
         </el-radio>
         <el-radio value="Recreate" class="strategy-radio-item">
-          <span class="radio-label">重新创建</span>
+          <span class="radio-label">重新创建 (Recreate)</span>
         </el-radio>
       </el-radio-group>
     </div>
 
+    <!-- 滚动升级配置 -->
+    <div v-if="localFormData.strategyType === 'RollingUpdate'" class="strategy-form-grid">
+      <div class="form-grid-row">
+        <div class="form-grid-item">
+          <label class="form-grid-label">最大激增 Pod 数</label>
+          <el-input
+            v-model="localFormData.maxSurge"
+            placeholder="例如: 3 或 25%"
+            class="grid-input"
+            @input="handleUpdate"
+          />
+          <div class="form-tip">升级过程中最多可以比期望副本数多的 Pod 数量</div>
+        </div>
+        <div class="form-grid-item">
+          <label class="form-grid-label">最大不可用 Pod 数</label>
+          <el-input
+            v-model="localFormData.maxUnavailable"
+            placeholder="例如: 1 或 25%"
+            class="grid-input"
+            @input="handleUpdate"
+          />
+          <div class="form-tip">升级过程中最多可以有多少个 Pod 不可用</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通用配置 -->
     <div class="strategy-form-grid">
       <div class="form-grid-row">
         <div class="form-grid-item">
-          <label class="form-grid-label">最大 Pod 数量</label>
-          <el-input
-            v-model="formData.maxSurge"
-            placeholder="例如: 3 或 25%"
-            class="grid-input"
-          />
-        </div>
-        <div class="form-grid-item">
-          <label class="form-grid-label">最大不可用数量</label>
-          <el-input
-            v-model="formData.maxUnavailable"
-            placeholder="例如: 1 或 25%"
-            class="grid-input"
-          />
-        </div>
-      </div>
-      <div class="form-grid-row">
-        <div class="form-grid-item">
           <label class="form-grid-label">最小就绪时间(秒)</label>
-          <el-input
-            v-model="formData.minReadySeconds"
-            placeholder="最小就绪时间"
+          <el-input-number
+            v-model="localFormData.minReadySeconds"
+            :min="0"
+            :max="3600"
+            placeholder="0"
             class="grid-input"
+            @change="handleUpdate"
           />
+          <div class="form-tip">新 Pod 就绪后最少等待多少秒才继续升级</div>
         </div>
         <div class="form-grid-item">
-          <label class="form-grid-label">进程截止时间(秒)</label>
-          <el-input
-            v-model="formData.progressDeadlineSeconds"
-            placeholder="进程截止时间"
+          <label class="form-grid-label">进度截止时间(秒)</label>
+          <el-input-number
+            v-model="localFormData.progressDeadlineSeconds"
+            :min="60"
+            :max="3600"
+            placeholder="600"
             class="grid-input"
+            @change="handleUpdate"
           />
+          <div class="form-tip">升级失败前等待的最长时间</div>
         </div>
       </div>
       <div class="form-grid-row">
-        <div class="form-grid-item full-width">
-          <label class="form-grid-label">修订历史记录限制</label>
-          <el-input
-            v-model="formData.revisionHistoryLimit"
-            placeholder="修订历史记录限制"
+        <div class="form-grid-item">
+          <label class="form-grid-label">修订历史限制</label>
+          <el-input-number
+            v-model="localFormData.revisionHistoryLimit"
+            :min="0"
+            :max="100"
+            placeholder="10"
             class="grid-input"
+            @change="handleUpdate"
           />
+          <div class="form-tip">保留多少个旧版本的 ReplicaSet</div>
+        </div>
+        <div class="form-grid-item">
+          <label class="form-grid-label">超时时间(秒)</label>
+          <el-input-number
+            v-model="localFormData.timeoutSeconds"
+            :min="1"
+            :max="3600"
+            placeholder="600"
+            class="grid-input"
+            @change="handleUpdate"
+          />
+          <div class="form-tip">升级操作的默认超时时间</div>
         </div>
       </div>
     </div>
@@ -63,30 +97,69 @@
 </template>
 
 <script setup lang="ts">
+import { reactive, watch } from 'vue'
+
 interface FormData {
   strategyType: string
-  maxSurge: string
-  maxUnavailable: string
-  minReadySeconds: string
-  progressDeadlineSeconds: string
-  revisionHistoryLimit: string
+  maxSurge: string | number
+  maxUnavailable: string | number
+  minReadySeconds: number
+  progressDeadlineSeconds: number
+  revisionHistoryLimit: number
+  timeoutSeconds: number
 }
 
 const props = defineProps<{
   formData: FormData
 }>()
+
+const emit = defineEmits<{
+  update: [data: FormData]
+}>()
+
+// 创建本地响应式数据
+const localFormData = reactive<FormData>({
+  strategyType: props.formData.strategyType || 'RollingUpdate',
+  maxSurge: props.formData.maxSurge || '25%',
+  maxUnavailable: props.formData.maxUnavailable || '25%',
+  minReadySeconds: props.formData.minReadySeconds || 0,
+  progressDeadlineSeconds: props.formData.progressDeadlineSeconds || 600,
+  revisionHistoryLimit: props.formData.revisionHistoryLimit || 10,
+  timeoutSeconds: props.formData.timeoutSeconds || 600
+})
+
+const handleUpdate = () => {
+  emit('update', { ...localFormData })
+}
+
+// 监听 props 变化
+watch(() => props.formData, (newVal) => {
+  Object.assign(localFormData, newVal)
+}, { deep: true })
 </script>
 
 <style scoped>
 .scaling-strategy-wrapper {
-  padding: 24px 32px;
-  background: #fff;
+  padding: 0;
+  background: transparent;
 }
 
 .strategy-section {
-  margin-bottom: 32px;
-  padding-bottom: 24px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
   border-bottom: 1px solid #e4e7ed;
+}
+
+.strategy-section:last-child {
+  border-bottom: none;
+}
+
+.section-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 16px;
 }
 
 .strategy-radio {
@@ -199,5 +272,12 @@ const props = defineProps<{
 .grid-input :deep(.el-input__inner) {
   font-size: 14px;
   color: #303133;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 </style>

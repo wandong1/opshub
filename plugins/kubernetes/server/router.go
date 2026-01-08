@@ -11,7 +11,7 @@ import (
 func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 	clusterHandler := NewClusterHandler(db)
 	clusterService := service.NewClusterService(db)
-	resourceHandler := NewResourceHandler(clusterService)
+	resourceHandler := NewResourceHandler(clusterService, db)
 	roleHandler := NewRoleHandler(db)
 	roleBindingHandler := NewRoleBindingHandler(db)
 
@@ -57,13 +57,54 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 		clusters.POST("/cloudtty/service", resourceHandler.CreateCloudTTYService)
 
 		clusters.GET("/resources/namespaces", resourceHandler.ListNamespaces)
+		clusters.POST("/resources/namespaces", resourceHandler.CreateNamespace)
+		clusters.GET("/resources/namespaces/:namespaceName/yaml", resourceHandler.GetNamespaceYAML)
+		clusters.PUT("/resources/namespaces/:namespaceName/yaml", resourceHandler.UpdateNamespaceYAML)
+		clusters.DELETE("/resources/namespaces/:namespaceName", resourceHandler.DeleteNamespace)
 		clusters.GET("/resources/pods", resourceHandler.ListPods)
 		clusters.GET("/resources/deployments", resourceHandler.ListDeployments)
 		clusters.GET("/resources/workloads", resourceHandler.GetWorkloads)
 		clusters.GET("/resources/workloads/:namespace/:name/yaml", resourceHandler.GetWorkloadYAML)
 		clusters.PUT("/resources/workloads/:namespace/:name/yaml", resourceHandler.UpdateWorkloadYAML)
+		clusters.POST("/workloads/update", resourceHandler.UpdateWorkload)
 		clusters.GET("/resources/api-groups", resourceHandler.GetAPIGroups)
 		clusters.GET("/resources/api-resources", resourceHandler.GetResourcesByAPIGroup)
+
+		// 网络资源管理 - Service
+		clusters.GET("/resources/services", resourceHandler.ListServices)
+		clusters.GET("/resources/services/:namespace/:name/yaml", resourceHandler.GetServiceYAML)
+		clusters.PUT("/resources/services/:namespace/:name/yaml", resourceHandler.UpdateServiceYAML)
+		clusters.POST("/resources/services/:namespace/:name", resourceHandler.CreateService)
+		clusters.DELETE("/resources/services/:namespace/:name", resourceHandler.DeleteService)
+
+		// 网络资源管理 - Ingress
+		clusters.GET("/resources/ingresses", resourceHandler.ListIngresses)
+		clusters.GET("/resources/ingresses/:namespace/:name/yaml", resourceHandler.GetIngressYAML)
+		clusters.PUT("/resources/ingresses/:namespace/:name/yaml", resourceHandler.UpdateIngressYAML)
+		clusters.POST("/resources/ingresses/:namespace/:name", resourceHandler.CreateIngress)
+		clusters.DELETE("/resources/ingresses/:namespace/:name", resourceHandler.DeleteIngress)
+
+		// 网络资源管理 - Endpoints
+		clusters.GET("/resources/endpoints", resourceHandler.ListEndpoints)
+		clusters.GET("/resources/endpoints/:namespace/:name", resourceHandler.GetEndpointsDetail)
+
+		// 网络资源管理 - NetworkPolicy
+		clusters.GET("/resources/networkpolicies", resourceHandler.ListNetworkPolicies)
+		clusters.GET("/resources/networkpolicies/:namespace/:name/yaml", resourceHandler.GetNetworkPolicyYAML)
+		clusters.PUT("/resources/networkpolicies/:namespace/:name/yaml", resourceHandler.UpdateNetworkPolicyYAML)
+		clusters.DELETE("/resources/networkpolicies/:namespace/:name", resourceHandler.DeleteNetworkPolicy)
+
+		// 配置管理 - ConfigMap
+		clusters.GET("/resources/configmaps", resourceHandler.ListConfigMaps)
+		clusters.GET("/resources/configmaps/:namespace/:name/yaml", resourceHandler.GetConfigMapYAML)
+		clusters.PUT("/resources/configmaps/:namespace/:name/yaml", resourceHandler.UpdateConfigMapYAML)
+		clusters.DELETE("/resources/configmaps/:namespace/:name", resourceHandler.DeleteConfigMap)
+
+		// 配置管理 - Secret
+		clusters.GET("/resources/secrets", resourceHandler.ListSecrets)
+		clusters.GET("/resources/secrets/:namespace/:name/yaml", resourceHandler.GetSecretYAML)
+		clusters.PUT("/resources/secrets/:namespace/:name/yaml", resourceHandler.UpdateSecretYAML)
+		clusters.DELETE("/resources/secrets/:namespace/:name", resourceHandler.DeleteSecret)
 
 		// 统计信息
 		clusters.GET("/resources/stats", resourceHandler.GetClusterStats)

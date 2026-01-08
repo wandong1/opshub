@@ -10,7 +10,7 @@
           添加挂载点
         </el-button>
       </div>
-      <div v-if="mounts.length > 0" class="mount-table-wrapper">
+      <div v-if="localMounts.length > 0" class="mount-table-wrapper">
         <el-table :data="localMounts" class="mount-table" size="default">
           <el-table-column label="卷名" min-width="150">
             <template #default="{ row }">
@@ -22,7 +22,7 @@
                 @change="updateMounts"
               >
                 <el-option
-                  v-for="vol in volumeList"
+                  v-for="vol in volumes"
                   :key="vol.name"
                   :label="vol.name"
                   :value="vol.name"
@@ -33,7 +33,7 @@
           <el-table-column label="挂载路径" min-width="200">
             <template #default="{ row }">
               <el-input
-                v-model="row.path"
+                v-model="row.mountPath"
                 placeholder="/container/path"
                 size="small"
                 @input="updateMounts"
@@ -78,14 +78,14 @@ import { Plus, Delete, FolderOpened } from '@element-plus/icons-vue'
 
 interface VolumeMount {
   name: string
-  path: string
+  mountPath: string
   subPath?: string
   readOnly?: boolean
 }
 
 const props = defineProps<{
-  mounts: VolumeMount[]
-  volumeList?: { name: string }[]
+  volumeMounts: VolumeMount[]
+  volumes: { name: string; type?: string }[]
 }>()
 
 const emit = defineEmits<{
@@ -94,10 +94,10 @@ const emit = defineEmits<{
 
 const localMounts = ref<VolumeMount[]>([])
 
-watch(() => props.mounts, (newVal) => {
+watch(() => props.volumeMounts, (newVal) => {
   localMounts.value = (newVal || []).map(m => ({
-    name: m.name,
-    path: m.path,
+    name: m.name || '',
+    mountPath: m.mountPath || '',
     subPath: m.subPath || '',
     readOnly: m.readOnly || false
   }))
@@ -106,7 +106,7 @@ watch(() => props.mounts, (newVal) => {
 const addMount = () => {
   localMounts.value.push({
     name: '',
-    path: '',
+    mountPath: '',
     subPath: '',
     readOnly: false
   })
@@ -126,7 +126,7 @@ const updateMounts = () => {
 <style scoped>
 .mount-config-content {
   padding: 0;
-  background: #fff;
+  background: transparent;
 }
 
 .mount-section {
@@ -137,68 +137,127 @@ const updateMounts = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  background: linear-gradient(to right, #f8f9fa, #ffffff);
-  border: 1px solid #e4e7ed;
-  border-radius: 8px 8px 0 0;
+  padding: 12px 20px;
+  background: #d4af37;
+  border: 1px solid #d4af37;
+  border-radius: 12px 12px 0 0;
   margin-bottom: 0;
 }
 
 .mount-header-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
+  gap: 10px;
+  font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: #1a1a1a;
+  letter-spacing: 0.3px;
 }
 
 .mount-header-title .el-icon {
   font-size: 18px;
-  color: #409eff;
+  color: #d4af37;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #ffffff;
+  border-radius: 6px;
+  color: #d4af37;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.mount-header .el-button {
+  font-weight: 500;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #d4af37;
+  color: #d4af37;
+}
+
+.mount-header .el-button:hover {
+  background: #fafafa;
+  border-color: #c9a227;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
 }
 
 .mount-table-wrapper {
-  border: 1px solid #e4e7ed;
+  border: 1px solid #e8e8e8;
   border-top: none;
-  border-radius: 0 0 8px 8px;
-  padding: 16px;
-  background: #fafbfc;
+  border-radius: 0 0 12px 12px;
+  padding: 20px;
+  background: #ffffff;
 }
 
 .mount-table {
-  background: #fff;
-  border-radius: 6px;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .mount-table :deep(.el-table__header-wrapper) {
-  background: #f5f7fa;
+  background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
 }
 
 .mount-table :deep(.el-table__header th) {
-  background: #f5f7fa;
-  color: #606266;
+  background: transparent;
+  color: #333;
   font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .mount-table :deep(.el-table__body) {
   font-size: 13px;
 }
 
+.mount-table :deep(.el-table__body tr) {
+  transition: all 0.3s ease;
+}
+
+.mount-table :deep(.el-table__body tr:hover) {
+  background: #fafafa;
+}
+
+.mount-table :deep(.el-table__body td) {
+  border-bottom: 1px solid #f0f0f0;
+}
+
 .mount-table :deep(.el-input__wrapper) {
-  box-shadow: none !important;
-  background: transparent;
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
 .mount-table :deep(.el-input__wrapper:hover) {
-  box-shadow: none !important;
+  border-color: #d4af37;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
 .mount-table :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px var(--el-color-primary) inset !important;
+  border-color: #d4af37;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
+}
+
+.mount-table :deep(.el-select .el-input__wrapper) {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.mount-table :deep(.el-switch) {
+  --el-switch-on-color: #d4af37;
 }
 
 :deep(.el-empty) {
-  padding: 40px 0;
+  padding: 60px 0;
+}
+
+:deep(.el-empty__description) {
+  color: #999;
 }
 </style>
