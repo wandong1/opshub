@@ -164,26 +164,8 @@ func (r *AsciinemaRecorder) GetFileSize() int64 {
 
 // sanitizeString 清理字符串，确保可以正确序列化为JSON
 func sanitizeString(s string) string {
-	// 替换控制字符为转义序列
-	result := ""
-	for _, r := range s {
-		switch {
-		case r == '\n':
-			result += "\n"
-		case r == '\r':
-			result += "\r"
-		case r == '\t':
-			result += "\t"
-		case r == '\\':
-			result += "\\\\"
-		case r == '"':
-			result += "\\\""
-		case r < 32:
-			// 其他控制字符，忽略或用点号代替
-			result += "."
-		default:
-			result += string(r)
-		}
-	}
-	return result
+	// 直接返回原始字符串
+	// Go 的 json.Marshal 会自动处理所有必要的转义
+	// 包括 ANSI 转义序列（ESC 字符）
+	return s
 }

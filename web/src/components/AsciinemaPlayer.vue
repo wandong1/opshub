@@ -36,7 +36,9 @@ let player: any = null
 // 动态加载 AsciinemaPlayer
 const loadAsciinemaPlayer = async () => {
   return new Promise<void>((resolve, reject) => {
-    if ((window as any).AsciinemaPlayer) {
+    const win = window as any
+    // 检查是否已加载
+    if (win.AsciinemaPlayer || win.AsciiinemaPlayer) {
       resolve()
       return
     }
@@ -50,7 +52,14 @@ const loadAsciinemaPlayer = async () => {
     // 加载 JS
     const script = document.createElement('script')
     script.src = 'https://cdn.jsdelivr.net/npm/asciinema-player@3.6.3/dist/bundle/asciinema-player.min.js'
-    script.onload = () => resolve()
+    script.onload = () => {
+      console.log('✅ AsciinemaPlayer 库已加载')
+      console.log('全局变量:', {
+        AsciinemaPlayer: win.AsciinemaPlayer,
+        AsciiinemaPlayer: win.AsciiinemaPlayer
+      })
+      resolve()
+    }
     script.onerror = () => reject(new Error('Failed to load AsciinemaPlayer'))
     document.head.appendChild(script)
   })
@@ -68,11 +77,21 @@ const createPlayer = async () => {
       playerRef.value.innerHTML = ''
     }
 
-    // 创建新播放器
-    const AsciinemaPlayer = (window as any).AsciinemaPlayer
-    player = new AsciinemaPlayer(props.src, playerRef.value, {
-      cols: props.cols,
-      rows: props.rows,
+    const win = window as any
+    // 尝试两种可能的全局变量名
+    const AsciinemaPlayerLibrary = win.AsciinemaPlayer || win.AsciiinemaPlayer
+
+    console.log('📼 AsciinemaPlayer 库:', AsciinemaPlayerLibrary)
+    console.log('📼 播放器容器:', playerRef.value)
+    console.log('📼 录制文件 URL:', props.src)
+
+    if (!AsciinemaPlayerLibrary) {
+      throw new Error('AsciinemaPlayer library not loaded')
+    }
+
+    // 使用 create 函数创建播放器（asciinema-player v3+）
+    player = AsciinemaPlayerLibrary.create(props.src, playerRef.value, {
+      // 不设置 cols 和 rows，让播放器从录制文件中自动读取
       autoplay: props.autoplay,
       preload: props.preload ? 'auto' : 'none',
       startTime: props.startTime,
@@ -80,7 +99,11 @@ const createPlayer = async () => {
       loop: props.loop,
       theme: 'tango',
       poster: 'npt:0:01',
+      // 确保控制栏显示
+      controls: true,
     })
+
+    console.log('✅ 播放器创建成功:', player)
 
     // 监听事件
     if (player.addEventListener) {
@@ -93,7 +116,8 @@ const createPlayer = async () => {
 
     emit('ready')
   } catch (error) {
-    console.error('Failed to create AsciinemaPlayer:', error)
+    console.error('❌ Failed to create AsciinemaPlayer:', error)
+    console.error('错误详情:', error)
   }
 }
 
@@ -131,11 +155,13 @@ defineExpose({
   align-items: center;
   justify-content: center;
   background-color: #000;
+  min-height: 500px;
 }
 
 .asciinema-player-wrapper {
   width: 100%;
   height: 100%;
+  overflow: auto;
 }
 
 /* 深度样式覆盖 - 修改 AsciinemaPlayer 的颜色 */
@@ -148,11 +174,15 @@ defineExpose({
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-control-bar) {
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent) !important;
+  background: rgba(0, 0, 0, 0.9) !important;
+  opacity: 1 !important;
+  height: auto !important;
+  min-height: 48px !important;
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-progress-container) {
   background-color: rgba(212, 175, 55, 0.2) !important;
+  height: 6px !important;
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-progress-bar) {
@@ -161,9 +191,16 @@ defineExpose({
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-controls) {
   color: #d4af37 !important;
+  display: flex !important;
+  opacity: 1 !important;
+}
+
+.asciinema-player-wrapper :deep(.asciinema-player .ap-control-bar) {
+  display: block !important;
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-icon-button) {
+  display: inline-flex !important;
   color: #d4af37 !important;
 }
 

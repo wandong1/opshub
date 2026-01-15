@@ -48,6 +48,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  'count-update': [count: number]
+}>()
 const loading = ref(false)
 const psps = ref<PodSecurityPolicyInfo[]>([])
 const searchName = ref('')
@@ -89,7 +92,25 @@ const handleDelete = (row: PodSecurityPolicyInfo) => {
   ElMessage.info('删除功能开发中...')
 }
 
-watch(() => props.clusterId, loadData, { immediate: true })
+const handleCreate = () => {
+  ElMessage.info('新增功能开发中...')
+}
+
+watch(() => props.clusterId, () => {
+  if (props.clusterId) {
+    loadData()
+  }
+}, { immediate: true })
+
+// 监听筛选后的数据变化，更新计数
+watch(filteredData, (newData) => {
+  emit('count-update', newData?.length || 0)
+})
+
+// 暴露方法给父组件
+defineExpose({
+  handleCreate
+})
 </script>
 
 <style scoped>
@@ -101,7 +122,7 @@ watch(() => props.clusterId, loadData, { immediate: true })
 .name-cell { display: flex; align-items: center; gap: 10px; }
 .name-icon-wrapper { width: 32px; height: 32px; border-radius: 6px; background: linear-gradient(135deg, #000 0%, #1a1a1a 100%); display: flex; align-items: center; justify-content: center; border: 1px solid #d4af37; }
 .name-icon { color: #d4af37; }
-.name-text { font-weight: 600; color: #d4af37; }
+.name-text { font-weight: 600; color: #303133; }
 .action-btn { color: #d4af37; margin: 0 4px; }
 .action-btn.danger { color: #f56c6c; }
 .action-btn:hover { transform: scale(1.1); }

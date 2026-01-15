@@ -21,18 +21,19 @@ func NewDepartmentService(deptUseCase *rbac.DepartmentUseCase) *DepartmentServic
 
 // CreateDepartment 创建部门
 func (s *DepartmentService) CreateDepartment(c *gin.Context) {
-	var req rbac.SysDepartment
+	var req rbac.DepartmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
 		return
 	}
 
-	if err := s.deptUseCase.Create(c.Request.Context(), &req); err != nil {
+	dept := req.ToModel()
+	if err := s.deptUseCase.Create(c.Request.Context(), dept); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败: "+err.Error())
 		return
 	}
 
-	response.Success(c, req)
+	response.Success(c, dept)
 }
 
 // UpdateDepartment 更新部门
@@ -44,19 +45,20 @@ func (s *DepartmentService) UpdateDepartment(c *gin.Context) {
 		return
 	}
 
-	var req rbac.SysDepartment
+	var req rbac.DepartmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
 		return
 	}
 
-	req.ID = uint(id)
-	if err := s.deptUseCase.Update(c.Request.Context(), &req); err != nil {
+	dept := req.ToModel()
+	dept.ID = uint(id)
+	if err := s.deptUseCase.Update(c.Request.Context(), dept); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "更新失败: "+err.Error())
 		return
 	}
 
-	response.Success(c, req)
+	response.Success(c, dept)
 }
 
 // DeleteDepartment 删除部门
@@ -102,5 +104,22 @@ func (s *DepartmentService) GetDepartmentTree(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, tree)
+	// 转换为VO格式
+	var voTree []*rbac.DepartmentInfoVO
+	for _, dept := range tree {
+		voTree = append(voTree, s.deptUseCase.ToInfoVO(dept))
+	}
+
+	response.Success(c, voTree)
+}
+
+// GetParentOptions 获取父级部门选项
+func (s *DepartmentService) GetParentOptions(c *gin.Context) {
+	options, err := s.deptUseCase.GetParentOptions(c.Request.Context())
+	if err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, "查询失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, options)
 }

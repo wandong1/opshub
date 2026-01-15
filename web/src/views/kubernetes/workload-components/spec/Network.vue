@@ -64,10 +64,12 @@
           <div class="form-item-row">
             <label class="form-label">服务器地址</label>
             <div class="dns-inputs-wrapper">
-              <div v-for="(ns, index) in formData.dnsConfig.nameservers" :key="'ns-'+index" class="dns-input-item">
-                <el-input v-model="formData.dnsConfig.nameservers[index]" placeholder="如: 8.8.8.8" size="small" style="width: 200px;" />
-                <el-button type="danger" link @click="emit('removeDNSNameserver', index)" :icon="Delete" size="small">删除</el-button>
-              </div>
+              <template v-if="formData.dnsConfig">
+                <div v-for="(ns, index) in formData.dnsConfig.nameservers" :key="'ns-'+index" class="dns-input-item">
+                  <el-input v-model="formData.dnsConfig.nameservers[index]" placeholder="如: 8.8.8.8" size="small" style="width: 200px;" />
+                  <el-button type="danger" link @click="emit('removeDNSNameserver', index)" :icon="Delete" size="small">删除</el-button>
+                </div>
+              </template>
               <el-button type="primary" link @click="emit('addDNSNameserver')" :icon="Plus" size="small">添加服务器</el-button>
             </div>
             <span class="form-hint">DNS 服务器 IP 地址列表</span>
@@ -75,10 +77,12 @@
           <div class="form-item-row">
             <label class="form-label">搜索域</label>
             <div class="dns-inputs-wrapper">
-              <div v-for="(search, index) in formData.dnsConfig.searches" :key="'search-'+index" class="dns-input-item">
-                <el-input v-model="formData.dnsConfig.searches[index]" placeholder="如: default.svc.cluster.local" size="small" style="width: 250px;" />
-                <el-button type="danger" link @click="emit('removeDNSSearch', index)" :icon="Delete" size="small">删除</el-button>
-              </div>
+              <template v-if="formData.dnsConfig">
+                <div v-for="(search, index) in formData.dnsConfig.searches" :key="'search-'+index" class="dns-input-item">
+                  <el-input v-model="formData.dnsConfig.searches[index]" placeholder="如: default.svc.cluster.local" size="small" style="width: 250px;" />
+                  <el-button type="danger" link @click="emit('removeDNSSearch', index)" :icon="Delete" size="small">删除</el-button>
+                </div>
+              </template>
               <el-button type="primary" link @click="emit('addDNSSearch')" :icon="Plus" size="small">添加搜索域</el-button>
             </div>
             <span class="form-hint">DNS 搜索域列表</span>
@@ -86,12 +90,14 @@
           <div class="form-item-row">
             <label class="form-label">DNS 选项</label>
             <div class="dns-options-wrapper">
-              <div v-for="(opt, index) in formData.dnsConfig.options" :key="'opt-'+index" class="dns-option-item">
-                <el-input v-model="opt.name" placeholder="选项名，如: ndots" size="small" style="width: 150px;" />
-                <span class="option-separator">:</span>
-                <el-input v-model="opt.value" placeholder="值，如: 5" size="small" style="width: 120px;" />
-                <el-button type="danger" link @click="emit('removeDNSOption', index)" :icon="Delete" size="small">删除</el-button>
-              </div>
+              <template v-if="formData.dnsConfig">
+                <div v-for="(opt, index) in formData.dnsConfig.options" :key="'opt-'+index" class="dns-option-item">
+                  <el-input v-model="opt.name" placeholder="选项名，如: ndots" size="small" style="width: 150px;" />
+                  <span class="option-separator">:</span>
+                  <el-input v-model="opt.value" placeholder="值，如: 5" size="small" style="width: 120px;" />
+                  <el-button type="danger" link @click="emit('removeDNSOption', index)" :icon="Delete" size="small">删除</el-button>
+                </div>
+              </template>
               <el-button type="primary" link @click="emit('addDNSOption')" :icon="Plus" size="small">添加选项</el-button>
             </div>
             <span class="form-hint">自定义 DNS 选项</span>
@@ -113,11 +119,11 @@ interface DNSConfig {
 }
 
 interface FormData {
-  hostNetwork: boolean
+  hostNetwork: boolean | undefined
   dnsPolicy: string
-  hostname: string
-  subdomain: string
-  dnsConfig: DNSConfig
+  hostname: string | undefined
+  subdomain: string | undefined
+  dnsConfig?: DNSConfig
 }
 
 const props = defineProps<{

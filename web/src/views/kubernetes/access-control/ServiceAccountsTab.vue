@@ -1,29 +1,5 @@
 <template>
   <div class="service-accounts-tab">
-    <!-- 操作栏 -->
-    <div class="action-bar">
-      <div class="search-section">
-        <el-input
-          v-model="searchName"
-          placeholder="搜索 ServiceAccount 名称..."
-          clearable
-          @input="handleSearch"
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
-      </div>
-
-      <div class="action-buttons">
-        <el-button class="black-button" @click="handleCreate">
-          <el-icon><Plus /></el-icon>
-          新增 ServiceAccount
-        </el-button>
-      </div>
-    </div>
-
     <!-- 表格 -->
     <div class="table-wrapper">
       <el-table
@@ -94,22 +70,28 @@
     <el-dialog
       v-model="yamlDialogVisible"
       :title="yamlDialogTitle"
-      width="80%"
+      width="900px"
       :close-on-click-modal="false"
-      top="5vh"
+      class="yaml-dialog"
     >
-      <div class="yaml-editor-container">
-        <el-input
+      <div class="yaml-editor-wrapper">
+        <div class="yaml-line-numbers">
+          <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
+        </div>
+        <textarea
           v-model="yamlContent"
-          type="textarea"
-          :rows="20"
-          placeholder="请输入 YAML 配置..."
-          class="yaml-editor"
-        />
+          class="yaml-textarea"
+          spellcheck="false"
+          @input="handleYamlInput"
+          @scroll="handleYamlScroll"
+          ref="yamlTextarea"
+        ></textarea>
       </div>
       <template #footer>
-        <el-button @click="yamlDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveYaml" :loading="yamlSaving">保存</el-button>
+        <div class="dialog-footer">
+          <el-button @click="yamlDialogVisible = false">关闭</el-button>
+          <el-button type="primary" @click="handleSaveYaml" :loading="yamlSaving" class="black-button">保存</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -121,16 +103,20 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, User, PriceTag, Edit, Delete, Plus } from '@element-plus/icons-vue'
 import { getServiceAccounts, type ServiceAccountInfo } from '@/api/kubernetes'
 import axios from 'axios'
+import * as yaml from 'js-yaml'
 
 interface Props {
   clusterId: number
   namespace?: string
+  searchName?: string
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  'count-update': [count: number]
+}>()
 const loading = ref(false)
 const serviceAccounts = ref<ServiceAccountInfo[]>([])
-const searchName = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const labelDialogVisible = ref(false)
@@ -140,6 +126,13 @@ const yamlDialogTitle = ref('')
 const yamlContent = ref('')
 const yamlSaving = ref(false)
 const editingItem = ref<ServiceAccountInfo | null>(null)
+const yamlTextarea = ref<HTMLTextAreaElement | null>(null)
+
+// 计算YAML行数
+const yamlLineCount = computed(() => {
+  if (!yamlContent.value) return 1
+  return yamlContent.value.split('\n').length
+})
 
 // 默认 ServiceAccount YAML 模板
 const defaultServiceAccountYaml = `apiVersion: v1
@@ -152,9 +145,9 @@ metadata:
 // 过滤后的数据
 const filteredData = computed(() => {
   let result = serviceAccounts.value
-  if (searchName.value) {
+  if (props.searchName) {
     result = result.filter(item =>
-      item.name.toLowerCase().includes(searchName.value.toLowerCase())
+      item.name.toLowerCase().includes(props.searchName!.toLowerCase())
     )
   }
   return result
@@ -179,11 +172,6 @@ const loadData = async () => {
   } finally {
     loading.value = false
   }
-}
-
-// 搜索
-const handleSearch = () => {
-  currentPage.value = 1
 }
 
 // 分页
@@ -212,22 +200,63 @@ const handleCreate = () => {
 const handleEdit = async (row: ServiceAccountInfo) => {
   try {
     const token = localStorage.getItem('token') || ''
-    const response = await axios.get(
-      `/api/v1/plugins/kubernetes/resources/serviceaccounts/${row.namespace}/${row.name}`,
+    const response: any = await axios.get(
+      `/api/v1/plugins/kubernetes/resources/serviceaccounts/${row.namespace}/${row.name}/yaml`,
       {
         params: { clusterId: props.clusterId },
         headers: { Authorization: `Bearer ${token}` }
       }
     )
-    // 将对象转换为 YAML 格式
-    yamlContent.value = JSONToYAML(response.data.data)
-    yamlDialogTitle.value = '编辑 ServiceAccount'
+    // 清理不需要的字段并修复 apiVersion
+    const cleanData = cleanK8sResource(response.data.data || response.data)
+    // 将返回的JSON对象转换为YAML字符串
+    yamlContent.value = yaml.dump(cleanData, {
+      indent: 2,
+      lineWidth: -1,
+      noRefs: true,
+      sortKeys: false
+    })
+    yamlDialogTitle.value = `ServiceAccount YAML - ${row.name}`
     editingItem.value = row
     yamlDialogVisible.value = true
   } catch (error) {
     console.error(error)
     ElMessage.error('获取 ServiceAccount YAML 失败')
   }
+}
+
+// 清理 K8s 资源对象，移除不需要的字段
+const cleanK8sResource = (data: any): any => {
+  if (!data || typeof data !== 'object') return data
+
+  // 深拷贝避免修改原数据
+  const cleaned = JSON.parse(JSON.stringify(data))
+
+  // 移除 metadata 中的不需要字段
+  if (cleaned.metadata) {
+    delete cleaned.metadata.managedFields
+    delete cleaned.metadata.creationTimestamp
+    delete cleaned.metadata.resourceVersion
+    delete cleaned.metadata.selfLink
+    delete cleaned.metadata.uid
+    delete cleaned.metadata.generation
+  }
+
+  // 修复 apiVersion 空串问题
+  if (!cleaned.apiVersion || cleaned.apiVersion === '') {
+    // 根据 kind 设置默认 apiVersion
+    const kindToApiVersion: Record<string, string> = {
+      ServiceAccount: 'v1',
+      Role: 'rbac.authorization.k8s.io/v1',
+      RoleBinding: 'rbac.authorization.k8s.io/v1',
+      ClusterRole: 'rbac.authorization.k8s.io/v1',
+      ClusterRoleBinding: 'rbac.authorization.k8s.io/v1',
+      PodSecurityPolicy: 'policy/v1beta1'
+    }
+    cleaned.apiVersion = kindToApiVersion[cleaned.kind] || 'v1'
+  }
+
+  return cleaned
 }
 
 // 删除
@@ -270,12 +299,17 @@ const handleSaveYaml = async () => {
     const namespace = props.namespace || 'default'
 
     if (editingItem.value) {
-      // 编辑模式 - 需要实现更新 API
-      ElMessage.info('编辑功能开发中...')
+      // 编辑模式 - 使用 YAML 更新 API
+      await axios.put(
+        `/api/v1/plugins/kubernetes/resources/serviceaccounts/${editingItem.value.namespace}/${editingItem.value.name}/yaml`,
+        { clusterId: props.clusterId, yaml: yamlContent.value },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      ElMessage.success('更新成功')
     } else {
       // 新增模式
       await axios.post(
-        `/api/v1/plugins/kubernetes/resources/serviceactions/${namespace}`,
+        `/api/v1/plugins/kubernetes/resources/serviceaccounts/${namespace}/yaml`,
         yamlContent.value,
         {
           params: { clusterId: props.clusterId },
@@ -286,14 +320,28 @@ const handleSaveYaml = async () => {
         }
       )
       ElMessage.success('创建成功')
-      yamlDialogVisible.value = false
-      await loadData()
     }
+    yamlDialogVisible.value = false
+    await loadData()
   } catch (error: any) {
     console.error(error)
     ElMessage.error('保存失败: ' + (error.response?.data?.message || error.message))
   } finally {
     yamlSaving.value = false
+  }
+}
+
+// YAML编辑器输入处理
+const handleYamlInput = () => {
+  // 可以添加输入验证
+}
+
+// YAML编辑器滚动处理（同步行号滚动）
+const handleYamlScroll = (e: Event) => {
+  const target = e.target as HTMLTextAreaElement
+  const lineNumbers = document.querySelector('.yaml-line-numbers') as HTMLElement
+  if (lineNumbers) {
+    lineNumbers.scrollTop = target.scrollTop
   }
 }
 
@@ -338,8 +386,20 @@ const JSONToYAML = (obj: any): string => {
 
 // 监听 props 变化
 watch(() => [props.clusterId, props.namespace], () => {
-  loadData()
+  if (props.clusterId) {
+    loadData()
+  }
 }, { immediate: true })
+
+// 监听筛选后的数据变化，更新计数
+watch(filteredData, (newData) => {
+  emit('count-update', newData?.length || 0)
+})
+
+// 暴露方法给父组件
+defineExpose({
+  handleCreate
+})
 </script>
 
 <style scoped>
@@ -433,7 +493,7 @@ watch(() => [props.clusterId, props.namespace], () => {
 
 .name-text {
   font-weight: 600;
-  color: #d4af37;
+  color: #303133;
 }
 
 .secrets-count {
@@ -501,14 +561,78 @@ watch(() => [props.clusterId, props.namespace], () => {
   transform: scale(1.1);
 }
 
-.yaml-editor-container {
-  width: 100%;
+/* YAML 编辑弹窗 */
+.yaml-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  color: #d4af37;
+  border-radius: 8px 8px 0 0;
+  padding: 20px 24px;
 }
 
-.yaml-editor {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+.yaml-dialog :deep(.el-dialog__title) {
+  color: #d4af37;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.yaml-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background-color: #1a1a1a;
+}
+
+.yaml-editor-wrapper {
+  display: flex;
+  border: 1px solid #d4af37;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #000000;
+}
+
+.yaml-line-numbers {
+  background-color: #0d0d0d;
+  color: #666;
+  padding: 16px 8px;
+  text-align: right;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
+  user-select: none;
+  overflow: hidden;
+  min-width: 40px;
+  border-right: 1px solid #333;
+}
+
+.line-number {
+  height: 20.8px;
+  line-height: 1.6;
+}
+
+.yaml-textarea {
+  flex: 1;
+  background-color: #000000;
+  color: #d4af37;
+  border: none;
+  outline: none;
+  padding: 16px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 400px;
+}
+
+.yaml-textarea::placeholder {
+  color: #555;
+}
+
+.yaml-textarea:focus {
+  outline: none;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .pagination-wrapper {

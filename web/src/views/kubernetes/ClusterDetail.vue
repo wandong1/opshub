@@ -284,16 +284,38 @@
         <div class="card-title-section">
           <el-icon class="card-icon" :size="20" color="#D4AF37"><Monitor /></el-icon>
           <span class="card-title">节点信息</span>
-          <span class="node-count">{{ nodeList.length }}个节点</span>
+          <span class="node-count">{{ filteredNodeList.length }}个节点</span>
         </div>
       </template>
+
+      <!-- 搜索框 -->
+      <div class="node-search-bar">
+        <el-input
+          v-model="nodeSearchKeyword"
+          placeholder="搜索节点名称、IP地址..."
+          clearable
+          @clear="handleNodeSearch"
+          @keyup.enter="handleNodeSearch"
+          class="search-input"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-button class="search-button" @click="handleNodeSearch">搜索</el-button>
+      </div>
+
       <el-table
-        :data="nodeList"
+        :data="paginatedNodeList"
         stripe
         style="width: 100%"
         v-loading="nodesLoading"
       >
-        <el-table-column prop="name" label="节点名称" min-width="150" />
+        <el-table-column prop="name" label="节点名称" min-width="150">
+          <template #default="{ row }">
+            <span class="node-name-link">{{ row.name }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="角色" width="100">
           <template #default="{ row }">
             <el-tag :type="getNodeRoleType(row.roles)" size="small">
@@ -318,6 +340,19 @@
         <el-table-column prop="osImage" label="操作系统" min-width="180" show-overflow-tooltip />
         <el-table-column prop="age" label="创建时间" width="180" />
       </el-table>
+
+      <!-- 分页 -->
+      <div class="node-pagination-wrapper">
+        <el-pagination
+          v-model:current-page="nodeCurrentPage"
+          v-model:page-size="nodePageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="filteredNodeList.length"
+          layout="total, sizes, prev, pager, next"
+          @current-change="handleNodePageChange"
+          @size-change="handleNodeSizeChange"
+        />
+      </div>
     </el-card>
 
     <!-- 最近事件 -->
@@ -434,6 +469,48 @@ const nodeList = ref<NodeInfo[]>([])
 const eventList = ref<EventInfo[]>([])
 const nodesLoading = ref(false)
 const eventsLoading = ref(false)
+
+// 节点搜索和分页
+const nodeSearchKeyword = ref('')
+const nodeCurrentPage = ref(1)
+const nodePageSize = ref(10)
+
+// 过滤后的节点列表
+const filteredNodeList = computed(() => {
+  if (!nodeSearchKeyword.value) {
+    return nodeList.value
+  }
+  const keyword = nodeSearchKeyword.value.toLowerCase()
+  return nodeList.value.filter(node => {
+    return (
+      node.name.toLowerCase().includes(keyword) ||
+      (node.internalIP && node.internalIP.toLowerCase().includes(keyword)) ||
+      (node.externalIP && node.externalIP.toLowerCase().includes(keyword))
+    )
+  })
+})
+
+// 分页后的节点列表
+const paginatedNodeList = computed(() => {
+  const start = (nodeCurrentPage.value - 1) * nodePageSize.value
+  const end = start + nodePageSize.value
+  return filteredNodeList.value.slice(start, end)
+})
+
+// 处理节点搜索
+const handleNodeSearch = () => {
+  nodeCurrentPage.value = 1
+}
+
+// 处理节点分页变化
+const handleNodePageChange = (page: number) => {
+  nodeCurrentPage.value = page
+}
+
+const handleNodeSizeChange = (size: number) => {
+  nodePageSize.value = size
+  nodeCurrentPage.value = 1
+}
 
 // 快速统计卡片数据
 const quickStats = computed(() => [
@@ -877,6 +954,48 @@ onMounted(() => {
 .full-width-card {
   grid-column: 1 / -1;
   margin-bottom: 20px;
+}
+
+/* 节点搜索栏 */
+.node-search-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  .search-input {
+    flex: 1;
+    max-width: 400px;
+  }
+
+  .search-button {
+    background-color: #000;
+    color: #d4af37;
+    border: 1px solid #d4af37;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 500;
+
+    &:hover {
+      background-color: #d4af37;
+      color: #000;
+    }
+  }
+}
+
+/* 节点名称链接样式 */
+.node-name-link {
+  color: #d4af37;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* 节点分页 */
+.node-pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 16px;
 }
 
 /* 资源使用率 */

@@ -2,34 +2,38 @@
   <div class="service-list">
     <!-- 搜索和筛选 -->
     <div class="search-bar">
-      <el-input
-        v-model="searchName"
-        placeholder="搜索服务名称..."
-        clearable
-        class="search-input"
-        @input="handleSearch"
-      >
-        <template #prefix>
-          <el-icon class="search-icon"><Search /></el-icon>
-        </template>
-      </el-input>
+      <div class="search-bar-left">
+        <el-input
+          v-model="searchName"
+          placeholder="搜索服务名称..."
+          clearable
+          class="search-input"
+          @input="handleSearch"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><Search /></el-icon>
+          </template>
+        </el-input>
 
-      <el-select v-model="filterType" placeholder="服务类型" clearable @change="handleSearch" class="filter-select">
-        <el-option label="全部" value="" />
-        <el-option label="ClusterIP" value="ClusterIP" />
-        <el-option label="NodePort" value="NodePort" />
-        <el-option label="LoadBalancer" value="LoadBalancer" />
-      </el-select>
+        <el-select v-model="filterType" placeholder="服务类型" clearable @change="handleSearch" class="filter-select">
+          <el-option label="全部" value="" />
+          <el-option label="ClusterIP" value="ClusterIP" />
+          <el-option label="NodePort" value="NodePort" />
+          <el-option label="LoadBalancer" value="LoadBalancer" />
+        </el-select>
 
-      <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-        <el-option label="全部" value="" />
-        <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-      </el-select>
+        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
+          <el-option label="全部" value="" />
+          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </el-select>
+      </div>
 
-      <el-button class="black-button" @click="handleCreate">创建服务</el-button>
-      <el-button class="black-button" @click="handleCreateYAML">
-        <el-icon><Document /></el-icon> YAML创建
-      </el-button>
+      <div class="search-bar-right">
+        <el-button class="black-button" @click="handleCreate">创建服务</el-button>
+        <el-button class="black-button" @click="handleCreateYAML">
+          <el-icon><Document /></el-icon> YAML创建
+        </el-button>
+      </div>
     </div>
 
     <!-- 服务列表 -->
@@ -41,8 +45,14 @@
         size="default"
       >
         <el-table-column label="名称" prop="name" min-width="180" fixed>
+          <template #header>
+            <span class="header-with-icon">
+              <el-icon class="header-icon header-icon-blue"><Connection /></el-icon>
+              名称
+            </span>
+          </template>
           <template #default="{ row }">
-            <div class="name-cell">
+            <div class="name-cell" @click="handleShowDetail(row)" style="cursor: pointer;">
               <el-icon class="name-icon"><Connection /></el-icon>
               <div>
                 <div class="name-text">{{ row.name }}</div>
@@ -172,6 +182,14 @@
       :clusterId="clusterId"
       @success="handleEditSuccess"
     />
+
+    <!-- Service详情对话框 -->
+    <ServiceDetailDialog
+      ref="detailDialogRef"
+      :clusterId="clusterId"
+      @terminal="handleTerminal"
+      @logs="handleLogs"
+    />
   </div>
 </template>
 
@@ -182,13 +200,14 @@ import { Search, Connection, Document, Edit, Delete } from '@element-plus/icons-
 import { load } from 'js-yaml'
 import { getServices, getServiceYAML, updateServiceYAML, createServiceYAML, deleteService, getNamespaces, type ServiceInfo } from '@/api/kubernetes'
 import ServiceEditDialog from './ServiceEditDialog.vue'
+import ServiceDetailDialog from './ServiceDetailDialog.vue'
 
 const props = defineProps<{
   clusterId?: number
   namespace?: string
 }>()
 
-const emit = defineEmits(['edit', 'yaml', 'refresh'])
+const emit = defineEmits(['edit', 'yaml', 'refresh', 'count-update', 'terminal', 'logs'])
 
 const loading = ref(false)
 const saving = ref(false)
@@ -205,6 +224,7 @@ const selectedService = ref<ServiceInfo | null>(null)
 const yamlTextarea = ref<HTMLTextAreaElement | null>(null)
 const originalJsonData = ref<any>(null) // 保存原始 JSON 数据
 const editDialogRef = ref<any>(null)
+const detailDialogRef = ref<any>(null)
 
 // YAML 创建相关
 const createYamlDialogVisible = ref(false)
@@ -504,10 +524,27 @@ watch(() => props.namespace, () => {
   loadServices()
 })
 
+// 监听筛选后的数据变化，更新计数
+watch(filteredServices, (newData) => {
+  emit('count-update', newData.length)
+})
+
 onMounted(() => {
   loadServices()
   loadNamespaces()
 })
+
+const handleShowDetail = (service: ServiceInfo) => {
+  detailDialogRef.value?.open(service.namespace, service.name)
+}
+
+const handleTerminal = (data: { namespace: string; name: string }) => {
+  emit('terminal', data)
+}
+
+const handleLogs = (data: { namespace: string; name: string }) => {
+  emit('logs', data)
+}
 
 // 暴露方法给父组件
 defineExpose({
@@ -536,8 +573,24 @@ defineExpose({
 
 .search-bar {
   display: flex;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.search-bar-left {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.search-bar-right {
+  display: flex;
+  gap: 12px;
 }
 
 .search-input {
@@ -564,13 +617,41 @@ defineExpose({
   gap: 10px;
 }
 
+.name-cell:hover {
+  opacity: 0.8;
+}
+
 .name-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #d4af37;
   font-size: 18px;
+  flex-shrink: 0;
+  border: 1px solid #d4af37;
 }
 
 .name-text {
   font-weight: 500;
+  color: #303133;
+}
+
+/* 表头图标 */
+.header-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-icon {
+  font-size: 16px;
+}
+
+.header-icon-blue {
   color: #d4af37;
 }
 

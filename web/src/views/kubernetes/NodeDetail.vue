@@ -92,8 +92,10 @@
       <!-- 基本信息 -->
       <div class="info-card">
         <div class="card-header">
-          <el-icon class="header-icon"><InfoFilled /></el-icon>
-          <h3>基本信息</h3>
+          <div class="header-left">
+            <el-icon class="header-icon"><InfoFilled /></el-icon>
+            <h3>基本信息</h3>
+          </div>
         </div>
         <div class="card-body">
           <div class="info-row">
@@ -124,8 +126,10 @@
       <!-- 系统信息 -->
       <div class="info-card">
         <div class="card-header">
-          <el-icon class="header-icon"><Monitor /></el-icon>
-          <h3>系统信息</h3>
+          <div class="header-left">
+            <el-icon class="header-icon"><Monitor /></el-icon>
+            <h3>系统信息</h3>
+          </div>
         </div>
         <div class="card-body">
           <div class="info-row">
@@ -150,8 +154,10 @@
       <!-- 网络信息 -->
       <div class="info-card">
         <div class="card-header">
-          <el-icon class="header-icon"><Connection /></el-icon>
-          <h3>网络信息</h3>
+          <div class="header-left">
+            <el-icon class="header-icon"><Connection /></el-icon>
+            <h3>网络信息</h3>
+          </div>
         </div>
         <div class="card-body">
           <div class="info-row">
@@ -221,8 +227,10 @@
 
       <div class="info-card">
         <div class="card-header">
-          <el-icon class="header-icon"><Document /></el-icon>
-          <h3>注解 ({{ Object.keys(nodeInfo.annotations || {}).length }})</h3>
+          <div class="header-left">
+            <el-icon class="header-icon"><Document /></el-icon>
+            <h3>注解 ({{ Object.keys(nodeInfo.annotations || {}).length }})</h3>
+          </div>
         </div>
         <div class="card-body">
           <div class="tags-container">
@@ -872,8 +880,8 @@ onMounted(() => {
   justify-content: space-between;
   gap: 10px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  border-bottom: 1px solid #d4af37;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .card-header .header-left {
@@ -884,14 +892,14 @@ onMounted(() => {
 
 .card-header .header-icon {
   font-size: 20px;
-  color: #d4af37;
+  color: #606266;
 }
 
 .card-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #d4af37;
+  color: #303133;
 }
 
 .card-body {
@@ -1086,8 +1094,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  border-bottom: 1px solid #d4af37;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .section-title {
@@ -1098,14 +1106,14 @@ onMounted(() => {
 
 .section-title .title-icon {
   font-size: 20px;
-  color: #d4af37;
+  color: #606266;
 }
 
 .section-title h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #d4af37;
+  color: #303133;
 }
 
 .search-wrapper {
@@ -1114,30 +1122,30 @@ onMounted(() => {
 }
 
 .search-input :deep(.el-input__wrapper) {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: #d4af37;
+  background-color: #f5f7fa;
+  border-color: #dcdfe6;
   border-radius: 6px;
 }
 
 .search-input :deep(.el-input__wrapper:hover) {
-  border-color: #bfa13f;
+  border-color: #c0c4cc;
 }
 
 .search-input :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
 }
 
 .search-input :deep(.el-input__inner) {
-  color: #d4af37;
+  color: #303133;
 }
 
 .search-input :deep(.el-input__inner::placeholder) {
-  color: rgba(212, 175, 55, 0.6);
+  color: #a8abb2;
 }
 
 .search-input :deep(.el-input__prefix) {
-  color: #d4af37;
+  color: #909399;
 }
 
 /* 节点状态信息 */
@@ -1272,12 +1280,12 @@ onMounted(() => {
 }
 
 .pagination-wrapper :deep(.el-pager li.is-active) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  border-color: #d4af37;
+  background: #409eff;
+  border-color: #409eff;
 }
 
 .pagination-wrapper :deep(.el-pager li.is-active .number) {
-  color: #d4af37;
+  color: #fff;
 }
 
 .pagination-wrapper :deep(.btn-prev),
@@ -1289,8 +1297,8 @@ onMounted(() => {
 
 .pagination-wrapper :deep(.btn-prev:hover),
 .pagination-wrapper :deep(.btn-next:hover) {
-  border-color: #d4af37;
-  color: #d4af37;
+  border-color: #409eff;
+  color: #409eff;
 }
 
 /* 响应式 */

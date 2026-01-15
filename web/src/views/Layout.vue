@@ -7,17 +7,16 @@
 
       <el-menu
         :default-active="activeMenu"
-        :default-openeds="defaultOpeneds"
         class="el-menu-vertical"
         router
+        :unique-opened="true"
         background-color="#001529"
         text-color="#fff"
         active-text-color="#fff"
-        unique-opened
       >
         <template v-for="menu in menuList" :key="menu.ID">
           <!-- 有子菜单的情况 -->
-          <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="String(menu.ID)">
+          <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="String(menu.ID)" :class="{ 'menu-disabled': menu.status === 0 }">
             <template #title>
               <el-icon><component :is="getIcon(menu.icon)" /></el-icon>
               <span>{{ menu.name }}</span>
@@ -25,7 +24,8 @@
             <el-menu-item
               v-for="subMenu in menu.children"
               :key="subMenu.ID"
-              :index="subMenu.path"
+              :index="subMenu.status === 0 ? undefined : subMenu.path"
+              :class="{ 'menu-disabled': subMenu.status === 0 }"
             >
               <el-icon><component :is="getIcon(subMenu.icon)" /></el-icon>
               <span>{{ subMenu.name }}</span>
@@ -33,7 +33,11 @@
           </el-sub-menu>
 
           <!-- 没有子菜单的情况 -->
-          <el-menu-item v-else :index="menu.path">
+          <el-menu-item
+            v-else
+            :index="menu.status === 0 ? undefined : menu.path"
+            :class="{ 'menu-disabled': menu.status === 0 }"
+          >
             <el-icon><component :is="getIcon(menu.icon)" /></el-icon>
             <span>{{ menu.name }}</span>
           </el-menu-item>
@@ -147,7 +151,6 @@ const avatarUrl = computed(() => {
 
 const currentRoute = computed(() => route)
 const menuList = ref<any[]>([])
-const defaultOpeneds = ref<string[]>([])
 
 // 图标映射
 const iconMap: Record<string, any> = {
@@ -215,8 +218,8 @@ const buildPluginMenus = () => {
           icon: menu.icon,
           sort: sort, // 使用自定义排序或默认排序
           hidden: menu.hidden,
-          parentPath: menu.parentPath,
-          children: []
+          parentPath: menu.parentPath
+          // 不设置 children 属性，让 buildMenuTree 根据实际子菜单动态设置
         })
 
         console.log(`  - 菜单: ${menu.name}, sort: ${sort} (自定义: ${customSort.has(menu.path)})`)
@@ -232,12 +235,25 @@ const buildPluginMenus = () => {
 
 // 构建菜单树
 const buildMenuTree = (menus: any[]) => {
+  // 只过滤掉不可见的菜单，禁用的菜单仍然显示但标记为禁用状态
+  const filteredMenus = menus.filter(menu => {
+    const isVisible = menu.visible === undefined || menu.visible === 1
+
+    if (!isVisible) {
+      console.log(`[Layout buildMenuTree] 过滤掉不可见的菜单: ${menu.name}`)
+    }
+
+    return isVisible
+  })
+
+  console.log('[Layout buildMenuTree] 过滤后菜单数量:', filteredMenus.length, '原始数量:', menus.length)
+
   // 创建一个 Map 来快速查找菜单
   const menuMap = new Map()
 
-  console.log('[Layout buildMenuTree] 开始构建菜单树,菜单数量:', menus.length)
+  console.log('[Layout buildMenuTree] 开始构建菜单树,菜单数量:', filteredMenus.length)
 
-  menus.forEach(menu => {
+  filteredMenus.forEach(menu => {
     // 统一使用 ID 或 path 作为唯一标识
     const menuId = menu.ID || menu.id || menu.path
     if (!menuId) {
@@ -245,9 +261,10 @@ const buildMenuTree = (menus: any[]) => {
       return
     }
 
-    // 克隆菜单对象,避免修改原始数据
-    const clonedMenu = { ...menu }
-    menuMap.set(menuId, { ...clonedMenu, children: [] })
+    // 克隆菜单对象,避免修改原始数据，并移除原有的children
+    const { children, ...menuWithoutChildren } = menu
+    // 不设置 children 属性，只在需要时动态添加
+    menuMap.set(menuId, menuWithoutChildren)
 
     console.log(`[Layout buildMenuTree] 添加菜单到Map: ${menu.name} (ID: ${menuId})`)
   })
@@ -255,7 +272,7 @@ const buildMenuTree = (menus: any[]) => {
   const tree: any[] = []
 
   // 构建树结构
-  menus.forEach(menu => {
+  filteredMenus.forEach(menu => {
     const menuId = menu.ID || menu.id || menu.path
     const menuItem = menuMap.get(menuId)
 
@@ -285,6 +302,10 @@ const buildMenuTree = (menus: any[]) => {
     if (parentId && menuMap.has(parentId)) {
       // 有父菜单，添加到父菜单的 children
       const parent = menuMap.get(parentId)
+      // 确保 children 数组存在
+      if (!parent.children) {
+        parent.children = []
+      }
       parent.children.push(menuItem)
       console.log(`[Layout buildMenuTree] 将 ${menu.name} 添加到父菜单 ${parent.name}`)
     } else if (parentId) {
@@ -309,6 +330,41 @@ const buildMenuTree = (menus: any[]) => {
   }
 
   sortMenus(tree)
+
+  // 清理空的children数组 - 关键修复！
+  const cleanEmptyChildren = (nodes: any[]) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]
+      // 详细日志
+      console.log(`[Layout cleanEmptyChildren] 处理 ${node.name}, children:`, node.children)
+
+      // 检查 children 是否存在且为空数组
+      if (Array.isArray(node.children) && node.children.length === 0) {
+        console.log(`[Layout cleanEmptyChildren] 删除 ${node.name} 的空 children 数组`)
+        delete node.children
+        // 关键修复：明确设置 hasChildren 为 false
+        node.hasChildren = false
+      } else if (Array.isArray(node.children) && node.children.length > 0) {
+        console.log(`[Layout cleanEmptyChildren] ${node.name} 有 ${node.children.length} 个子菜单，递归处理`)
+        // 关键修复：明确设置 hasChildren 为 true
+        node.hasChildren = true
+        cleanEmptyChildren(node.children)
+      } else if (node.children) {
+        // children 存在但不是数组，删除它
+        console.log(`[Layout cleanEmptyChildren] ${node.name} 的 children 不是数组，删除它:`, typeof node.children)
+        delete node.children
+        node.hasChildren = false
+      } else {
+        console.log(`[Layout cleanEmptyChildren] ${node.name} 没有 children 属性`)
+        // 明确设置 hasChildren 为 false
+        node.hasChildren = false
+      }
+    }
+  }
+
+  console.log('[Layout buildMenuTree] 清理前，顶级菜单:', tree.map(m => ({ name: m.name, hasChildren: !!m.children, childrenCount: m.children?.length || 0, childrenType: typeof m.children })))
+  cleanEmptyChildren(tree)
+  console.log('[Layout buildMenuTree] 清理后，顶级菜单:', tree.map(m => ({ name: m.name, hasChildren: !!m.children, childrenCount: m.children?.length || 0, hasChildrenAttr: m.hasChildren })))
 
   console.log('[Layout buildMenuTree] 菜单树构建完成,顶级菜单数:', tree.length)
   console.log('[Layout buildMenuTree] 最终菜单树:', tree)
@@ -338,9 +394,11 @@ const loadMenu = async () => {
     // 3. 展平系统菜单树(因为系统菜单可能是嵌套结构)
     const flattenMenus = (menus: any[], result: any[] = []) => {
       menus.forEach(menu => {
-        result.push(menu)
-        if (menu.children && menu.children.length > 0) {
-          flattenMenus(menu.children, result)
+        // 移除children属性，避免旧的children数据干扰
+        const { children, ...menuWithoutChildren } = menu
+        result.push(menuWithoutChildren)
+        if (children && children.length > 0) {
+          flattenMenus(children, result)
         }
       })
       return result
@@ -591,7 +649,7 @@ onMounted(async () => {
   padding-left: 20px !important; /* 从24px改为20px,往左移 */
   height: 48px !important;
   line-height: 48px !important;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, color 0.3s ease;
   margin: 4px 12px; /* 上下4px间距,左右12px */
   border-radius: 8px; /* 圆角效果 */
 }
@@ -622,7 +680,7 @@ onMounted(async () => {
   padding-left: 20px !important; /* 从24px改为20px,往左移 */
   height: 48px !important;
   line-height: 48px !important;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, color 0.3s ease;
   margin: 4px 12px; /* 上下4px间距,左右12px */
   border-radius: 8px; /* 圆角效果 */
 }
@@ -652,11 +710,69 @@ onMounted(async () => {
   border-radius: 6px; /* 子菜单圆角稍小 */
 }
 
+/* 禁用子菜单展开动画，防止抖动 */
+:deep(.el-menu--collapse-transition) {
+  transition: none !important;
+}
+
+:deep(.el-menu--inline) {
+  transition: none !important;
+}
+
+:deep(.el-sub-menu__title) {
+  transition: background-color 0.3s ease, color 0.3s ease !important;
+}
+
+/* 子菜单展开时不使用动画 */
+:deep(.el-menu--vertical .el-sub-menu .el-menu) {
+  transition: none !important;
+}
+
+/* 彻底禁用 el-menu 的折叠转换动画 */
+:deep(.el-menu.el-menu--vertical) {
+  --el-transition-duration: 0s;
+}
+
+:deep(.el-menu--vertical .el-menu--popup) {
+  animation: none !important;
+}
+
+/* 禁用子菜单折叠器的过渡动画 */
+:deep(.el-menu--vertical .el-sub-menu .el-sub-menu__title .el-sub-menu__icon-arrow) {
+  transition: none !important;
+}
+
+:deep(.el-menu--vertical > .el-sub-menu.is-opened > .el-sub-menu__title .el-sub-menu__icon-arrow) {
+  transform: none !important;
+}
+
 /* 子菜单项选中状态 */
 :deep(.el-menu--inline .el-menu-item.is-active) {
   background-color: #FFAF35 !important;
   color: #000000 !important;
   border-radius: 6px; /* 圆角效果 */
+}
+
+/* 禁用菜单样式 */
+:deep(.menu-disabled) {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+}
+
+:deep(.menu-disabled.el-menu-item) {
+  pointer-events: none !important;
+}
+
+:deep(.menu-disabled.el-sub-menu__title) {
+  pointer-events: none !important;
+}
+
+:deep(.menu-disabled .el-icon) {
+  opacity: 0.5 !important;
+}
+
+:deep(.menu-disabled span) {
+  opacity: 0.7 !important;
 }
 
 .el-header {

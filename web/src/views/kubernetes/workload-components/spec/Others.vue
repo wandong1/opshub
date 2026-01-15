@@ -17,7 +17,7 @@
             <el-input-number v-model="formData.terminationGracePeriodSeconds" :min="0" :max="3600" size="small" style="width: 200px;" />
             <span class="form-hint">Pod 删除时等待优雅终止的时间（秒），默认 30 秒</span>
           </div>
-          <div class="form-item-row">
+          <div class="form-item-row" v-if="formData.type !== 'Job' && formData.type !== 'CronJob'">
             <label class="form-label">活动期限(秒)</label>
             <el-input-number v-model="formData.activeDeadlineSeconds" :min="0" :max="86400" size="small" style="width: 200px;" controls-position="right" />
             <span class="form-hint">可选，Pod 可运行的最长时间（秒），超时将被终止</span>

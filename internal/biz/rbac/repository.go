@@ -30,6 +30,7 @@ type DepartmentRepo interface {
 	Delete(ctx context.Context, id uint) error
 	GetByID(ctx context.Context, id uint) (*SysDepartment, error)
 	GetTree(ctx context.Context) ([]*SysDepartment, error)
+	GetAll(ctx context.Context) ([]*SysDepartment, error)
 }
 
 type MenuRepo interface {
@@ -40,4 +41,16 @@ type MenuRepo interface {
 	GetTree(ctx context.Context) ([]*SysMenu, error)
 	GetByUserID(ctx context.Context, userID uint) ([]*SysMenu, error)
 	GetByRoleID(ctx context.Context, roleID uint) ([]*SysMenu, error)
+}
+
+type PositionRepo interface {
+	Create(ctx context.Context, position *SysPosition) error
+	Update(ctx context.Context, position *SysPosition) error
+	Delete(ctx context.Context, id uint) error
+	GetByID(ctx context.Context, id uint) (*SysPosition, error)
+	List(ctx context.Context, page, pageSize int, postCode, postName string) ([]*SysPosition, int64, error)
+	GetAll(ctx context.Context) ([]*SysPosition, error)
+	GetUsers(ctx context.Context, positionID uint, page, pageSize int) ([]*SysUser, int64, error)
+	AssignUsers(ctx context.Context, positionID uint, userIDs []uint) error
+	RemoveUser(ctx context.Context, positionID, userID uint) error
 }

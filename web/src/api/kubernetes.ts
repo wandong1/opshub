@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import * as yaml from 'js-yaml'
 
 export interface Cluster {
   id: number
@@ -441,7 +442,7 @@ export interface RoleDetail {
  */
 export function getClusterRoles(clusterId: number) {
   return request<Role[]>({
-    url: '/api/v1/plugins/kubernetes/roles/cluster',
+    url: '/api/v1/plugins/kubernetes/resources/clusterroles',
     method: 'get',
     params: { clusterId }
   })
@@ -604,6 +605,50 @@ export function deleteRole(clusterId: number, namespace: string, roleName: strin
 }
 
 /**
+ * 删除角色绑定
+ */
+export function deleteRoleBinding(clusterId: number, namespace: string, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/rolebindings/${namespace}/${name}`,
+    method: 'delete',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 删除集群角色
+ */
+export function deleteClusterRole(clusterId: number, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/clusterroles/${name}`,
+    method: 'delete',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 删除集群角色绑定
+ */
+export function deleteClusterRoleBinding(clusterId: number, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/clusterrolebindings/${name}`,
+    method: 'delete',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 删除服务账户
+ */
+export function deleteServiceAccount(clusterId: number, namespace: string, name: string) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/serviceaccounts/${namespace}/${name}`,
+    method: 'delete',
+    params: { clusterId }
+  })
+}
+
+/**
  * 创建角色请求接口
  */
 export interface CreateRoleRequest {
@@ -737,7 +782,7 @@ export interface UpdateWorkloadParams {
 
 export function updateWorkload(params: UpdateWorkloadParams) {
   // 将 YAML 字符串解析为对象
-  const kubernetesObject = JSON.parse(params.yaml)
+  const kubernetesObject = yaml.load(params.yaml)
 
   return request({
     url: '/api/v1/plugins/kubernetes/workloads/update',
@@ -1362,22 +1407,30 @@ export function getServiceAccounts(clusterId: number, namespace?: string) {
 /**
  * 获取命名空间 Roles 列表
  */
-export function getRoles(clusterId: number, namespace: string) {
+export function getRoles(clusterId: number, namespace?: string) {
+  const params: Record<string, any> = { clusterId }
+  if (namespace) {
+    params.namespace = namespace
+  }
   return request<RoleInfo[]>({
     url: '/api/v1/plugins/kubernetes/resources/roles',
     method: 'get',
-    params: { clusterId, namespace }
+    params
   })
 }
 
 /**
  * 获取 RoleBindings 列表
  */
-export function getRoleBindings(clusterId: number, namespace: string) {
+export function getRoleBindings(clusterId: number, namespace?: string) {
+  const params: Record<string, any> = { clusterId }
+  if (namespace) {
+    params.namespace = namespace
+  }
   return request<RoleBindingInfo[]>({
     url: '/api/v1/plugins/kubernetes/resources/rolebindings',
     method: 'get',
-    params: { clusterId, namespace }
+    params
   })
 }
 
@@ -1398,6 +1451,148 @@ export function getClusterRoleBindings(clusterId: number) {
 export function getPodSecurityPolicies(clusterId: number) {
   return request<PodSecurityPolicyInfo[]>({
     url: '/api/v1/plugins/kubernetes/resources/podsecuritypolicies',
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+// ==================== 访问控制资源创建 ====================
+
+/**
+ * 创建 Role (从 YAML)
+ */
+export function createRoleFromYAML(clusterId: number, namespace: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/roles/${namespace}/yaml`,
+    method: 'post',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 更新 Role (从 YAML)
+ */
+export function updateRoleFromYAML(clusterId: number, namespace: string, name: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/roles/${namespace}/${name}/yaml`,
+    method: 'put',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 创建 RoleBinding (从 YAML)
+ */
+export function createRoleBindingFromYAML(clusterId: number, namespace: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/rolebindings/${namespace}/yaml`,
+    method: 'post',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 更新 RoleBinding (从 YAML)
+ */
+export function updateRoleBindingFromYAML(clusterId: number, namespace: string, name: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/rolebindings/${namespace}/${name}/yaml`,
+    method: 'put',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 创建 ClusterRole (从 YAML)
+ */
+export function createClusterRoleFromYAML(clusterId: number, data: any) {
+  return request({
+    url: '/api/v1/plugins/kubernetes/resources/clusterroles/yaml',
+    method: 'post',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 更新 ClusterRole (从 YAML)
+ */
+export function updateClusterRoleFromYAML(clusterId: number, name: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/clusterroles/${name}/yaml`,
+    method: 'put',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 创建 ClusterRoleBinding (从 YAML)
+ */
+export function createClusterRoleBindingFromYAML(clusterId: number, data: any) {
+  return request({
+    url: '/api/v1/plugins/kubernetes/resources/clusterrolebindings/yaml',
+    method: 'post',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 更新 ClusterRoleBinding (从 YAML)
+ */
+export function updateClusterRoleBindingFromYAML(clusterId: number, name: string, data: any) {
+  return request({
+    url: `/api/v1/plugins/kubernetes/resources/clusterrolebindings/${name}/yaml`,
+    method: 'put',
+    params: { clusterId },
+    data
+  })
+}
+
+/**
+ * 获取 Role YAML
+ */
+export function getRoleYAML(clusterId: number, namespace: string, name: string) {
+  return request<{ yaml: string }>({
+    url: `/api/v1/plugins/kubernetes/resources/roles/${namespace}/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 获取 RoleBinding YAML
+ */
+export function getRoleBindingYAML(clusterId: number, namespace: string, name: string) {
+  return request<{ yaml: string }>({
+    url: `/api/v1/plugins/kubernetes/resources/rolebindings/${namespace}/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 获取 ClusterRole YAML
+ */
+export function getClusterRoleYAML(clusterId: number, name: string) {
+  return request<{ yaml: string }>({
+    url: `/api/v1/plugins/kubernetes/resources/clusterroles/${name}/yaml`,
+    method: 'get',
+    params: { clusterId }
+  })
+}
+
+/**
+ * 获取 ClusterRoleBinding YAML
+ */
+export function getClusterRoleBindingYAML(clusterId: number, name: string) {
+  return request<{ yaml: string }>({
+    url: `/api/v1/plugins/kubernetes/resources/clusterrolebindings/${name}/yaml`,
     method: 'get',
     params: { clusterId }
   })
@@ -1849,3 +2044,4 @@ export function deletePodDisruptionBudget(clusterId: number, namespace: string, 
     data: { clusterId }
   })
 }
+

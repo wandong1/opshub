@@ -171,6 +171,56 @@ func (uc *DepartmentUseCase) GetTree(ctx context.Context) ([]*SysDepartment, err
 	return uc.deptRepo.GetTree(ctx)
 }
 
+// GetParentOptions 获取父级部门选项（用于级联选择器）
+func (uc *DepartmentUseCase) GetParentOptions(ctx context.Context) ([]*DepartmentParentOptionVO, error) {
+	departments, err := uc.deptRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return uc.buildParentOptions(departments, 0), nil
+}
+
+func (uc *DepartmentUseCase) buildParentOptions(departments []*SysDepartment, parentID uint) []*DepartmentParentOptionVO {
+	var options []*DepartmentParentOptionVO
+	for _, dept := range departments {
+		if dept.ParentID == parentID {
+			option := &DepartmentParentOptionVO{
+				ID:       dept.ID,
+				ParentID: dept.ParentID,
+				Label:    dept.Name,
+			}
+			children := uc.buildParentOptions(departments, dept.ID)
+			if len(children) > 0 {
+				option.Children = children
+			}
+			options = append(options, option)
+		}
+	}
+	return options
+}
+
+// ToInfoVO 将SysDepartment转换为DepartmentInfoVO
+func (uc *DepartmentUseCase) ToInfoVO(dept *SysDepartment) *DepartmentInfoVO {
+	if dept == nil {
+		return nil
+	}
+	vo := &DepartmentInfoVO{
+		ID:         dept.ID,
+		ParentID:   dept.ParentID,
+		DeptType:   dept.DeptType,
+		DeptName:   dept.Name,
+		Code:       dept.Code,
+		DeptStatus: dept.Status,
+		CreateTime: dept.CreatedAt.Format("2006-01-02 15:04:05"),
+	}
+	if len(dept.Children) > 0 {
+		for _, child := range dept.Children {
+			vo.Children = append(vo.Children, uc.ToInfoVO(child))
+		}
+	}
+	return vo
+}
+
 type MenuUseCase struct {
 	menuRepo MenuRepo
 }
@@ -207,4 +257,50 @@ func (uc *MenuUseCase) GetByUserID(ctx context.Context, userID uint) ([]*SysMenu
 
 func (uc *MenuUseCase) GetByRoleID(ctx context.Context, roleID uint) ([]*SysMenu, error) {
 	return uc.menuRepo.GetByRoleID(ctx, roleID)
+}
+
+type PositionUseCase struct {
+	positionRepo PositionRepo
+}
+
+func NewPositionUseCase(positionRepo PositionRepo) *PositionUseCase {
+	return &PositionUseCase{
+		positionRepo: positionRepo,
+	}
+}
+
+func (uc *PositionUseCase) Create(ctx context.Context, position *SysPosition) error {
+	return uc.positionRepo.Create(ctx, position)
+}
+
+func (uc *PositionUseCase) Update(ctx context.Context, position *SysPosition) error {
+	return uc.positionRepo.Update(ctx, position)
+}
+
+func (uc *PositionUseCase) Delete(ctx context.Context, id uint) error {
+	return uc.positionRepo.Delete(ctx, id)
+}
+
+func (uc *PositionUseCase) GetByID(ctx context.Context, id uint) (*SysPosition, error) {
+	return uc.positionRepo.GetByID(ctx, id)
+}
+
+func (uc *PositionUseCase) List(ctx context.Context, page, pageSize int, postCode, postName string) ([]*SysPosition, int64, error) {
+	return uc.positionRepo.List(ctx, page, pageSize, postCode, postName)
+}
+
+func (uc *PositionUseCase) GetAll(ctx context.Context) ([]*SysPosition, error) {
+	return uc.positionRepo.GetAll(ctx)
+}
+
+func (uc *PositionUseCase) GetUsers(ctx context.Context, positionID uint, page, pageSize int) ([]*SysUser, int64, error) {
+	return uc.positionRepo.GetUsers(ctx, positionID, page, pageSize)
+}
+
+func (uc *PositionUseCase) AssignUsers(ctx context.Context, positionID uint, userIDs []uint) error {
+	return uc.positionRepo.AssignUsers(ctx, positionID, userIDs)
+}
+
+func (uc *PositionUseCase) RemoveUser(ctx context.Context, positionID, userID uint) error {
+	return uc.positionRepo.RemoveUser(ctx, positionID, userID)
 }

@@ -2,27 +2,31 @@
   <div class="pdb-list">
     <!-- 搜索和筛选 -->
     <div class="search-bar">
-      <el-input
-        v-model="searchName"
-        placeholder="搜索 PodDisruptionBudget 名称..."
-        clearable
-        class="search-input"
-        @input="handleSearch"
-      >
-        <template #prefix>
-          <el-icon class="search-icon"><Search /></el-icon>
-        </template>
-      </el-input>
+      <div class="search-bar-left">
+        <el-input
+          v-model="searchName"
+          placeholder="搜索 PodDisruptionBudget 名称..."
+          clearable
+          class="search-input"
+          @input="handleSearch"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><Search /></el-icon>
+          </template>
+        </el-input>
 
-      <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-        <el-option label="全部" value="" />
-        <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-      </el-select>
+        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
+          <el-option label="全部" value="" />
+          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </el-select>
+      </div>
 
-      <el-button type="primary" class="black-button create-btn" @click="handleCreate">
-        <el-icon style="margin-right: 4px;"><Plus /></el-icon>
-        新增 PodDisruptionBudget
-      </el-button>
+      <div class="search-bar-right">
+        <el-button type="primary" class="black-button create-btn" @click="handleCreate">
+          <el-icon style="margin-right: 4px;"><Plus /></el-icon>
+          新增 PodDisruptionBudget
+        </el-button>
+      </div>
     </div>
 
     <!-- PodDisruptionBudget 列表 -->
@@ -34,6 +38,12 @@
         size="default"
       >
         <el-table-column label="名称" prop="name" min-width="180" fixed>
+          <template #header>
+            <span class="header-with-icon">
+              <el-icon class="header-icon header-icon-blue"><Lock /></el-icon>
+              名称
+            </span>
+          </template>
           <template #default="{ row }">
             <div class="name-cell">
               <div class="name-icon-wrapper">
@@ -163,7 +173,7 @@ const props = defineProps<{
   clusterId?: number
 }>()
 
-const emit = defineEmits(['edit', 'yaml', 'refresh'])
+const emit = defineEmits(['edit', 'yaml', 'refresh', 'count-update'])
 
 const loading = ref(false)
 const pdbList = ref<PDBInfo[]>([])
@@ -270,7 +280,6 @@ const loadPDBs = async () => {
   } catch (error) {
     console.error('获取 PodDisruptionBudget 列表失败:', error)
     pdbList.value = []
-    ElMessage.error('获取 PodDisruptionBudget 列表失败')
   } finally {
     loading.value = false
   }
@@ -295,8 +304,8 @@ const handleEditYAML = async (row: PDBInfo) => {
         headers: { Authorization: `Bearer ${token}` }
       }
     )
-    // 响应拦截器已经返回了 res.data，所以直接用 response.yaml
-    yamlContent.value = response.yaml || ''
+    // 原生axios，需要用 response.data.data?.yaml
+    yamlContent.value = response.data.data?.yaml || ''
     yamlDialogVisible.value = true
   } catch (error: any) {
     console.error('获取 YAML 失败:', error)
@@ -434,11 +443,21 @@ watch(() => props.clusterId, (newVal) => {
   }
 })
 
+// 监听筛选后的数据变化，更新计数
+watch(filteredPDBs, (newData) => {
+  emit('count-update', newData.length)
+})
+
 onMounted(() => {
   if (props.clusterId) {
     loadNamespaces()
     loadPDBs()
   }
+})
+
+// 暴露方法给父组件
+defineExpose({
+  loadPDBs
 })
 </script>
 
@@ -449,13 +468,25 @@ onMounted(() => {
 
 /* 搜索栏 */
 .search-bar {
-  margin-bottom: 16px;
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.search-bar-left {
   display: flex;
-  gap: 16px;
+  gap: 12px;
+  flex: 1;
+}
+
+.search-bar-right {
+  display: flex;
+  gap: 12px;
 }
 
 .search-input {
@@ -534,8 +565,22 @@ onMounted(() => {
 }
 
 .name-text {
-  font-size: 14px;
   font-weight: 600;
+  color: #303133;
+}
+
+/* 表头图标 */
+.header-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-icon {
+  font-size: 16px;
+}
+
+.header-icon-blue {
   color: #d4af37;
 }
 

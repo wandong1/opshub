@@ -13,6 +13,7 @@ type HTTPServer struct {
 	roleService       *rbacService.RoleService
 	departmentService *rbacService.DepartmentService
 	menuService       *rbacService.MenuService
+	positionService   *rbacService.PositionService
 	authMiddleware    *rbacService.AuthMiddleware
 }
 
@@ -21,6 +22,7 @@ func NewHTTPServer(
 	roleService *rbacService.RoleService,
 	departmentService *rbacService.DepartmentService,
 	menuService *rbacService.MenuService,
+	positionService *rbacService.PositionService,
 	authMiddleware *rbacService.AuthMiddleware,
 ) *HTTPServer {
 	return &HTTPServer{
@@ -28,6 +30,7 @@ func NewHTTPServer(
 		roleService:       roleService,
 		departmentService: departmentService,
 		menuService:       menuService,
+		positionService:   positionService,
 		authMiddleware:    authMiddleware,
 	}
 }
@@ -75,8 +78,9 @@ func (s *HTTPServer) RegisterRoutes(r *gin.Engine) {
 		departments := auth.Group("/departments")
 		{
 			departments.GET("/tree", s.departmentService.GetDepartmentTree)
-			departments.GET("/:id", s.departmentService.GetDepartment)
+			departments.GET("/parent-options", s.departmentService.GetParentOptions)
 			departments.POST("", s.departmentService.CreateDepartment)
+			departments.GET("/:id", s.departmentService.GetDepartment)
 			departments.PUT("/:id", s.departmentService.UpdateDepartment)
 			departments.DELETE("/:id", s.departmentService.DeleteDepartment)
 		}
@@ -91,6 +95,19 @@ func (s *HTTPServer) RegisterRoutes(r *gin.Engine) {
 			menus.PUT("/:id", s.menuService.UpdateMenu)
 			menus.DELETE("/:id", s.menuService.DeleteMenu)
 		}
+
+		// 岗位管理
+		positions := auth.Group("/positions")
+		{
+			positions.GET("", s.positionService.ListPositions)
+			positions.GET("/:id", s.positionService.GetPosition)
+			positions.POST("", s.positionService.CreatePosition)
+			positions.PUT("/:id", s.positionService.UpdatePosition)
+			positions.DELETE("/:id", s.positionService.DeletePosition)
+			positions.GET("/:id/users", s.positionService.GetPositionUsers)
+			positions.POST("/:id/users", s.positionService.AssignUsersToPosition)
+			positions.DELETE("/:id/users/:userId", s.positionService.RemoveUserFromPosition)
+		}
 	}
 }
 
@@ -100,6 +117,7 @@ func NewRBACServices(db *gorm.DB, jwtSecret string) (
 	*rbacService.RoleService,
 	*rbacService.DepartmentService,
 	*rbacService.MenuService,
+	*rbacService.PositionService,
 	*rbacService.AuthMiddleware,
 ) {
 	// 初始化Repository
@@ -107,12 +125,14 @@ func NewRBACServices(db *gorm.DB, jwtSecret string) (
 	roleRepo := rbacdata.NewRoleRepo(db)
 	deptRepo := rbacdata.NewDepartmentRepo(db)
 	menuRepo := rbacdata.NewMenuRepo(db)
+	positionRepo := rbacdata.NewPositionRepo(db)
 
 	// 初始化UseCase
 	userUseCase := rbacbiz.NewUserUseCase(userRepo)
 	roleUseCase := rbacbiz.NewRoleUseCase(roleRepo)
 	deptUseCase := rbacbiz.NewDepartmentUseCase(deptRepo)
 	menuUseCase := rbacbiz.NewMenuUseCase(menuRepo)
+	positionUseCase := rbacbiz.NewPositionUseCase(positionRepo)
 
 	// 初始化Service
 	authService := rbacService.NewAuthService(jwtSecret, roleUseCase)
@@ -120,7 +140,8 @@ func NewRBACServices(db *gorm.DB, jwtSecret string) (
 	roleService := rbacService.NewRoleService(roleUseCase)
 	departmentService := rbacService.NewDepartmentService(deptUseCase)
 	menuService := rbacService.NewMenuService(menuUseCase)
+	positionService := rbacService.NewPositionService(positionUseCase)
 	authMiddleware := rbacService.NewAuthMiddleware(authService)
 
-	return userService, roleService, departmentService, menuService, authMiddleware
+	return userService, roleService, departmentService, menuService, positionService, authMiddleware
 }

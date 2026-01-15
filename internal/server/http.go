@@ -94,10 +94,10 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	router.Static("/uploads", "./web/public/uploads")
 
 	// 创建 RBAC 服务
-	userService, roleService, departmentService, menuService, authMiddleware := rbac.NewRBACServices(s.db, jwtSecret)
+	userService, roleService, departmentService, menuService, positionService, authMiddleware := rbac.NewRBACServices(s.db, jwtSecret)
 
 	// RBAC 路由
-	rbacServer := rbac.NewHTTPServer(userService, roleService, departmentService, menuService, authMiddleware)
+	rbacServer := rbac.NewHTTPServer(userService, roleService, departmentService, menuService, positionService, authMiddleware)
 	rbacServer.RegisterRoutes(router)
 
 	// API v1 - 需要认证的接口

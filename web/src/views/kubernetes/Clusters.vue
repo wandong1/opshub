@@ -123,16 +123,29 @@
     <!-- 集群列表 -->
     <div class="table-wrapper">
       <!-- 批量操作栏 -->
-      <div v-if="selectedClusters.length > 0" class="batch-actions">
-        <span class="selected-info">已选择 {{ selectedClusters.length }} 项</span>
-        <el-button type="danger" @click="handleBatchDelete">
-          <el-icon style="margin-right: 4px;"><Delete /></el-icon>
-          批量删除
-        </el-button>
-        <el-button @click="selectedClusters = []">取消选择</el-button>
+      <div v-if="selectedClusters.length > 0" class="batch-actions-bar">
+        <div class="batch-actions-left">
+          <el-checkbox
+            v-model="selectAllCurrentPage"
+            :indeterminate="isIndeterminate"
+            @change="handleSelectAllCurrentPage"
+          >
+            <span class="selected-count">已选择 {{ selectedClusters.length }} 个集群</span>
+          </el-checkbox>
+        </div>
+        <div class="batch-actions-right">
+          <el-button type="primary" :icon="Refresh" @click="handleBatchSync" plain>
+            批量同步
+          </el-button>
+          <el-button type="danger" :icon="Delete" @click="handleBatchDelete" plain>
+            批量删除
+          </el-button>
+          <el-button @click="clearSelection">取消选择</el-button>
+        </div>
       </div>
 
       <el-table
+        ref="clusterTableRef"
         :data="paginatedClusterList"
         v-loading="loading"
         class="modern-table"
@@ -148,7 +161,7 @@
           </span>
         </template>
         <template #default="{ row }">
-          <el-button link type="primary" @click="handleViewDetail(row)" style="font-size: 14px;">
+          <el-button link @click="handleViewDetail(row)" class="cluster-name-link">
             {{ row.name }}
           </el-button>
         </template>
@@ -237,7 +250,8 @@
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '编辑集群' : '注册集群'"
-      width="700px"
+      width="70%"
+      class="cluster-edit-dialog"
       @close="handleDialogClose"
     >
       <el-form :model="clusterForm" :rules="rules" ref="formRef" label-width="100px">
@@ -338,6 +352,12 @@
                   <el-icon><Connection /></el-icon>
                 </template>
               </el-input>
+            </el-form-item>
+            <el-form-item label="TLS 验证">
+              <el-switch v-model="skipTLSVerify" active-text="跳过验证" inactive-text="验证证书" />
+              <span style="margin-left: 12px; font-size: 12px; color: #909399;">
+                ⚠️ 跳过 TLS 验证仅适用于测试环境，生产环境请提供 CA 证书
+              </span>
             </el-form-item>
             <el-form-item label="Token" prop="token">
               <div class="code-editor-wrapper">
@@ -661,6 +681,7 @@ const submitLoading = ref(false)
 const formRef = ref<FormInstance>()
 const fileInputRef = ref<HTMLInputElement>()
 const authType = ref('config')
+const skipTLSVerify = ref(true)  // 默认跳过 TLS 验证，适用于自签名证书
 const lineCount = ref(1)
 const tokenLineCount = ref(1)
 const isEdit = ref(false)
@@ -675,6 +696,9 @@ const syncing = ref(false) // 同步状态
 const clusterList = ref<Cluster[]>([])
 const clusterCredentialUsers = ref<CredentialUser[]>([])
 const selectedClusters = ref<Cluster[]>([]) // 选中的集群
+const clusterTableRef = ref() // 表格引用
+const selectAllCurrentPage = ref(false) // 全选当前页
+const isIndeterminate = ref(false) // 半选状态
 
 // 分页状态
 const currentPage = ref(1)
@@ -967,6 +991,99 @@ const handleSyncAll = async () => {
 // 处理表格选择变化
 const handleSelectionChange = (selection: Cluster[]) => {
   selectedClusters.value = selection
+  updateSelectAllStatus()
+}
+
+// 更新全选状态
+const updateSelectAllStatus = () => {
+  const currentPageCount = paginatedClusterList.value.length
+  const selectedCount = selectedClusters.value.length
+
+  if (selectedCount === 0) {
+    selectAllCurrentPage.value = false
+    isIndeterminate.value = false
+  } else if (selectedCount === currentPageCount) {
+    selectAllCurrentPage.value = true
+    isIndeterminate.value = false
+  } else {
+    selectAllCurrentPage.value = false
+    isIndeterminate.value = true
+  }
+}
+
+// 处理当前页全选
+const handleSelectAllCurrentPage = (checked: boolean) => {
+  if (checked) {
+    // 添加当前页所有集群到已选择列表（去重）
+    const currentPageIds = new Set(selectedClusters.value.map(c => c.id))
+    paginatedClusterList.value.forEach(cluster => {
+      if (!currentPageIds.has(cluster.id)) {
+        selectedClusters.value.push(cluster)
+      }
+    })
+  } else {
+    // 移除当前页的集群
+    const currentPageIds = new Set(paginatedClusterList.value.map(c => c.id))
+    selectedClusters.value = selectedClusters.value.filter(c => !currentPageIds.has(c.id))
+  }
+  updateSelectAllStatus()
+  // 同步表格选择状态
+  syncTableSelection()
+}
+
+// 同步表格选择状态
+const syncTableSelection = () => {
+  if (clusterTableRef.value) {
+    const selectedIds = new Set(selectedClusters.value.map(c => c.id))
+    paginatedClusterList.value.forEach(row => {
+      const isSelected = selectedIds.has(row.id)
+      clusterTableRef.value.toggleRowSelection(row, isSelected)
+    })
+  }
+}
+
+// 清除选择
+const clearSelection = () => {
+  selectedClusters.value = []
+  selectAllCurrentPage.value = false
+  isIndeterminate.value = false
+  if (clusterTableRef.value) {
+    clusterTableRef.value.clearSelection()
+  }
+}
+
+// 批量同步集群
+const handleBatchSync = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要同步选中的 ${selectedClusters.value.length} 个集群吗？`,
+      '批量同步确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+
+    const loadingMsg = ElMessage.info({
+      message: `正在同步 ${selectedClusters.value.length} 个集群，请稍候...`,
+      duration: 0,
+      type: 'info'
+    })
+
+    // 并发同步所有选中的集群
+    const syncPromises = selectedClusters.value.map(cluster => syncClusterStatus(cluster.id))
+    await Promise.all(syncPromises)
+
+    loadingMsg.close()
+    clearSelection()
+    await loadClusters()
+    ElMessage.success('同步成功')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.message || '同步失败')
+    }
+  }
 }
 
 // 批量删除集群
@@ -999,7 +1116,7 @@ const handleBatchDelete = async () => {
     await Promise.all(deletePromises)
 
     loadingMsg.close()
-    selectedClusters.value = []
+    clearSelection()
     await loadClusters()
     ElMessage.success('删除成功')
   } catch (error: any) {
@@ -1159,11 +1276,16 @@ const handleSubmit = async () => {
 
 // 从 Token 构建 KubeConfig
 const buildKubeConfigFromToken = (apiEndpoint: string, token: string) => {
+  // 根据 skipTLSVerify 决定是否跳过 TLS 验证
+  const tlsConfig = skipTLSVerify.value
+    ? '    insecure-skip-tls-verify: true'
+    : '    certificate-authority-data: ""'
+
   return `apiVersion: v1
 kind: Config
 clusters:
 - cluster:
-    certificate-authority-data: ""
+${tlsConfig}
     server: ${apiEndpoint}
   name: kubernetes
 contexts:
@@ -1491,6 +1613,7 @@ const handleDialogClose = () => {
     description: ''
   })
   authType.value = 'config'
+  skipTLSVerify.value = true  // 重置 TLS 验证选项
   isEdit.value = false
   editClusterId.value = undefined
   kubeConfigEditable.value = true
@@ -1552,6 +1675,15 @@ watch(activeAuthTab, async (newTab) => {
     await refreshCurrentUserCredential()
   }
 })
+
+// 监听分页列表变化，保持选中状态
+watch(paginatedClusterList, () => {
+  if (selectedClusters.value.length > 0) {
+    nextTick(() => {
+      syncTableSelection()
+    })
+  }
+}, { flush: 'post' })
 </script>
 
 <style scoped>
@@ -1713,23 +1845,194 @@ watch(activeAuthTab, async (newTab) => {
 }
 
 /* 批量操作栏 */
-.batch-actions {
+.batch-actions-bar {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
+  padding: 16px 24px;
+  margin-bottom: 16px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  border-left: 4px solid #409EFF;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.15);
+  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.selected-info {
-  flex: 1;
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.batch-actions-left {
+  display: flex;
+  align-items: center;
+}
+
+.batch-actions-left :deep(.el-checkbox__label) {
+  font-size: 15px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+/* 批量操作栏内的复选框样式 */
+.batch-actions-left :deep(.el-checkbox) {
+  display: flex;
+  align-items: center;
+  height: auto;
+}
+
+.batch-actions-left :deep(.el-checkbox__input) {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  line-height: 1;
+}
+
+.batch-actions-left :deep(.el-checkbox__inner) {
+  border: 2px solid #d4af37;
+  background: #ffffff;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.batch-actions-left :deep(.el-checkbox__inner:hover) {
+  border-color: #c9a227;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
+  border-color: #ffffff;
+  border-width: 2px;
+  height: 11px;
+  left: 6px;
+  width: 5px;
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
+  background-color: #ffffff;
+  height: 2px;
+  top: 10px;
+  width: 10px;
+  left: 6px;
+}
+
+.batch-actions-left :deep(.el-checkbox__label) {
+  font-size: 15px;
+  color: #1a1a1a;
+  font-weight: 600;
+  line-height: 22px;
+  padding-left: 8px;
+}
+
+.selected-count {
+  font-size: 15px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.batch-actions-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.batch-actions-right .el-button {
+  border-radius: 8px;
+  font-weight: 600;
   font-size: 14px;
-  color: #606266;
-  font-weight: 500;
+  padding: 10px 18px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid;
+  background: #1a1a1a;
+  color: #ffffff;
+  border-color: #1a1a1a;
+}
+
+.batch-actions-right .el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  background: #333333;
+  border-color: #333333;
+  color: #ffffff;
+}
+
+/* 移除特定按钮类型的颜色样式，统一使用黑底白字 */
+.batch-actions-right .el-button--primary,
+.batch-actions-right .el-button--warning,
+.batch-actions-right .el-button--info,
+.batch-actions-right .el-button--danger,
+.batch-actions-right .el-button--success {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #ffffff;
+}
+
+.batch-actions-right .el-button--primary:hover,
+.batch-actions-right .el-button--warning:hover,
+.batch-actions-right .el-button--info:hover,
+.batch-actions-right .el-button--danger:hover,
+.batch-actions-right .el-button--success:hover {
+  background: #333333;
+  border-color: #333333;
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* 表格复选框金色样式 */
+.modern-table :deep(.el-checkbox__inner) {
+  border: 2px solid #d4af37;
+  background: #ffffff;
+  border-radius: 4px;
+}
+
+.modern-table :deep(.el-checkbox__inner:hover) {
+  border-color: #c9a227;
+}
+
+.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
+  border-color: #ffffff;
+  border-width: 2px;
+}
+
+.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
+  background-color: #ffffff;
 }
 
 /* 搜索栏 */
@@ -1820,6 +2123,16 @@ watch(activeAuthTab, async (newTab) => {
 
 .modern-table :deep(.el-button--link) {
   transition: all 0.2s ease;
+}
+
+.cluster-name-link {
+  color: #303133 !important;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cluster-name-link:hover {
+  color: #409eff !important;
 }
 
 .modern-table :deep(.el-tag) {
@@ -2134,5 +2447,16 @@ watch(activeAuthTab, async (newTab) => {
       }
     }
   }
+}
+
+/* 集群编辑对话框样式 */
+:deep(.cluster-edit-dialog) {
+  width: 70% !important;
+  max-width: 90vw;
+}
+
+:deep(.cluster-edit-dialog .el-dialog__body) {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 </style>

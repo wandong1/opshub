@@ -2,52 +2,175 @@
   <div class="roles-container">
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
-      <h2 class="page-title">角色管理</h2>
-      <el-button class="black-button" @click="handleAdd">新增角色</el-button>
+      <div class="page-title-group">
+        <div class="page-title-icon">
+          <el-icon><User /></el-icon>
+        </div>
+        <div>
+          <h2 class="page-title">角色管理</h2>
+          <p class="page-subtitle">管理系统角色权限，支持角色创建、编辑与权限分配</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <el-button class="black-button" @click="handleAdd">
+          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+          新增角色
+        </el-button>
+      </div>
     </div>
 
-    <el-table :data="roleList" border stripe v-loading="loading" style="width: 100%">
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="name" label="角色名称" min-width="150" />
-      <el-table-column prop="code" label="角色编码" min-width="150" />
-      <el-table-column prop="description" label="描述" min-width="200" />
-      <el-table-column label="状态" width="80">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'">
-            {{ row.status === 1 ? '启用' : '禁用' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button class="black-button" size="small" @click="handleEdit(row)">编辑</el-button>
-          <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <!-- 搜索栏 -->
+    <div class="search-bar">
+      <div class="search-inputs">
+        <el-input
+          v-model="searchForm.name"
+          placeholder="搜索角色名称..."
+          clearable
+          class="search-input"
+          @input="handleSearch"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><Search /></el-icon>
+          </template>
+        </el-input>
 
-    <!-- 分页 -->
-    <el-pagination
-      v-model:current-page="pagination.page"
-      v-model:page-size="pagination.pageSize"
-      :total="pagination.total"
-      layout="total, prev, pager, next"
-      @current-change="loadRoles"
-      style="margin-top: 20px; justify-content: center"
-    />
+        <el-input
+          v-model="searchForm.code"
+          placeholder="搜索角色编码..."
+          clearable
+          class="search-input"
+          @input="handleSearch"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><Key /></el-icon>
+          </template>
+        </el-input>
+
+        <el-select
+          v-model="searchForm.status"
+          placeholder="角色状态"
+          clearable
+          class="search-input"
+          @change="handleSearch"
+        >
+          <el-option label="启用" :value="1" />
+          <el-option label="禁用" :value="0" />
+        </el-select>
+      </div>
+
+      <div class="search-actions">
+        <el-button class="reset-btn" @click="handleReset">
+          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
+          重置
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 表格容器 -->
+    <div class="table-wrapper">
+      <el-table
+        :data="filteredRoleList"
+        v-loading="loading"
+        class="modern-table"
+        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+      >
+        <el-table-column prop="id" label="ID" width="80" align="center" />
+
+        <el-table-column label="角色名称" prop="name" min-width="150">
+          <template #default="{ row }">
+            <div class="role-name-cell">
+              <el-icon class="role-icon"><UserFilled /></el-icon>
+              <span class="role-name">{{ row.name }}</span>
+            </div>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="code" min-width="150">
+          <template #header>
+            <span class="header-with-icon">
+              <el-icon class="header-icon header-icon-gold"><Key /></el-icon>
+              角色编码
+            </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="description" label="描述" min-width="200">
+          <template #default="{ row }">
+            <span class="description-text">{{ row.description || '-' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'danger'" effect="dark">
+              {{ row.status === 1 ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="createTime" label="创建时间" min-width="180" />
+
+        <el-table-column label="操作" width="150" fixed="right" align="center">
+          <template #default="{ row }">
+            <div class="action-buttons">
+              <el-tooltip content="编辑" placement="top">
+                <el-button link class="action-btn action-edit" @click="handleEdit(row)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button link class="action-btn action-delete" @click="handleDelete(row)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          layout="total, prev, pager, next, jumper"
+          @current-change="loadRoles"
+        />
+      </div>
+    </div>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="600px"
+      class="role-edit-dialog"
+      :close-on-click-modal="false"
+      @close="handleDialogClose"
+    >
       <el-form :model="roleForm" :rules="rules" ref="formRef" label-width="100px">
         <el-form-item label="角色名称" prop="name">
-          <el-input v-model="roleForm.name" />
+          <el-input v-model="roleForm.name" placeholder="请输入角色名称" />
         </el-form-item>
+
         <el-form-item label="角色编码" prop="code">
-          <el-input v-model="roleForm.code" />
+          <el-input v-model="roleForm.code" placeholder="请输入角色编码" />
         </el-form-item>
+
+        <el-form-item label="显示顺序" prop="sort">
+          <el-input-number v-model="roleForm.sort" :min="0" />
+        </el-form-item>
+
         <el-form-item label="描述" prop="description">
-          <el-input v-model="roleForm.description" type="textarea" />
+          <el-input
+            v-model="roleForm.description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入角色描述"
+          />
         </el-form-item>
+
         <el-form-item label="状态" prop="status">
           <el-radio-group v-model="roleForm.status">
             <el-radio :label="1">启用</el-radio>
@@ -57,32 +180,79 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <div class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button class="black-button" @click="handleSubmit" :loading="submitting">确定</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox, FormInstance } from 'element-plus'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
+import {
+  Plus,
+  Edit,
+  Delete,
+  User,
+  UserFilled,
+  Search,
+  RefreshLeft,
+  Key
+} from '@element-plus/icons-vue'
 import { getRoleList, createRole, updateRole, deleteRole } from '@/api/role'
 
+// 加载状态
 const loading = ref(false)
+const submitting = ref(false)
+
+// 对话框状态
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
+
+// 表单引用
 const formRef = ref<FormInstance>()
 
+// 分页
 const pagination = reactive({
   page: 1,
   pageSize: 10,
   total: 0
 })
 
-const roleList = ref([])
+// 角色列表
+const roleList = ref<any[]>([])
 
+// 搜索表单
+const searchForm = reactive({
+  name: '',
+  code: '',
+  status: undefined as number | undefined
+})
+
+// 过滤后的角色列表
+const filteredRoleList = computed(() => {
+  let result = [...roleList.value]
+
+  if (searchForm.name) {
+    result = result.filter(item => item.name?.includes(searchForm.name))
+  }
+
+  if (searchForm.code) {
+    result = result.filter(item => item.code?.includes(searchForm.code))
+  }
+
+  if (searchForm.status !== undefined) {
+    result = result.filter(item => item.status === searchForm.status)
+  }
+
+  return result
+})
+
+// 角色表单
 const roleForm = reactive({
   id: 0,
   name: '',
@@ -92,11 +262,32 @@ const roleForm = reactive({
   sort: 0
 })
 
-const rules = {
-  name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入角色编码', trigger: 'blur' }]
+// 表单验证规则
+const rules: FormRules = {
+  name: [
+    { required: true, message: '请输入角色名称', trigger: 'blur' },
+    { min: 2, max: 50, message: '角色名称长度在 2 到 50 个字符', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请输入角色编码', trigger: 'blur' },
+    { min: 2, max: 50, message: '角色编码长度在 2 到 50 个字符', trigger: 'blur' }
+  ]
 }
 
+// 搜索处理
+const handleSearch = () => {
+  // 搜索时自动回到第一页
+  pagination.page = 1
+}
+
+// 重置搜索
+const handleReset = () => {
+  searchForm.name = ''
+  searchForm.code = ''
+  searchForm.status = undefined
+}
+
+// 加载角色列表
 const loadRoles = async () => {
   loading.value = true
   try {
@@ -106,53 +297,98 @@ const loadRoles = async () => {
     })
     roleList.value = res.list || []
     pagination.total = res.total || 0
+  } catch (error) {
+    console.error('获取角色列表失败:', error)
+    ElMessage.error('获取角色列表失败')
   } finally {
     loading.value = false
   }
 }
 
+// 重置表单
+const resetForm = () => {
+  roleForm.id = 0
+  roleForm.name = ''
+  roleForm.code = ''
+  roleForm.description = ''
+  roleForm.status = 1
+  roleForm.sort = 0
+  formRef.value?.clearValidate()
+}
+
+// 新增角色
 const handleAdd = () => {
-  isEdit.value = false
+  resetForm()
   dialogTitle.value = '新增角色'
+  isEdit.value = false
   dialogVisible.value = true
 }
 
+// 编辑角色
 const handleEdit = (row: any) => {
-  isEdit.value = true
+  Object.assign(roleForm, {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    description: row.description || '',
+    status: row.status,
+    sort: row.sort || 0
+  })
   dialogTitle.value = '编辑角色'
-  Object.assign(roleForm, row)
+  isEdit.value = true
   dialogVisible.value = true
 }
 
+// 删除角色
 const handleDelete = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要删除该角色吗？', '提示', { type: 'warning' })
-    await deleteRole(row.id)
-    ElMessage.success('删除成功')
-    loadRoles()
-  } catch (error) {
-    if (error !== 'cancel') console.error(error)
-  }
+  ElMessageBox.confirm(`确定要删除角色"${row.name}"吗？`, '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      await deleteRole(row.id)
+      ElMessage.success('删除成功')
+      loadRoles()
+    } catch (error: any) {
+      ElMessage.error(error.message || '删除失败')
+    }
+  }).catch(() => {})
 }
 
+// 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
+
   await formRef.value.validate(async (valid) => {
-    if (valid) {
-      try {
-        if (isEdit.value) {
-          await updateRole(roleForm.id, roleForm)
-        } else {
-          await createRole(roleForm)
-        }
-        ElMessage.success('操作成功')
-        dialogVisible.value = false
-        loadRoles()
-      } catch (error) {
-        console.error(error)
+    if (!valid) return
+
+    submitting.value = true
+    try {
+      const data = { ...roleForm }
+
+      if (isEdit.value) {
+        await updateRole(data.id, data)
+        ElMessage.success('更新成功')
+      } else {
+        await createRole(data)
+        ElMessage.success('创建成功')
       }
+
+      dialogVisible.value = false
+      loadRoles()
+    } catch (error: any) {
+      ElMessage.error(error.message || (isEdit.value ? '更新失败' : '创建失败'))
+    } finally {
+      submitting.value = false
     }
   })
+}
+
+// 对话框关闭事件
+const handleDialogClose = () => {
+  formRef.value?.resetFields()
+  resetForm()
 }
 
 onMounted(() => {
@@ -162,32 +398,228 @@ onMounted(() => {
 
 <style scoped>
 .roles-container {
-  padding: 20px;
-  background-color: #fff;
-  min-height: 100%;
+  padding: 0;
+  background-color: transparent;
 }
 
+/* 页面头部 */
 .page-header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding: 16px 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.page-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.page-title-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  border-radius: 10px;
+  display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e6e6e6;
+  justify-content: center;
+  color: #d4af37;
+  font-size: 22px;
+  flex-shrink: 0;
+  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 600;
   color: #303133;
+  line-height: 1.3;
 }
 
-/* 黑色按钮样式 */
+.page-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.4;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* 搜索栏 */
+.search-bar {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.search-inputs {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.search-input {
+  width: 280px;
+}
+
+.search-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.reset-btn {
+  background: #f5f7fa;
+  border-color: #dcdfe6;
+  color: #606266;
+}
+
+.reset-btn:hover {
+  background: #e6e8eb;
+  border-color: #c0c4cc;
+}
+
+/* 搜索框样式 */
+.search-bar :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  border: 1px solid #dcdfe6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  background-color: #fff;
+}
+
+.search-bar :deep(.el-input__wrapper:hover) {
+  border-color: #d4af37;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
+}
+
+.search-bar :deep(.el-input__wrapper.is-focus) {
+  border-color: #d4af37;
+  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
+}
+
+.search-icon {
+  color: #d4af37;
+}
+
+/* 表格容器 */
+.table-wrapper {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.modern-table {
+  width: 100%;
+}
+
+.modern-table :deep(.el-table__body-wrapper) {
+  border-radius: 0 0 12px 12px;
+}
+
+.modern-table :deep(.el-table__row) {
+  transition: background-color 0.2s ease;
+}
+
+.modern-table :deep(.el-table__row:hover) {
+  background-color: #f8fafc !important;
+}
+
+/* 表头图标 */
+.header-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-icon {
+  font-size: 16px;
+}
+
+.header-icon-gold {
+  color: #d4af37;
+}
+
+/* 角色名称单元格 */
+.role-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.role-icon {
+  font-size: 18px;
+  color: #409eff;
+  flex-shrink: 0;
+}
+
+.role-name {
+  font-weight: 500;
+}
+
+.description-text {
+  color: #606266;
+}
+
+/* 操作按钮 */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.action-btn :deep(.el-icon) {
+  font-size: 16px;
+}
+
+.action-btn:hover {
+  transform: scale(1.1);
+}
+
+.action-edit:hover {
+  background-color: #e8f4ff;
+  color: #409eff;
+}
+
+.action-delete:hover {
+  background-color: #fee;
+  color: #f56c6c;
+}
+
 .black-button {
   background-color: #000000 !important;
   color: #ffffff !important;
   border-color: #000000 !important;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
 }
 
 .black-button:hover {
@@ -195,8 +627,53 @@ onMounted(() => {
   border-color: #333333 !important;
 }
 
-.black-button:focus {
-  background-color: #000000 !important;
-  border-color: #000000 !important;
+/* 分页器 */
+.pagination-container {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 对话框样式 */
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+:deep(.role-edit-dialog) {
+  border-radius: 12px;
+}
+
+:deep(.role-edit-dialog .el-dialog__header) {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+:deep(.role-edit-dialog .el-dialog__body) {
+  padding: 24px;
+}
+
+:deep(.role-edit-dialog .el-dialog__footer) {
+  padding: 16px 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 标签样式 */
+:deep(.el-tag) {
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-weight: 500;
+}
+
+/* 输入框样式 */
+:deep(.el-input__wrapper),
+:deep(.el-textarea__inner) {
+  border-radius: 8px;
+}
+
+:deep(.el-select .el-input__wrapper) {
+  border-radius: 8px;
 }
 </style>

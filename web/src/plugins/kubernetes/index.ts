@@ -60,17 +60,17 @@ class KubernetesPlugin implements Plugin {
         parentPath: parentPath,
       },
       {
-        name: '工作负载',
-        path: '/kubernetes/workloads',
-        icon: 'Tools',
+        name: '命名空间',
+        path: '/kubernetes/namespaces',
+        icon: 'FolderOpened',
         sort: 3,
         hidden: false,
         parentPath: parentPath,
       },
       {
-        name: '命名空间',
-        path: '/kubernetes/namespaces',
-        icon: 'FolderOpened',
+        name: '工作负载',
+        path: '/kubernetes/workloads',
+        icon: 'Tools',
         sort: 4,
         hidden: false,
         parentPath: parentPath,
@@ -112,14 +112,6 @@ class KubernetesPlugin implements Plugin {
         path: '/kubernetes/audit',
         icon: 'View',
         sort: 9,
-        hidden: false,
-        parentPath: parentPath,
-      },
-      {
-        name: '应用诊断',
-        path: '/kubernetes/diagnostic',
-        icon: 'Odometer',
-        sort: 10,
         hidden: false,
         parentPath: parentPath,
       },
@@ -209,15 +201,9 @@ class KubernetesPlugin implements Plugin {
             component: () => import('@/views/kubernetes/Audit.vue'),
             meta: { title: '终端审计' },
           },
-          {
-            path: 'diagnostic',
-            name: 'K8sDiagnostic',
-            component: () => import('@/views/kubernetes/Diagnostic.vue'),
-            meta: { title: '应用诊断' },
-          },
         ],
-      },
-    ]
+    },
+  ]
   }
 }
 

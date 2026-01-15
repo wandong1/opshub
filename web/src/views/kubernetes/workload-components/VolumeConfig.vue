@@ -94,22 +94,27 @@
               <!-- ConfigMap 配置 -->
               <template v-if="volume.type === 'configMap'">
                 <div class="form-row">
-                  <label>ConfigMap 名称</label>
-                  <el-select
-                    v-model="volume.configMap!.name"
-                    filterable
-                    placeholder="选择 ConfigMap"
-                    size="small"
-                    style="width: 100%;"
-                    @change="updateVolume(index)"
-                  >
-                    <el-option
-                      v-for="cm in configMaps"
-                      :key="cm.name"
-                      :label="cm.name"
-                      :value="cm.name"
-                    />
-                  </el-select>
+                  <label>
+                    ConfigMap 名称
+                    <el-button link type="primary" @click="emit('refreshConfigMaps')" :icon="Refresh" size="small" circle />
+                  </label>
+                  <div class="select-with-refresh">
+                    <el-select
+                      v-model="volume.configMap!.name"
+                      filterable
+                      placeholder="选择 ConfigMap"
+                      size="small"
+                      style="flex: 1;"
+                      @change="updateVolume(index)"
+                    >
+                      <el-option
+                        v-for="cm in configMaps"
+                        :key="cm.name"
+                        :label="cm.name"
+                        :value="cm.name"
+                      />
+                    </el-select>
+                  </div>
                 </div>
                 <div class="form-row">
                   <label>默认权限</label>
@@ -136,22 +141,27 @@
               <!-- Secret 配置 -->
               <template v-if="volume.type === 'secret'">
                 <div class="form-row">
-                  <label>Secret 名称</label>
-                  <el-select
-                    v-model="volume.secret!.secretName"
-                    filterable
-                    placeholder="选择 Secret"
-                    size="small"
-                    style="width: 100%;"
-                    @change="updateVolume(index)"
-                  >
-                    <el-option
-                      v-for="sec in secrets"
-                      :key="sec.name"
-                      :label="sec.name"
-                      :value="sec.name"
-                    />
-                  </el-select>
+                  <label>
+                    Secret 名称
+                    <el-button link type="primary" @click="emit('refreshSecrets')" :icon="Refresh" size="small" circle />
+                  </label>
+                  <div class="select-with-refresh">
+                    <el-select
+                      v-model="volume.secret!.secretName"
+                      filterable
+                      placeholder="选择 Secret"
+                      size="small"
+                      style="flex: 1;"
+                      @change="updateVolume(index)"
+                    >
+                      <el-option
+                        v-for="sec in secrets"
+                        :key="sec.name"
+                        :label="sec.name"
+                        :value="sec.name"
+                      />
+                    </el-select>
+                  </div>
                 </div>
                 <div class="form-row">
                   <label>默认权限</label>
@@ -178,22 +188,27 @@
               <!-- PVC 配置 -->
               <template v-if="volume.type === 'persistentVolumeClaim'">
                 <div class="form-row">
-                  <label>声明名称</label>
-                  <el-select
-                    v-model="volume.persistentVolumeClaim!.claimName"
-                    filterable
-                    placeholder="选择 PVC"
-                    size="small"
-                    style="width: 100%;"
-                    @change="updateVolume(index)"
-                  >
-                    <el-option
-                      v-for="pvc in pvcs"
-                      :key="pvc.name"
-                      :label="pvc.name"
-                      :value="pvc.name"
-                    />
-                  </el-select>
+                  <label>
+                    声明名称
+                    <el-button link type="primary" @click="emit('refreshPVCs')" :icon="Refresh" size="small" circle />
+                  </label>
+                  <div class="select-with-refresh">
+                    <el-select
+                      v-model="volume.persistentVolumeClaim!.claimName"
+                      filterable
+                      placeholder="选择 PVC"
+                      size="small"
+                      style="flex: 1;"
+                      @change="updateVolume(index)"
+                    >
+                      <el-option
+                        v-for="pvc in pvcs"
+                        :key="pvc.name"
+                        :label="pvc.name"
+                        :value="pvc.name"
+                      />
+                    </el-select>
+                  </div>
                 </div>
                 <div class="form-row">
                   <label>只读</label>
@@ -213,7 +228,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Plus, Delete, ArrowRight } from '@element-plus/icons-vue'
+import { Plus, Delete, ArrowRight, Refresh } from '@element-plus/icons-vue'
 
 interface ConfigMapItem {
   key: string
@@ -272,6 +287,9 @@ const emit = defineEmits<{
   addVolume: []
   removeVolume: [index: number]
   update: [volumes: Volume[]]
+  refreshConfigMaps: []
+  refreshSecrets: []
+  refreshPVCs: []
 }>()
 
 const expandedIndex = ref<number>(-1)
@@ -537,6 +555,12 @@ const removeSecretItem = (volume: Volume, idx: number) => {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
+}
+
+.select-with-refresh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .items-list {

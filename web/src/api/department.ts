@@ -24,3 +24,8 @@ export const updateDepartment = (id: number, data: any) => {
 export const deleteDepartment = (id: number) => {
   return request.delete(`/api/v1/departments/${id}`)
 }
+
+// 获取父级部门选项（用于级联选择器）
+export const getParentOptions = () => {
+  return request.get('/api/v1/departments/parent-options')
+}

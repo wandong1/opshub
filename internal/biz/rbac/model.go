@@ -39,11 +39,56 @@ type SysDepartment struct {
 	gorm.Model
 	Name        string            `gorm:"type:varchar(50);not null;comment:部门名称" json:"name"`
 	Code        string            `gorm:"type:varchar(50);uniqueIndex;comment:部门编码" json:"code"`
-	ParentID    uint              `gorm:"default:0;comment:父部门ID" json:"parentId"`
+	ParentID    uint              `gorm:"column:parent_id;default:0;comment:父部门ID" json:"parentId"`
 	Parent      *SysDepartment    `gorm:"-" json:"parent,omitempty"`
 	Children    []*SysDepartment   `gorm:"-" json:"children,omitempty"`
+	DeptType    int               `gorm:"column:dept_type;type:tinyint;default:3;comment:部门类型 1:公司 2:中心 3:部门" json:"deptType"`
 	Sort        int               `gorm:"type:int;default:0;comment:排序" json:"sort"`
 	Status      int               `gorm:"type:tinyint;default:1;comment:状态 1:启用 0:禁用" json:"status"`
+}
+
+// DepartmentRequest 部门请求（前端使用）
+type DepartmentRequest struct {
+	ID         uint   `json:"id"`
+	ParentID   uint   `json:"parentId"`
+	DeptType   int    `json:"deptType"`
+	DeptName   string `json:"deptName" binding:"required,min=2,max=50"`
+	Code       string `json:"code" binding:"required,min=2,max=50"`
+	Sort       int    `json:"sort"`
+	DeptStatus int    `json:"deptStatus" binding:"required"`
+}
+
+// ToModel 转换为SysDepartment模型
+func (r *DepartmentRequest) ToModel() *SysDepartment {
+	return &SysDepartment{
+		Model:    gorm.Model{ID: r.ID},
+		Name:     r.DeptName,
+		Code:     r.Code,
+		ParentID: r.ParentID,
+		DeptType: r.DeptType,
+		Sort:     r.Sort,
+		Status:   r.DeptStatus,
+	}
+}
+
+// DepartmentInfoVO 部门信息VO（用于API响应）
+type DepartmentInfoVO struct {
+	ID         uint               `json:"id"`
+	ParentID   uint               `json:"parentId"`
+	DeptType   int                `json:"deptType"`
+	DeptName   string             `json:"deptName"`
+	Code       string             `json:"code"`
+	DeptStatus int                `json:"deptStatus"`
+	CreateTime string             `json:"createTime"`
+	Children   []*DepartmentInfoVO `json:"children,omitempty"`
+}
+
+// DepartmentParentOptionVO 部门父级选项VO（用于级联选择器）
+type DepartmentParentOptionVO struct {
+	ID       uint                        `json:"id"`
+	ParentID uint                        `json:"parentId"`
+	Label    string                      `json:"label"`
+	Children []*DepartmentParentOptionVO `json:"children,omitempty"`
 }
 
 // SysMenu 菜单表
@@ -76,6 +121,22 @@ type SysRoleMenu struct {
 	MenuID uint `gorm:"primaryKey;column:menu_id;comment:菜单ID" json:"menuId"`
 }
 
+// SysPosition 岗位表
+type SysPosition struct {
+	gorm.Model
+	PostName   string    `gorm:"type:varchar(50);not null;comment:岗位名称" json:"postName"`
+	PostCode   string    `gorm:"type:varchar(50);uniqueIndex;not null;comment:岗位编码" json:"postCode"`
+	PostStatus int       `gorm:"type:tinyint;default:1;comment:状态 1:启用 2:禁用" json:"postStatus"`
+	Remark     string    `gorm:"type:varchar(200);comment:备注" json:"remark"`
+	Users      []SysUser `gorm:"many2many:sys_user_position;joinForeignKey:PositionID;joinReferences:UserID" json:"users,omitempty"`
+}
+
+// SysUserPosition 用户岗位关联表
+type SysUserPosition struct {
+	UserID     uint `gorm:"primaryKey;column:user_id;comment:用户ID" json:"userId"`
+	PositionID uint `gorm:"primaryKey;column:position_id;comment:岗位ID" json:"positionId"`
+}
+
 // TableName 指定表名
 func (SysUser) TableName() string {
 	return "sys_user"
@@ -99,4 +160,12 @@ func (SysUserRole) TableName() string {
 
 func (SysRoleMenu) TableName() string {
 	return "sys_role_menu"
+}
+
+func (SysPosition) TableName() string {
+	return "sys_position"
+}
+
+func (SysUserPosition) TableName() string {
+	return "sys_user_position"
 }

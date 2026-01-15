@@ -47,6 +47,14 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 		clusters.DELETE("/resources/nodes/:nodeName", resourceHandler.DeleteNode)
 		clusters.GET("/resources/nodes/:nodeName/metrics", resourceHandler.GetNodeMetrics)
 
+		// 节点批量操作
+		clusters.POST("/resources/nodes/batch/drain", resourceHandler.BatchDrainNodes)
+		clusters.POST("/resources/nodes/batch/cordon", resourceHandler.BatchCordonNodes)
+		clusters.POST("/resources/nodes/batch/uncordon", resourceHandler.BatchUncordonNodes)
+		clusters.POST("/resources/nodes/batch/delete", resourceHandler.BatchDeleteNodes)
+		clusters.POST("/resources/nodes/batch/labels", resourceHandler.BatchUpdateNodeLabels)
+		clusters.POST("/resources/nodes/batch/taints", resourceHandler.BatchUpdateNodeTaints)
+
 		// Shell WebSocket
 		clusters.GET("/shell/nodes/:nodeName", resourceHandler.NodeShellWebSocket)
 		clusters.GET("/shell/pods", resourceHandler.PodShellWebSocket)
@@ -65,6 +73,30 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 
 		// 访问控制资源
 		clusters.GET("/resources/serviceaccounts", resourceHandler.ListServiceAccounts)
+		clusters.POST("/resources/serviceaccounts/:namespace/yaml", resourceHandler.CreateServiceAccountFromYAML)
+		clusters.GET("/resources/serviceaccounts/:namespace/:name/yaml", resourceHandler.GetServiceAccountYAML)
+		clusters.PUT("/resources/serviceaccounts/:namespace/:name/yaml", resourceHandler.UpdateServiceAccountYAML)
+		clusters.DELETE("/resources/serviceaccounts/:namespace/:name", resourceHandler.DeleteServiceAccount)
+		clusters.POST("/resources/roles/:namespace/yaml", resourceHandler.CreateRoleFromYAML)
+		clusters.GET("/resources/roles/:namespace/:name/yaml", resourceHandler.GetRoleYAML)
+		clusters.PUT("/resources/roles/:namespace/:name/yaml", resourceHandler.UpdateRoleYAML)
+		clusters.DELETE("/resources/roles/:namespace/:name", resourceHandler.DeleteRole)
+
+		clusters.POST("/resources/rolebindings/:namespace/yaml", resourceHandler.CreateRoleBindingFromYAML)
+		clusters.GET("/resources/rolebindings/:namespace/:name/yaml", resourceHandler.GetRoleBindingYAML)
+		clusters.PUT("/resources/rolebindings/:namespace/:name/yaml", resourceHandler.UpdateRoleBindingYAML)
+		clusters.DELETE("/resources/rolebindings/:namespace/:name", resourceHandler.DeleteRoleBinding)
+
+		clusters.POST("/resources/clusterroles/yaml", resourceHandler.CreateClusterRoleFromYAML)
+		clusters.GET("/resources/clusterroles/:name/yaml", resourceHandler.GetClusterRoleYAML)
+		clusters.PUT("/resources/clusterroles/:name/yaml", resourceHandler.UpdateClusterRoleYAML)
+		clusters.DELETE("/resources/clusterroles/:name", resourceHandler.DeleteClusterRole)
+
+		clusters.POST("/resources/clusterrolebindings/yaml", resourceHandler.CreateClusterRoleBindingFromYAML)
+		clusters.GET("/resources/clusterrolebindings/:name/yaml", resourceHandler.GetClusterRoleBindingYAML)
+		clusters.PUT("/resources/clusterrolebindings/:name/yaml", resourceHandler.UpdateClusterRoleBindingYAML)
+		clusters.DELETE("/resources/clusterrolebindings/:name", resourceHandler.DeleteClusterRoleBinding)
+
 		clusters.GET("/resources/roles", resourceHandler.ListRoles)
 		clusters.GET("/resources/rolebindings", resourceHandler.ListRoleBindings)
 		clusters.GET("/resources/clusterroles", resourceHandler.ListClusterRoles)
@@ -93,6 +125,13 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 		clusters.POST("/workloads/rollback", resourceHandler.RollbackWorkload)
 		clusters.POST("/resources/workloads/create", resourceHandler.CreateWorkloadFromYAML)
 		clusters.DELETE("/resources/workloads/:namespace/:name", resourceHandler.DeleteWorkload)
+
+		// 工作负载批量操作
+		clusters.POST("/resources/workloads/batch/delete", resourceHandler.BatchDeleteWorkloads)
+		clusters.POST("/resources/workloads/batch/restart", resourceHandler.BatchRestartWorkloads)
+		clusters.POST("/resources/workloads/batch/pause", resourceHandler.BatchPauseWorkloads)
+		clusters.POST("/resources/workloads/batch/resume", resourceHandler.BatchResumeWorkloads)
+
 		clusters.GET("/resources/api-groups", resourceHandler.GetAPIGroups)
 		clusters.GET("/resources/api-resources", resourceHandler.GetResourcesByAPIGroup)
 
@@ -127,12 +166,14 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 
 		// 配置管理 - ConfigMap
 		clusters.GET("/resources/configmaps", resourceHandler.ListConfigMaps)
+		clusters.POST("/resources/configmaps/:namespace/yaml", resourceHandler.CreateConfigMapFromYAML)
 		clusters.GET("/resources/configmaps/:namespace/:name/yaml", resourceHandler.GetConfigMapYAML)
 		clusters.PUT("/resources/configmaps/:namespace/:name/yaml", resourceHandler.UpdateConfigMapYAML)
 		clusters.DELETE("/resources/configmaps/:namespace/:name", resourceHandler.DeleteConfigMap)
 
 		// 配置管理 - Secret
 		clusters.GET("/resources/secrets", resourceHandler.ListSecrets)
+		clusters.POST("/resources/secrets/:namespace/yaml", resourceHandler.CreateSecretFromYAML)
 		clusters.GET("/resources/secrets/:namespace/:name/yaml", resourceHandler.GetSecretYAML)
 		clusters.PUT("/resources/secrets/:namespace/:name/yaml", resourceHandler.UpdateSecretYAML)
 		clusters.DELETE("/resources/secrets/:namespace/:name", resourceHandler.DeleteSecret)
@@ -215,5 +256,6 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
 		clusters.GET("/role-bindings/user-roles", roleBindingHandler.GetUserClusterRoles)
 		clusters.GET("/role-bindings/user-bindings", roleBindingHandler.GetUserRoleBindings)
 		clusters.GET("/role-bindings/credential-users", roleBindingHandler.GetClusterCredentialUsers)
+
 	}
 }

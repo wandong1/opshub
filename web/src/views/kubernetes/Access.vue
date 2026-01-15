@@ -28,23 +28,6 @@
             :value="cluster.id"
           />
         </el-select>
-        <el-select
-          v-model="selectedNamespace"
-          placeholder="选择命名空间"
-          class="namespace-select"
-          @change="handleNamespaceChange"
-          :disabled="!selectedClusterId"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><FolderOpened /></el-icon>
-          </template>
-          <el-option
-            v-for="ns in namespaceList"
-            :key="ns.name"
-            :label="ns.name"
-            :value="ns.name"
-          />
-        </el-select>
         <el-button class="black-button" @click="loadData">
           <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
           刷新
@@ -64,6 +47,47 @@
           <component :is="type.icon" />
         </el-icon>
         <span class="type-label">{{ type.label }}</span>
+        <span v-if="type.count !== undefined" class="type-count">({{ type.count }})</span>
+      </div>
+    </div>
+
+    <!-- 操作栏 -->
+    <div class="action-bar" v-if="selectedClusterId">
+      <div class="search-section">
+        <el-input
+          v-model="searchName"
+          placeholder="搜索名称..."
+          clearable
+          class="search-input"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-select
+          v-model="selectedNamespace"
+          placeholder="选择命名空间"
+          class="namespace-select"
+          @change="handleNamespaceChange"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><FolderOpened /></el-icon>
+          </template>
+          <el-option label="所有命名空间" value="" />
+          <el-option
+            v-for="ns in namespaceList"
+            :key="ns.name"
+            :label="ns.name"
+            :value="ns.name"
+          />
+        </el-select>
+      </div>
+
+      <div class="action-buttons">
+        <el-button class="black-button" @click="handleCreate">
+          <el-icon><Plus /></el-icon>
+          {{ getCreateButtonText() }}
+        </el-button>
       </div>
     </div>
 
@@ -71,47 +95,50 @@
     <div class="content-wrapper">
       <!-- ServiceAccounts -->
       <ServiceAccountsTab
-        v-if="activeTab === 'serviceaccounts' && selectedClusterId"
+        v-show="activeTab === 'serviceaccounts' && selectedClusterId"
+        ref="serviceAccountsTabRef"
         :cluster-id="selectedClusterId"
         :namespace="selectedNamespace"
+        :search-name="searchName"
+        @count-update="(count) => updateCount('serviceaccounts', count)"
       />
 
       <!-- Roles -->
-      <template v-if="activeTab === 'roles'">
-        <RolesTab
-          v-if="selectedClusterId && selectedNamespace"
-          :cluster-id="selectedClusterId"
-          :namespace="selectedNamespace"
-        />
-        <el-empty v-else description="请选择命名空间" />
-      </template>
+      <RolesTab
+        v-show="activeTab === 'roles' && selectedClusterId"
+        ref="rolesTabRef"
+        :cluster-id="selectedClusterId"
+        :namespace="selectedNamespace || ''"
+        :search-name="searchName"
+        @count-update="(count) => updateCount('roles', count)"
+      />
 
       <!-- RoleBindings -->
-      <template v-if="activeTab === 'rolebindings'">
-        <RoleBindingsTab
-          v-if="selectedClusterId && selectedNamespace"
-          :cluster-id="selectedClusterId"
-          :namespace="selectedNamespace"
-        />
-        <el-empty v-else description="请选择命名空间" />
-      </template>
+      <RoleBindingsTab
+        v-show="activeTab === 'rolebindings' && selectedClusterId"
+        ref="roleBindingsTabRef"
+        :cluster-id="selectedClusterId"
+        :namespace="selectedNamespace || ''"
+        :search-name="searchName"
+        @count-update="(count) => updateCount('rolebindings', count)"
+      />
 
       <!-- ClusterRoles -->
       <ClusterRolesTab
-        v-if="activeTab === 'clusterroles' && selectedClusterId"
+        v-show="activeTab === 'clusterroles' && selectedClusterId"
+        ref="clusterRolesTabRef"
         :cluster-id="selectedClusterId"
+        :search-name="searchName"
+        @count-update="(count) => updateCount('clusterroles', count)"
       />
 
       <!-- ClusterRoleBindings -->
       <ClusterRoleBindingsTab
-        v-if="activeTab === 'clusterrolebindings' && selectedClusterId"
+        v-show="activeTab === 'clusterrolebindings' && selectedClusterId"
+        ref="clusterRoleBindingsTabRef"
         :cluster-id="selectedClusterId"
-      />
-
-      <!-- PodSecurityPolicies -->
-      <PodSecurityPoliciesTab
-        v-if="activeTab === 'podsecuritypolicies' && selectedClusterId"
-        :cluster-id="selectedClusterId"
+        :search-name="searchName"
+        @count-update="(count) => updateCount('clusterrolebindings', count)"
       />
     </div>
   </div>
@@ -127,37 +154,74 @@ import {
   User,
   Key,
   Link,
-  Connection
+  Connection,
+  Search,
+  Plus
 } from '@element-plus/icons-vue'
 import { getClusterList, getNamespaces, type Cluster, type NamespaceInfo } from '@/api/kubernetes'
+import axios from 'axios'
 import ServiceAccountsTab from './access-control/ServiceAccountsTab.vue'
 import RolesTab from './access-control/RolesTab.vue'
 import RoleBindingsTab from './access-control/RoleBindingsTab.vue'
 import ClusterRolesTab from './access-control/ClusterRolesTab.vue'
 import ClusterRoleBindingsTab from './access-control/ClusterRoleBindingsTab.vue'
-import PodSecurityPoliciesTab from './access-control/PodSecurityPoliciesTab.vue'
 
 // 访问控制类型定义
 interface AccessType {
   label: string
   value: string
   icon: any
+  count: number
 }
 
-const accessTypes: AccessType[] = [
-  { label: 'ServiceAccounts', value: 'serviceaccounts', icon: User },
-  { label: 'Roles', value: 'roles', icon: Key },
-  { label: 'RoleBindings', value: 'rolebindings', icon: Link },
-  { label: 'ClusterRoles', value: 'clusterroles', icon: Key },
-  { label: 'ClusterRoleBindings', value: 'clusterrolebindings', icon: Connection },
-  { label: 'PodSecurityPolicies', value: 'podsecuritypolicies', icon: Lock },
-]
+const accessTypes = ref<AccessType[]>([
+  { label: 'ServiceAccounts', value: 'serviceaccounts', icon: User, count: 0 },
+  { label: 'Roles', value: 'roles', icon: Key, count: 0 },
+  { label: 'RoleBindings', value: 'rolebindings', icon: Link, count: 0 },
+  { label: 'ClusterRoles', value: 'clusterroles', icon: Key, count: 0 },
+  { label: 'ClusterRoleBindings', value: 'clusterrolebindings', icon: Connection, count: 0 },
+])
 
 const activeTab = ref('serviceaccounts')
 const selectedClusterId = ref<number>()
 const selectedNamespace = ref<string>()
 const clusterList = ref<Cluster[]>([])
 const namespaceList = ref<NamespaceInfo[]>([])
+const searchName = ref('')
+
+// 子组件引用
+const serviceAccountsTabRef = ref()
+const rolesTabRef = ref()
+const roleBindingsTabRef = ref()
+const clusterRolesTabRef = ref()
+const clusterRoleBindingsTabRef = ref()
+
+// 获取新增按钮文本
+const getCreateButtonText = () => {
+  const buttonMap: Record<string, string> = {
+    serviceaccounts: '新增 ServiceAccount',
+    roles: '新增 Role',
+    rolebindings: '新增 RoleBinding',
+    clusterroles: '新增 ClusterRole',
+    clusterrolebindings: '新增 ClusterRoleBinding'
+  }
+  return buttonMap[activeTab.value] || '新增'
+}
+
+// 处理新增按钮点击
+const handleCreate = () => {
+  const refMap: Record<string, any> = {
+    serviceaccounts: serviceAccountsTabRef.value,
+    roles: rolesTabRef.value,
+    rolebindings: roleBindingsTabRef.value,
+    clusterroles: clusterRolesTabRef.value,
+    clusterrolebindings: clusterRoleBindingsTabRef.value
+  }
+  const activeRef = refMap[activeTab.value]
+  if (activeRef && activeRef.handleCreate) {
+    activeRef.handleCreate()
+  }
+}
 
 // 加载集群列表
 const loadClusters = async () => {
@@ -184,6 +248,14 @@ const loadClusters = async () => {
     }
   } catch (error) {
     console.error('加载集群列表失败:', error)
+  }
+}
+
+// 更新资源数量
+const updateCount = (type: string, count: number) => {
+  const accessType = accessTypes.value.find(t => t.value === type)
+  if (accessType) {
+    accessType.count = count
   }
 }
 
@@ -227,9 +299,26 @@ const handleTabChange = (tab: string) => {
   activeTab.value = tab
 }
 
-// 加载数据
-const loadData = () => {
-  loadClusters()
+// 加载数据 - 根据当前激活的Tab刷新对应数据
+const loadData = async () => {
+  if (!selectedClusterId.value) {
+    await loadClusters()
+    return
+  }
+
+  // 根据当前激活的Tab刷新对应的子组件数据
+  const refMap: Record<string, any> = {
+    serviceaccounts: serviceAccountsTabRef.value,
+    roles: rolesTabRef.value,
+    rolebindings: roleBindingsTabRef.value,
+    clusterroles: clusterRolesTabRef.value,
+    clusterrolebindings: clusterRoleBindingsTabRef.value
+  }
+
+  const activeRef = refMap[activeTab.value]
+  if (activeRef && activeRef.loadData) {
+    await activeRef.loadData()
+  }
 }
 
 onMounted(() => {
@@ -322,6 +411,27 @@ onMounted(() => {
   color: #d4af37;
 }
 
+/* 操作栏 */
+.action-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 12px 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.search-section {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.search-input {
+  width: 280px;
+}
+
 /* 访问控制类型标签栏 */
 .access-types-bar {
   display: flex;
@@ -380,6 +490,12 @@ onMounted(() => {
 
 .type-label {
   font-size: 14px;
+}
+
+.type-count {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-left: 2px;
 }
 
 /* 内容区域 */

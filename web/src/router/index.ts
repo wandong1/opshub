@@ -36,16 +36,28 @@ const router = createRouter({
           meta: { title: '角色管理' }
         },
         {
-          path: 'departments',
-          name: 'Departments',
-          component: () => import('@/views/system/Departments.vue'),
-          meta: { title: '部门管理' }
-        },
-        {
           path: 'menus',
           name: 'Menus',
           component: () => import('@/views/system/Menus.vue'),
           meta: { title: '菜单管理' }
+        },
+        {
+          path: 'dept-info',
+          name: 'DeptInfo',
+          component: () => import('@/views/system/DeptInfo.vue'),
+          meta: { title: '部门信息' }
+        },
+        {
+          path: 'position-info',
+          name: 'PositionInfo',
+          component: () => import('@/views/system/PositionInfo.vue'),
+          meta: { title: '岗位信息' }
+        },
+        {
+          path: 'system-config',
+          name: 'SystemConfig',
+          component: () => import('@/views/system/SystemConfig.vue'),
+          meta: { title: '系统配置' }
         },
         {
           path: 'profile',

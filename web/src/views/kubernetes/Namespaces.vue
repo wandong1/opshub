@@ -1294,9 +1294,12 @@ onMounted(() => {
 }
 
 .namespace-name {
-  font-size: 14px;
   font-weight: 600;
-  color: #d4af37;
+  color: #303133;
+}
+
+.namespace-name:hover {
+  color: #409eff;
 }
 
 .namespace-status {

@@ -137,7 +137,7 @@
         <div class="play-info">
           <div class="info-item">
             <span class="info-label">集群:</span>
-            <span class="info-value">{{ selectedSession?.clusterName }}</span>
+            <span class="info-value">{{ selectedSession?.clusterName || '-' }}</span>
           </div>
           <div class="info-item">
             <span class="info-label">命名空间:</span>
@@ -154,6 +154,14 @@
           <div class="info-item">
             <span class="info-label">用户:</span>
             <span class="info-value">{{ selectedSession?.username }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">时长:</span>
+            <span class="info-value">{{ selectedSession ? formatDuration(selectedSession.duration) : '-' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">大小:</span>
+            <span class="info-value">{{ selectedSession ? formatFileSize(selectedSession.fileSize) : '-' }}</span>
           </div>
           <div class="info-item">
             <span class="info-label">时间:</span>
@@ -189,6 +197,7 @@ import {
   Monitor
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
+import axios from 'axios'
 import AsciinemaPlayer from '@/components/AsciinemaPlayer.vue'
 
 interface TerminalSession {
@@ -256,6 +265,21 @@ const formatDuration = (seconds: number) => {
   return `${s}s`
 }
 
+// 格式化文件大小
+const formatFileSize = (bytes: number) => {
+  if (!bytes) return '-'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = bytes
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex++
+  }
+
+  return `${size.toFixed(1)} ${units[unitIndex]}`
+}
+
 // 格式化时间
 const formatTime = (timeStr: string) => {
   if (!timeStr) return '-'
@@ -275,7 +299,10 @@ const loadSessions = async () => {
   loading.value = true
   try {
     const response = await request.get(`/api/v1/plugins/kubernetes/terminal/sessions`)
-    sessionList.value = response.data || []
+    console.log('🔍 终端会话响应:', response)
+    // 响应拦截器已经返回了 res.data，所以 response 直接就是数组
+    sessionList.value = response || []
+    console.log('🔍 sessionList 设置后:', sessionList.value)
   } catch (error: any) {
     console.error('获取终端会话列表失败:', error)
     sessionList.value = []
@@ -300,15 +327,29 @@ const handlePlay = async (row: TerminalSession) => {
   selectedSession.value = row
 
   try {
-    const response = await request.get(
-      `/api/v1/plugins/kubernetes/terminal/sessions/${row.id}/play`,
-      {
-        responseType: 'blob'
+    // 使用原生 axios 获取录制文件，因为后端直接返回文件内容（不是标准响应格式）
+    const token = localStorage.getItem('token')
+    const response = await axios.get(`/api/v1/plugins/kubernetes/terminal/sessions/${row.id}/play`, {
+      headers: {
+        Authorization: `Bearer ${token}`
       }
-    )
+    })
 
-    // 创建 blob URL
-    const blob = new Blob([response], { type: 'application/json' })
+    console.log('📼 录制文件内容:', response.data)
+
+    // 将数据转换为字符串并创建 blob
+    let jsonString: string
+    if (typeof response.data === 'string') {
+      jsonString = response.data
+    } else if (response.data instanceof ArrayBuffer) {
+      // 如果是 ArrayBuffer，转换为字符串
+      const decoder = new TextDecoder('utf-8')
+      jsonString = decoder.decode(response.data)
+    } else {
+      jsonString = JSON.stringify(response.data)
+    }
+
+    const blob = new Blob([jsonString], { type: 'application/json' })
     recordingUrl.value = URL.createObjectURL(blob)
 
     playDialogVisible.value = true
@@ -567,27 +608,30 @@ onMounted(() => {
 .play-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.3);
+  gap: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 8px;
   border: 1px solid #d4af37;
 }
 
 .info-item {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  align-items: center;
 }
 
 .info-label {
   color: #d4af37;
-  font-weight: 500;
-  font-size: 13px;
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 60px;
 }
 
 .info-value {
-  color: #e0e0e0;
-  font-size: 13px;
+  color: #000000;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .player-wrapper {

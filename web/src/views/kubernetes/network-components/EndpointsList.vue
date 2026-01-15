@@ -1,25 +1,35 @@
 <template>
   <div class="endpoints-list">
     <div class="search-bar">
-      <el-input v-model="searchName" placeholder="搜索 Endpoints 名称..." clearable class="search-input" @input="handleSearch">
-        <template #prefix>
-          <el-icon class="search-icon"><Search /></el-icon>
-        </template>
-      </el-input>
+      <div class="search-bar-left">
+        <el-input v-model="searchName" placeholder="搜索 Endpoints 名称..." clearable class="search-input" @input="handleSearch">
+          <template #prefix>
+            <el-icon class="search-icon"><Search /></el-icon>
+          </template>
+        </el-input>
 
-      <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-        <el-option label="全部" value="" />
-        <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-      </el-select>
+        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
+          <el-option label="全部" value="" />
+          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </el-select>
+      </div>
 
-      <el-button class="black-button" @click="handleCreateYAML">
-        <el-icon><Document /></el-icon> YAML创建
-      </el-button>
+      <div class="search-bar-right">
+        <el-button class="black-button" @click="handleCreateYAML">
+          <el-icon><Document /></el-icon> YAML创建
+        </el-button>
+      </div>
     </div>
 
     <div class="table-wrapper">
       <el-table :data="filteredEndpoints" v-loading="loading" class="modern-table" size="default">
         <el-table-column label="名称" prop="name" min-width="200" fixed>
+          <template #header>
+            <span class="header-with-icon">
+              <el-icon class="header-icon header-icon-blue"><Connection /></el-icon>
+              名称
+            </span>
+          </template>
           <template #default="{ row }">
             <div class="name-cell">
               <el-icon class="name-icon"><Connection /></el-icon>
@@ -152,7 +162,7 @@ const props = defineProps<{
   namespace?: string
 }>()
 
-const emit = defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'count-update'])
 
 const loading = ref(false)
 const endpointsList = ref<EndpointsInfo[]>([])
@@ -440,6 +450,11 @@ watch(() => props.namespace, () => {
   loadEndpoints()
 })
 
+// 监听筛选后的数据变化，更新计数
+watch(filteredEndpoints, (newData) => {
+  emit('count-update', newData.length)
+})
+
 onMounted(() => {
   loadEndpoints()
   loadNamespaces()
@@ -472,8 +487,24 @@ defineExpose({
 
 .search-bar {
   display: flex;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.search-bar-left {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.search-bar-right {
+  display: flex;
+  gap: 12px;
 }
 
 .search-input {
@@ -501,12 +532,36 @@ defineExpose({
 }
 
 .name-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #d4af37;
   font-size: 18px;
+  flex-shrink: 0;
+  border: 1px solid #d4af37;
 }
 
 .name-text {
   font-weight: 500;
+  color: #303133;
+}
+
+/* 表头图标 */
+.header-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-icon {
+  font-size: 16px;
+}
+
+.header-icon-blue {
   color: #d4af37;
 }
 

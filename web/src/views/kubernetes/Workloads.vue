@@ -12,57 +12,26 @@
         </div>
       </div>
       <div class="header-actions">
+        <el-select
+          v-model="selectedClusterId"
+          placeholder="选择集群"
+          class="cluster-select"
+          @change="handleClusterChange"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><Platform /></el-icon>
+          </template>
+          <el-option
+            v-for="cluster in clusterList"
+            :key="cluster.id"
+            :label="cluster.alias || cluster.name"
+            :value="cluster.id"
+          />
+        </el-select>
         <el-button class="black-button" @click="loadWorkloads">
           <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
           刷新
         </el-button>
-      </div>
-    </div>
-
-    <!-- 上下文选择栏 -->
-    <div class="context-bar">
-      <div class="context-selectors">
-        <div class="context-item">
-          <span class="context-label">
-            <el-icon><Platform /></el-icon>
-            集群
-          </span>
-          <el-select
-            v-model="selectedClusterId"
-            placeholder="选择集群"
-            class="context-select"
-            @change="handleClusterChange"
-          >
-            <el-option
-              v-for="cluster in clusterList"
-              :key="cluster.id"
-              :label="cluster.alias || cluster.name"
-              :value="cluster.id"
-            />
-          </el-select>
-        </div>
-
-        <div class="context-item">
-          <span class="context-label">
-            <el-icon><FolderOpened /></el-icon>
-            命名空间
-          </span>
-          <el-select
-            v-model="selectedNamespace"
-            placeholder="所有命名空间"
-            clearable
-            filterable
-            @change="handleSearch"
-            class="context-select"
-          >
-            <el-option
-              v-for="ns in namespaceList"
-              :key="ns.name"
-              :label="ns.name"
-              :value="ns.name"
-            />
-          </el-select>
-        </div>
       </div>
     </div>
 
@@ -98,6 +67,25 @@
             <el-icon class="search-icon"><Search /></el-icon>
           </template>
         </el-input>
+
+        <el-select
+          v-model="selectedNamespace"
+          placeholder="所有命名空间"
+          clearable
+          filterable
+          @change="handleSearch"
+          class="namespace-select"
+        >
+          <template #prefix>
+            <el-icon class="search-icon"><FolderOpened /></el-icon>
+          </template>
+          <el-option
+            v-for="ns in namespaceList"
+            :key="ns.name"
+            :label="ns.name"
+            :value="ns.name"
+          />
+        </el-select>
       </div>
 
       <div class="action-buttons">
@@ -118,6 +106,56 @@
       </div>
     </div>
 
+    <!-- 批量操作栏 -->
+    <div v-if="selectedWorkloads.length > 0" class="batch-action-bar">
+      <div class="batch-action-left">
+        <span class="selected-count">已选择 {{ selectedWorkloads.length }} 项</span>
+      </div>
+      <div class="batch-action-right">
+        <el-button
+          v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet' || selectedType === 'DaemonSet'"
+          @click="handleBatchRestart"
+          :loading="batchActionLoading"
+          class="batch-btn"
+        >
+          <el-icon><Refresh /></el-icon>
+          批量重启
+        </el-button>
+        <el-button
+          v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
+          @click="handleBatchPause"
+          :loading="batchActionLoading"
+          type="warning"
+          class="batch-btn"
+        >
+          <el-icon><VideoPause /></el-icon>
+          批量停止
+        </el-button>
+        <el-button
+          v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
+          @click="handleBatchResume"
+          :loading="batchActionLoading"
+          type="success"
+          class="batch-btn"
+        >
+          <el-icon><VideoPlay /></el-icon>
+          批量恢复
+        </el-button>
+        <el-button
+          @click="handleBatchDelete"
+          :loading="batchActionLoading"
+          type="danger"
+          class="batch-btn"
+        >
+          <el-icon><Delete /></el-icon>
+          批量删除
+        </el-button>
+        <el-button @click="clearSelection" class="batch-btn">
+          取消选择
+        </el-button>
+      </div>
+    </div>
+
     <!-- 工作负载列表 -->
     <div class="table-wrapper">
       <el-table
@@ -128,7 +166,10 @@
         :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
         :row-style="{ height: '56px' }"
         :cell-style="{ padding: '8px 0' }"
+        @selection-change="handleSelectionChange"
       >
+        <!-- 选择列 -->
+        <el-table-column type="selection" width="55" fixed="left" />
         <!-- 名称列（所有类型通用，但显示内容不同） -->
         <el-table-column label="名称" min-width="200" fixed="left">
           <template #header>
@@ -139,8 +180,15 @@
           </template>
           <template #default="{ row }">
             <div class="workload-name-cell">
+              <div class="workload-type-icon-box">
+                <el-icon class="workload-type-icon-gold" :size="18">
+                  <Tools />
+                </el-icon>
+              </div>
               <div class="workload-name-content">
-                <div class="workload-name golden-text clickable" @click="row.type === 'Pod' ? handlePodWorkloadClick(row) : handleShowDetail(row)">{{ row.name }}</div>
+                <el-tooltip :content="row.name" placement="top" effect="light">
+                  <div class="workload-name clickable" @click="row.type === 'Pod' ? handlePodWorkloadClick(row) : handleShowDetail(row)">{{ row.name }}</div>
+                </el-tooltip>
                 <!-- Pod类型显示容器，其他类型显示命名空间 -->
                 <div v-if="selectedType === 'Pod'" class="workload-namespace">{{ row.containers || '-' }}</div>
                 <div v-else class="workload-namespace">{{ row.namespace }}</div>
@@ -166,7 +214,7 @@
           </el-table-column>
 
           <!-- 状态列 -->
-          <el-table-column label="状态" width="120" align="center">
+          <el-table-column label="状态" min-width="150" align="center">
             <template #default="{ row }">
               <div :class="['status-badge', `status-${row.podStatus?.toLowerCase()}`]">
                 {{ row.podStatus || '-' }}
@@ -280,9 +328,16 @@
               <div class="image-cell">
                 <el-tooltip
                   v-if="row.images && row.images.length > 0"
-                  :content="row.images.join('\n')"
                   placement="top"
+                  effect="light"
                 >
+                  <template #content>
+                    <div class="image-tooltip-content">
+                      <div v-for="(image, index) in row.images" :key="index" class="image-tooltip-item">
+                        {{ image }}
+                      </div>
+                    </div>
+                  </template>
                   <div class="image-list">
                     <span v-for="(image, index) in getDisplayImages(row.images)" :key="index" class="image-item">
                       {{ image }}
@@ -301,7 +356,7 @@
         <!-- Job 专用列 -->
         <template v-if="selectedType === 'Job'">
           <!-- 状态 -->
-          <el-table-column label="状态" width="120" align="center">
+          <el-table-column label="状态" min-width="150" align="center">
             <template #default="{ row }">
               <div :class="['status-badge', `status-${row.status?.toLowerCase()}`]">
                 {{ row.status || '-' }}
@@ -796,7 +851,7 @@
                       </div>
                     </template>
                   </el-table-column>
-                  <el-table-column label="状态" width="140" align="center">
+                  <el-table-column label="状态" min-width="150" align="center">
                     <template #default="{ row }">
                       <div class="status-cell">
                         <el-icon :class="`status-indicator status-${row.statusType} ${row.isLoading ? 'is-loading' : ''}`">
@@ -1034,9 +1089,15 @@
               <div class="tab-content">
                 <VolumeConfig
                   :volumes="editWorkloadData.volumes || []"
+                  :configMaps="configMaps"
+                  :secrets="secrets"
+                  :pvcs="pvcs"
                   @addVolume="handleAddVolume"
                   @removeVolume="handleRemoveVolume"
                   @update="handleUpdateVolumes"
+                  @refreshConfigMaps="loadConfigMaps"
+                  @refreshSecrets="loadSecrets"
+                  @refreshPVCs="loadPVCs"
                 />
               </div>
             </el-tab-pane>
@@ -1116,7 +1177,15 @@
             </el-tab-pane>
             <el-tab-pane label="网络" name="network">
               <div class="tab-content">
-                <Network :formData="editWorkloadData" />
+                <Network
+                  :formData="editWorkloadData"
+                  @addDNSNameserver="handleAddDNSNameserver"
+                  @removeDNSNameserver="handleRemoveDNSNameserver"
+                  @addDNSSearch="handleAddDNSSearch"
+                  @removeDNSSearch="handleRemoveDNSSearch"
+                  @addDNSOption="handleAddDNSOption"
+                  @removeDNSOption="handleRemoveDNSOption"
+                />
               </div>
             </el-tab-pane>
             <el-tab-pane label="其他" name="others">
@@ -1297,7 +1366,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick, onUnmounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import axios from 'axios'
 import * as yaml from 'js-yaml'
 import { Terminal } from '@xterm/xterm'
@@ -1339,7 +1408,7 @@ import {
   VideoPlay,
   Plus
 } from '@element-plus/icons-vue'
-import { getClusterList, updateWorkload, type Cluster } from '@/api/kubernetes'
+import { getClusterList, updateWorkload, getConfigMaps, getSecrets, getPersistentVolumeClaims, type Cluster } from '@/api/kubernetes'
 // 导入工作负载编辑组件
 import BasicInfo from './workload-components/BasicInfo.vue'
 import ContainerConfig from './workload-components/ContainerConfig.vue'
@@ -1459,6 +1528,11 @@ const editWorkloadData = ref<any>(null)
 const activeEditTab = ref('containers')
 const isCreateMode = ref(false) // 区分创建模式还是编辑模式
 
+// 存储资源配置
+const configMaps = ref<{ name: string }[]>([])
+const secrets = ref<{ name: string }[]>([])
+const pvcs = ref<{ name: string }[]>([])
+
 // 终端弹窗
 const terminalDialogVisible = ref(false)
 const terminalConnected = ref(false)
@@ -1502,6 +1576,10 @@ const createWorkloadDialogVisible = ref(false)
 const selectedWorkloadType = ref('Deployment')
 const createYamlContent = ref('')
 const createYamlLoading = ref(false)
+
+// 批量操作
+const selectedWorkloads = ref<Workload[]>([])
+const batchActionLoading = ref(false)
 
 // 工作负载类型模板
 const workloadTemplates: Record<string, string> = {
@@ -2024,15 +2102,11 @@ const handleAddWorkloadForm = async () => {
         maxSurge: '25%'
       }
     },
-    hostNetwork: false,
+    hostNetwork: undefined,
     dnsPolicy: 'ClusterFirst',
-    hostname: '',
-    subdomain: '',
-    dnsConfig: {
-      nameservers: [],
-      searches: [],
-      options: []
-    },
+    hostname: undefined,
+    subdomain: undefined,
+    dnsConfig: undefined,
     terminationGracePeriodSeconds: 30,
     serviceAccountName: 'default',
     restartPolicy: (workloadType === 'Job' || workloadType === 'CronJob') ? 'OnFailure' : 'Always'
@@ -2198,8 +2272,8 @@ const fetchPodDetailsForMenu = async (podName: string, namespace: string) => {
       params: { clusterId: selectedClusterId.value },
       headers: { Authorization: `Bearer ${token}` }
     })
-    // 后端直接返回 Pod 对象，不在 data 字段中
-    podMenuData.value = response.data
+    // 后端现在返回标准格式 {code: 0, message: "success", data: pod}
+    podMenuData.value = response.data.data
   } catch (error: any) {
     console.error('获取 Pod 详情失败:', error)
     ElMessage.error('获取 Pod 详情失败: ' + (error.response?.data?.message || error.message))
@@ -2222,14 +2296,32 @@ const handleDeletePod = async (podName: string, namespace: string) => {
       }
     )
 
-    const token = localStorage.getItem('token')
-    await axios.delete(`/api/v1/plugins/kubernetes/resources/pods/${namespace}/${podName}`, {
-      params: { clusterId: selectedClusterId.value },
-      headers: { Authorization: `Bearer ${token}` }
+    const loadingInstance = ElLoading.service({
+      lock: true,
+      text: '正在删除 Pod...',
+      background: 'rgba(0, 0, 0, 0.7)'
     })
 
-    ElMessage.success('Pod 删除成功')
-    await loadWorkloads()
+    try {
+      const token = localStorage.getItem('token')
+      await axios.delete(`/api/v1/plugins/kubernetes/resources/workloads/${namespace}/${podName}`, {
+        params: {
+          clusterId: selectedClusterId.value,
+          type: 'Pod'
+        },
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      loadingInstance.setText('删除成功，正在刷新...')
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await loadWorkloads()
+
+      loadingInstance.close()
+      ElMessage.success('Pod 删除成功')
+    } catch (err) {
+      loadingInstance.close()
+      throw err
+    }
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('删除 Pod 失败:', error)
@@ -2254,6 +2346,269 @@ const handleWorkloadEdit = (row: Workload) => {
 const handleWorkloadDelete = (row: Workload) => {
   selectedWorkload.value = row
   handleDelete()
+}
+
+// 批量操作相关函数
+const handleSelectionChange = (selection: Workload[]) => {
+  selectedWorkloads.value = selection
+}
+
+const clearSelection = () => {
+  selectedWorkloads.value = []
+}
+
+const handleBatchDelete = async () => {
+  if (selectedWorkloads.value.length === 0) {
+    ElMessage.warning('请先选择要删除的工作负载')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
+      '批量删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    batchActionLoading.value = true
+    const token = localStorage.getItem('token')
+
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/workloads/batch/delete',
+      {
+        clusterId: selectedClusterId.value,
+        workloads: selectedWorkloads.value.map(w => ({
+          namespace: w.namespace,
+          name: w.name,
+          type: w.type || selectedType.value
+        }))
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    if (response.data.code === 0) {
+      const results = response.data.data.results || []
+      const successCount = results.filter(r => r.success).length
+      const failureCount = results.filter(r => !r.success).length
+
+      if (failureCount > 0) {
+        const failures = results.filter(r => !r.success)
+        const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
+        ElMessage.warning(`批量删除完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+      } else {
+        ElMessage.success(`成功删除 ${successCount} 个工作负载`)
+      }
+
+      clearSelection()
+      await loadWorkloads()
+    } else {
+      ElMessage.error(response.data.message || '批量删除失败')
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量删除失败:', error)
+      ElMessage.error('批量删除失败')
+    }
+  } finally {
+    batchActionLoading.value = false
+  }
+}
+
+const handleBatchRestart = async () => {
+  if (selectedWorkloads.value.length === 0) {
+    ElMessage.warning('请先选择要重启的工作负载')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要重启选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
+      '批量重启确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    batchActionLoading.value = true
+    const token = localStorage.getItem('token')
+
+    const workloadData = selectedWorkloads.value.map(w => ({
+      namespace: w.namespace,
+      name: w.name,
+      type: w.type || selectedType.value
+    }))
+
+    console.log('批量重启的工作负载列表:', workloadData)
+
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/workloads/batch/restart',
+      {
+        clusterId: selectedClusterId.value,
+        workloads: workloadData
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    console.log('批量重启响应:', response.data)
+
+    if (response.data.code === 0) {
+      const results = response.data.data.results || []
+      const successCount = results.filter(r => r.success).length
+      const failureCount = results.filter(r => !r.success).length
+
+      console.log('批量重启结果:', { successCount, failureCount, results })
+
+      if (failureCount > 0) {
+        // 显示失败详情
+        const failures = results.filter(r => !r.success)
+        const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
+        ElMessage.warning(`批量重启完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+      } else {
+        ElMessage.success(`成功重启 ${successCount} 个工作负载`)
+      }
+
+      clearSelection()
+      await loadWorkloads()
+    } else {
+      ElMessage.error(response.data.message || '批量重启失败')
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量重启失败:', error)
+      console.error('错误详情:', error.response?.data)
+      ElMessage.error(error.response?.data?.message || '批量重启失败')
+    }
+  } finally {
+    batchActionLoading.value = false
+  }
+}
+
+const handleBatchPause = async () => {
+  if (selectedWorkloads.value.length === 0) {
+    ElMessage.warning('请先选择要停止的工作负载')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要停止选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
+      '批量停止确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    batchActionLoading.value = true
+    const token = localStorage.getItem('token')
+
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/workloads/batch/pause',
+      {
+        clusterId: selectedClusterId.value,
+        workloads: selectedWorkloads.value.map(w => ({
+          namespace: w.namespace,
+          name: w.name,
+          type: w.type || selectedType.value
+        }))
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    if (response.data.code === 0) {
+      const results = response.data.data.results || []
+      const successCount = results.filter(r => r.success).length
+      const failureCount = results.filter(r => !r.success).length
+
+      if (failureCount > 0) {
+        const failures = results.filter(r => !r.success)
+        const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
+        ElMessage.warning(`批量停止完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+      } else {
+        ElMessage.success(`成功停止 ${successCount} 个工作负载`)
+      }
+
+      clearSelection()
+      await loadWorkloads()
+    } else {
+      ElMessage.error(response.data.message || '批量停止失败')
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量停止失败:', error)
+      ElMessage.error('批量停止失败')
+    }
+  } finally {
+    batchActionLoading.value = false
+  }
+}
+
+const handleBatchResume = async () => {
+  if (selectedWorkloads.value.length === 0) {
+    ElMessage.warning('请先选择要恢复的工作负载')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要恢复选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
+      '批量恢复确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    batchActionLoading.value = true
+    const token = localStorage.getItem('token')
+
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/workloads/batch/resume',
+      {
+        clusterId: selectedClusterId.value,
+        workloads: selectedWorkloads.value.map(w => ({
+          namespace: w.namespace,
+          name: w.name,
+          type: w.type || selectedType.value
+        }))
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    if (response.data.code === 0) {
+      const results = response.data.data.results || []
+      const successCount = results.filter(r => r.success).length
+      const failureCount = results.filter(r => !r.success).length
+
+      if (failureCount > 0) {
+        const failures = results.filter(r => !r.success)
+        const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
+        ElMessage.warning(`批量恢复完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+      } else {
+        ElMessage.success(`成功恢复 ${successCount} 个工作负载`)
+      }
+
+      clearSelection()
+      await loadWorkloads()
+    } else {
+      ElMessage.error(response.data.message || '批量恢复失败')
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量恢复失败:', error)
+      ElMessage.error('批量恢复失败')
+    }
+  } finally {
+    batchActionLoading.value = false
+  }
 }
 
 // 加载节点列表
@@ -3207,10 +3562,12 @@ const initTerminal = async () => {
     container: terminalData.value.container
   })
 
-  // 构建WebSocket URL
+  // 构建WebSocket URL - 在开发环境直接连接后端，生产环境使用当前域名
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.hostname
-  const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '9876')
+  // 开发环境直接连接9876端口，生产环境使用当前端口
+  const isDev = import.meta.env.DEV
+  const port = isDev ? '9876' : (window.location.port || (window.location.protocol === 'https:' ? '443' : '9876'))
   const wsUrl = `${protocol}//${host}:${port}/api/v1/plugins/kubernetes/shell/pods?` +
     `clusterId=${clusterId}&` +
     `namespace=${terminalData.value.namespace}&` +
@@ -3248,7 +3605,14 @@ const initTerminal = async () => {
     terminalWebSocket.onclose = (event) => {
       console.log('🔌 WebSocket 已关闭:', event.code, event.reason)
       terminalConnected.value = false
-      terminal.writeln('\x1b[1;33m连接已关闭\x1b[0m')
+      // 安全检查：terminal 可能已经被销毁
+      if (terminal) {
+        try {
+          terminal.writeln('\x1b[1;33m连接已关闭\x1b[0m')
+        } catch (e) {
+          console.warn('写入终端消息失败（可能已销毁）:', e)
+        }
+      }
     }
 
     // 处理用户输入
@@ -3411,6 +3775,19 @@ watch(logsDialogVisible, (newVal) => {
     stopLogsAutoRefresh()
   }
 })
+
+// 监听编辑对话框打开和命名空间变化，加载存储资源
+watch(
+  () => [editDialogVisible.value, editWorkloadData.value?.namespace],
+  ([visible, namespace]) => {
+    if (visible && namespace) {
+      loadConfigMaps()
+      loadSecrets()
+      loadPVCs()
+    }
+  },
+  { deep: true }
+)
 
 // 获取注解提示内容
 const getAnnotationsTooltip = (annotations: Record<string, string>) => {
@@ -3659,15 +4036,17 @@ const handleShowEditDialog = async () => {
       console.log('🔍 转换后的 matchRules:', matchRules)
       console.log('🔍 matchRules 长度:', matchRules.length)
 
-      // 解析 DNS 配置
-      const dnsConfig = templateSpec?.dnsConfig || {}
-      const parsedDnsConfig = {
-        nameservers: dnsConfig.nameservers || [],
-        searches: dnsConfig.searches || [],
-        options: (dnsConfig.options || []).map((opt: any) => ({
-          name: opt.name || '',
-          value: opt.value || ''
-        }))
+      // 解析 DNS 配置 - 只有当后端有配置时才设置
+      let parsedDnsConfig = undefined
+      if (templateSpec?.dnsConfig) {
+        parsedDnsConfig = {
+          nameservers: templateSpec.dnsConfig.nameservers || [],
+          searches: templateSpec.dnsConfig.searches || [],
+          options: (templateSpec.dnsConfig.options || []).map((opt: any) => ({
+            name: opt.name || '',
+            value: opt.value || ''
+          }))
+        }
       }
 
       // 转换数据格式以适应组件
@@ -3695,13 +4074,17 @@ const handleShowEditDialog = async () => {
         containers: parseContainers(templateSpec?.containers || []),
         initContainers: parseContainers(templateSpec?.initContainers || []),
         volumes: parseVolumesFromKubernetes(templateSpec?.volumes || []),
-        hostNetwork: templateSpec?.hostNetwork || false,
+        hostNetwork: templateSpec?.hostNetwork,
         dnsPolicy: templateSpec?.dnsPolicy || 'ClusterFirst',
-        hostname: templateSpec?.hostname || '',
-        subdomain: templateSpec?.subdomain || '',
+        hostname: templateSpec?.hostname,
+        subdomain: templateSpec?.subdomain,
         dnsConfig: parsedDnsConfig,
+        priorityClassName: templateSpec?.priorityClassName,
         terminationGracePeriodSeconds: templateSpec?.terminationGracePeriodSeconds || 30,
-        activeDeadlineSeconds: templateSpec?.activeDeadlineSeconds,
+        // activeDeadlineSeconds 对于 Job/CronJob 应该从 jobTemplate.spec 读取，而不是从 template.spec
+        activeDeadlineSeconds: isCronJob
+          ? (workloadData.spec?.jobTemplate?.spec?.activeDeadlineSeconds || null)
+          : (workloadType === 'Job' ? (workloadData.spec?.activeDeadlineSeconds || null) : templateSpec?.activeDeadlineSeconds),
         serviceAccountName: templateSpec?.serviceAccountName || 'default',
         // 根据工作负载类型设置正确的重启策略默认值
         restartPolicy: templateSpec?.restartPolicy ||
@@ -4091,6 +4474,46 @@ const handleRemoveToleration = (index: number) => {
   editWorkloadData.value.tolerations.splice(index, 1)
 }
 
+// DNS 配置处理方法
+const handleAddDNSNameserver = () => {
+  if (!editWorkloadData.value) return
+  if (!editWorkloadData.value.dnsConfig) {
+    editWorkloadData.value.dnsConfig = { nameservers: [], searches: [], options: [] }
+  }
+  editWorkloadData.value.dnsConfig.nameservers.push('')
+}
+
+const handleRemoveDNSNameserver = (index: number) => {
+  if (!editWorkloadData.value?.dnsConfig?.nameservers) return
+  editWorkloadData.value.dnsConfig.nameservers.splice(index, 1)
+}
+
+const handleAddDNSSearch = () => {
+  if (!editWorkloadData.value) return
+  if (!editWorkloadData.value.dnsConfig) {
+    editWorkloadData.value.dnsConfig = { nameservers: [], searches: [], options: [] }
+  }
+  editWorkloadData.value.dnsConfig.searches.push('')
+}
+
+const handleRemoveDNSSearch = (index: number) => {
+  if (!editWorkloadData.value?.dnsConfig?.searches) return
+  editWorkloadData.value.dnsConfig.searches.splice(index, 1)
+}
+
+const handleAddDNSOption = () => {
+  if (!editWorkloadData.value) return
+  if (!editWorkloadData.value.dnsConfig) {
+    editWorkloadData.value.dnsConfig = { nameservers: [], searches: [], options: [] }
+  }
+  editWorkloadData.value.dnsConfig.options.push({ name: '', value: '' })
+}
+
+const handleRemoveDNSOption = (index: number) => {
+  if (!editWorkloadData.value?.dnsConfig?.options) return
+  editWorkloadData.value.dnsConfig.options.splice(index, 1)
+}
+
 // 将前端数据转换为 Kubernetes YAML 格式
 const convertToKubernetesYaml = (data: any, cluster: string, namespace: string): string => {
   const kindMap: Record<string, string> = {
@@ -4208,7 +4631,57 @@ const convertToKubernetesYaml = (data: any, cluster: string, namespace: string):
   const podSpec: any = {
     containers,
     restartPolicy,
-    dnsPolicy: 'ClusterFirst'
+    dnsPolicy: data.dnsPolicy || 'ClusterFirst',
+    serviceAccountName: data.serviceAccountName || 'default',
+    terminationGracePeriodSeconds: data.terminationGracePeriodSeconds || 30
+  }
+
+  // 添加可选的 Pod 级别字段
+  // 注意：对于编辑模式，需要明确发送这些字段来覆盖旧值，即使值是 "假" 值
+  // 使用 !== undefined 而不是直接判断真值，以确保 false 和空字符串也能被发送
+  if (data.hostNetwork !== undefined) {
+    podSpec.hostNetwork = data.hostNetwork
+  }
+  if (data.hostname !== undefined) {
+    // 空字符串需要转换为 null 来删除字段
+    podSpec.hostname = data.hostname || null
+  }
+  if (data.subdomain !== undefined) {
+    // 空字符串需要转换为 null 来删除字段
+    podSpec.subdomain = data.subdomain || null
+  }
+  if (data.automountServiceAccountToken !== undefined) {
+    podSpec.automountServiceAccountToken = data.automountServiceAccountToken
+  }
+  if (data.priorityClassName !== undefined) {
+    // 空字符串需要转换为 null 来删除字段
+    const value = data.priorityClassName || null
+    podSpec.priorityClassName = value
+    console.log('🔍 priorityClassName 处理:', {
+      原始值: data.priorityClassName,
+      类型: typeof data.priorityClassName,
+      设置值: value,
+      设置类型: typeof value
+    })
+  }
+
+  // DNS 配置 - 明确处理删除情况
+  // 如果 dnsConfig 存在，检查是否有内容
+  if (data.dnsConfig !== undefined) {
+    const hasContent = (data.dnsConfig.nameservers?.length > 0 || data.dnsConfig.searches?.length > 0 || data.dnsConfig.options?.length > 0)
+    if (hasContent) {
+      // 有内容，设置完整的 dnsConfig
+      podSpec.dnsConfig = {
+        nameservers: data.dnsConfig.nameservers,
+        searches: data.dnsConfig.searches,
+        options: data.dnsConfig.options
+      }
+    } else {
+      // 没有内容，明确设置为 null 来删除配置
+      // 注意：需要检查是否是编辑模式（有原始资源）
+      // 对于 StrategicMergePatch，设置为 null 会删除字段
+      podSpec.dnsConfig = null
+    }
   }
 
   if (initContainers.length > 0) {
@@ -4338,11 +4811,7 @@ const convertToKubernetesYaml = (data: any, cluster: string, namespace: string):
       spec.revisionHistoryLimit = data.revisionHistoryLimit
     }
 
-    if (data.type === 'StatefulSet') {
-      // StatefulSet 特有字段
-      spec.serviceAccountName = podSpec.serviceAccountName || 'default'
-      delete podSpec.serviceAccountName
-    }
+    // StatefulSet 没有特殊的spec字段，serviceAccountName 在 podSpec 中
   } else if (data.type === 'DaemonSet') {
     // DaemonSet spec
     spec = {
@@ -4358,16 +4827,16 @@ const convertToKubernetesYaml = (data: any, cluster: string, namespace: string):
     }
 
     // 添加 Job 配置
-    if (jobConfig.value.completions) {
+    if (jobConfig.value.completions !== undefined) {
       spec.completions = jobConfig.value.completions
     }
-    if (jobConfig.value.parallelism) {
+    if (jobConfig.value.parallelism !== undefined) {
       spec.parallelism = jobConfig.value.parallelism
     }
     if (jobConfig.value.backoffLimit !== undefined && jobConfig.value.backoffLimit !== null) {
       spec.backoffLimit = jobConfig.value.backoffLimit
     }
-    if (jobConfig.value.activeDeadlineSeconds) {
+    if (jobConfig.value.activeDeadlineSeconds !== undefined && jobConfig.value.activeDeadlineSeconds !== null) {
       spec.activeDeadlineSeconds = jobConfig.value.activeDeadlineSeconds
     }
 
@@ -4380,16 +4849,16 @@ const convertToKubernetesYaml = (data: any, cluster: string, namespace: string):
     }
 
     // 添加 Job 配置到 jobTemplate
-    if (jobConfig.value.completions) {
+    if (jobConfig.value.completions !== undefined) {
       jobSpec.completions = jobConfig.value.completions
     }
-    if (jobConfig.value.parallelism) {
+    if (jobConfig.value.parallelism !== undefined) {
       jobSpec.parallelism = jobConfig.value.parallelism
     }
     if (jobConfig.value.backoffLimit !== undefined && jobConfig.value.backoffLimit !== null) {
       jobSpec.backoffLimit = jobConfig.value.backoffLimit
     }
-    if (jobConfig.value.activeDeadlineSeconds) {
+    if (jobConfig.value.activeDeadlineSeconds !== undefined && jobConfig.value.activeDeadlineSeconds !== null) {
       jobSpec.activeDeadlineSeconds = jobConfig.value.activeDeadlineSeconds
     }
 
@@ -4403,13 +4872,13 @@ const convertToKubernetesYaml = (data: any, cluster: string, namespace: string):
       }
     }
 
-    if (cronJobConfig.value.timeZone) {
+    if (cronJobConfig.value.timeZone !== undefined && cronJobConfig.value.timeZone !== '') {
       spec.timeZone = cronJobConfig.value.timeZone
     }
-    if (cronJobConfig.value.startingDeadlineSeconds) {
+    if (cronJobConfig.value.startingDeadlineSeconds !== undefined && cronJobConfig.value.startingDeadlineSeconds !== null) {
       spec.startingDeadlineSeconds = cronJobConfig.value.startingDeadlineSeconds
     }
-    if (cronJobConfig.value.suspend) {
+    if (cronJobConfig.value.suspend !== undefined) {
       spec.suspend = cronJobConfig.value.suspend
     }
   } else if (data.type === 'Pod') {
@@ -4425,14 +4894,13 @@ const convertToKubernetesYaml = (data: any, cluster: string, namespace: string):
     spec
   }
 
-  // 转换为 JSON 字符串
-  const jsonStr = JSON.stringify(resource)
-  console.log('🔍 ====== 最终发送的 JSON ======')
-  console.log('🔍 JSON 长度:', jsonStr.length)
-  console.log('🔍 podSpec 部分:', JSON.stringify(podSpec, null, 2))
-  console.log('🔍 完整的 spec:', JSON.stringify(spec, null, 2))
+  // 转换为 YAML 字符串
+  const yamlStr = yaml.dump(resource, { indent: 2, lineWidth: -1 })
+  console.log('🔍 ====== 最终生成的 YAML ======')
+  console.log('🔍 YAML 长度:', yamlStr.length)
+  console.log('🔍 完整的 YAML:', yamlStr)
 
-  return jsonStr
+  return yamlStr
 }
 
 // 构建容器对象
@@ -4843,14 +5311,12 @@ const handleSaveEdit = async () => {
 
     if (isCreateMode.value) {
       // 创建模式：调用创建API
-      // 将JSON字符串解析为对象
-      const workloadObj = JSON.parse(yaml)
       const token = localStorage.getItem('token')
       await axios.post(
         `/api/v1/plugins/kubernetes/resources/workloads/create`,
         {
           clusterId: selectedClusterId.value,
-          ...workloadObj  // 直接展开Kubernetes资源对象的字段
+          yaml: yaml  // 发送YAML字符串，不是JSON对象
         },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -5064,6 +5530,42 @@ const handleUpdateVolumes = (volumes: any[]) => {
   }
 }
 
+// 加载 ConfigMap 列表
+const loadConfigMaps = async () => {
+  if (!selectedClusterId.value || !editWorkloadData.value?.namespace) return
+
+  try {
+    const data = await getConfigMaps(selectedClusterId.value, editWorkloadData.value.namespace)
+    configMaps.value = data || []
+  } catch (error) {
+    console.error('加载 ConfigMap 列表失败:', error)
+  }
+}
+
+// 加载 Secret 列表
+const loadSecrets = async () => {
+  if (!selectedClusterId.value || !editWorkloadData.value?.namespace) return
+
+  try {
+    const data = await getSecrets(selectedClusterId.value, editWorkloadData.value.namespace)
+    secrets.value = data || []
+  } catch (error) {
+    console.error('加载 Secret 列表失败:', error)
+  }
+}
+
+// 加载 PVC 列表
+const loadPVCs = async () => {
+  if (!selectedClusterId.value || !editWorkloadData.value?.namespace) return
+
+  try {
+    const data = await getPersistentVolumeClaims(selectedClusterId.value, editWorkloadData.value.namespace)
+    pvcs.value = data || []
+  } catch (error) {
+    console.error('加载 PVC 列表失败:', error)
+  }
+}
+
 // 删除工作负载
 const handleDelete = async () => {
   if (!selectedWorkload.value) return
@@ -5178,6 +5680,14 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.cluster-select {
+  width: 280px;
+}
+
+.search-icon {
+  color: #d4af37;
 }
 
 .black-button {
@@ -5307,8 +5817,18 @@ onMounted(() => {
 }
 
 .search-section {
+  display: flex;
+  gap: 12px;
+  align-items: center;
   flex: 1;
-  max-width: 400px;
+}
+
+.search-input {
+  width: 280px;
+}
+
+.namespace-select {
+  width: 200px;
 }
 
 .action-section {
@@ -5320,6 +5840,175 @@ onMounted(() => {
 .action-buttons {
   display: flex;
   gap: 12px;
+}
+
+/* 批量操作栏 */
+.batch-action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  margin-bottom: 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.batch-action-left {
+  display: flex;
+  align-items: center;
+}
+
+.selected-count {
+  font-size: 15px;
+  color: #1a1a1a;
+  font-weight: 700;
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 2px solid #d4af37;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
+}
+
+.selected-count::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: #d4af37;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+    box-shadow: 0 0 0 6px rgba(212, 175, 55, 0);
+  }
+}
+
+.batch-action-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.batch-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid #1a1a1a;
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.batch-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  background: #333333;
+  border-color: #333333;
+  color: #ffffff;
+}
+
+/* 统一所有按钮类型为黑底白字 */
+.batch-btn.el-button--danger,
+.batch-btn.el-button--warning,
+.batch-btn.el-button--success,
+.batch-btn.el-button--info,
+.batch-btn.el-button--primary {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #ffffff;
+}
+
+.batch-btn.el-button--danger:hover,
+.batch-btn.el-button--warning:hover,
+.batch-btn.el-button--success:hover,
+.batch-btn.el-button--info:hover,
+.batch-btn.el-button--primary:hover {
+  background: #333333;
+  border-color: #333333;
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* 选择列样式优化 */
+.modern-table :deep(.el-table__header .el-table-column--selection .cell) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modern-table :deep(.el-table__body .el-table-column--selection .cell) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 自定义复选框样式 */
+.modern-table :deep(.el-checkbox__inner) {
+  border-radius: 4px;
+  border: 2px solid #d4af37;
+  background: transparent;
+  width: 18px;
+  height: 18px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modern-table :deep(.el-checkbox__inner:hover) {
+  border-color: #c9a227;
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.15);
+}
+
+.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
+  border-color: #ffffff;
+  border-width: 2px;
+}
+
+.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
+  background-color: #ffffff;
+}
+
+/* 选中行的样式 */
+.modern-table :deep(.el-table__body tr.current-row) {
+  background: rgba(24, 144, 255, 0.05) !important;
+}
+
+.modern-table :deep(.el-table__body tr:hover td) {
+  background: rgba(24, 144, 255, 0.03) !important;
 }
 
 /* 创建按钮样式 */
@@ -5499,10 +6188,35 @@ onMounted(() => {
   gap: 2px;
 }
 
+.workload-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workload-type-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d4af37;
+  flex-shrink: 0;
+}
+
+.workload-type-icon-gold {
+  color: #d4af37;
+}
+
 .workload-name {
-  font-size: 14px;
   font-weight: 500;
   color: #303133;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
 }
 
 .golden-text {
@@ -5669,6 +6383,24 @@ onMounted(() => {
   color: #8c8c8c;
 }
 
+/* 其他错误状态的默认样式 */
+.status-badge[class*="status-"]:not(.status-running):not(.status-succeeded):not(.status-failed):not(.status-pending):not(.status-unknown) {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+/* 常见错误状态 */
+.status-imagepullbackoff,
+.status-errimagepull,
+.status-crashloopbackoff,
+.status-oomkilled,
+.status-error,
+.status-containercannotrun,
+.status-invalidimagename {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
 /* Pod IP */
 .pod-ip {
   font-family: 'Monaco', 'Menlo', monospace;
@@ -5721,6 +6453,22 @@ onMounted(() => {
 .image-empty {
   color: #909399;
   font-size: 13px;
+}
+
+/* 镜像提示框样式 */
+.image-tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 500px;
+}
+
+.image-tooltip-item {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  color: #303133;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 /* 时间单元格 */

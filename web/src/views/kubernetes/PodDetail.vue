@@ -513,7 +513,8 @@ const loadPodDetail = async () => {
         headers: { Authorization: `Bearer ${token}` }
       }
     )
-    podData.value = response.data
+    // 后端现在返回标准格式 {code: 0, message: "success", data: pod}
+    podData.value = response.data.data
   } catch (error: any) {
     console.error('获取 Pod 详情失败:', error)
     ElMessage.error(error.response?.data?.message || '获取 Pod 详情失败')

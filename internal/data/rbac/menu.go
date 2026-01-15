@@ -62,7 +62,10 @@ func (r *menuRepo) GetByID(ctx context.Context, id uint) (*rbac.SysMenu, error) 
 
 func (r *menuRepo) GetTree(ctx context.Context) ([]*rbac.SysMenu, error) {
 	var menus []*rbac.SysMenu
-	err := r.db.WithContext(ctx).Order("sort ASC").Find(&menus).Error
+	err := r.db.WithContext(ctx).
+		Where("visible = ?", 1).
+		Order("sort ASC").
+		Find(&menus).Error
 	if err != nil {
 		return nil, err
 	}

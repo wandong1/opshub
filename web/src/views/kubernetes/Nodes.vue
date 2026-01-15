@@ -31,7 +31,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-icon stat-icon-purple">
-          <el-icon><CPU /></el-icon>
+          <el-icon><Cpu /></el-icon>
         </div>
         <div class="stat-content">
           <div class="stat-label">总CPU核数</div>
@@ -137,7 +137,7 @@
     <el-dialog
       v-model="cloudttyDialogVisible"
       title="部署 CloudTTY"
-      width="600px"
+      width="70%"
       :close-on-click-modal="false"
     >
       <div class="cloudtty-dialog-content">
@@ -211,7 +211,7 @@
     <el-dialog
       v-model="cloudttyTerminalVisible"
       :title="`Shell - ${selectedNode?.name || ''}`"
-      width="900px"
+      width="70%"
       :close-on-click-modal="false"
       @close="handleCloseCloudTTY"
       class="cloudtty-terminal-dialog"
@@ -227,9 +227,44 @@
       </div>
     </el-dialog>
 
+    <!-- 批量操作栏 -->
+    <div v-if="selectedNodes.length > 0" class="batch-actions-bar">
+      <div class="batch-actions-left">
+        <el-checkbox
+          v-model="selectAllCurrentPage"
+          :indeterminate="isIndeterminate"
+          @change="handleSelectAllCurrentPage"
+        >
+          <span class="selected-count">已选择 {{ selectedNodes.length }} 个节点</span>
+        </el-checkbox>
+      </div>
+      <div class="batch-actions-right">
+        <el-button type="primary" :icon="PriceTag" @click="showBatchLabelsDialog" plain>
+          批量打标签
+        </el-button>
+        <el-button type="warning" :icon="WarnTriangleFilled" @click="showBatchTaintsDialog" plain>
+          批量设置污点
+        </el-button>
+        <el-button type="info" :icon="CircleClose" @click="handleBatchDrain" plain>
+          批量排空
+        </el-button>
+        <el-button type="warning" :icon="Warning" @click="handleBatchCordon" plain>
+          批量不可调度
+        </el-button>
+        <el-button type="success" :icon="CircleCheck" @click="handleBatchUncordon" plain>
+          批量可调度
+        </el-button>
+        <el-button type="danger" :icon="Delete" @click="handleBatchDelete" plain>
+          批量删除
+        </el-button>
+        <el-button @click="clearSelection">取消选择</el-button>
+      </div>
+    </div>
+
     <!-- 节点列表 -->
     <div class="table-wrapper">
       <el-table
+        ref="nodeTableRef"
         :data="paginatedNodeList"
         v-loading="loading"
         class="modern-table"
@@ -237,8 +272,10 @@
         :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
         :row-style="{ height: '56px' }"
         :cell-style="{ padding: '8px 0' }"
+        @selection-change="handleSelectionChange"
       >
-      <el-table-column label="节点名称" min-width="220" fixed="left">
+      <el-table-column type="selection" width="55" fixed="left" />
+      <el-table-column label="节点名称" min-width="180" fixed="left">
         <template #header>
           <span class="header-with-icon">
             <el-icon class="header-icon header-icon-blue"><Monitor /></el-icon>
@@ -248,7 +285,7 @@
         <template #default="{ row }">
           <div class="node-name-cell">
             <div class="node-icon-wrapper">
-              <el-icon class="node-icon" :size="18"><Platform /></el-icon>
+              <el-icon class="node-icon" :size="16"><Platform /></el-icon>
             </div>
             <div class="node-name-content">
               <div class="node-name link-text" @click="goToNodeDetail(row)">{{ row.name }}</div>
@@ -258,12 +295,12 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="状态" width="100" align="center">
+      <el-table-column label="状态" min-width="90" align="center">
         <template #default="{ row }">
           <el-tag
             :type="row.status === 'Ready' ? 'success' : 'danger'"
             effect="dark"
-            size="large"
+            size="small"
             class="status-tag"
           >
             {{ row.status === 'Ready' ? '正常' : '异常' }}
@@ -271,67 +308,67 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="角色" width="130" align="center">
+      <el-table-column label="角色" min-width="100" align="center">
         <template #default="{ row }">
           <div :class="['role-badge', 'role-' + (row.roles || 'worker')]">
-            <el-icon :size="14"><User /></el-icon>
+            <el-icon :size="13"><User /></el-icon>
             <span>{{ getRoleText(row.roles) }}</span>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="Kubelet版本" width="140">
+      <el-table-column label="Kubelet版本" min-width="110">
         <template #default="{ row }">
           <div class="version-cell">
-            <el-icon class="version-icon"><InfoFilled /></el-icon>
-            <span>{{ row.version || '-' }}</span>
+            <el-icon class="version-icon" :size="13"><InfoFilled /></el-icon>
+            <span class="version-text">{{ row.version || '-' }}</span>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="标签" width="120" align="center">
+      <el-table-column label="标签" min-width="85" align="center">
         <template #default="{ row }">
           <div class="label-cell" @click="showLabels(row)">
             <div class="label-badge-wrapper">
               <span class="label-count">{{ Object.keys(row.labels || {}).length }}</span>
-              <el-icon class="label-icon"><PriceTag /></el-icon>
+              <el-icon class="label-icon" :size="14"><PriceTag /></el-icon>
             </div>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="运行时间" width="140">
+      <el-table-column label="运行时间" min-width="110">
         <template #default="{ row }">
           <div class="age-cell">
-            <el-icon class="age-icon"><Clock /></el-icon>
+            <el-icon class="age-icon" :size="13"><Clock /></el-icon>
             <span>{{ row.age || '-' }}</span>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="CPU" width="180">
+      <el-table-column label="CPU" min-width="130">
         <template #default="{ row }">
           <div class="resource-cell">
             <div class="resource-icon resource-icon-cpu">
-              <el-icon><Cpu /></el-icon>
+              <el-icon :size="14"><Cpu /></el-icon>
             </div>
             <span class="resource-value">{{ formatCPUWithUsage(row) }}</span>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="内存" width="180">
+      <el-table-column label="内存" min-width="130">
         <template #default="{ row }">
           <div class="resource-cell">
             <div class="resource-icon resource-icon-memory">
-              <el-icon><Coin /></el-icon>
+              <el-icon :size="14"><Coin /></el-icon>
             </div>
             <span class="resource-value">{{ formatMemoryWithUsage(row) }}</span>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="Pod数量" width="110" align="center">
+      <el-table-column label="Pod数量" min-width="95" align="center">
         <template #default="{ row }">
           <div class="pod-count-cell">
             <span class="pod-count">{{ row.podCount ?? 0 }}/{{ row.podCapacity ?? 0 }}</span>
@@ -340,30 +377,30 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="调度状态" width="120" align="center">
+      <el-table-column label="调度" min-width="90" align="center">
         <template #default="{ row }">
           <el-tag
             :type="row.schedulable ? 'success' : 'warning'"
             effect="dark"
-            size="large"
+            size="small"
           >
-            {{ row.schedulable ? '可调度' : '不可调度' }}
+            {{ row.schedulable ? '可调度' : '不可' }}
           </el-tag>
         </template>
       </el-table-column>
 
-      <el-table-column label="污点" width="120" align="center">
+      <el-table-column label="污点" min-width="90" align="center">
         <template #default="{ row }">
           <div class="taint-cell" @click="showTaints(row)">
             <div class="taint-badge-wrapper">
-              <el-icon class="taint-icon"><WarnTriangleFilled /></el-icon>
+              <el-icon class="taint-icon" :size="14"><WarnTriangleFilled /></el-icon>
               <span class="taint-count">{{ row.taintCount ?? 0 }}</span>
             </div>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="80" fixed="right" align="center">
+      <el-table-column label="操作" width="75" fixed="right" align="center">
         <template #default="{ row }">
           <el-dropdown trigger="click" @command="(command: string) => handleActionCommand(command, row)">
             <el-button link class="action-btn">
@@ -678,6 +715,188 @@
       </template>
     </el-dialog>
 
+    <!-- 批量标签弹窗 -->
+    <el-dialog
+      v-model="batchLabelDialogVisible"
+      title="批量设置节点标签"
+      width="700px"
+      class="batch-label-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="batch-label-content">
+        <el-alert
+          title="将对选中的 {{ selectedNodes.length }} 个节点执行标签操作"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px"
+        />
+
+        <el-form :model="batchLabelForm" label-width="100px">
+          <el-form-item label="操作类型">
+            <el-radio-group v-model="batchLabelForm.operation">
+              <el-radio value="add">添加标签</el-radio>
+              <el-radio value="remove">删除标签</el-radio>
+              <el-radio value="replace">替换标签</el-radio>
+            </el-radio-group>
+            <div class="form-tip">
+              添加：仅添加新标签，不覆盖已有标签 | 删除：删除指定标签 | 替换：覆盖指定标签的值
+            </div>
+          </el-form-item>
+
+          <el-form-item label="标签列表">
+            <div class="batch-label-list">
+              <div v-for="(label, index) in batchLabelForm.labels" :key="index" class="batch-label-row">
+                <el-input
+                  v-model="label.key"
+                  placeholder="标签键（如: app）"
+                  style="width: 200px; margin-right: 10px"
+                />
+                <span class="label-separator">=</span>
+                <el-input
+                  v-model="label.value"
+                  placeholder="标签值（如: nginx）"
+                  style="width: 200px; margin-right: 10px"
+                />
+                <el-button
+                  type="danger"
+                  :icon="Delete"
+                  circle
+                  size="small"
+                  @click="removeBatchLabel(index)"
+                />
+              </div>
+              <el-button
+                type="primary"
+                :icon="Plus"
+                @click="addBatchLabel"
+                plain
+                style="width: 100%; margin-top: 10px"
+              >
+                添加标签
+              </el-button>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <el-button @click="batchLabelDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleBatchLabels" :loading="batchLabelSaving">
+          确定执行
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量污点弹窗 -->
+    <el-dialog
+      v-model="batchTaintDialogVisible"
+      title="批量设置节点污点"
+      width="800px"
+      class="batch-taint-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="batch-taint-content">
+        <el-alert
+          title="将对选中的 {{ selectedNodes.length }} 个节点执行污点操作"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px"
+        />
+
+        <el-form :model="batchTaintForm" label-width="100px">
+          <el-form-item label="操作类型">
+            <el-radio-group v-model="batchTaintForm.operation">
+              <el-radio value="add">添加污点</el-radio>
+              <el-radio value="remove">删除污点</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <el-form-item label="污点列表">
+            <div class="batch-taint-list">
+              <div v-for="(taint, index) in batchTaintForm.taints" :key="index" class="batch-taint-row">
+                <el-input
+                  v-model="taint.key"
+                  placeholder="键（如: key1）"
+                  style="width: 150px; margin-right: 8px"
+                />
+                <span class="taint-separator">=</span>
+                <el-input
+                  v-model="taint.value"
+                  placeholder="值（可选）"
+                  style="width: 150px; margin-right: 8px"
+                />
+                <span class="taint-separator">:</span>
+                <el-select
+                  v-model="taint.effect"
+                  placeholder="Effect"
+                  style="width: 150px; margin-right: 8px"
+                >
+                  <el-option label="NoSchedule" value="NoSchedule" />
+                  <el-option label="PreferNoSchedule" value="PreferNoSchedule" />
+                  <el-option label="NoExecute" value="NoExecute" />
+                </el-select>
+                <el-button
+                  type="danger"
+                  :icon="Delete"
+                  circle
+                  size="small"
+                  @click="removeBatchTaint(index)"
+                />
+              </div>
+              <el-button
+                type="primary"
+                :icon="Plus"
+                @click="addBatchTaint"
+                plain
+                style="width: 100%; margin-top: 10px"
+              >
+                添加污点
+              </el-button>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <el-button @click="batchTaintDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleBatchTaints" :loading="batchTaintSaving">
+          确定执行
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量操作结果弹窗 -->
+    <el-dialog
+      v-model="batchResultDialogVisible"
+      title="批量操作结果"
+      width="700px"
+      class="batch-result-dialog"
+    >
+      <div class="batch-result-content">
+        <div class="result-summary">
+          <el-tag :type="getBatchResultSummary().successCount === getBatchResultSummary().totalCount ? 'success' : 'warning'" size="large">
+            成功: {{ getBatchResultSummary().successCount }} / {{ getBatchResultSummary().totalCount }}
+          </el-tag>
+        </div>
+        <el-table :data="batchResults" max-height="400" class="result-table">
+          <el-table-column prop="nodeName" label="节点名称" width="200" />
+          <el-table-column label="状态" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.success ? 'success' : 'danger'" size="small">
+                {{ row.success ? '成功' : '失败' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="message" label="消息" min-width="200" />
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="batchResultDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- YAML 编辑弹窗 -->
     <el-dialog
       v-model="yamlDialogVisible"
@@ -715,7 +934,7 @@
     <el-dialog
       v-model="shellDialogVisible"
       :title="`Shell - ${selectedNode?.name || ''}`"
-      width="900px"
+      width="70%"
       class="shell-dialog"
       @close="handleCloseShell"
       @opened="handleShellOpened"
@@ -731,7 +950,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, computed, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
@@ -772,6 +991,28 @@ const router = useRouter()
 const clusterList = ref<Cluster[]>([])
 const selectedClusterId = ref<number>()
 const nodeList = ref<NodeInfo[]>([])
+
+// 批量操作相关
+const nodeTableRef = ref()
+const selectedNodes = ref<NodeInfo[]>([])
+const selectAllCurrentPage = ref(false)
+const isIndeterminate = ref(false)
+const batchLabelDialogVisible = ref(false)
+const batchTaintDialogVisible = ref(false)
+const batchResultDialogVisible = ref(false)
+const batchLabelSaving = ref(false)
+const batchTaintSaving = ref(false)
+const batchResults = ref<{ nodeName: string; success: boolean; message: string }[]>([])
+
+const batchLabelForm = ref({
+  operation: 'add',
+  labels: [] as { key: string; value: string }[]
+})
+
+const batchTaintForm = ref({
+  operation: 'add',
+  taints: [] as { key: string; value: string; effect: string }[]
+})
 
 // 搜索条件
 const searchName = ref('')
@@ -2100,6 +2341,366 @@ const openCloudTTY = () => {
   ElMessage.info('请手动部署 CloudTTY 或使用自动部署功能')
 }
 
+// 批量操作相关函数
+// 处理选择变化
+const handleSelectionChange = (selection: NodeInfo[]) => {
+  selectedNodes.value = selection
+  updateSelectAllStatus()
+}
+
+// 更新全选状态
+const updateSelectAllStatus = () => {
+  const currentPageCount = paginatedNodeList.value.length
+  const selectedCount = selectedNodes.value.length
+
+  if (selectedCount === 0) {
+    selectAllCurrentPage.value = false
+    isIndeterminate.value = false
+  } else if (selectedCount === currentPageCount) {
+    selectAllCurrentPage.value = true
+    isIndeterminate.value = false
+  } else {
+    selectAllCurrentPage.value = false
+    isIndeterminate.value = true
+  }
+}
+
+// 处理当前页全选
+const handleSelectAllCurrentPage = (checked: boolean) => {
+  if (checked) {
+    // 添加当前页所有节点到已选择列表（去重）
+    const currentPageNames = new Set(selectedNodes.value.map(n => n.name))
+    paginatedNodeList.value.forEach(node => {
+      if (!currentPageNames.has(node.name)) {
+        selectedNodes.value.push(node)
+      }
+    })
+  } else {
+    // 移除当前页的节点
+    const currentPageNames = new Set(paginatedNodeList.value.map(n => n.name))
+    selectedNodes.value = selectedNodes.value.filter(n => !currentPageNames.has(n.name))
+  }
+  updateSelectAllStatus()
+  // 同步表格选择状态
+  syncTableSelection()
+}
+
+// 同步表格选择状态
+const syncTableSelection = () => {
+  if (nodeTableRef.value) {
+    const selectedNames = new Set(selectedNodes.value.map(n => n.name))
+    paginatedNodeList.value.forEach(row => {
+      const isSelected = selectedNames.has(row.name)
+      nodeTableRef.value.toggleRowSelection(row, isSelected)
+    })
+  }
+}
+
+// 清除选择
+const clearSelection = () => {
+  selectedNodes.value = []
+  selectAllCurrentPage.value = false
+  isIndeterminate.value = false
+  if (nodeTableRef.value) {
+    nodeTableRef.value.clearSelection()
+  }
+}
+
+// 监听分页列表变化，保持选中状态
+watch(paginatedNodeList, () => {
+  if (selectedNodes.value.length > 0) {
+    nextTick(() => {
+      syncTableSelection()
+    })
+  }
+}, { flush: 'post' })
+
+// 显示批量标签对话框
+const showBatchLabelsDialog = () => {
+  batchLabelForm.value = {
+    operation: 'add',
+    labels: [{ key: '', value: '' }]
+  }
+  batchLabelDialogVisible.value = true
+}
+
+// 添加批量标签
+const addBatchLabel = () => {
+  batchLabelForm.value.labels.push({ key: '', value: '' })
+}
+
+// 删除批量标签
+const removeBatchLabel = (index: number) => {
+  if (batchLabelForm.value.labels.length > 1) {
+    batchLabelForm.value.labels.splice(index, 1)
+  } else {
+    ElMessage.warning('至少保留一个标签')
+  }
+}
+
+// 处理批量标签
+const handleBatchLabels = async () => {
+  const validLabels = batchLabelForm.value.labels.filter(l => l.key.trim() !== '')
+  if (validLabels.length === 0) {
+    ElMessage.warning('请至少填写一个有效的标签')
+    return
+  }
+
+  // 检查是否有重复的键
+  const keys = validLabels.map(l => l.key)
+  const uniqueKeys = new Set(keys)
+  if (keys.length !== uniqueKeys.size) {
+    ElMessage.warning('存在重复的标签键，请检查')
+    return
+  }
+
+  batchLabelSaving.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const labelsMap: Record<string, string> = {}
+    validLabels.forEach(l => {
+      labelsMap[l.key] = l.value
+    })
+
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/nodes/batch/labels',
+      {
+        clusterId: selectedClusterId.value,
+        nodeNames: selectedNodes.value.map(n => n.name),
+        labels: labelsMap,
+        operation: batchLabelForm.value.operation
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    batchResults.value = response.data.data?.results || []
+    batchResultDialogVisible.value = true
+    batchLabelDialogVisible.value = false
+
+    await loadNodes()
+    clearSelection()
+  } catch (error: any) {
+    console.error('批量设置标签失败:', error)
+    ElMessage.error(`批量设置标签失败: ${error.response?.data?.message || error.message}`)
+  } finally {
+    batchLabelSaving.value = false
+  }
+}
+
+// 显示批量污点对话框
+const showBatchTaintsDialog = () => {
+  batchTaintForm.value = {
+    operation: 'add',
+    taints: [{ key: '', value: '', effect: 'NoSchedule' }]
+  }
+  batchTaintDialogVisible.value = true
+}
+
+// 添加批量污点
+const addBatchTaint = () => {
+  batchTaintForm.value.taints.push({ key: '', value: '', effect: 'NoSchedule' })
+}
+
+// 删除批量污点
+const removeBatchTaint = (index: number) => {
+  if (batchTaintForm.value.taints.length > 1) {
+    batchTaintForm.value.taints.splice(index, 1)
+  } else {
+    ElMessage.warning('至少保留一个污点')
+  }
+}
+
+// 处理批量污点
+const handleBatchTaints = async () => {
+  const validTaints = batchTaintForm.value.taints.filter(t => t.key.trim() !== '')
+  if (validTaints.length === 0) {
+    ElMessage.warning('请至少填写一个有效的污点')
+    return
+  }
+
+  batchTaintSaving.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/nodes/batch/taints',
+      {
+        clusterId: selectedClusterId.value,
+        nodeNames: selectedNodes.value.map(n => n.name),
+        taints: validTaints,
+        operation: batchTaintForm.value.operation
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    batchResults.value = response.data.data?.results || []
+    batchResultDialogVisible.value = true
+    batchTaintDialogVisible.value = false
+
+    await loadNodes()
+    clearSelection()
+  } catch (error: any) {
+    console.error('批量设置污点失败:', error)
+    ElMessage.error(`批量设置污点失败: ${error.response?.data?.message || error.message}`)
+  } finally {
+    batchTaintSaving.value = false
+  }
+}
+
+// 批量排空
+const handleBatchDrain = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要排空选中的 ${selectedNodes.value.length} 个节点吗？这将会驱逐这些节点上的所有 Pod。`,
+      '批量排空确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'black-button'
+      }
+    )
+
+    const token = localStorage.getItem('token')
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/nodes/batch/drain',
+      {
+        clusterId: selectedClusterId.value,
+        nodeNames: selectedNodes.value.map(n => n.name)
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    batchResults.value = response.data.data?.results || []
+    batchResultDialogVisible.value = true
+
+    await loadNodes()
+    clearSelection()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量排空失败:', error)
+      ElMessage.error(`批量排空失败: ${error.response?.data?.message || error.message}`)
+    }
+  }
+}
+
+// 批量设为不可调度
+const handleBatchCordon = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将选中的 ${selectedNodes.value.length} 个节点设为不可调度吗？这些节点将不再接受新的Pod调度。`,
+      '批量设为不可调度确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'black-button'
+      }
+    )
+
+    const token = localStorage.getItem('token')
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/nodes/batch/cordon',
+      {
+        clusterId: selectedClusterId.value,
+        nodeNames: selectedNodes.value.map(n => n.name)
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    batchResults.value = response.data.data?.results || []
+    batchResultDialogVisible.value = true
+
+    await loadNodes()
+    clearSelection()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量设为不可调度失败:', error)
+      ElMessage.error(`批量设为不可调度失败: ${error.response?.data?.message || error.message}`)
+    }
+  }
+}
+
+// 批量设为可调度
+const handleBatchUncordon = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将选中的 ${selectedNodes.value.length} 个节点设为可调度吗？这些节点将重新接受新的Pod调度。`,
+      '批量设为可调度确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'info',
+        confirmButtonClass: 'black-button'
+      }
+    )
+
+    const token = localStorage.getItem('token')
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/nodes/batch/uncordon',
+      {
+        clusterId: selectedClusterId.value,
+        nodeNames: selectedNodes.value.map(n => n.name)
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    batchResults.value = response.data.data?.results || []
+    batchResultDialogVisible.value = true
+
+    await loadNodes()
+    clearSelection()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量设为可调度失败:', error)
+      ElMessage.error(`批量设为可调度失败: ${error.response?.data?.message || error.message}`)
+    }
+  }
+}
+
+// 批量删除节点
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedNodes.value.length} 个节点吗？此操作不可恢复！`,
+      '批量删除节点确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'error',
+        confirmButtonClass: 'black-button'
+      }
+    )
+
+    const token = localStorage.getItem('token')
+    const response = await axios.post(
+      '/api/v1/plugins/kubernetes/resources/nodes/batch/delete',
+      {
+        clusterId: selectedClusterId.value,
+        nodeNames: selectedNodes.value.map(n => n.name)
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    batchResults.value = response.data.data?.results || []
+    batchResultDialogVisible.value = true
+
+    await loadNodes()
+    clearSelection()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('批量删除节点失败:', error)
+      ElMessage.error(`批量删除节点失败: ${error.response?.data?.message || error.message}`)
+    }
+  }
+}
+
+// 获取批量操作结果摘要
+const getBatchResultSummary = () => {
+  const totalCount = batchResults.value.length
+  const successCount = batchResults.value.filter(r => r.success).length
+  return { totalCount, successCount }
+}
+
 onMounted(() => {
   loadClusters()
   checkCloudTTY()
@@ -2145,6 +2746,11 @@ onMounted(() => {
   justify-content: center;
   font-size: 32px;
   flex-shrink: 0;
+}
+
+.stat-icon .el-icon {
+  font-size: 32px;
+  color: inherit;
 }
 
 .stat-icon-blue {
@@ -2285,8 +2891,8 @@ onMounted(() => {
 }
 
 .cloudtty-action-btn {
-  background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%);
-  color: #000000;
+  background: #1a1a1a;
+  color: #ffffff;
   border: none;
   font-weight: 600;
   padding: 12px 24px;
@@ -2296,18 +2902,18 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   letter-spacing: 0.5px;
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   margin-left: 12px;
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
-    background: linear-gradient(135deg, #E5C158 0%, #C9961C 100%);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    background: #333333;
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
 
   :deep(.el-icon) {
@@ -2407,9 +3013,23 @@ onMounted(() => {
 }
 
 .cloudtty-terminal-dialog {
+  width: 70% !important;
+  max-width: 90vw;
+
   .el-dialog__body {
     padding: 0;
   }
+}
+
+/* Shell对话框 */
+.shell-dialog {
+  width: 70% !important;
+  max-width: 90vw;
+}
+
+/* CloudTTY部署对话框 */
+.cloudtty-dialog-content {
+  padding: 0;
 }
 
 .search-icon {
@@ -2421,7 +3041,8 @@ onMounted(() => {
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 /* 搜索框样式优化 */
@@ -2475,6 +3096,11 @@ onMounted(() => {
 
 .modern-table :deep(.el-table__body-wrapper) {
   border-radius: 0 0 12px 12px;
+  overflow-x: hidden !important;
+}
+
+.modern-table :deep(.el-table__header-wrapper) {
+  overflow-x: hidden !important;
 }
 
 .modern-table :deep(.el-table__row) {
@@ -2526,19 +3152,18 @@ onMounted(() => {
 }
 
 .node-name {
-  font-size: 14px;
   font-weight: 500;
   color: #303133;
 }
 
 .link-text {
-  color: #d4af37;
+  color: #303133;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .link-text:hover {
-  color: #bfa13f;
+  color: #409eff;
   text-decoration: underline;
 }
 
@@ -3552,5 +4177,321 @@ onMounted(() => {
   background-color: #000000;
   border-radius: 4px;
   overflow: hidden;
+}
+
+/* 批量操作栏 */
+.batch-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  margin-bottom: 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.batch-actions-left {
+  display: flex;
+  align-items: center;
+}
+
+.batch-actions-left :deep(.el-checkbox__label) {
+  font-size: 15px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+/* 批量操作栏内的复选框样式 */
+.batch-actions-left :deep(.el-checkbox__inner) {
+  border: 2px solid #d4af37;
+  background: #ffffff;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.batch-actions-left :deep(.el-checkbox__inner:hover) {
+  border-color: #c9a227;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background: #d4af37;
+  border-color: #d4af37;
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
+  border-color: #ffffff;
+  border-width: 2px;
+}
+
+.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
+  background-color: #ffffff;
+}
+
+.selected-count {
+  font-size: 15px;
+  color: #1a1a1a;
+  font-weight: 700;
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 2px solid #d4af37;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
+}
+
+.selected-count::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: #d4af37;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+    box-shadow: 0 0 0 6px rgba(212, 175, 55, 0);
+  }
+}
+
+.batch-actions-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.batch-actions-right .el-button {
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 18px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid currentColor;
+  background: #1a1a1a;
+  color: #ffffff;
+  border-color: #1a1a1a;
+}
+
+.batch-actions-right .el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  background: #333333;
+  border-color: #333333;
+  color: #ffffff;
+}
+
+/* 移除特定按钮类型的颜色样式，统一使用黑底白字 */
+.batch-actions-right .el-button--primary,
+.batch-actions-right .el-button--warning,
+.batch-actions-right .el-button--info,
+.batch-actions-right .el-button--danger,
+.batch-actions-right .el-button--success {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #ffffff;
+}
+
+.batch-actions-right .el-button--primary:hover,
+.batch-actions-right .el-button--warning:hover,
+.batch-actions-right .el-button--info:hover,
+.batch-actions-right .el-button--danger:hover,
+.batch-actions-right .el-button--success:hover {
+  background: #333333;
+  border-color: #333333;
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* 选择列样式优化 */
+.modern-table :deep(.el-table__header .el-table-column--selection .cell) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modern-table :deep(.el-table__body .el-table-column--selection .cell) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 自定义复选框样式 */
+.modern-table :deep(.el-checkbox__inner) {
+  border-radius: 4px;
+  border: 2px solid #d4af37;
+  background: transparent;
+  width: 18px;
+  height: 18px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modern-table :deep(.el-checkbox__inner:hover) {
+  border-color: #f0c78e;
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
+}
+
+.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background: linear-gradient(135deg, #d4af37 0%, #c9a227 100%);
+  border-color: #d4af37;
+}
+
+.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background: linear-gradient(135deg, #d4af37 0%, #c9a227 100%);
+  border-color: #d4af37;
+}
+
+.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
+  border-color: #000000;
+  border-width: 2px;
+}
+
+.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
+  background-color: #000000;
+}
+
+/* 选中行的样式 */
+.modern-table :deep(.el-table__body tr.current-row) {
+  background: rgba(212, 175, 55, 0.05) !important;
+}
+
+.modern-table :deep(.el-table__body tr:hover td) {
+  background: rgba(212, 175, 55, 0.03) !important;
+}
+
+/* 批量标签对话框 */
+.batch-label-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  color: #d4af37;
+  border-radius: 8px 8px 0 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid #d4af37;
+}
+
+.batch-label-dialog :deep(.el-dialog__title) {
+  color: #d4af37;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.batch-label-content {
+  padding: 10px 0;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.batch-label-list {
+  width: 100%;
+}
+
+.batch-label-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.label-separator {
+  color: #909399;
+  font-weight: 600;
+  margin: 0 8px;
+}
+
+/* 批量污点对话框 */
+.batch-taint-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  color: #d4af37;
+  border-radius: 8px 8px 0 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid #d4af37;
+}
+
+.batch-taint-dialog :deep(.el-dialog__title) {
+  color: #d4af37;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.batch-taint-content {
+  padding: 10px 0;
+}
+
+.batch-taint-list {
+  width: 100%;
+}
+
+.batch-taint-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.taint-separator {
+  color: #909399;
+  font-weight: 600;
+  margin: 0 4px;
+}
+
+/* 批量操作结果对话框 */
+.batch-result-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  color: #d4af37;
+  border-radius: 8px 8px 0 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid #d4af37;
+}
+
+.batch-result-dialog :deep(.el-dialog__title) {
+  color: #d4af37;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.batch-result-content {
+  padding: 10px 0;
+}
+
+.result-summary {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.result-table {
+  margin-top: 20px;
 }
 </style>

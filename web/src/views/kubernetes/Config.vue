@@ -8,7 +8,7 @@
         </div>
         <div>
           <h2 class="page-title">配置管理</h2>
-          <p class="page-subtitle">管理 Kubernetes ConfigMaps 和 Secrets</p>
+          <p class="page-subtitle">管理 Kubernetes ConfigMaps、Secrets 和其他配置资源</p>
         </div>
       </div>
       <div class="header-actions">
@@ -35,72 +35,99 @@
       </div>
     </div>
 
-    <!-- Tab 切换 -->
-    <el-tabs v-model="activeTab" @tab-change="handleTabChange" class="config-tabs">
-      <el-tab-pane label="ConfigMaps" name="configmaps">
-        <ConfigMapList
-          v-if="activeTab === 'configmaps'"
-          :clusterId="selectedClusterId"
-          @edit="handleEditConfigMap"
-          @yaml="handleEditConfigMapYAML"
-          @refresh="loadCurrentResources"
-        />
-      </el-tab-pane>
+    <!-- 配置类型标签 -->
+    <div class="config-types-bar">
+      <div
+        v-for="type in configTypes"
+        :key="type.value"
+        :class="['type-tab', { active: activeTab === type.value }]"
+        @click="handleTabChange(type.value)"
+      >
+        <el-icon class="type-icon">
+          <component :is="type.icon" />
+        </el-icon>
+        <span class="type-label">{{ type.label }}</span>
+        <span v-if="type.count !== undefined" class="type-count">({{ type.count }})</span>
+      </div>
+    </div>
 
-      <el-tab-pane label="Secrets" name="secrets">
-        <SecretList
-          v-if="activeTab === 'secrets'"
-          :clusterId="selectedClusterId"
-          @edit="handleEditSecret"
-          @yaml="handleEditSecretYAML"
-          @refresh="loadCurrentResources"
-        />
-      </el-tab-pane>
+    <!-- 内容区域 -->
+    <div class="content-wrapper">
+      <!-- ConfigMaps -->
+      <ConfigMapList
+        v-show="activeTab === 'configmaps' && selectedClusterId"
+        ref="configMapListRef"
+        :clusterId="selectedClusterId"
+        @edit="handleEditConfigMap"
+        @yaml="handleEditConfigMapYAML"
+        @refresh="loadCurrentResources"
+        @count-update="(count) => updateCount('configmaps', count)"
+      />
 
-      <el-tab-pane label="ResourceQuotas" name="resourcequotas">
-        <ResourceQuotaList
-          v-if="activeTab === 'resourcequotas'"
-          :clusterId="selectedClusterId"
-          @refresh="loadCurrentResources"
-        />
-      </el-tab-pane>
+      <!-- Secrets -->
+      <SecretList
+        v-show="activeTab === 'secrets' && selectedClusterId"
+        ref="secretListRef"
+        :clusterId="selectedClusterId"
+        @edit="handleEditSecret"
+        @yaml="handleEditSecretYAML"
+        @refresh="loadCurrentResources"
+        @count-update="(count) => updateCount('secrets', count)"
+      />
 
-      <el-tab-pane label="LimitRanges" name="limitranges">
-        <LimitRangeList
-          v-if="activeTab === 'limitranges'"
-          :clusterId="selectedClusterId"
-          @refresh="loadCurrentResources"
-        />
-      </el-tab-pane>
+      <!-- ResourceQuotas -->
+      <ResourceQuotaList
+        v-show="activeTab === 'resourcequotas' && selectedClusterId"
+        ref="resourceQuotaListRef"
+        :clusterId="selectedClusterId"
+        @refresh="loadCurrentResources"
+        @count-update="(count) => updateCount('resourcequotas', count)"
+      />
 
-      <el-tab-pane label="HPA" name="hpa">
-        <HPAList
-          v-if="activeTab === 'hpa'"
-          :clusterId="selectedClusterId"
-          @refresh="loadCurrentResources"
-        />
-      </el-tab-pane>
+      <!-- LimitRanges -->
+      <LimitRangeList
+        v-show="activeTab === 'limitranges' && selectedClusterId"
+        ref="limitRangeListRef"
+        :clusterId="selectedClusterId"
+        @refresh="loadCurrentResources"
+        @count-update="(count) => updateCount('limitranges', count)"
+      />
 
-      <el-tab-pane label="PodDisruptionBudgets" name="pdb">
-        <PodDisruptionBudgetList
-          v-if="activeTab === 'pdb'"
-          :clusterId="selectedClusterId"
-          @refresh="loadCurrentResources"
-        />
-      </el-tab-pane>
-    </el-tabs>
+      <!-- HPA -->
+      <HPAList
+        v-show="activeTab === 'hpa' && selectedClusterId"
+        ref="hpaListRef"
+        :clusterId="selectedClusterId"
+        @refresh="loadCurrentResources"
+        @count-update="(count) => updateCount('hpa', count)"
+      />
+
+      <!-- PodDisruptionBudgets -->
+      <PodDisruptionBudgetList
+        v-show="activeTab === 'pdb' && selectedClusterId"
+        ref="pdbListRef"
+        :clusterId="selectedClusterId"
+        @refresh="loadCurrentResources"
+        @count-update="(count) => updateCount('pdb', count)"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Platform,
   Refresh,
-  Key
+  Key,
+  Lock,
+  Histogram,
+  Operation,
+  TrendCharts
 } from '@element-plus/icons-vue'
 import { getClusterList, type Cluster } from '@/api/kubernetes'
+import axios from 'axios'
 import ConfigMapList from './config-components/ConfigMapList.vue'
 import SecretList from './config-components/SecretList.vue'
 import ResourceQuotaList from './config-components/ResourceQuotaList.vue'
@@ -108,9 +135,34 @@ import LimitRangeList from './config-components/LimitRangeList.vue'
 import HPAList from './config-components/HPAList.vue'
 import PodDisruptionBudgetList from './config-components/PodDisruptionBudgetList.vue'
 
+// 配置类型定义
+interface ConfigType {
+  label: string
+  value: string
+  icon: any
+  count: number
+}
+
+const configTypes = ref<ConfigType[]>([
+  { label: 'ConfigMaps', value: 'configmaps', icon: Key, count: 0 },
+  { label: 'Secrets', value: 'secrets', icon: Lock, count: 0 },
+  { label: 'ResourceQuotas', value: 'resourcequotas', icon: Histogram, count: 0 },
+  { label: 'LimitRanges', value: 'limitranges', icon: Operation, count: 0 },
+  { label: 'HPA', value: 'hpa', icon: TrendCharts, count: 0 },
+  { label: 'PodDisruptionBudgets', value: 'pdb', icon: Lock, count: 0 },
+])
+
 const clusterList = ref<Cluster[]>([])
 const selectedClusterId = ref<number>()
 const activeTab = ref('configmaps')
+
+// 子组件引用
+const configMapListRef = ref()
+const secretListRef = ref()
+const resourceQuotaListRef = ref()
+const limitRangeListRef = ref()
+const hpaListRef = ref()
+const pdbListRef = ref()
 
 // 加载集群列表
 const loadClusters = async () => {
@@ -141,13 +193,36 @@ const handleClusterChange = async () => {
 }
 
 // Tab 切换
-const handleTabChange = () => {
-  localStorage.setItem('config_active_tab', activeTab.value)
+const handleTabChange = (tab: string) => {
+  activeTab.value = tab
+  localStorage.setItem('config_active_tab', tab)
 }
 
 // 加载当前资源
-const loadCurrentResources = () => {
-  // 由子组件处理
+const loadCurrentResources = async () => {
+  if (!selectedClusterId.value) return
+
+  // 根据当前激活的 tab 刷新对应的子组件数据
+  switch (activeTab.value) {
+    case 'configmaps':
+      await configMapListRef.value?.loadConfigMaps?.()
+      break
+    case 'secrets':
+      await secretListRef.value?.loadSecrets?.()
+      break
+    case 'resourcequotas':
+      await resourceQuotaListRef.value?.loadResourceQuotas?.()
+      break
+    case 'limitranges':
+      await limitRangeListRef.value?.loadLimitRanges?.()
+      break
+    case 'hpa':
+      await hpaListRef.value?.loadHPAs?.()
+      break
+    case 'pdb':
+      await pdbListRef.value?.loadPDBs?.()
+      break
+  }
 }
 
 // ConfigMap 操作
@@ -166,6 +241,14 @@ const handleEditSecret = (secret: any) => {
 
 const handleEditSecretYAML = (secret: any) => {
   ElMessage.info('编辑 Secret YAML 功能开发中...')
+}
+
+// 更新数量
+const updateCount = (type: string, count: number) => {
+  const configType = configTypes.value.find(t => t.value === type)
+  if (configType) {
+    configType.count = count
+  }
 }
 
 onMounted(() => {
@@ -258,33 +341,60 @@ onMounted(() => {
   color: #d4af37;
 }
 
-.config-tabs {
+/* 配置类型标签栏 */
+.config-types-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 20px;
+  flex-wrap: wrap;
 }
 
-.config-tabs :deep(.el-tabs__header) {
-  margin-bottom: 20px;
-}
-
-.config-tabs :deep(.el-tabs__nav-wrap::after) {
-  background-color: #d4af37;
-}
-
-.config-tabs :deep(.el-tabs__item) {
+.type-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
   font-size: 14px;
   font-weight: 500;
-  color: #606266;
 }
 
-.config-tabs :deep(.el-tabs__item.is-active) {
-  color: #d4af37;
+.type-tab:hover {
+  background: #2a2a2a;
 }
 
-.config-tabs :deep(.el-tabs__active-bar) {
-  background-color: #d4af37;
+.type-tab.active {
+  background: #d4af37;
+  color: #000;
+  border: 1px solid #d4af37;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+}
+
+.type-icon {
+  font-size: 16px;
+}
+
+.type-label {
+  white-space: nowrap;
+}
+
+.type-count {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-left: 2px;
+}
+
+/* 内容区域 */
+.content-wrapper {
+  background: transparent;
 }
 
 .cluster-select :deep(.el-input__wrapper) {

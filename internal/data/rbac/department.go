@@ -24,17 +24,17 @@ func (r *departmentRepo) Update(ctx context.Context, dept *rbac.SysDepartment) e
 
 func (r *departmentRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 检查是否有子部门
+		// 检查是否有子部门（包括软删除的）
 		var count int64
-		if err := tx.Model(&rbac.SysDepartment{}).Where("parent_id = ?", id).Count(&count).Error; err != nil {
+		if err := tx.Model(&rbac.SysDepartment{}).Unscoped().Where("parent_id = ?", id).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
 			return gorm.ErrRegistered // 存在子部门，不能删除
 		}
 
-		// 删除部门
-		return tx.Delete(&rbac.SysDepartment{}, id).Error
+		// 硬删除部门（包括软删除的记录）
+		return tx.Unscoped().Delete(&rbac.SysDepartment{}, id).Error
 	})
 }
 
@@ -65,4 +65,10 @@ func (r *departmentRepo) buildTree(departments []*rbac.SysDepartment, parentID u
 		}
 	}
 	return tree
+}
+
+func (r *departmentRepo) GetAll(ctx context.Context) ([]*rbac.SysDepartment, error) {
+	var departments []*rbac.SysDepartment
+	err := r.db.WithContext(ctx).Order("sort ASC").Find(&departments).Error
+	return departments, err
 }

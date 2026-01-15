@@ -28,6 +28,7 @@ import (
 	"k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -158,15 +159,22 @@ type NodeCondition struct {
 
 // PodInfo Pod信息
 type PodInfo struct {
-	Name      string            `json:"name"`
-	Namespace string            `json:"namespace"`
-	Ready     string            `json:"ready"`
-	Status    string            `json:"status"`
-	Restarts  int32             `json:"restarts"`
-	Age       string            `json:"age"`
-	IP        string            `json:"ip"`
-	Node      string            `json:"node"`
-	Labels    map[string]string `json:"labels"`
+	Name       string          `json:"name"`
+	Namespace  string          `json:"namespace"`
+	Ready      string          `json:"ready"`
+	Status     string          `json:"status"`
+	Phase      string          `json:"phase"`
+	Restarts   int32           `json:"restarts"`
+	Age        string          `json:"age"`
+	IP         string          `json:"ip"`
+	Node       string          `json:"node"`
+	Labels     map[string]string `json:"labels"`
+	Containers []ContainerInfo `json:"containers"`
+}
+
+// ContainerInfo 容器信息
+type ContainerInfo struct {
+	Name string `json:"name"`
 }
 
 // NamespaceInfo 命名空间信息
@@ -737,6 +745,14 @@ func (h *ResourceHandler) ListPods(c *gin.Context) {
 
 		// 获取Pod状态
 		podInfo.Status = string(pod.Status.Phase)
+		podInfo.Phase = string(pod.Status.Phase)
+
+		// 添加容器信息
+		for _, container := range pod.Spec.Containers {
+			podInfo.Containers = append(podInfo.Containers, ContainerInfo{
+				Name: container.Name,
+			})
+		}
 
 		podInfos = append(podInfos, podInfo)
 	}
@@ -2371,6 +2387,659 @@ func (h *ResourceHandler) DeleteNode(c *gin.Context) {
 	})
 }
 
+// BatchNodesRequest 批量节点操作请求
+type BatchNodesRequest struct {
+	ClusterID int      `json:"clusterId" binding:"required"`
+	NodeNames []string `json:"nodeNames" binding:"required"`
+}
+
+// BatchNodeLabelsRequest 批量节点标签操作请求
+type BatchNodeLabelsRequest struct {
+	ClusterID int                    `json:"clusterId" binding:"required"`
+	NodeNames []string              `json:"nodeNames" binding:"required"`
+	Labels    map[string]string     `json:"labels" binding:"required"`
+	Operation string                `json:"operation" binding:"required"` // add, remove, replace
+}
+
+// BatchNodeTaintsRequest 批量节点污点操作请求
+type BatchNodeTaintsRequest struct {
+	ClusterID int                    `json:"clusterId" binding:"required"`
+	NodeNames []string              `json:"nodeNames" binding:"required"`
+	Taints    []TaintInfo           `json:"taints" binding:"required"`
+	Operation string                `json:"operation" binding:"required"` // add, remove
+}
+
+// BatchDrainNodesRequest 批量排空节点请求
+type BatchDrainNodesRequest struct {
+	ClusterID            int      `json:"clusterId" binding:"required"`
+	NodeNames            []string `json:"nodeNames" binding:"required"`
+	Force                bool     `json:"force"`
+	IgnoreDaemonsets     bool     `json:"ignoreDaemonsets"`
+	DeleteLocalData      bool     `json:"deleteLocalData"`
+	GracePeriodSeconds   int      `json:"gracePeriodSeconds"`
+	Timeout              int      `json:"timeout"`
+}
+
+// BatchOperationResult 批量操作结果
+type BatchOperationResult struct {
+	NodeName  string `json:"nodeName"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+}
+
+// BatchDrainNodes 批量排空节点
+func (h *ResourceHandler) BatchDrainNodes(c *gin.Context) {
+	var req BatchDrainNodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.NodeNames) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "节点名称列表不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchOperationResult, 0, len(req.NodeNames))
+
+	for _, nodeName := range req.NodeNames {
+		// 获取节点上的Pod列表
+		pods, err := clientset.CoreV1().Pods("").List(c.Request.Context(), metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+		})
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  "获取Pod列表失败: " + err.Error(),
+			})
+			continue
+		}
+
+		// 删除Pod
+		failedPods := []string{}
+		for _, pod := range pods.Items {
+			// 跳过 DaemonSet 管理的 Pod（除非强制删除）
+			if !req.Force && isPodOwnedByDaemonSet(&pod) {
+				continue
+			}
+
+			// 跳过本地存储的 Pod（除非强制删除）
+			if !req.DeleteLocalData && hasLocalStorage(&pod) {
+				continue
+			}
+
+			// 设置删除宽限期
+			gracePeriod := int64(req.GracePeriodSeconds)
+			if req.GracePeriodSeconds <= 0 {
+				gracePeriod = 30 // 默认30秒
+			}
+
+			deleteOptions := metav1.DeleteOptions{
+				GracePeriodSeconds: &gracePeriod,
+			}
+
+			err := clientset.CoreV1().Pods(pod.Namespace).Delete(c.Request.Context(), pod.Name, deleteOptions)
+			if err != nil {
+				failedPods = append(failedPods, fmt.Sprintf("%s/%s", pod.Namespace, pod.Name))
+			}
+		}
+
+		if len(failedPods) > 0 {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  fmt.Sprintf("部分Pod删除失败: %v", failedPods),
+			})
+		} else {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  true,
+				Message:  "排空成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量排空操作完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchCordonNodes 批量设为不可调度
+func (h *ResourceHandler) BatchCordonNodes(c *gin.Context) {
+	var req BatchNodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.NodeNames) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "节点名称列表不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchOperationResult, 0, len(req.NodeNames))
+
+	for _, nodeName := range req.NodeNames {
+		err := h.cordonNode(c.Request.Context(), clientset, nodeName, true)
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  err.Error(),
+			})
+		} else {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  true,
+				Message:  "设为不可调度成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量设为不可调度完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchUncordonNodes 批量设为可调度
+func (h *ResourceHandler) BatchUncordonNodes(c *gin.Context) {
+	var req BatchNodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.NodeNames) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "节点名称列表不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchOperationResult, 0, len(req.NodeNames))
+
+	for _, nodeName := range req.NodeNames {
+		err := h.cordonNode(c.Request.Context(), clientset, nodeName, false)
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  err.Error(),
+			})
+		} else {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  true,
+				Message:  "设为可调度成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量设为可调度完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchDeleteNodes 批量删除节点
+func (h *ResourceHandler) BatchDeleteNodes(c *gin.Context) {
+	var req BatchNodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.NodeNames) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "节点名称列表不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchOperationResult, 0, len(req.NodeNames))
+
+	for _, nodeName := range req.NodeNames {
+		err := clientset.CoreV1().Nodes().Delete(c.Request.Context(), nodeName, metav1.DeleteOptions{})
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  err.Error(),
+			})
+		} else {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  true,
+				Message:  "删除成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量删除节点完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchUpdateNodeLabels 批量更新节点标签
+func (h *ResourceHandler) BatchUpdateNodeLabels(c *gin.Context) {
+	var req BatchNodeLabelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.NodeNames) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "节点名称列表不能为空",
+		})
+		return
+	}
+
+	// 验证操作类型
+	if req.Operation != "add" && req.Operation != "remove" && req.Operation != "replace" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的操作类型，必须是 add、remove 或 replace",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchOperationResult, 0, len(req.NodeNames))
+
+	for _, nodeName := range req.NodeNames {
+		// 获取节点
+		node, err := clientset.CoreV1().Nodes().Get(c.Request.Context(), nodeName, metav1.GetOptions{})
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  "获取节点失败: " + err.Error(),
+			})
+			continue
+		}
+
+		// 处理标签操作
+		switch req.Operation {
+		case "add":
+			// 添加标签（不覆盖已有标签）
+			for key, value := range req.Labels {
+				if node.Labels == nil {
+					node.Labels = make(map[string]string)
+				}
+				if _, exists := node.Labels[key]; !exists {
+					node.Labels[key] = value
+				}
+			}
+		case "remove":
+			// 删除标签
+			for key := range req.Labels {
+				delete(node.Labels, key)
+			}
+		case "replace":
+			// 替换标签
+			if node.Labels == nil {
+				node.Labels = make(map[string]string)
+			}
+			for key, value := range req.Labels {
+				node.Labels[key] = value
+			}
+		}
+
+		// 更新节点
+		_, err = clientset.CoreV1().Nodes().Update(c.Request.Context(), node, metav1.UpdateOptions{})
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  "更新节点失败: " + err.Error(),
+			})
+		} else {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  true,
+				Message:  "标签更新成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量更新节点标签完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchUpdateNodeTaints 批量更新节点污点
+func (h *ResourceHandler) BatchUpdateNodeTaints(c *gin.Context) {
+	var req BatchNodeTaintsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.NodeNames) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "节点名称列表不能为空",
+		})
+		return
+	}
+
+	// 验证操作类型
+	if req.Operation != "add" && req.Operation != "remove" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的操作类型，必须是 add 或 remove",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchOperationResult, 0, len(req.NodeNames))
+
+	for _, nodeName := range req.NodeNames {
+		// 获取节点
+		node, err := clientset.CoreV1().Nodes().Get(c.Request.Context(), nodeName, metav1.GetOptions{})
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  "获取节点失败: " + err.Error(),
+			})
+			continue
+		}
+
+		// 转换污点格式
+		newTaints := make([]v1.Taint, 0, len(req.Taints))
+		for _, taint := range req.Taints {
+			newTaints = append(newTaints, v1.Taint{
+				Key:    taint.Key,
+				Value:  taint.Value,
+				Effect: v1.TaintEffect(taint.Effect),
+			})
+		}
+
+		// 处理污点操作
+		switch req.Operation {
+		case "add":
+			// 添加污点
+			for _, newTaint := range newTaints {
+				found := false
+				for i, existingTaint := range node.Spec.Taints {
+					if existingTaint.Key == newTaint.Key && existingTaint.Effect == newTaint.Effect {
+						// 更新已存在的污点
+						node.Spec.Taints[i] = newTaint
+						found = true
+						break
+					}
+				}
+				if !found {
+					node.Spec.Taints = append(node.Spec.Taints, newTaint)
+				}
+			}
+		case "remove":
+			// 删除污点
+			updatedTaints := make([]v1.Taint, 0, len(node.Spec.Taints))
+			for _, existingTaint := range node.Spec.Taints {
+				shouldRemove := false
+				for _, taintToRemove := range newTaints {
+					if existingTaint.Key == taintToRemove.Key && existingTaint.Effect == taintToRemove.Effect {
+						shouldRemove = true
+						break
+					}
+				}
+				if !shouldRemove {
+					updatedTaints = append(updatedTaints, existingTaint)
+				}
+			}
+			node.Spec.Taints = updatedTaints
+		}
+
+		// 更新节点
+		_, err = clientset.CoreV1().Nodes().Update(c.Request.Context(), node, metav1.UpdateOptions{})
+		if err != nil {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  false,
+				Message:  "更新节点失败: " + err.Error(),
+			})
+		} else {
+			results = append(results, BatchOperationResult{
+				NodeName: nodeName,
+				Success:  true,
+				Message:  "污点更新成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量更新节点污点完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// cordonNode 设置节点为可调度/不可调度
+func (h *ResourceHandler) cordonNode(ctx context.Context, clientset *kubernetes.Clientset, nodeName string, unschedulable bool) error {
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("获取节点失败: %w", err)
+	}
+
+	node.Spec.Unschedulable = unschedulable
+
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("更新节点失败: %w", err)
+	}
+
+	return nil
+}
+
+// isPodOwnedByDaemonSet 检查Pod是否由DaemonSet管理
+func isPodOwnedByDaemonSet(pod *v1.Pod) bool {
+	for _, ownerRef := range pod.OwnerReferences {
+		if ownerRef.Kind == "DaemonSet" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasLocalStorage 检查Pod是否有本地存储
+func hasLocalStorage(pod *v1.Pod) bool {
+	for _, volume := range pod.Spec.Volumes {
+		if volume.EmptyDir != nil || volume.HostPath != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // yamlMarshal 简单的YAML序列化
 func yamlMarshal(obj interface{}) ([]byte, error) {
 	return yaml.Marshal(obj)
@@ -2762,8 +3431,23 @@ func (h *ResourceHandler) GetCloudTTYStatus(c *gin.Context) {
 	}
 
 	// 检查 CloudTTY deployment 是否存在
-	_, err = clientset.AppsV1().Deployments("cloudtty-system").Get(c.Request.Context(), "cloudtty-controller-manager", metav1.GetOptions{})
-	if err != nil {
+	// 尝试多个可能的deployment名称
+	deployments := []string{
+		"cloudtty-operator-controller-manager",
+		"cloudtty-controller-manager",
+	}
+	installed := false
+	for _, deployName := range deployments {
+		_, err = clientset.AppsV1().Deployments("cloudtty-system").Get(c.Request.Context(), deployName, metav1.GetOptions{})
+		if err == nil {
+			installed = true
+			fmt.Printf("✅ [GetCloudTTYStatus] CloudTTY 已安装，找到 Deployment: %s\n", deployName)
+			break
+		}
+	}
+
+	if !installed {
+		fmt.Printf("❌ [GetCloudTTYStatus] CloudTTY 未安装，尝试的 Deployment: %v\n", deployments)
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
 			"data": gin.H{"installed": false},
@@ -3541,8 +4225,27 @@ func (h *ResourceHandler) convertPodToWorkload(pod *v1.Pod) WorkloadInfo {
 		memory = &limits.Memory
 	}
 
-	// Pod 状态
+	// Pod 状态 - 检查容器状态获取更详细的信息
 	podStatus := string(pod.Status.Phase)
+
+	// 如果Pod不是Running或Succeeded状态，检查容器状态获取详细原因
+	if pod.Status.Phase != v1.PodRunning && pod.Status.Phase != v1.PodSucceeded {
+		for _, cs := range pod.Status.ContainerStatuses {
+			// 检查等待状态
+			if cs.State.Waiting != nil {
+				// 如果有具体的错误原因，使用该原因作为状态
+				if cs.State.Waiting.Reason != "" {
+					podStatus = cs.State.Waiting.Reason
+					break
+				}
+			}
+			// 检查终止状态
+			if cs.State.Terminated != nil && cs.State.Terminated.Reason != "" {
+				podStatus = cs.State.Terminated.Reason
+				break
+			}
+		}
+	}
 
 	// 重启次数
 	var restartCount int32
@@ -4234,7 +4937,7 @@ func (h *ResourceHandler) UpdateWorkloadYAML(c *gin.Context) {
 	// 根据类型更新资源
 	switch req.Type {
 	case "Deployment":
-		_, err := clientset.AppsV1().Deployments(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.AppsV1().Deployments(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4243,7 +4946,7 @@ func (h *ResourceHandler) UpdateWorkloadYAML(c *gin.Context) {
 			return
 		}
 	case "StatefulSet":
-		_, err := clientset.AppsV1().StatefulSets(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.AppsV1().StatefulSets(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4252,7 +4955,7 @@ func (h *ResourceHandler) UpdateWorkloadYAML(c *gin.Context) {
 			return
 		}
 	case "DaemonSet":
-		_, err := clientset.AppsV1().DaemonSets(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.AppsV1().DaemonSets(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4261,7 +4964,7 @@ func (h *ResourceHandler) UpdateWorkloadYAML(c *gin.Context) {
 			return
 		}
 	case "Job":
-		_, err := clientset.BatchV1().Jobs(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.BatchV1().Jobs(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4270,7 +4973,7 @@ func (h *ResourceHandler) UpdateWorkloadYAML(c *gin.Context) {
 			return
 		}
 	case "CronJob":
-		_, err := clientset.BatchV1().CronJobs(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.BatchV1().CronJobs(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4395,9 +5098,10 @@ func (h *ResourceHandler) UpdateWorkload(c *gin.Context) {
 	}
 
 	// 根据类型更新资源
+	// 使用 MergePatchType 而不是 MergePatchType，以支持通过 null 删除字段
 	switch workloadType {
 	case "Deployment":
-		_, err := clientset.AppsV1().Deployments(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.AppsV1().Deployments(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4406,7 +5110,7 @@ func (h *ResourceHandler) UpdateWorkload(c *gin.Context) {
 			return
 		}
 	case "StatefulSet":
-		_, err := clientset.AppsV1().StatefulSets(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.AppsV1().StatefulSets(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4415,7 +5119,7 @@ func (h *ResourceHandler) UpdateWorkload(c *gin.Context) {
 			return
 		}
 	case "DaemonSet":
-		_, err := clientset.AppsV1().DaemonSets(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.AppsV1().DaemonSets(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4424,7 +5128,7 @@ func (h *ResourceHandler) UpdateWorkload(c *gin.Context) {
 			return
 		}
 	case "Job":
-		_, err := clientset.BatchV1().Jobs(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.BatchV1().Jobs(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -4433,7 +5137,7 @@ func (h *ResourceHandler) UpdateWorkload(c *gin.Context) {
 			return
 		}
 	case "CronJob":
-		_, err := clientset.BatchV1().CronJobs(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		_, err := clientset.BatchV1().CronJobs(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
@@ -5584,7 +6288,7 @@ func (h *ResourceHandler) UpdateIngressYAML(c *gin.Context) {
 		return
 	}
 
-	_, err = clientset.NetworkingV1().Ingresses(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+	_, err = clientset.NetworkingV1().Ingresses(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 	if err != nil {
 		HandleK8sError(c, err, "Ingress")
 		return
@@ -6597,7 +7301,7 @@ func (h *ResourceHandler) UpdateNetworkPolicyYAML(c *gin.Context) {
 		return
 	}
 
-	_, err = clientset.NetworkingV1().NetworkPolicies(namespace).Patch(c.Request.Context(), name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+	_, err = clientset.NetworkingV1().NetworkPolicies(namespace).Patch(c.Request.Context(), name, types.MergePatchType, patchData, metav1.PatchOptions{})
 	if err != nil {
 		HandleK8sError(c, err, "网络策略")
 		return
@@ -7287,29 +7991,40 @@ func (h *ResourceHandler) GetConfigMapYAML(c *gin.Context) {
 	cleaned := cleanConfigMapForYAML(configMap)
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    cleaned,
+		"code": 0,
+		"data": gin.H{
+			"items":   cleaned,
+			"total":   0,
+			"page":    0,
+			"pageSize": 0,
+		},
+		"msg": "获取成功",
 	})
 }
 
 // UpdateConfigMapYAML 更新 ConfigMap YAML
 func (h *ResourceHandler) UpdateConfigMapYAML(c *gin.Context) {
-	var req struct {
-		ClusterID int    `json:"clusterId"`
-		YAML      string `json:"yaml"`
-	}
+	namespace := c.Param("namespace")
+	name := c.Param("name")
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// 从 query 参数获取 clusterId
+	clusterIDStr := c.Query("clusterId")
+	if clusterIDStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "请求参数错误: " + err.Error(),
+			"message": "缺少 clusterId 参数",
 		})
 		return
 	}
 
-	namespace := c.Param("namespace")
-	name := c.Param("name")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "clusterId 参数格式错误",
+		})
+		return
+	}
 
 	// 获取当前用户ID
 	currentUserID, ok := GetCurrentUserID(c)
@@ -7317,7 +8032,7 @@ func (h *ResourceHandler) UpdateConfigMapYAML(c *gin.Context) {
 		return
 	}
 
-	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
 	if err != nil {
 		if h.handleGetClientsetError(c, err) {
 			return
@@ -7329,12 +8044,12 @@ func (h *ResourceHandler) UpdateConfigMapYAML(c *gin.Context) {
 		return
 	}
 
-	// 解析 YAML
+	// 直接解析请求体为 ConfigMap 对象
 	var configMap v1.ConfigMap
-	if err := yaml.Unmarshal([]byte(req.YAML), &configMap); err != nil {
+	if err := c.ShouldBindJSON(&configMap); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "解析 YAML 失败: " + err.Error(),
+			"message": "解析请求体失败: " + err.Error(),
 		})
 		return
 	}
@@ -7531,29 +8246,40 @@ func (h *ResourceHandler) GetSecretYAML(c *gin.Context) {
 	cleaned := cleanSecretForYAML(secret)
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    cleaned,
+		"code": 0,
+		"data": gin.H{
+			"items":   cleaned,
+			"total":   0,
+			"page":    0,
+			"pageSize": 0,
+		},
+		"msg": "获取成功",
 	})
 }
 
 // UpdateSecretYAML 更新 Secret YAML
 func (h *ResourceHandler) UpdateSecretYAML(c *gin.Context) {
-	var req struct {
-		ClusterID int    `json:"clusterId"`
-		YAML      string `json:"yaml"`
-	}
+	namespace := c.Param("namespace")
+	name := c.Param("name")
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// 从 query 参数获取 clusterId
+	clusterIDStr := c.Query("clusterId")
+	if clusterIDStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "请求参数错误: " + err.Error(),
+			"message": "缺少 clusterId 参数",
 		})
 		return
 	}
 
-	namespace := c.Param("namespace")
-	name := c.Param("name")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "clusterId 参数格式错误",
+		})
+		return
+	}
 
 	// 获取当前用户ID
 	currentUserID, ok := GetCurrentUserID(c)
@@ -7561,7 +8287,7 @@ func (h *ResourceHandler) UpdateSecretYAML(c *gin.Context) {
 		return
 	}
 
-	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
 	if err != nil {
 		if h.handleGetClientsetError(c, err) {
 			return
@@ -7573,12 +8299,12 @@ func (h *ResourceHandler) UpdateSecretYAML(c *gin.Context) {
 		return
 	}
 
-	// 解析 YAML
+	// 直接解析请求体为 Secret 对象
 	var secret v1.Secret
-	if err := yaml.Unmarshal([]byte(req.YAML), &secret); err != nil {
+	if err := c.ShouldBindJSON(&secret); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "解析 YAML 失败: " + err.Error(),
+			"message": "解析请求体失败: " + err.Error(),
 		})
 		return
 	}
@@ -7973,13 +8699,17 @@ func (h *ResourceHandler) PodShellWebSocket(c *gin.Context) {
 
 	// 处理 WebSocket 消息
 	done := make(chan struct{})
+	// 创建可取消的 context
+	ctx, cancel := context.WithCancel(context.Background())
+
 	go func() {
 		defer close(done)
+		defer cancel() // 当 goroutine 结束时取消 context
 		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				if err != websocket.ErrCloseSent {
-					fmt.Printf("🐚 WebSocket read error: %v\n", err)
+					log.Printf("🐚 WebSocket read error: %v", err)
 				}
 				return
 			}
@@ -7988,7 +8718,8 @@ func (h *ResourceHandler) PodShellWebSocket(c *gin.Context) {
 	}()
 
 	// 流式处理
-	err = executor.StreamWithContext(context.Background(), remotecommand.StreamOptions{
+	log.Printf("🔧 开始流式处理，recorder是否为nil: %v", recorder == nil)
+	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:  wsReader,
 		Stdout: wsWriter,
 		Stderr: wsWriter,
@@ -7996,14 +8727,17 @@ func (h *ResourceHandler) PodShellWebSocket(c *gin.Context) {
 	})
 
 	if err != nil {
-		fmt.Printf("🐚 Executor error: %v\n", err)
+		log.Printf("🐚 Executor error: %v", err)
 	}
 
+	log.Printf("🔧 Executor StreamWithContext 完成，等待 goroutine 结束")
 	// 等待读取 goroutine 结束
 	<-done
+	log.Printf("🔧 Goroutine 已结束，开始检查 recorder")
 
 	// 关闭录制器并保存会话记录
 	if recorder != nil {
+		log.Printf("✅ Recorder 不为空，准备保存会话记录")
 		duration := recorder.GetDuration()
 		fileSize := recorder.GetFileSize()
 		recordingPath := recorder.GetRecordingPath()
@@ -8037,13 +8771,15 @@ func (h *ResourceHandler) PodShellWebSocket(c *gin.Context) {
 		}
 
 		if err := h.db.Create(&session).Error; err != nil {
-			log.Printf("保存终端会话记录失败: %v", err)
+			log.Printf("❌ 保存终端会话记录失败: %v", err)
 		} else {
-			fmt.Printf("✅ 终端会话已保存: ID=%d, 时长=%ds, 大小=%d bytes\n", session.ID, duration, fileSize)
+			log.Printf("✅ 终端会话已保存: ID=%d, clusterID=%d, 时长=%ds, 大小=%d bytes", session.ID, clusterID, duration, fileSize)
 		}
+	} else {
+		log.Printf("⚠️  录制器为空，跳过保存会话记录")
 	}
 
-	fmt.Printf("🐚 WebSocket connection closed for pod %s/%s\n", namespace, podName)
+	log.Printf("🐚 WebSocket connection closed for pod %s/%s\n", namespace, podName)
 }
 
 // PauseWorkload 暂停/恢复工作负载
@@ -8255,6 +8991,477 @@ func (h *ResourceHandler) RollbackWorkload(c *gin.Context) {
 	})
 }
 
+// BatchWorkloadsRequest 批量工作负载操作请求
+type BatchWorkloadsRequest struct {
+	ClusterID  uint                  `json:"clusterId" binding:"required"`
+	Workloads []WorkloadItem        `json:"workloads" binding:"required"`
+}
+
+// WorkloadItem 工作负载项
+type WorkloadItem struct {
+	Namespace string `json:"namespace" binding:"required"`
+	Name      string `json:"name" binding:"required"`
+	Type      string `json:"type" binding:"required"` // Deployment, StatefulSet, DaemonSet, Job, Pod
+}
+
+// BatchWorkloadResult 批量工作负载操作结果
+type BatchWorkloadResult struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+}
+
+// BatchDeleteWorkloads 批量删除工作负载
+func (h *ResourceHandler) BatchDeleteWorkloads(c *gin.Context) {
+	var req BatchWorkloadsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.Workloads) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "工作负载列表不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), req.ClusterID, currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchWorkloadResult, 0, len(req.Workloads))
+
+	for _, item := range req.Workloads {
+		var err error
+
+		switch item.Type {
+		case "Deployment":
+			err = clientset.AppsV1().Deployments(item.Namespace).Delete(c.Request.Context(), item.Name, metav1.DeleteOptions{})
+		case "StatefulSet":
+			err = clientset.AppsV1().StatefulSets(item.Namespace).Delete(c.Request.Context(), item.Name, metav1.DeleteOptions{})
+		case "DaemonSet":
+			err = clientset.AppsV1().DaemonSets(item.Namespace).Delete(c.Request.Context(), item.Name, metav1.DeleteOptions{})
+		case "Job":
+			err = clientset.BatchV1().Jobs(item.Namespace).Delete(c.Request.Context(), item.Name, metav1.DeleteOptions{})
+		case "Pod":
+			err = clientset.CoreV1().Pods(item.Namespace).Delete(c.Request.Context(), item.Name, metav1.DeleteOptions{})
+		default:
+			err = fmt.Errorf("不支持的工作负载类型: %s", item.Type)
+		}
+
+		if err != nil {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   false,
+				Message:   err.Error(),
+			})
+		} else {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   true,
+				Message:   "删除成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量删除操作完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchRestartWorkloads 批量重启工作负载
+func (h *ResourceHandler) BatchRestartWorkloads(c *gin.Context) {
+	var req BatchWorkloadsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.Workloads) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "工作负载列表不能为空",
+		})
+		return
+	}
+
+	// 添加调试日志
+	fmt.Printf("🔄 [BatchRestartWorkloads] 收到重启请求，集群ID: %d，工作负载数量: %d\n", req.ClusterID, len(req.Workloads))
+	for i, w := range req.Workloads {
+		fmt.Printf("  [%d] Namespace: %s, Name: %s, Type: %s\n", i+1, w.Namespace, w.Name, w.Type)
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), req.ClusterID, currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchWorkloadResult, 0, len(req.Workloads))
+
+	for _, item := range req.Workloads {
+		var err error
+
+		// 重启策略：对于支持重启的工作负载，通过触发滚动更新来重启
+		// 对于 Pod，直接删除并让它重新创建
+
+		switch item.Type {
+		case "Deployment":
+			// 通过更新 annotations 触发滚动更新
+			fmt.Printf("  🔄 正在重启 Deployment: %s/%s\n", item.Namespace, item.Name)
+			deployment, getErr := clientset.AppsV1().Deployments(item.Namespace).Get(c.Request.Context(), item.Name, metav1.GetOptions{})
+			if getErr == nil {
+				if deployment.Spec.Template.Annotations == nil {
+					deployment.Spec.Template.Annotations = make(map[string]string)
+				}
+				// 添加时间戳触发更新
+				deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+				_, err = clientset.AppsV1().Deployments(item.Namespace).Update(c.Request.Context(), deployment, metav1.UpdateOptions{})
+				fmt.Printf("  ✅ Deployment %s/%s 重启%v\n", item.Namespace, item.Name, map[bool]string{true: "成功", false: "失败"}[err == nil])
+			} else {
+				err = getErr
+				fmt.Printf("  ❌ Deployment %s/%s 获取失败: %v\n", item.Namespace, item.Name, getErr)
+			}
+
+		case "StatefulSet":
+			// StatefulSet 也支持同样的重启方式
+			statefulSet, getErr := clientset.AppsV1().StatefulSets(item.Namespace).Get(c.Request.Context(), item.Name, metav1.GetOptions{})
+			if getErr == nil {
+				if statefulSet.Spec.Template.Annotations == nil {
+					statefulSet.Spec.Template.Annotations = make(map[string]string)
+				}
+				statefulSet.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+				_, err = clientset.AppsV1().StatefulSets(item.Namespace).Update(c.Request.Context(), statefulSet, metav1.UpdateOptions{})
+			} else {
+				err = getErr
+			}
+
+		case "DaemonSet":
+			// DaemonSet 也支持同样的重启方式
+			daemonSet, getErr := clientset.AppsV1().DaemonSets(item.Namespace).Get(c.Request.Context(), item.Name, metav1.GetOptions{})
+			if getErr == nil {
+				if daemonSet.Spec.Template.Annotations == nil {
+					daemonSet.Spec.Template.Annotations = make(map[string]string)
+				}
+				daemonSet.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+				_, err = clientset.AppsV1().DaemonSets(item.Namespace).Update(c.Request.Context(), daemonSet, metav1.UpdateOptions{})
+			} else {
+				err = getErr
+			}
+
+		case "Pod":
+			// Pod 通过删除让它重新创建（如果由控制器管理）
+			// 或者记录不支持单独重启
+			err = fmt.Errorf("Pod 不支持直接重启，请删除后由控制器重建")
+
+		case "Job":
+			// Job 不支持重启，只能重新创建
+			err = fmt.Errorf("Job 不支持重启，请删除后重新创建")
+
+		default:
+			err = fmt.Errorf("不支持的工作负载类型: %s", item.Type)
+		}
+
+		if err != nil {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   false,
+				Message:   err.Error(),
+			})
+		} else {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   true,
+				Message:   "重启成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量重启操作完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchPauseWorkloads 批量停止工作负载
+func (h *ResourceHandler) BatchPauseWorkloads(c *gin.Context) {
+	var req BatchWorkloadsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.Workloads) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "工作负载列表不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), req.ClusterID, currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchWorkloadResult, 0, len(req.Workloads))
+
+	for _, item := range req.Workloads {
+		var err error
+
+		switch item.Type {
+		case "Deployment":
+			deployment, err := clientset.AppsV1().Deployments(item.Namespace).Get(c.Request.Context(), item.Name, metav1.GetOptions{})
+			if err == nil {
+				deployment.Spec.Paused = true
+				_, err = clientset.AppsV1().Deployments(item.Namespace).Update(c.Request.Context(), deployment, metav1.UpdateOptions{})
+			}
+
+		case "StatefulSet":
+			// StatefulSet 不支持 paused，需要通过将副本数设为0来实现"停止"
+			statefulSet, err := clientset.AppsV1().StatefulSets(item.Namespace).Get(c.Request.Context(), item.Name, metav1.GetOptions{})
+			if err == nil {
+				// 保存原始副本数
+				if statefulSet.Annotations == nil {
+					statefulSet.Annotations = make(map[string]string)
+				}
+				statefulSet.Annotations["opshub/original-replicas"] = fmt.Sprintf("%d", *statefulSet.Spec.Replicas)
+				zero := int32(0)
+				statefulSet.Spec.Replicas = &zero
+				_, err = clientset.AppsV1().StatefulSets(item.Namespace).Update(c.Request.Context(), statefulSet, metav1.UpdateOptions{})
+			}
+
+		case "DaemonSet":
+			// DaemonSet 不支持停止
+			err = fmt.Errorf("DaemonSet 不支持停止操作")
+
+		case "Job", "Pod":
+			err = fmt.Errorf("%s 不支持停止操作", item.Type)
+
+		default:
+			err = fmt.Errorf("不支持的工作负载类型: %s", item.Type)
+		}
+
+		if err != nil {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   false,
+				Message:   err.Error(),
+			})
+		} else {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   true,
+				Message:   "停止成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量停止操作完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
+// BatchResumeWorkloads 批量启动工作负载
+func (h *ResourceHandler) BatchResumeWorkloads(c *gin.Context) {
+	var req BatchWorkloadsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.Workloads) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "工作负载列表不能为空",
+		})
+		return
+	}
+
+	// 获取当前用户ID
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未授权",
+		})
+		return
+	}
+
+	// 获取clientset
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), req.ClusterID, currentUserID.(uint))
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	results := make([]BatchWorkloadResult, 0, len(req.Workloads))
+
+	for _, item := range req.Workloads {
+		var err error
+
+		switch item.Type {
+		case "Deployment":
+			deployment, err := clientset.AppsV1().Deployments(item.Namespace).Get(c.Request.Context(), item.Name, metav1.GetOptions{})
+			if err == nil {
+				deployment.Spec.Paused = false
+				_, err = clientset.AppsV1().Deployments(item.Namespace).Update(c.Request.Context(), deployment, metav1.UpdateOptions{})
+			}
+
+		case "StatefulSet":
+			// StatefulSet 恢复副本数
+			statefulSet, err := clientset.AppsV1().StatefulSets(item.Namespace).Get(c.Request.Context(), item.Name, metav1.GetOptions{})
+			if err == nil {
+				// 尝试从 annotations 获取原始副本数
+				if originalReplicasStr, ok := statefulSet.Annotations["opshub/original-replicas"]; ok {
+					originalReplicas, err := strconv.ParseInt(originalReplicasStr, 10, 32)
+					if err == nil && originalReplicas > 0 {
+						replicas := int32(originalReplicas)
+						statefulSet.Spec.Replicas = &replicas
+					}
+				} else {
+					// 如果没有保存原始副本数，默认设为1
+					one := int32(1)
+					statefulSet.Spec.Replicas = &one
+				}
+				delete(statefulSet.Annotations, "opshub/original-replicas")
+				_, err = clientset.AppsV1().StatefulSets(item.Namespace).Update(c.Request.Context(), statefulSet, metav1.UpdateOptions{})
+			}
+
+		case "DaemonSet", "Job", "Pod":
+			err = fmt.Errorf("%s 不支持启动操作", item.Type)
+
+		default:
+			err = fmt.Errorf("不支持的工作负载类型: %s", item.Type)
+		}
+
+		if err != nil {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   false,
+				Message:   err.Error(),
+			})
+		} else {
+			results = append(results, BatchWorkloadResult{
+				Namespace: item.Namespace,
+				Name:      item.Name,
+				Type:      item.Type,
+				Success:   true,
+				Message:   "启动成功",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "批量启动操作完成",
+		"data": gin.H{
+			"results": results,
+		},
+	})
+}
+
 // FileInfo 文件信息
 type FileInfo struct {
 	Name    string `json:"name"`
@@ -8310,7 +9517,11 @@ func (h *ResourceHandler) GetPodDetail(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, pod)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    pod,
+	})
 }
 
 // GetPodEvents 获取 Pod 事件
@@ -11328,6 +12539,1190 @@ func (h *ResourceHandler) ListServiceAccounts(c *gin.Context) {
 	})
 }
 
+// GetServiceAccountYAML 获取 ServiceAccount YAML
+func (h *ResourceHandler) GetServiceAccountYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	serviceAccount, err := clientset.CoreV1().ServiceAccounts(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ServiceAccount")
+		return
+	}
+
+	// 构造返回数据，添加 apiVersion 和 kind
+	result := gin.H{
+		"apiVersion": serviceAccount.APIVersion,
+		"kind":       "ServiceAccount",
+		"metadata":   serviceAccount.ObjectMeta,
+	}
+	if len(serviceAccount.Secrets) > 0 {
+		result["secrets"] = serviceAccount.Secrets
+	}
+	if serviceAccount.AutomountServiceAccountToken != nil {
+		result["automountServiceAccountToken"] = *serviceAccount.AutomountServiceAccountToken
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    result,
+	})
+}
+
+// UpdateServiceAccountYAML 更新 ServiceAccount YAML
+func (h *ResourceHandler) UpdateServiceAccountYAML(c *gin.Context) {
+	var req struct {
+		ClusterID int    `json:"clusterId"`
+		YAML      string `json:"yaml"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(req.ClusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var serviceAccount v1.ServiceAccount
+	if err := yaml.Unmarshal([]byte(req.YAML), &serviceAccount); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+
+	// 更新 ServiceAccount
+	_, err = clientset.CoreV1().ServiceAccounts(namespace).Update(c.Request.Context(), &serviceAccount, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ServiceAccount")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+	})
+}
+
+// CreateServiceAccountFromYAML 从 YAML 创建 ServiceAccount
+func (h *ResourceHandler) CreateServiceAccountFromYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 读取 YAML 内容
+	yamlContent, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "读取请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var serviceAccount v1.ServiceAccount
+	if err := yaml.Unmarshal(yamlContent, &serviceAccount); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保命名空间正确
+	serviceAccount.Namespace = namespace
+
+	// 创建 ServiceAccount
+	_, err = clientset.CoreV1().ServiceAccounts(namespace).Create(c.Request.Context(), &serviceAccount, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ServiceAccount")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+	})
+}
+
+// DeleteServiceAccount 删除ServiceAccount
+func (h *ResourceHandler) DeleteServiceAccount(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.CoreV1().ServiceAccounts(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ServiceAccount")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// GetRoleYAML 获取Role YAML
+func (h *ResourceHandler) GetRoleYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	role, err := clientset.RbacV1().Roles(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Role")
+		return
+	}
+
+	// 构造返回数据，添加 apiVersion 和 kind
+	result := gin.H{
+		"apiVersion": role.APIVersion,
+		"kind":       "Role",
+		"metadata":   role.ObjectMeta,
+		"rules":      role.Rules,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "获取成功",
+		"data":    result,
+	})
+}
+
+// CreateRoleFromYAML 从YAML创建Role
+func (h *ResourceHandler) CreateRoleFromYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 读取 YAML 内容
+	yamlContent, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "读取请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var role rbacv1.Role
+	if err := yaml.Unmarshal(yamlContent, &role); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保命名空间正确
+	role.Namespace = namespace
+
+	// 创建 Role
+	_, err = clientset.RbacV1().Roles(namespace).Create(c.Request.Context(), &role, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Role")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// UpdateRoleYAML 更新Role YAML
+func (h *ResourceHandler) UpdateRoleYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 从 query 参数获取 clusterId
+	clusterIDStr := c.Query("clusterId")
+	if clusterIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 clusterId 参数",
+		})
+		return
+	}
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "clusterId 参数格式错误",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 直接解析请求体为 Role 对象
+	var role rbacv1.Role
+	if err := c.ShouldBindJSON(&role); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保名称一致
+	role.Name = name
+	role.Namespace = namespace
+
+	// 更新 Role
+	_, err = clientset.RbacV1().Roles(namespace).Update(c.Request.Context(), &role, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Role")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteRole 删除Role
+func (h *ResourceHandler) DeleteRole(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.RbacV1().Roles(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Role")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// GetRoleBindingYAML 获取RoleBinding YAML
+func (h *ResourceHandler) GetRoleBindingYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	roleBinding, err := clientset.RbacV1().RoleBindings(namespace).Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "RoleBinding")
+		return
+	}
+
+	// 构造返回数据，添加 apiVersion 和 kind
+	result := gin.H{
+		"apiVersion": roleBinding.APIVersion,
+		"kind":       "RoleBinding",
+		"metadata":   roleBinding.ObjectMeta,
+		"subjects":   roleBinding.Subjects,
+		"roleRef":    roleBinding.RoleRef,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "获取成功",
+		"data":    result,
+	})
+}
+
+// CreateRoleBindingFromYAML 从YAML创建RoleBinding
+func (h *ResourceHandler) CreateRoleBindingFromYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 读取 YAML 内容
+	yamlContent, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "读取请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var roleBinding rbacv1.RoleBinding
+	if err := yaml.Unmarshal(yamlContent, &roleBinding); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保命名空间正确
+	roleBinding.Namespace = namespace
+
+	// 创建 RoleBinding
+	_, err = clientset.RbacV1().RoleBindings(namespace).Create(c.Request.Context(), &roleBinding, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "RoleBinding")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// UpdateRoleBindingYAML 更新RoleBinding YAML
+func (h *ResourceHandler) UpdateRoleBindingYAML(c *gin.Context) {
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 从 query 参数获取 clusterId
+	clusterIDStr := c.Query("clusterId")
+	if clusterIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 clusterId 参数",
+		})
+		return
+	}
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "clusterId 参数格式错误",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 直接解析请求体为 RoleBinding 对象
+	var roleBinding rbacv1.RoleBinding
+	if err := c.ShouldBindJSON(&roleBinding); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保名称一致
+	roleBinding.Name = name
+	roleBinding.Namespace = namespace
+
+	// 更新 RoleBinding
+	_, err = clientset.RbacV1().RoleBindings(namespace).Update(c.Request.Context(), &roleBinding, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "RoleBinding")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteRoleBinding 删除RoleBinding
+func (h *ResourceHandler) DeleteRoleBinding(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.RbacV1().RoleBindings(namespace).Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "RoleBinding")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// GetClusterRoleYAML 获取ClusterRole YAML
+func (h *ResourceHandler) GetClusterRoleYAML(c *gin.Context) {
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	clusterRole, err := clientset.RbacV1().ClusterRoles().Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRole")
+		return
+	}
+
+	// 构造返回数据，添加 apiVersion 和 kind
+	result := gin.H{
+		"apiVersion": clusterRole.APIVersion,
+		"kind":       "ClusterRole",
+		"metadata":   clusterRole.ObjectMeta,
+		"rules":      clusterRole.Rules,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "获取成功",
+		"data":    result,
+	})
+}
+
+// CreateClusterRoleFromYAML 从YAML创建ClusterRole
+func (h *ResourceHandler) CreateClusterRoleFromYAML(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 读取 YAML 内容
+	yamlContent, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "读取请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var clusterRole rbacv1.ClusterRole
+	if err := yaml.Unmarshal(yamlContent, &clusterRole); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 创建 ClusterRole
+	_, err = clientset.RbacV1().ClusterRoles().Create(c.Request.Context(), &clusterRole, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRole")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// UpdateClusterRoleYAML 更新ClusterRole YAML
+func (h *ResourceHandler) UpdateClusterRoleYAML(c *gin.Context) {
+	name := c.Param("name")
+
+	// 从 query 参数获取 clusterId
+	clusterIDStr := c.Query("clusterId")
+	if clusterIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 clusterId 参数",
+		})
+		return
+	}
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "clusterId 参数格式错误",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 直接解析请求体为 ClusterRole 对象
+	var clusterRole rbacv1.ClusterRole
+	if err := c.ShouldBindJSON(&clusterRole); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保名称一致
+	clusterRole.Name = name
+
+	// 更新 ClusterRole
+	_, err = clientset.RbacV1().ClusterRoles().Update(c.Request.Context(), &clusterRole, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRole")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteClusterRole 删除ClusterRole
+func (h *ResourceHandler) DeleteClusterRole(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.RbacV1().ClusterRoles().Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRole")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// GetClusterRoleBindingYAML 获取ClusterRoleBinding YAML
+func (h *ResourceHandler) GetClusterRoleBindingYAML(c *gin.Context) {
+	name := c.Param("name")
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get(c.Request.Context(), name, metav1.GetOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRoleBinding")
+		return
+	}
+
+	// 构造返回数据，添加 apiVersion 和 kind
+	result := gin.H{
+		"apiVersion": clusterRoleBinding.APIVersion,
+		"kind":       "ClusterRoleBinding",
+		"metadata":   clusterRoleBinding.ObjectMeta,
+		"subjects":   clusterRoleBinding.Subjects,
+		"roleRef":    clusterRoleBinding.RoleRef,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "获取成功",
+		"data":    result,
+	})
+}
+
+// CreateClusterRoleBindingFromYAML 从YAML创建ClusterRoleBinding
+func (h *ResourceHandler) CreateClusterRoleBindingFromYAML(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	// 读取 YAML 内容
+	yamlContent, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "读取请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析 YAML
+	var clusterRoleBinding rbacv1.ClusterRoleBinding
+	if err := yaml.Unmarshal(yamlContent, &clusterRoleBinding); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析 YAML 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 创建 ClusterRoleBinding
+	_, err = clientset.RbacV1().ClusterRoleBindings().Create(c.Request.Context(), &clusterRoleBinding, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRoleBinding")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// UpdateClusterRoleBindingYAML 更新ClusterRoleBinding YAML
+func (h *ResourceHandler) UpdateClusterRoleBindingYAML(c *gin.Context) {
+	name := c.Param("name")
+
+	// 从 query 参数获取 clusterId
+	clusterIDStr := c.Query("clusterId")
+	if clusterIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 clusterId 参数",
+		})
+		return
+	}
+
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "clusterId 参数格式错误",
+		})
+		return
+	}
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 直接解析请求体为 ClusterRoleBinding 对象
+	var clusterRoleBinding rbacv1.ClusterRoleBinding
+	if err := c.ShouldBindJSON(&clusterRoleBinding); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保名称一致
+	clusterRoleBinding.Name = name
+
+	// 更新 ClusterRoleBinding
+	_, err = clientset.RbacV1().ClusterRoleBindings().Update(c.Request.Context(), &clusterRoleBinding, metav1.UpdateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRoleBinding")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// DeleteClusterRoleBinding 删除ClusterRoleBinding
+func (h *ResourceHandler) DeleteClusterRoleBinding(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.Atoi(clusterIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	name := c.Param("name")
+
+	// 获取当前用户ID
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	err = clientset.RbacV1().ClusterRoleBindings().Delete(c.Request.Context(), name, metav1.DeleteOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ClusterRoleBinding")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
 // ListRoles 获取Role列表
 func (h *ResourceHandler) ListRoles(c *gin.Context) {
 	clusterIDStr := c.Query("clusterId")
@@ -11335,11 +13730,6 @@ func (h *ResourceHandler) ListRoles(c *gin.Context) {
 	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的集群ID"})
-		return
-	}
-
-	if namespace == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "namespace 参数必填"})
 		return
 	}
 
@@ -11363,20 +13753,45 @@ func (h *ResourceHandler) ListRoles(c *gin.Context) {
 		return
 	}
 
-	list, err := clientset.RbacV1().Roles(namespace).List(c.Request.Context(), metav1.ListOptions{})
-	if err != nil {
-		HandleK8sError(c, err, "Role")
-		return
-	}
+	result := make([]gin.H, 0)
 
-	result := make([]gin.H, 0, len(list.Items))
-	for _, item := range list.Items {
-		result = append(result, gin.H{
-			"name":      item.Name,
-			"namespace": item.Namespace,
-			"age":       calculateAge(item.CreationTimestamp.Time),
-			"labels":    item.Labels,
-		})
+	if namespace == "" {
+		// 获取所有命名空间的 Roles
+		namespaceList, err := clientset.CoreV1().Namespaces().List(c.Request.Context(), metav1.ListOptions{})
+		if err != nil {
+			HandleK8sError(c, err, "Namespace")
+			return
+		}
+
+		for _, ns := range namespaceList.Items {
+			list, err := clientset.RbacV1().Roles(ns.Name).List(c.Request.Context(), metav1.ListOptions{})
+			if err != nil {
+				continue // 跳过有错误的命名空间
+			}
+			for _, item := range list.Items {
+				result = append(result, gin.H{
+					"name":      item.Name,
+					"namespace": item.Namespace,
+					"age":       calculateAge(item.CreationTimestamp.Time),
+					"labels":    item.Labels,
+				})
+			}
+		}
+	} else {
+		// 获取指定命名空间的 Roles
+		list, err := clientset.RbacV1().Roles(namespace).List(c.Request.Context(), metav1.ListOptions{})
+		if err != nil {
+			HandleK8sError(c, err, "Role")
+			return
+		}
+		for _, item := range list.Items {
+			result = append(result, gin.H{
+				"name":      item.Name,
+				"namespace": item.Namespace,
+				"age":       calculateAge(item.CreationTimestamp.Time),
+				"labels":    item.Labels,
+			})
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -11396,11 +13811,6 @@ func (h *ResourceHandler) ListRoleBindings(c *gin.Context) {
 		return
 	}
 
-	if namespace == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "namespace 参数必填"})
-		return
-	}
-
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "未授权：无法获取用户信息"})
@@ -11421,20 +13831,83 @@ func (h *ResourceHandler) ListRoleBindings(c *gin.Context) {
 		return
 	}
 
-	list, err := clientset.RbacV1().RoleBindings(namespace).List(c.Request.Context(), metav1.ListOptions{})
-	if err != nil {
-		HandleK8sError(c, err, "RoleBinding")
-		return
-	}
+	result := make([]gin.H, 0)
 
-	result := make([]gin.H, 0, len(list.Items))
-	for _, item := range list.Items {
-		result = append(result, gin.H{
-			"name":      item.Name,
-			"namespace": item.Namespace,
-			"age":       calculateAge(item.CreationTimestamp.Time),
-			"labels":    item.Labels,
-		})
+	if namespace == "" {
+		// 获取所有命名空间的 RoleBindings
+		namespaceList, err := clientset.CoreV1().Namespaces().List(c.Request.Context(), metav1.ListOptions{})
+		if err != nil {
+			HandleK8sError(c, err, "Namespace")
+			return
+		}
+
+		for _, ns := range namespaceList.Items {
+			list, err := clientset.RbacV1().RoleBindings(ns.Name).List(c.Request.Context(), metav1.ListOptions{})
+			if err != nil {
+				continue // 跳过有错误的命名空间
+			}
+			for _, item := range list.Items {
+				roleKind := "Role"
+				roleName := ""
+				if item.RoleRef.Kind == "ClusterRole" {
+					roleKind = "ClusterRole"
+				}
+				roleName = item.RoleRef.Name
+
+				subjects := make([]gin.H, 0, len(item.Subjects))
+				for _, subject := range item.Subjects {
+					subjects = append(subjects, gin.H{
+						"kind":      subject.Kind,
+						"name":      subject.Name,
+						"namespace": subject.Namespace,
+					})
+				}
+
+				result = append(result, gin.H{
+					"name":      item.Name,
+					"namespace": item.Namespace,
+					"roleKind":  roleKind,
+					"roleName":  roleName,
+					"subjects":  subjects,
+					"age":       calculateAge(item.CreationTimestamp.Time),
+					"labels":    item.Labels,
+				})
+			}
+		}
+	} else {
+		// 获取指定命名空间的 RoleBindings
+		list, err := clientset.RbacV1().RoleBindings(namespace).List(c.Request.Context(), metav1.ListOptions{})
+		if err != nil {
+			HandleK8sError(c, err, "RoleBinding")
+			return
+		}
+		for _, item := range list.Items {
+			roleKind := "Role"
+			roleName := ""
+			if item.RoleRef.Kind == "ClusterRole" {
+				roleKind = "ClusterRole"
+			}
+			roleName = item.RoleRef.Name
+
+			subjects := make([]gin.H, 0, len(item.Subjects))
+			for _, subject := range item.Subjects {
+				subjects = append(subjects, gin.H{
+					"kind":      subject.Kind,
+					"name":      subject.Name,
+					"namespace": subject.Namespace,
+				})
+			}
+
+			result = append(result, gin.H{
+				"name":      item.Name,
+				"namespace": item.Namespace,
+				"roleKind":  roleKind,
+				"roleName":  roleName,
+				"subjects":  subjects,
+				"age":       calculateAge(item.CreationTimestamp.Time),
+				"labels":    item.Labels,
+			})
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -11532,10 +14005,23 @@ func (h *ResourceHandler) ListClusterRoleBindings(c *gin.Context) {
 
 	result := make([]gin.H, 0, len(list.Items))
 	for _, item := range list.Items {
+		roleName := item.RoleRef.Name
+
+		subjects := make([]gin.H, 0, len(item.Subjects))
+		for _, subject := range item.Subjects {
+			subjects = append(subjects, gin.H{
+				"kind":      subject.Kind,
+				"name":      subject.Name,
+				"namespace": subject.Namespace,
+			})
+		}
+
 		result = append(result, gin.H{
-			"name":   item.Name,
-			"age":    calculateAge(item.CreationTimestamp.Time),
-			"labels": item.Labels,
+			"name":     item.Name,
+			"roleName": roleName,
+			"subjects": subjects,
+			"age":      calculateAge(item.CreationTimestamp.Time),
+			"labels":   item.Labels,
 		})
 	}
 
@@ -11582,5 +14068,127 @@ func (h *ResourceHandler) ListPodSecurityPolicies(c *gin.Context) {
 		"code":    0,
 		"message": "PodSecurityPolicy API已废弃，Kubernetes 1.25+不再支持",
 		"data":    []gin.H{},
+	})
+}
+
+// ==================== ConfigMap 创建 ====================
+
+// CreateConfigMapFromYAML 从 YAML/JSON 创建 ConfigMap
+func (h *ResourceHandler) CreateConfigMapFromYAML(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 直接绑定 JSON 对象
+	var configMap v1.ConfigMap
+	if err := c.ShouldBindJSON(&configMap); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析请求失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保命名空间正确
+	configMap.Namespace = namespace
+
+	_, err = clientset.CoreV1().ConfigMaps(namespace).Create(c.Request.Context(), &configMap, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "ConfigMap")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
+	})
+}
+
+// ==================== Secret 创建 ====================
+
+// CreateSecretFromYAML 从 YAML/JSON 创建 Secret
+func (h *ResourceHandler) CreateSecretFromYAML(c *gin.Context) {
+	clusterIDStr := c.Query("clusterId")
+	clusterID, err := strconv.ParseUint(clusterIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的集群ID",
+		})
+		return
+	}
+
+	namespace := c.Param("namespace")
+
+	currentUserID, ok := GetCurrentUserID(c)
+	if !ok {
+		return
+	}
+
+	clientset, err := h.clusterService.GetClientsetForUser(c.Request.Context(), uint(clusterID), currentUserID)
+	if err != nil {
+		if h.handleGetClientsetError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取集群客户端失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 直接绑定 JSON 对象
+	var secret v1.Secret
+	if err := c.ShouldBindJSON(&secret); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "解析请求失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 确保命名空间正确
+	secret.Namespace = namespace
+
+	_, err = clientset.CoreV1().Secrets(namespace).Create(c.Request.Context(), &secret, metav1.CreateOptions{})
+	if err != nil {
+		HandleK8sError(c, err, "Secret")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "创建成功",
+		"data": gin.H{
+			"needRefresh": true,
+		},
 	})
 }
