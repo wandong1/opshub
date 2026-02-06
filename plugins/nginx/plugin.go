@@ -28,6 +28,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/ydcloud-dy/opshub/internal/plugin"
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 	"github.com/ydcloud-dy/opshub/plugins/nginx/model"
 	"github.com/ydcloud-dy/opshub/plugins/nginx/server"
 )
@@ -107,7 +108,32 @@ func (p *Plugin) Enable(db *gorm.DB) error {
 	// 启动日志采集调度器
 	go p.startLogCollectorScheduler()
 
+	// 初始化插件按钮权限
+	p.initPermissions(db)
+
 	return nil
+}
+
+// initPermissions 初始化Nginx插件按钮权限
+func (p *Plugin) initPermissions(db *gorm.DB) {
+	utils.EnsureMenu(db, "nginx", "Nginx统计", 1, "", "/nginx", "", "Odometer", 36)
+	utils.EnsureMenu(db, "nginx-config", "功能配置", 2, "nginx", "/nginx/config", "nginx/Config", "Setting", 1)
+
+	utils.EnsureMenuPermissions(db, "nginx-config", []utils.MenuPermission{
+		{Code: "nginx-sources:list", Name: "查看数据源", ApiMethod: "GET", ApiPath: "/api/v1/plugins/nginx/sources", Sort: 1},
+		{Code: "nginx-sources:create", Name: "创建数据源", ApiMethod: "POST", ApiPath: "/api/v1/plugins/nginx/sources", Sort: 2},
+		{Code: "nginx-sources:update", Name: "编辑数据源", ApiMethod: "PUT", ApiPath: "/api/v1/plugins/nginx/sources/:id", Sort: 3},
+		{Code: "nginx-sources:delete", Name: "删除数据源", ApiMethod: "DELETE", ApiPath: "/api/v1/plugins/nginx/sources/:id", Sort: 4},
+	})
+
+	utils.EnsureMenuPermissions(db, "nginx", []utils.MenuPermission{
+		{Code: "nginx:overview", Name: "查看概况", ApiMethod: "GET", ApiPath: "/api/v1/plugins/nginx/overview", Sort: 5},
+		{Code: "nginx:logs", Name: "查看访问日志", ApiMethod: "GET", ApiPath: "/api/v1/plugins/nginx/access-logs", Sort: 6},
+		{Code: "nginx:stats", Name: "查看统计数据", ApiMethod: "GET", ApiPath: "/api/v1/plugins/nginx/stats/timeseries", Sort: 7},
+		{Code: "nginx:collect", Name: "手动采集日志", ApiMethod: "POST", ApiPath: "/api/v1/plugins/nginx/collect", Sort: 8},
+	})
+
+	utils.AssignMenusToAdminRole(db)
 }
 
 // Disable 禁用插件

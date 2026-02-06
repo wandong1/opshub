@@ -41,6 +41,7 @@ import (
 	"github.com/ydcloud-dy/opshub/internal/service"
 	rbacservice "github.com/ydcloud-dy/opshub/internal/service/rbac"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 	"github.com/ydcloud-dy/opshub/plugins/kubernetes/data/models"
 	k8smodel "github.com/ydcloud-dy/opshub/plugins/kubernetes/model"
 	"go.uber.org/zap"
@@ -155,8 +156,11 @@ func runServer() (*conf.Config, error) {
 		return nil, fmt.Errorf("初始化默认数据失败: %w", err)
 	}
 
+	// 初始化按钮级权限数据（幂等，每次启动执行）
+	initButtonPermissions(data.DB())
+
 	// 初始化HTTP服务器
-	httpServer := server.NewHTTPServer(cfg, svc, data.DB())
+	httpServer := server.NewHTTPServer(cfg, svc, data.DB(), redis.Get())
 	globalHTTPServer = httpServer // 保存到全局变量
 
 	// 启动服务器
@@ -182,6 +186,7 @@ func autoMigrate(db *gorm.DB) error {
 		&rbacmodel.SysMenu{},
 		&rbacmodel.SysUserRole{},
 		&rbacmodel.SysRoleMenu{},
+		&rbacmodel.SysMenuAPI{},
 		&rbacmodel.SysPosition{},
 		&rbacmodel.SysUserPosition{},
 		&rbacmodel.SysRoleAssetPermission{},
@@ -357,6 +362,183 @@ func initDefaultData(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+// initButtonPermissions 初始化按钮级权限数据（幂等）
+func initButtonPermissions(db *gorm.DB) {
+	appLogger.Info("检查并初始化按钮级权限数据...")
+
+	// 用户管理
+	utils.EnsureMenuPermissions(db, "users", []utils.MenuPermission{
+		{Code: "users:list", Name: "查看用户列表", ApiMethod: "GET", ApiPath: "/api/v1/users", Sort: 1},
+		{Code: "users:detail", Name: "查看用户详情", ApiMethod: "GET", ApiPath: "/api/v1/users/:id", Sort: 2},
+		{Code: "users:create", Name: "创建用户", ApiMethod: "POST", ApiPath: "/api/v1/users", Sort: 3},
+		{Code: "users:update", Name: "编辑用户", ApiMethod: "PUT", ApiPath: "/api/v1/users/:id", Sort: 4},
+		{Code: "users:delete", Name: "删除用户", ApiMethod: "DELETE", ApiPath: "/api/v1/users/:id", Sort: 5},
+		{Code: "users:assign-roles", Name: "分配角色", ApiMethod: "POST", ApiPath: "/api/v1/users/:id/roles", Sort: 6},
+		{Code: "users:assign-positions", Name: "分配岗位", ApiMethod: "POST", ApiPath: "/api/v1/users/:id/positions", Sort: 7},
+		{Code: "users:reset-pwd", Name: "重置密码", ApiMethod: "PUT", ApiPath: "/api/v1/users/:id/reset-password", Sort: 8},
+		{Code: "users:unlock", Name: "解锁用户", ApiMethod: "POST", ApiPath: "/api/v1/users/:id/unlock", Sort: 9},
+	})
+
+	// 角色管理
+	utils.EnsureMenuPermissions(db, "roles", []utils.MenuPermission{
+		{Code: "roles:list", Name: "查看角色列表", ApiMethod: "GET", ApiPath: "/api/v1/roles", Sort: 1},
+		{Code: "roles:all", Name: "获取全部角色", ApiMethod: "GET", ApiPath: "/api/v1/roles/all", Sort: 2},
+		{Code: "roles:detail", Name: "查看角色详情", ApiMethod: "GET", ApiPath: "/api/v1/roles/:id", Sort: 3},
+		{Code: "roles:create", Name: "创建角色", ApiMethod: "POST", ApiPath: "/api/v1/roles", Sort: 4},
+		{Code: "roles:update", Name: "编辑角色", ApiMethod: "PUT", ApiPath: "/api/v1/roles/:id", Sort: 5},
+		{Code: "roles:delete", Name: "删除角色", ApiMethod: "DELETE", ApiPath: "/api/v1/roles/:id", Sort: 6},
+		{Code: "roles:assign-menus", Name: "分配菜单权限", ApiMethod: "POST", ApiPath: "/api/v1/roles/:id/menus", Sort: 7},
+	})
+
+	// 菜单管理
+	utils.EnsureMenuPermissions(db, "menus", []utils.MenuPermission{
+		{Code: "menus:tree", Name: "查看菜单树", ApiMethod: "GET", ApiPath: "/api/v1/menus/tree", Sort: 1},
+		{Code: "menus:detail", Name: "查看菜单详情", ApiMethod: "GET", ApiPath: "/api/v1/menus/:id", Sort: 2},
+		{Code: "menus:create", Name: "创建菜单", ApiMethod: "POST", ApiPath: "/api/v1/menus", Sort: 3},
+		{Code: "menus:update", Name: "编辑菜单", ApiMethod: "PUT", ApiPath: "/api/v1/menus/:id", Sort: 4},
+		{Code: "menus:delete", Name: "删除菜单", ApiMethod: "DELETE", ApiPath: "/api/v1/menus/:id", Sort: 5},
+	})
+
+	// 部门管理
+	utils.EnsureMenuPermissions(db, "departments", []utils.MenuPermission{
+		{Code: "depts:tree", Name: "查看部门树", ApiMethod: "GET", ApiPath: "/api/v1/departments/tree", Sort: 1},
+		{Code: "depts:parent-options", Name: "获取上级部门选项", ApiMethod: "GET", ApiPath: "/api/v1/departments/parent-options", Sort: 2},
+		{Code: "depts:detail", Name: "查看部门详情", ApiMethod: "GET", ApiPath: "/api/v1/departments/:id", Sort: 3},
+		{Code: "depts:create", Name: "创建部门", ApiMethod: "POST", ApiPath: "/api/v1/departments", Sort: 4},
+		{Code: "depts:update", Name: "编辑部门", ApiMethod: "PUT", ApiPath: "/api/v1/departments/:id", Sort: 5},
+		{Code: "depts:delete", Name: "删除部门", ApiMethod: "DELETE", ApiPath: "/api/v1/departments/:id", Sort: 6},
+	})
+
+	// 岗位管理
+	utils.EnsureMenuPermissions(db, "positions", []utils.MenuPermission{
+		{Code: "positions:list", Name: "查看岗位列表", ApiMethod: "GET", ApiPath: "/api/v1/positions", Sort: 1},
+		{Code: "positions:detail", Name: "查看岗位详情", ApiMethod: "GET", ApiPath: "/api/v1/positions/:id", Sort: 2},
+		{Code: "positions:create", Name: "创建岗位", ApiMethod: "POST", ApiPath: "/api/v1/positions", Sort: 3},
+		{Code: "positions:update", Name: "编辑岗位", ApiMethod: "PUT", ApiPath: "/api/v1/positions/:id", Sort: 4},
+		{Code: "positions:delete", Name: "删除岗位", ApiMethod: "DELETE", ApiPath: "/api/v1/positions/:id", Sort: 5},
+		{Code: "positions:users", Name: "查看岗位用户", ApiMethod: "GET", ApiPath: "/api/v1/positions/:id/users", Sort: 6},
+		{Code: "positions:assign-users", Name: "分配岗位用户", ApiMethod: "POST", ApiPath: "/api/v1/positions/:id/users", Sort: 7},
+		{Code: "positions:remove-user", Name: "移除岗位用户", ApiMethod: "DELETE", ApiPath: "/api/v1/positions/:id/users/:userId", Sort: 8},
+	})
+
+	// 系统配置
+	utils.EnsureMenuPermissions(db, "settings", []utils.MenuPermission{
+		{Code: "settings:view", Name: "查看系统配置", ApiMethod: "GET", ApiPath: "/api/v1/system/config", Sort: 1},
+		{Code: "settings:basic", Name: "保存基础配置", ApiMethod: "PUT", ApiPath: "/api/v1/system/config/basic", Sort: 2},
+		{Code: "settings:security", Name: "保存安全配置", ApiMethod: "PUT", ApiPath: "/api/v1/system/config/security", Sort: 3},
+		{Code: "settings:logo", Name: "上传系统Logo", ApiMethod: "POST", ApiPath: "/api/v1/system/config/logo", Sort: 4},
+	})
+
+	// 操作日志
+	utils.EnsureMenuPermissions(db, "operation-logs", []utils.MenuPermission{
+		{Code: "op-logs:list", Name: "查看操作日志", ApiMethod: "GET", ApiPath: "/api/v1/audit/operation-logs", Sort: 1},
+		{Code: "op-logs:detail", Name: "查看日志详情", ApiMethod: "GET", ApiPath: "/api/v1/audit/operation-logs/:id", Sort: 2},
+		{Code: "op-logs:delete", Name: "删除操作日志", ApiMethod: "DELETE", ApiPath: "/api/v1/audit/operation-logs/:id", Sort: 3},
+		{Code: "op-logs:batch-delete", Name: "批量删除操作日志", ApiMethod: "POST", ApiPath: "/api/v1/audit/operation-logs/batch-delete", Sort: 4},
+	})
+
+	// 登录日志
+	utils.EnsureMenuPermissions(db, "login-logs", []utils.MenuPermission{
+		{Code: "login-logs:list", Name: "查看登录日志", ApiMethod: "GET", ApiPath: "/api/v1/audit/login-logs", Sort: 1},
+		{Code: "login-logs:detail", Name: "查看日志详情", ApiMethod: "GET", ApiPath: "/api/v1/audit/login-logs/:id", Sort: 2},
+		{Code: "login-logs:delete", Name: "删除登录日志", ApiMethod: "DELETE", ApiPath: "/api/v1/audit/login-logs/:id", Sort: 3},
+		{Code: "login-logs:batch-delete", Name: "批量删除登录日志", ApiMethod: "POST", ApiPath: "/api/v1/audit/login-logs/batch-delete", Sort: 4},
+	})
+
+	// === 资产管理模块（确保父菜单存在） ===
+	utils.EnsureMenu(db, "assets", "资产管理", 1, "", "/assets", "", "FolderOpened", 30)
+	utils.EnsureMenu(db, "asset-groups", "资产分组", 2, "assets", "/assets/groups", "asset/Groups", "Connection", 1)
+	utils.EnsureMenu(db, "hosts", "主机管理", 2, "assets", "/assets/hosts", "asset/Hosts", "Monitor", 2)
+	utils.EnsureMenu(db, "credentials", "凭证管理", 2, "assets", "/assets/credentials", "asset/Credentials", "Lock", 3)
+	utils.EnsureMenu(db, "terminal-sessions", "终端审计", 2, "assets", "/assets/terminal-sessions", "asset/TerminalSessions", "View", 4)
+
+	// 资产分组
+	utils.EnsureMenuPermissions(db, "asset-groups", []utils.MenuPermission{
+		{Code: "asset-groups:tree", Name: "查看资产分组", ApiMethod: "GET", ApiPath: "/api/v1/asset-groups/tree", Sort: 1},
+		{Code: "asset-groups:create", Name: "创建资产分组", ApiMethod: "POST", ApiPath: "/api/v1/asset-groups", Sort: 2},
+		{Code: "asset-groups:update", Name: "编辑资产分组", ApiMethod: "PUT", ApiPath: "/api/v1/asset-groups/:id", Sort: 3},
+		{Code: "asset-groups:delete", Name: "删除资产分组", ApiMethod: "DELETE", ApiPath: "/api/v1/asset-groups/:id", Sort: 4},
+	})
+
+	// 主机管理
+	utils.EnsureMenuPermissions(db, "hosts", []utils.MenuPermission{
+		{Code: "hosts:list", Name: "查看主机列表", ApiMethod: "GET", ApiPath: "/api/v1/hosts", Sort: 1},
+		{Code: "hosts:detail", Name: "查看主机详情", ApiMethod: "GET", ApiPath: "/api/v1/hosts/:id", Sort: 2},
+		{Code: "hosts:create", Name: "创建主机", ApiMethod: "POST", ApiPath: "/api/v1/hosts", Sort: 3},
+		{Code: "hosts:update", Name: "编辑主机", ApiMethod: "PUT", ApiPath: "/api/v1/hosts/:id", Sort: 4},
+		{Code: "hosts:delete", Name: "删除主机", ApiMethod: "DELETE", ApiPath: "/api/v1/hosts/:id", Sort: 5},
+		{Code: "hosts:batch-delete", Name: "批量删除主机", ApiMethod: "POST", ApiPath: "/api/v1/hosts/batch-delete", Sort: 6},
+		{Code: "hosts:test", Name: "测试主机连接", ApiMethod: "POST", ApiPath: "/api/v1/hosts/:id/test", Sort: 7},
+		{Code: "hosts:collect", Name: "采集主机信息", ApiMethod: "POST", ApiPath: "/api/v1/hosts/:id/collect", Sort: 8},
+		{Code: "hosts:batch-collect", Name: "批量采集信息", ApiMethod: "POST", ApiPath: "/api/v1/hosts/batch-collect", Sort: 9},
+		{Code: "hosts:import", Name: "导入主机", ApiMethod: "POST", ApiPath: "/api/v1/hosts/import", Sort: 10},
+		{Code: "hosts:template", Name: "下载导入模板", ApiMethod: "GET", ApiPath: "/api/v1/hosts/template/download", Sort: 11},
+		{Code: "hosts:files", Name: "文件管理", ApiMethod: "GET", ApiPath: "/api/v1/hosts/:id/files", Sort: 12},
+		{Code: "hosts:file-upload", Name: "上传文件", ApiMethod: "POST", ApiPath: "/api/v1/hosts/:id/files/upload", Sort: 13},
+		{Code: "hosts:file-download", Name: "下载文件", ApiMethod: "GET", ApiPath: "/api/v1/hosts/:id/files/download", Sort: 14},
+		{Code: "hosts:file-delete", Name: "删除文件", ApiMethod: "DELETE", ApiPath: "/api/v1/hosts/:id/files", Sort: 15},
+	})
+
+	// 凭证管理
+	utils.EnsureMenuPermissions(db, "credentials", []utils.MenuPermission{
+		{Code: "credentials:list", Name: "查看凭证列表", ApiMethod: "GET", ApiPath: "/api/v1/credentials", Sort: 1},
+		{Code: "credentials:create", Name: "创建凭证", ApiMethod: "POST", ApiPath: "/api/v1/credentials", Sort: 2},
+		{Code: "credentials:update", Name: "编辑凭证", ApiMethod: "PUT", ApiPath: "/api/v1/credentials/:id", Sort: 3},
+		{Code: "credentials:delete", Name: "删除凭证", ApiMethod: "DELETE", ApiPath: "/api/v1/credentials/:id", Sort: 4},
+	})
+
+	// 终端
+	utils.EnsureMenuPermissions(db, "terminal-sessions", []utils.MenuPermission{
+		{Code: "terminal:connect", Name: "SSH终端连接", ApiMethod: "GET", ApiPath: "/api/v1/asset/terminal/:id", Sort: 1},
+		{Code: "terminal-sessions:list", Name: "查看终端会话", ApiMethod: "GET", ApiPath: "/api/v1/terminal-sessions", Sort: 2},
+		{Code: "terminal-sessions:play", Name: "回放终端会话", ApiMethod: "GET", ApiPath: "/api/v1/terminal-sessions/:id/play", Sort: 3},
+		{Code: "terminal-sessions:delete", Name: "删除终端会话", ApiMethod: "DELETE", ApiPath: "/api/v1/terminal-sessions/:id", Sort: 4},
+	})
+
+	// === 身份认证模块 ===
+	utils.EnsureMenu(db, "identity", "身份认证", 1, "", "/identity", "", "Lock", 40)
+	utils.EnsureMenu(db, "identity-sources", "身份源管理", 2, "identity", "/identity/sources", "identity/Sources", "Connection", 1)
+	utils.EnsureMenu(db, "identity-apps", "应用管理", 2, "identity", "/identity/apps", "identity/Apps", "Platform", 2)
+	utils.EnsureMenu(db, "identity-logs", "认证日志", 2, "identity", "/identity/logs", "identity/Logs", "Document", 3)
+
+	// 身份源
+	utils.EnsureMenuPermissions(db, "identity-sources", []utils.MenuPermission{
+		{Code: "identity-sources:list", Name: "查看身份源", ApiMethod: "GET", ApiPath: "/api/v1/identity/sources", Sort: 1},
+		{Code: "identity-sources:create", Name: "创建身份源", ApiMethod: "POST", ApiPath: "/api/v1/identity/sources", Sort: 2},
+		{Code: "identity-sources:update", Name: "编辑身份源", ApiMethod: "PUT", ApiPath: "/api/v1/identity/sources/:id", Sort: 3},
+		{Code: "identity-sources:delete", Name: "删除身份源", ApiMethod: "DELETE", ApiPath: "/api/v1/identity/sources/:id", Sort: 4},
+	})
+
+	// 应用管理
+	utils.EnsureMenuPermissions(db, "identity-apps", []utils.MenuPermission{
+		{Code: "identity-apps:list", Name: "查看应用列表", ApiMethod: "GET", ApiPath: "/api/v1/identity/apps", Sort: 1},
+		{Code: "identity-apps:create", Name: "创建应用", ApiMethod: "POST", ApiPath: "/api/v1/identity/apps", Sort: 2},
+		{Code: "identity-apps:update", Name: "编辑应用", ApiMethod: "PUT", ApiPath: "/api/v1/identity/apps/:id", Sort: 3},
+		{Code: "identity-apps:delete", Name: "删除应用", ApiMethod: "DELETE", ApiPath: "/api/v1/identity/apps/:id", Sort: 4},
+	})
+
+	// 认证日志
+	utils.EnsureMenuPermissions(db, "identity-logs", []utils.MenuPermission{
+		{Code: "identity-logs:list", Name: "查看认证日志", ApiMethod: "GET", ApiPath: "/api/v1/identity/logs", Sort: 1},
+		{Code: "identity-logs:stats", Name: "查看认证统计", ApiMethod: "GET", ApiPath: "/api/v1/identity/logs/stats", Sort: 2},
+	})
+
+	// === 资产权限管理 ===
+	utils.EnsureMenu(db, "asset-perms", "资产权限", 2, "assets", "/assets/permissions", "asset/Permissions", "Key", 5)
+
+	utils.EnsureMenuPermissions(db, "asset-perms", []utils.MenuPermission{
+		{Code: "asset-perms:list", Name: "查看资产权限", ApiMethod: "GET", ApiPath: "/api/v1/asset-permissions", Sort: 1},
+		{Code: "asset-perms:create", Name: "创建资产权限", ApiMethod: "POST", ApiPath: "/api/v1/asset-permissions", Sort: 2},
+		{Code: "asset-perms:update", Name: "编辑资产权限", ApiMethod: "PUT", ApiPath: "/api/v1/asset-permissions/:id", Sort: 3},
+		{Code: "asset-perms:delete", Name: "删除资产权限", ApiMethod: "DELETE", ApiPath: "/api/v1/asset-permissions/:id", Sort: 4},
+	})
+
+	// 将所有菜单分配给admin角色
+	utils.AssignMenusToAdminRole(db)
+
+	appLogger.Info("按钮级权限数据初始化完成")
 }
 
 func stopServer(ctx context.Context, cfg *conf.Config) error {

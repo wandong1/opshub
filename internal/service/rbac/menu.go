@@ -20,17 +20,20 @@
 package rbac
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ydcloud-dy/opshub/internal/biz/rbac"
+	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 )
 
 type MenuService struct {
-	menuUseCase *rbac.MenuUseCase
-	roleUseCase *rbac.RoleUseCase
+	menuUseCase     *rbac.MenuUseCase
+	roleUseCase     *rbac.RoleUseCase
+	permissionCache *rbacdata.PermissionCache
 }
 
 func NewMenuService(menuUseCase *rbac.MenuUseCase, roleUseCase *rbac.RoleUseCase) *MenuService {
@@ -38,6 +41,11 @@ func NewMenuService(menuUseCase *rbac.MenuUseCase, roleUseCase *rbac.RoleUseCase
 		menuUseCase: menuUseCase,
 		roleUseCase: roleUseCase,
 	}
+}
+
+// SetPermissionCache 设置权限缓存
+func (s *MenuService) SetPermissionCache(cache *rbacdata.PermissionCache) {
+	s.permissionCache = cache
 }
 
 // CreateMenu 创建菜单
@@ -59,6 +67,10 @@ func (s *MenuService) CreateMenu(c *gin.Context) {
 		return
 	}
 
+	// 暂存 APIs，创建菜单时不含关联
+	apis := req.APIs
+	req.APIs = nil
+
 	if err := s.menuUseCase.Create(c.Request.Context(), &req); err != nil {
 		// 检查是否是重复键错误
 		if containsDuplicateKeyError(err.Error()) {
@@ -67,6 +79,20 @@ func (s *MenuService) CreateMenu(c *gin.Context) {
 		}
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败: "+err.Error())
 		return
+	}
+
+	// 保存 API 绑定
+	if req.Type == 3 && len(apis) > 0 {
+		if err := s.menuUseCase.SaveMenuAPIs(c.Request.Context(), req.ID, apis); err != nil {
+			response.ErrorCode(c, http.StatusInternalServerError, "保存API绑定失败: "+err.Error())
+			return
+		}
+	}
+
+	// 清除权限缓存
+	if s.permissionCache != nil {
+		s.permissionCache.ClearAllUserPermissions(context.Background())
+		s.permissionCache.ClearRegisteredAPIs(context.Background())
 	}
 
 	response.Success(c, req)
@@ -117,6 +143,10 @@ func (s *MenuService) UpdateMenu(c *gin.Context) {
 		return
 	}
 
+	// 暂存 APIs
+	apis := req.APIs
+	req.APIs = nil
+
 	req.ID = uint(id)
 	if err := s.menuUseCase.Update(c.Request.Context(), &req); err != nil {
 		// 检查是否是重复键错误
@@ -126,6 +156,20 @@ func (s *MenuService) UpdateMenu(c *gin.Context) {
 		}
 		response.ErrorCode(c, http.StatusInternalServerError, "更新失败: "+err.Error())
 		return
+	}
+
+	// 保存 API 绑定（按钮类型时）
+	if req.Type == 3 {
+		if err := s.menuUseCase.SaveMenuAPIs(c.Request.Context(), req.ID, apis); err != nil {
+			response.ErrorCode(c, http.StatusInternalServerError, "保存API绑定失败: "+err.Error())
+			return
+		}
+	}
+
+	// 清除所有用户权限缓存和已注册API缓存
+	if s.permissionCache != nil {
+		s.permissionCache.ClearAllUserPermissions(context.Background())
+		s.permissionCache.ClearRegisteredAPIs(context.Background())
 	}
 
 	response.Success(c, req)
@@ -153,6 +197,12 @@ func (s *MenuService) DeleteMenu(c *gin.Context) {
 	if err := s.menuUseCase.Delete(c.Request.Context(), uint(id)); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "删除失败: "+err.Error())
 		return
+	}
+
+	// 清除所有用户权限缓存和已注册API缓存
+	if s.permissionCache != nil {
+		s.permissionCache.ClearAllUserPermissions(context.Background())
+		s.permissionCache.ClearRegisteredAPIs(context.Background())
 	}
 
 	response.SuccessWithMessage(c, "删除成功", nil)

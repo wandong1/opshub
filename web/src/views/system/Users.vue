@@ -3,7 +3,7 @@
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
       <h2 class="page-title">用户管理</h2>
-      <el-button class="black-button" @click="handleAdd">新增用户</el-button>
+      <el-button v-permission="'users:create'" class="black-button" @click="handleAdd">新增用户</el-button>
     </div>
 
     <div class="content-wrapper">
@@ -85,16 +85,16 @@
           <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
               <el-tooltip v-if="row.isLocked" content="解锁" placement="top">
-                <el-button type="warning" size="small" :icon="Unlock" circle @click="handleUnlock(row)" />
+                <el-button v-permission="'users:unlock'" type="warning" size="small" :icon="Unlock" circle @click="handleUnlock(row)" />
               </el-tooltip>
               <el-tooltip content="编辑" placement="top">
-                <el-button type="primary" size="small" :icon="Edit" circle @click="handleEdit(row)" />
+                <el-button v-permission="'users:update'" type="primary" size="small" :icon="Edit" circle @click="handleEdit(row)" />
               </el-tooltip>
               <el-tooltip content="重置密码" placement="top">
-                <el-button type="info" size="small" :icon="Key" circle @click="handleResetPassword(row)" />
+                <el-button v-permission="'users:reset-pwd'" type="info" size="small" :icon="Key" circle @click="handleResetPassword(row)" />
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button type="danger" size="small" :icon="Delete" circle @click="handleDelete(row)" />
+                <el-button v-permission="'users:delete'" type="danger" size="small" :icon="Delete" circle @click="handleDelete(row)" />
               </el-tooltip>
             </template>
           </el-table-column>

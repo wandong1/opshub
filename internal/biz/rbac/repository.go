@@ -53,6 +53,12 @@ type DepartmentRepo interface {
 	GetAll(ctx context.Context) ([]*SysDepartment, error)
 }
 
+// APIPermission API权限信息
+type APIPermission struct {
+	ApiPath   string
+	ApiMethod string
+}
+
 type MenuRepo interface {
 	Create(ctx context.Context, menu *SysMenu) error
 	Update(ctx context.Context, menu *SysMenu) error
@@ -61,6 +67,11 @@ type MenuRepo interface {
 	GetTree(ctx context.Context) ([]*SysMenu, error)
 	GetByUserID(ctx context.Context, userID uint) ([]*SysMenu, error)
 	GetByRoleID(ctx context.Context, roleID uint) ([]*SysMenu, error)
+	GetAPIPermissionsByUserID(ctx context.Context, userID uint) ([]APIPermission, error)
+	GetAllRegisteredAPIs(ctx context.Context) ([]APIPermission, error)
+	GetMenuAPIs(ctx context.Context, menuID uint) ([]SysMenuAPI, error)
+	SaveMenuAPIs(ctx context.Context, menuID uint, apis []SysMenuAPI) error
+	DeleteMenuAPIs(ctx context.Context, menuID uint) error
 }
 
 type PositionRepo interface {

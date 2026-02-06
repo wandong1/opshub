@@ -20,12 +20,14 @@
 package rbac
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ydcloud-dy/opshub/internal/biz/rbac"
+	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 )
 
@@ -56,14 +58,22 @@ func GetUsername(c *gin.Context) string {
 
 // AuthMiddleware JWT认证中间件
 type AuthMiddleware struct {
-	authService        *AuthService
+	authService         *AuthService
 	assetPermissionRepo rbac.AssetPermissionRepo
+	menuRepo            rbac.MenuRepo
+	permissionCache     *rbacdata.PermissionCache
 }
 
 func NewAuthMiddleware(authService *AuthService) *AuthMiddleware {
 	return &AuthMiddleware{
 		authService: authService,
 	}
+}
+
+// SetPermissionDeps 设置权限检查依赖
+func (m *AuthMiddleware) SetPermissionDeps(menuRepo rbac.MenuRepo, cache *rbacdata.PermissionCache) {
+	m.menuRepo = menuRepo
+	m.permissionCache = cache
 }
 
 // SetAssetPermissionRepo 设置资产权限仓储
@@ -201,4 +211,117 @@ func (m *AuthMiddleware) RequireHostPermission(operation uint) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// 白名单路由，无需权限检查
+var permissionWhitelist = map[string]bool{
+	"/api/v1/profile":          true,
+	"/api/v1/profile/password": true,
+	"/api/v1/menus/user":       true,
+	"/api/v1/profile/avatar":   true,
+	"/api/v1/upload/avatar":    true,
+}
+
+// RequirePermission API权限检查中间件
+func (m *AuthMiddleware) RequirePermission() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 权限依赖未初始化时直接放行
+		if m.menuRepo == nil || m.permissionCache == nil {
+			c.Next()
+			return
+		}
+
+		// 白名单路由直接放行
+		fullPath := c.FullPath()
+		if fullPath == "" {
+			c.Next()
+			return
+		}
+		if permissionWhitelist[fullPath] {
+			c.Next()
+			return
+		}
+
+		userID := GetUserID(c)
+		if userID == 0 {
+			c.Next()
+			return
+		}
+
+		ctx := c.Request.Context()
+
+		// 检查是否admin（优先缓存）
+		isAdmin, found := m.permissionCache.GetUserIsAdmin(ctx, userID)
+		if !found {
+			isAdmin = m.checkIsAdmin(ctx, userID)
+			m.permissionCache.SetUserIsAdmin(ctx, userID, isAdmin)
+		}
+		if isAdmin {
+			c.Next()
+			return
+		}
+
+		method := c.Request.Method
+
+		// 获取已注册API列表（优先缓存）
+		registeredAPIs, err := m.permissionCache.GetRegisteredAPIs(ctx)
+		if err != nil || registeredAPIs == nil {
+			registeredAPIs, err = m.menuRepo.GetAllRegisteredAPIs(ctx)
+			if err != nil {
+				c.Next()
+				return
+			}
+			m.permissionCache.SetRegisteredAPIs(ctx, registeredAPIs)
+		}
+
+		// 检查该API是否在已注册列表中，未注册的API放行（渐进式迁移）
+		apiRegistered := false
+		for _, api := range registeredAPIs {
+			if api.ApiPath == fullPath && api.ApiMethod == method {
+				apiRegistered = true
+				break
+			}
+		}
+		if !apiRegistered {
+			c.Next()
+			return
+		}
+
+		// 获取用户权限列表（优先缓存）
+		userPerms, err := m.permissionCache.GetUserPermissions(ctx, userID)
+		if err != nil || userPerms == nil {
+			userPerms, err = m.menuRepo.GetAPIPermissionsByUserID(ctx, userID)
+			if err != nil {
+				response.ErrorCode(c, http.StatusInternalServerError, "权限检查失败")
+				c.Abort()
+				return
+			}
+			m.permissionCache.SetUserPermissions(ctx, userID, userPerms)
+		}
+
+		// 匹配权限
+		for _, perm := range userPerms {
+			if perm.ApiPath == fullPath && perm.ApiMethod == method {
+				c.Next()
+				return
+			}
+		}
+
+		response.ErrorCode(c, http.StatusForbidden, "权限不足：无此接口访问权限")
+		c.Abort()
+	}
+}
+
+// checkIsAdmin 检查用户是否拥有admin角色
+func (m *AuthMiddleware) checkIsAdmin(ctx context.Context, userID uint) bool {
+	roles, err := m.authService.roleUseCase.GetByUserID(ctx, userID)
+	if err != nil {
+		return false
+	}
+	for _, role := range roles {
+		if role.Code == "admin" {
+			return true
+		}
+	}
+	return false
 }

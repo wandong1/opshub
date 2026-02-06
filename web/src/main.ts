@@ -7,6 +7,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router, { registerPluginRoutes } from './router'
 import { pluginManager } from './plugins/manager'
+import { vPermission } from '@/directives/permission'
 
 // 导入插件（插件会自动注册到 pluginManager）
 import '@/plugins/kubernetes'
@@ -25,6 +26,9 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 }
 
 app.use(pinia)
+
+// 注册全局指令
+app.directive('permission', vPermission)
 
 // 自动安装所有已注册的插件
 async function installPlugins() {

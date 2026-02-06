@@ -140,6 +140,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getUserMenu } from '@/api/menu'
 import { pluginManager } from '@/plugins/manager'
+import { usePermissionStore } from '@/stores/permission'
 
 // Header 图片路径（来自 public 文件夹）
 const headerImage = '/header.png'
@@ -486,6 +487,10 @@ const loadMenu = async () => {
 
     // 1. 获取系统菜单（后端已根据用户权限过滤）
     const systemMenus = await getUserMenu() || []
+
+    // 加载按钮权限标识到 store
+    const permissionStore = usePermissionStore()
+    permissionStore.loadPermissions(systemMenus)
 
     // 2. 从系统菜单中提取所有授权的路径（用于插件菜单权限过滤）
     const pluginPathPrefixes = ['/kubernetes', '/monitor', '/task']

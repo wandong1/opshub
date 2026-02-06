@@ -18,6 +18,7 @@
         </el-button>
         <el-dropdown
           v-if="userHasEditPermission"
+          v-permission="'hosts:import'"
           @command="handleImportCommand"
           class="import-dropdown"
         >
@@ -163,6 +164,7 @@
           <div class="filter-actions">
             <el-button
               v-if="selectedHosts.length > 0"
+              v-permission="'hosts:batch-delete'"
               type="danger"
               plain
               @click="handleBatchDelete"
@@ -350,6 +352,7 @@
                   <el-tooltip content="编辑" placement="top">
                     <el-button
                       v-if="hasHostPermission(row.id, PERMISSION.EDIT)"
+                      v-permission="'hosts:update'"
                       link
                       class="action-btn action-edit"
                       @click="handleEditHost(row)"
@@ -360,6 +363,7 @@
                   <el-tooltip content="删除" placement="top">
                     <el-button
                       v-if="hasHostPermission(row.id, PERMISSION.DELETE)"
+                      v-permission="'hosts:delete'"
                       link
                       class="action-btn action-delete"
                       @click="handleDeleteHost(row)"

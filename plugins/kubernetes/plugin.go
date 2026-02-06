@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/ydcloud-dy/opshub/internal/plugin"
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 	"github.com/ydcloud-dy/opshub/plugins/kubernetes/model"
 	"github.com/ydcloud-dy/opshub/plugins/kubernetes/server"
 )
@@ -84,7 +85,37 @@ func (p *Plugin) Enable(db *gorm.DB) error {
 		}
 	}
 
+	// 初始化插件按钮权限
+	p.initPermissions(db)
+
 	return nil
+}
+
+// initPermissions 初始化Kubernetes插件按钮权限
+func (p *Plugin) initPermissions(db *gorm.DB) {
+	// 确保插件菜单存在
+	utils.EnsureMenu(db, "kubernetes", "容器管理", 1, "", "/kubernetes", "", "Platform", 20)
+	utils.EnsureMenu(db, "k8s-clusters", "集群管理", 2, "kubernetes", "/kubernetes/clusters", "kubernetes/Clusters", "Connection", 1)
+
+	// 集群管理
+	utils.EnsureMenuPermissions(db, "k8s-clusters", []utils.MenuPermission{
+		{Code: "clusters:list", Name: "查看集群列表", ApiMethod: "GET", ApiPath: "/api/v1/plugins/kubernetes/clusters", Sort: 1},
+		{Code: "clusters:create", Name: "创建集群", ApiMethod: "POST", ApiPath: "/api/v1/plugins/kubernetes/clusters", Sort: 2},
+		{Code: "clusters:update", Name: "编辑集群", ApiMethod: "PUT", ApiPath: "/api/v1/plugins/kubernetes/clusters/:id", Sort: 3},
+		{Code: "clusters:delete", Name: "删除集群", ApiMethod: "DELETE", ApiPath: "/api/v1/plugins/kubernetes/clusters/:id", Sort: 4},
+		{Code: "clusters:test", Name: "测试集群连接", ApiMethod: "POST", ApiPath: "/api/v1/plugins/kubernetes/clusters/:id/test", Sort: 5},
+		{Code: "clusters:sync", Name: "同步集群状态", ApiMethod: "POST", ApiPath: "/api/v1/plugins/kubernetes/clusters/:id/sync", Sort: 6},
+	})
+
+	// K8s资源查看
+	utils.EnsureMenuPermissions(db, "kubernetes", []utils.MenuPermission{
+		{Code: "k8s-resources:nodes", Name: "查看节点列表", ApiMethod: "GET", ApiPath: "/api/v1/plugins/kubernetes/resources/nodes", Sort: 10},
+		{Code: "k8s-resources:pods", Name: "查看Pod列表", ApiMethod: "GET", ApiPath: "/api/v1/plugins/kubernetes/resources/pods", Sort: 11},
+		{Code: "k8s-resources:deployments", Name: "查看Deployment列表", ApiMethod: "GET", ApiPath: "/api/v1/plugins/kubernetes/resources/deployments", Sort: 12},
+		{Code: "k8s-workloads:update", Name: "更新工作负载", ApiMethod: "POST", ApiPath: "/api/v1/plugins/kubernetes/workloads/update", Sort: 13},
+	})
+
+	utils.AssignMenusToAdminRole(db)
 }
 
 // Disable 禁用插件

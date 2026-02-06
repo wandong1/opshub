@@ -49,6 +49,8 @@ func (r *menuRepo) Update(ctx context.Context, menu *rbac.SysMenu) error {
 		"sort":       menu.Sort,
 		"visible":    menu.Visible,
 		"status":     menu.Status,
+		"api_path":   menu.ApiPath,
+		"api_method": menu.ApiMethod,
 	}).Error
 }
 
@@ -56,6 +58,11 @@ func (r *menuRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 删除角色菜单关联
 		if err := tx.Where("menu_id = ?", id).Delete(&rbac.SysRoleMenu{}).Error; err != nil {
+			return err
+		}
+
+		// 删除菜单API关联
+		if err := tx.Where("menu_id = ?", id).Delete(&rbac.SysMenuAPI{}).Error; err != nil {
 			return err
 		}
 
@@ -82,6 +89,7 @@ func (r *menuRepo) GetByID(ctx context.Context, id uint) (*rbac.SysMenu, error) 
 func (r *menuRepo) GetTree(ctx context.Context) ([]*rbac.SysMenu, error) {
 	var menus []*rbac.SysMenu
 	err := r.db.WithContext(ctx).
+		Preload("APIs").
 		Where("visible = ?", 1).
 		Order("sort ASC").
 		Find(&menus).Error
@@ -108,6 +116,7 @@ func (r *menuRepo) buildTree(menus []*rbac.SysMenu, parentID uint) []*rbac.SysMe
 func (r *menuRepo) GetByUserID(ctx context.Context, userID uint) ([]*rbac.SysMenu, error) {
 	var menus []*rbac.SysMenu
 	err := r.db.WithContext(ctx).
+		Preload("APIs").
 		Joins("JOIN sys_role_menu ON sys_role_menu.menu_id = sys_menu.id").
 		Joins("JOIN sys_user_role ON sys_user_role.role_id = sys_role_menu.role_id").
 		Where("sys_user_role.user_id = ? AND sys_menu.status = 1 AND sys_menu.visible = 1", userID).
@@ -129,4 +138,67 @@ func (r *menuRepo) GetByRoleID(ctx context.Context, roleID uint) ([]*rbac.SysMen
 		Where("sys_role_menu.role_id = ?", roleID).
 		Find(&menus).Error
 	return menus, err
+}
+
+func (r *menuRepo) GetAPIPermissionsByUserID(ctx context.Context, userID uint) ([]rbac.APIPermission, error) {
+	var perms []rbac.APIPermission
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT DISTINCT sma.api_path, sma.api_method
+		FROM sys_menu_api sma
+		JOIN sys_menu sm ON sm.id = sma.menu_id AND sm.deleted_at IS NULL
+		JOIN sys_role_menu srm ON srm.menu_id = sm.id
+		JOIN sys_user_role sur ON sur.role_id = srm.role_id
+		WHERE sur.user_id = ? AND sm.status = 1 AND sma.deleted_at IS NULL
+		UNION
+		SELECT DISTINCT sm.api_path, sm.api_method
+		FROM sys_menu sm
+		JOIN sys_role_menu srm ON srm.menu_id = sm.id
+		JOIN sys_user_role sur ON sur.role_id = srm.role_id
+		WHERE sur.user_id = ? AND sm.api_path != '' AND sm.api_method != '' AND sm.status = 1
+		AND sm.id NOT IN (SELECT DISTINCT menu_id FROM sys_menu_api WHERE deleted_at IS NULL)
+	`, userID, userID).Scan(&perms).Error
+	return perms, err
+}
+
+func (r *menuRepo) GetAllRegisteredAPIs(ctx context.Context) ([]rbac.APIPermission, error) {
+	var perms []rbac.APIPermission
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT DISTINCT sma.api_path, sma.api_method
+		FROM sys_menu_api sma
+		JOIN sys_menu sm ON sm.id = sma.menu_id AND sm.deleted_at IS NULL
+		WHERE sm.status = 1 AND sma.deleted_at IS NULL
+		UNION
+		SELECT DISTINCT api_path, api_method FROM sys_menu
+		WHERE api_path != '' AND api_method != '' AND status = 1 AND deleted_at IS NULL
+		AND id NOT IN (SELECT DISTINCT menu_id FROM sys_menu_api WHERE deleted_at IS NULL)
+	`).Scan(&perms).Error
+	return perms, err
+}
+
+func (r *menuRepo) GetMenuAPIs(ctx context.Context, menuID uint) ([]rbac.SysMenuAPI, error) {
+	var apis []rbac.SysMenuAPI
+	err := r.db.WithContext(ctx).Where("menu_id = ?", menuID).Find(&apis).Error
+	return apis, err
+}
+
+func (r *menuRepo) SaveMenuAPIs(ctx context.Context, menuID uint, apis []rbac.SysMenuAPI) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 先删除旧的
+		if err := tx.Where("menu_id = ?", menuID).Delete(&rbac.SysMenuAPI{}).Error; err != nil {
+			return err
+		}
+		// 批量插入新的
+		if len(apis) > 0 {
+			for i := range apis {
+				apis[i].MenuID = menuID
+				apis[i].ID = 0
+			}
+			return tx.Create(&apis).Error
+		}
+		return nil
+	})
+}
+
+func (r *menuRepo) DeleteMenuAPIs(ctx context.Context, menuID uint) error {
+	return r.db.WithContext(ctx).Where("menu_id = ?", menuID).Delete(&rbac.SysMenuAPI{}).Error
 }

@@ -129,7 +129,22 @@ type SysMenu struct {
 	Sort        int           `gorm:"type:int;default:0;comment:排序" json:"sort"`
 	Visible     int           `gorm:"type:tinyint;default:1;comment:是否显示 1:显示 0:隐藏" json:"visible"`
 	Status      int           `gorm:"type:tinyint;default:1;comment:状态 1:启用 0:禁用" json:"status"`
+	ApiPath     string        `gorm:"type:varchar(200);comment:后端API路径,支持:id参数占位" json:"apiPath"`
+	ApiMethod   string        `gorm:"type:varchar(10);comment:HTTP方法(GET/POST/PUT/DELETE)" json:"apiMethod"`
+	APIs        []SysMenuAPI  `gorm:"foreignKey:MenuID" json:"apis,omitempty"`
 	Roles       []SysRole     `gorm:"many2many:sys_role_menu" json:"-"`
+}
+
+// SysMenuAPI 菜单API关联表（一个按钮可绑定多个API）
+type SysMenuAPI struct {
+	gorm.Model
+	MenuID    uint   `gorm:"not null;index;comment:菜单ID" json:"menuId"`
+	ApiPath   string `gorm:"type:varchar(200);not null;comment:API路径" json:"apiPath"`
+	ApiMethod string `gorm:"type:varchar(10);not null;comment:HTTP方法" json:"apiMethod"`
+}
+
+func (SysMenuAPI) TableName() string {
+	return "sys_menu_api"
 }
 
 // SysUserRole 用户角色关联表
