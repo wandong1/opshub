@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
+        <el-button v-permission="'credentials:create'" class="black-button" @click="handleAdd">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           新建凭证
         </el-button>
@@ -115,12 +115,12 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip content="编辑" placement="top">
-                <el-button link class="action-btn action-edit" @click="handleEdit(row)">
+                <el-button v-permission="'credentials:update'" link class="action-btn action-edit" @click="handleEdit(row)">
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn action-delete" @click="handleDelete(row)" :disabled="row.hostCount > 0">
+                <el-button v-permission="'credentials:delete'" link class="action-btn action-delete" @click="handleDelete(row)" :disabled="row.hostCount > 0">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>

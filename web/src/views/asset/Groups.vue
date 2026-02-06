@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
+        <el-button v-permission="'asset-groups:create'" class="black-button" @click="handleAdd">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           新增分组
         </el-button>
@@ -110,12 +110,12 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip content="编辑" placement="top">
-                <el-button link class="action-btn action-edit" @click="handleEdit(row)">
+                <el-button v-permission="'asset-groups:update'" link class="action-btn action-edit" @click="handleEdit(row)">
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn action-delete" @click="handleDelete(row)">
+                <el-button v-permission="'asset-groups:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>

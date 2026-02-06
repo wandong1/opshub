@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
+        <el-button v-permission="'asset-perms:create'" class="black-button" @click="handleAdd">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           添加权限
         </el-button>
@@ -111,6 +111,7 @@
             <div class="action-buttons">
               <el-tooltip content="编辑" placement="top">
                 <el-button
+                  v-permission="'asset-perms:update'"
                   link
                   class="action-btn action-edit"
                   @click="handleEditClick(row)"
@@ -120,6 +121,7 @@
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
                 <el-button
+                  v-permission="'asset-perms:delete'"
                   link
                   class="action-btn action-delete"
                   @click="handleDeleteClick(row)"

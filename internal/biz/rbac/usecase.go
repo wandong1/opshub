@@ -283,6 +283,14 @@ func (uc *MenuUseCase) GetByRoleID(ctx context.Context, roleID uint) ([]*SysMenu
 	return uc.menuRepo.GetByRoleID(ctx, roleID)
 }
 
+func (uc *MenuUseCase) GetMenuAPIs(ctx context.Context, menuID uint) ([]SysMenuAPI, error) {
+	return uc.menuRepo.GetMenuAPIs(ctx, menuID)
+}
+
+func (uc *MenuUseCase) SaveMenuAPIs(ctx context.Context, menuID uint, apis []SysMenuAPI) error {
+	return uc.menuRepo.SaveMenuAPIs(ctx, menuID, apis)
+}
+
 type PositionUseCase struct {
 	positionRepo PositionRepo
 }

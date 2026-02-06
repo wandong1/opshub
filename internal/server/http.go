@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/ydcloud-dy/opshub/internal/conf"
@@ -50,16 +51,17 @@ import (
 
 // HTTPServer HTTP服务器
 type HTTPServer struct {
-	server    *http.Server
-	conf      *conf.Config
-	svc       *service.Service
-	db        *gorm.DB
-	pluginMgr *plugin.Manager
-	uploadSrv *UploadServer
+	server      *http.Server
+	conf        *conf.Config
+	svc         *service.Service
+	db          *gorm.DB
+	redisClient *redis.Client
+	pluginMgr   *plugin.Manager
+	uploadSrv   *UploadServer
 }
 
 // NewHTTPServer 创建HTTP服务器
-func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB) *HTTPServer {
+func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisClient *redis.Client) *HTTPServer {
 	// 设置Gin模式
 	gin.SetMode(conf.Server.Mode)
 
@@ -107,11 +109,12 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB) *HTTPSe
 
 	// 注册路由
 	s := &HTTPServer{
-		conf:      conf,
-		svc:       svc,
-		db:        db,
-		pluginMgr: pluginMgr,
-		uploadSrv: uploadSrv,
+		conf:        conf,
+		svc:         svc,
+		db:          db,
+		redisClient: redisClient,
+		pluginMgr:   pluginMgr,
+		uploadSrv:   uploadSrv,
 	}
 
 	// 先启用所有插件（在注册路由之前）
@@ -143,7 +146,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	router.Static("/uploads", "./web/public/uploads")
 
 	// 创建 RBAC 服务
-	userService, roleService, departmentService, menuService, positionService, captchaService, assetPermissionService, authMiddleware := rbac.NewRBACServices(s.db, jwtSecret)
+	userService, roleService, departmentService, menuService, positionService, captchaService, assetPermissionService, authMiddleware := rbac.NewRBACServices(s.db, jwtSecret, s.redisClient)
 
 	// RBAC 路由
 	rbacServer := rbac.NewHTTPServer(userService, roleService, departmentService, menuService, positionService, captchaService, assetPermissionService, authMiddleware)
@@ -178,6 +181,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	// API v1 - 需要认证的接口
 	v1 := router.Group("/api/v1")
 	v1.Use(authMiddleware.AuthRequired())
+	v1.Use(authMiddleware.RequirePermission())
 	{
 		// Audit 路由
 		auditHTTPServer := auditserver.NewHTTPService(operationLogService, loginLogService, dataLogService)
@@ -206,6 +210,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	// 插件路由
 	pluginsGroup := router.Group("/api/v1/plugins")
 	pluginsGroup.Use(authMiddleware.AuthRequired())
+	pluginsGroup.Use(authMiddleware.RequirePermission())
 	s.pluginMgr.RegisterAllRoutes(pluginsGroup)
 
 	// 插件管理接口

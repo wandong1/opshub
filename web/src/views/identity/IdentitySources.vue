@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
+        <el-button v-permission="'identity-sources:create'" class="black-button" @click="handleAdd">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           新增身份源
         </el-button>
@@ -84,8 +84,8 @@
           <el-table-column prop="createdAt" label="创建时间" width="170" />
           <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
-              <el-button class="black-button" size="small" @click="handleEdit(row)">编辑</el-button>
-              <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+              <el-button v-permission="'identity-sources:update'" class="black-button" size="small" @click="handleEdit(row)">编辑</el-button>
+              <el-button v-permission="'identity-sources:delete'" type="danger" size="small" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>

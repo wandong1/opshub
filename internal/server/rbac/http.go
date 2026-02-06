@@ -26,6 +26,7 @@ import (
 	auditdata "github.com/ydcloud-dy/opshub/internal/data/audit"
 	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	rbacService "github.com/ydcloud-dy/opshub/internal/service/rbac"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -79,6 +80,7 @@ func (s *HTTPServer) RegisterRoutes(r *gin.Engine) {
 	// 需要认证的路由
 	auth := r.Group("/api/v1")
 	auth.Use(s.authMiddleware.AuthRequired())
+	auth.Use(s.authMiddleware.RequirePermission())
 	{
 		// 用户相关
 		auth.GET("/profile", s.userService.GetProfile)
@@ -165,7 +167,7 @@ func (s *HTTPServer) RegisterRoutes(r *gin.Engine) {
 }
 
 // 依赖注入函数
-func NewRBACServices(db *gorm.DB, jwtSecret string) (
+func NewRBACServices(db *gorm.DB, jwtSecret string, redisClient *redis.Client) (
 	*rbacService.UserService,
 	*rbacService.RoleService,
 	*rbacService.DepartmentService,
@@ -213,6 +215,14 @@ func NewRBACServices(db *gorm.DB, jwtSecret string) (
 
 	// 设置登录日志用例到用户服务
 	userService.SetLoginLogUseCase(loginLogUseCase)
+
+	// 设置权限缓存
+	if redisClient != nil {
+		permCache := rbacdata.NewPermissionCache(redisClient)
+		authMiddleware.SetPermissionDeps(menuRepo, permCache)
+		roleService.SetPermissionCache(permCache)
+		menuService.SetPermissionCache(permCache)
+	}
 
 	return userService, roleService, departmentService, menuService, positionService, captchaService, assetPermissionService, authMiddleware
 }

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ydcloud-dy/opshub/internal/plugin"
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 	"github.com/ydcloud-dy/opshub/plugins/monitor/model"
 	"github.com/ydcloud-dy/opshub/plugins/monitor/server"
 )
@@ -92,7 +93,26 @@ func (p *Plugin) Enable(db *gorm.DB) error {
 	p.ctx, p.cancelCtx = context.WithCancel(context.Background())
 	go p.startMonitorScheduler()
 
+	// 初始化插件按钮权限
+	p.initPermissions(db)
+
 	return nil
+}
+
+// initPermissions 初始化Monitor插件按钮权限
+func (p *Plugin) initPermissions(db *gorm.DB) {
+	utils.EnsureMenu(db, "monitor", "监控中心", 1, "", "/monitor", "", "Monitor", 35)
+	utils.EnsureMenu(db, "monitor-domains", "域名监控", 2, "monitor", "/monitor/domains", "monitor/Domains", "Connection", 1)
+
+	utils.EnsureMenuPermissions(db, "monitor-domains", []utils.MenuPermission{
+		{Code: "domains:list", Name: "查看域名列表", ApiMethod: "GET", ApiPath: "/api/v1/plugins/monitor/domains", Sort: 1},
+		{Code: "domains:create", Name: "创建域名监控", ApiMethod: "POST", ApiPath: "/api/v1/plugins/monitor/domains", Sort: 2},
+		{Code: "domains:update", Name: "编辑域名监控", ApiMethod: "PUT", ApiPath: "/api/v1/plugins/monitor/domains/:id", Sort: 3},
+		{Code: "domains:delete", Name: "删除域名监控", ApiMethod: "DELETE", ApiPath: "/api/v1/plugins/monitor/domains/:id", Sort: 4},
+		{Code: "domains:check", Name: "立即检查", ApiMethod: "POST", ApiPath: "/api/v1/plugins/monitor/domains/:id/check", Sort: 5},
+	})
+
+	utils.AssignMenusToAdminRole(db)
 }
 
 // Disable 禁用插件

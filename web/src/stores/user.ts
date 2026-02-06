@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { login, register, getProfile } from '@/api/auth'
 import type { LoginParams, RegisterParams } from '@/api/auth'
+import { usePermissionStore } from '@/stores/permission'
 
 interface UserState {
   token: string
@@ -49,6 +50,8 @@ export const useUserStore = defineStore('user', {
       this.token = ''
       this.userInfo = null
       localStorage.removeItem('token')
+      const permissionStore = usePermissionStore()
+      permissionStore.clearPermissions()
     },
 
     // 更新头像

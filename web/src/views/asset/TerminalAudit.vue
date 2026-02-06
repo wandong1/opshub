@@ -98,6 +98,7 @@
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
                 <el-button
+                  v-permission="'terminal-sessions:delete'"
                   link
                   class="action-btn action-delete"
                   @click="handleDeleteClick(row)"

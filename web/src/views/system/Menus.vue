@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
+        <el-button v-permission="'menus:create'" class="black-button" @click="handleAdd">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           新增菜单
         </el-button>
@@ -101,6 +101,26 @@
 
         <el-table-column label="路由路径" prop="path" min-width="180" />
 
+        <el-table-column label="API绑定" min-width="220">
+          <template #default="{ row }">
+            <template v-if="row.type === 3 && row.apis && row.apis.length > 0">
+              <div v-for="(api, idx) in row.apis" :key="idx" style="line-height: 1.8;">
+                <el-tag size="small" :type="getMethodTagType(api.apiMethod)" effect="plain" style="margin-right: 4px;">
+                  {{ api.apiMethod }}
+                </el-tag>
+                <span style="font-size: 12px; color: #606266;">{{ api.apiPath }}</span>
+              </div>
+            </template>
+            <template v-else-if="row.type === 3 && row.apiPath">
+              <el-tag size="small" :type="getMethodTagType(row.apiMethod)" effect="plain" style="margin-right: 4px;">
+                {{ row.apiMethod }}
+              </el-tag>
+              <span style="font-size: 12px; color: #606266;">{{ row.apiPath }}</span>
+            </template>
+            <span v-else style="color: #909399;">-</span>
+          </template>
+        </el-table-column>
+
         <el-table-column label="图标" width="80" align="center">
           <template #default="{ row }">
             <el-icon v-if="row.icon" :size="18">
@@ -124,7 +144,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="150" fixed="right" align="center">
+        <el-table-column label="操作" width="200" fixed="right" align="center">
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip v-if="row.isPlugin" content="调整排序" placement="top">
@@ -132,13 +152,23 @@
                   <el-icon><Sort /></el-icon>
                 </el-button>
               </el-tooltip>
+              <el-tooltip v-if="!row.isPlugin && row.type === 1" content="新增下级菜单" placement="top">
+                <el-button v-permission="'menus:create'" link class="action-btn action-add-child" @click="handleAddChildMenu(row)">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip v-if="!row.isPlugin && row.type === 2" content="新增下级按钮" placement="top">
+                <el-button v-permission="'menus:create'" link class="action-btn action-add-child" @click="handleAddChildButton(row)">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+              </el-tooltip>
               <el-tooltip v-if="!row.isPlugin" content="编辑" placement="top">
-                <el-button link class="action-btn action-edit" @click="handleEdit(row)">
+                <el-button v-permission="'menus:update'" link class="action-btn action-edit" @click="handleEdit(row)">
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip v-if="!row.isPlugin" content="删除" placement="top">
-                <el-button link class="action-btn action-delete" @click="handleDelete(row)">
+                <el-button v-permission="'menus:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
@@ -225,6 +255,26 @@
             <el-radio :label="1">启用</el-radio>
             <el-radio :label="0">禁用</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="API绑定" v-if="menuForm.type === 3 && !editingPluginMenu">
+          <div class="api-list">
+            <div v-for="(api, index) in menuForm.apis" :key="index" class="api-row">
+              <el-select v-model="api.apiMethod" placeholder="方法" style="width: 110px;">
+                <el-option label="GET" value="GET" />
+                <el-option label="POST" value="POST" />
+                <el-option label="PUT" value="PUT" />
+                <el-option label="DELETE" value="DELETE" />
+              </el-select>
+              <el-input v-model="api.apiPath" placeholder="如 /api/v1/users/:id" style="flex: 1;" />
+              <el-button link type="danger" @click="menuForm.apis.splice(index, 1)">
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+            <el-button type="primary" link @click="menuForm.apis.push({ apiPath: '', apiMethod: '' })">
+              <el-icon style="margin-right: 4px;"><Plus /></el-icon>添加API
+            </el-button>
+          </div>
+          <div class="form-tip">一个按钮可绑定多个后端API，支持 :id 等路径参数占位符</div>
         </el-form-item>
       </el-form>
 
@@ -320,6 +370,17 @@ const iconMap: Record<string, any> = {
 // 获取图标组件
 const getIconComponent = (iconName: string) => {
   return iconMap[iconName] || Menu
+}
+
+// 获取HTTP方法标签类型
+const getMethodTagType = (method: string) => {
+  switch (method) {
+    case 'GET': return 'success'
+    case 'POST': return 'primary'
+    case 'PUT': return 'warning'
+    case 'DELETE': return 'danger'
+    default: return 'info'
+  }
 }
 
 // 插件菜单排序存储 key
@@ -438,7 +499,10 @@ const menuForm = reactive({
   icon: '',
   sort: 0,
   visible: 1,
-  status: 1
+  status: 1,
+  apiPath: '',
+  apiMethod: '',
+  apis: [] as Array<{ apiPath: string; apiMethod: string }>
 })
 
 const rules: FormRules = {
@@ -689,6 +753,26 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
+const handleAddChildMenu = (row: any) => {
+  isEdit.value = false
+  editingPluginMenu.value = false
+  dialogTitle.value = '新增下级菜单'
+  resetForm()
+  menuForm.parentId = row.ID || row.id
+  menuForm.type = 2
+  dialogVisible.value = true
+}
+
+const handleAddChildButton = (row: any) => {
+  isEdit.value = false
+  editingPluginMenu.value = false
+  dialogTitle.value = '新增下级按钮'
+  resetForm()
+  menuForm.parentId = row.ID || row.id
+  menuForm.type = 3
+  dialogVisible.value = true
+}
+
 const handleEdit = (row: any) => {
   isEdit.value = true
   editingPluginMenu.value = false
@@ -704,6 +788,16 @@ const handleEdit = (row: any) => {
   menuForm.sort = row.sort
   menuForm.visible = row.visible
   menuForm.status = row.status
+  menuForm.apiPath = row.apiPath || ''
+  menuForm.apiMethod = row.apiMethod || ''
+  // 填充多API绑定
+  if (row.apis && row.apis.length > 0) {
+    menuForm.apis = row.apis.map((a: any) => ({ apiPath: a.apiPath, apiMethod: a.apiMethod }))
+  } else if (row.apiPath && row.apiMethod) {
+    menuForm.apis = [{ apiPath: row.apiPath, apiMethod: row.apiMethod }]
+  } else {
+    menuForm.apis = []
+  }
   dialogVisible.value = true
 }
 
@@ -776,6 +870,10 @@ const handleSubmit = async () => {
         // 确保parentId是数字类型
         data.parentId = Number(data.parentId)
 
+        // 过滤掉空的API绑定
+        const apis = menuForm.apis.filter(a => a.apiPath && a.apiMethod)
+        ;(data as any).apis = apis
+
         if (isEdit.value) {
           await updateMenu(menuForm.id, data)
           ElMessage.success('更新成功')
@@ -808,7 +906,10 @@ const resetForm = () => {
     icon: '',
     sort: 0,
     visible: 1,
-    status: 1
+    status: 1,
+    apiPath: '',
+    apiMethod: '',
+    apis: []
   })
   formRef.value?.clearValidate()
 }
@@ -1076,6 +1177,11 @@ onMounted(() => {
   color: #e6a23c;
 }
 
+.action-add-child:hover {
+  background-color: #e8f5e9;
+  color: #4caf50;
+}
+
 .black-button {
   background-color: #000000 !important;
   color: #ffffff !important;
@@ -1096,6 +1202,18 @@ onMounted(() => {
   color: #999;
   margin-top: 4px;
   line-height: 1.5;
+}
+
+/* API列表样式 */
+.api-list {
+  width: 100%;
+}
+
+.api-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
 /* 对话框样式 */

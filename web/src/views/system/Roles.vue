@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
+        <el-button v-permission="'roles:create'" class="black-button" @click="handleAdd">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           新增角色
         </el-button>
@@ -114,17 +114,17 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip content="授权" placement="top">
-                <el-button link class="action-btn action-permission" @click="handlePermission(row)">
+                <el-button v-permission="'roles:assign-menus'" link class="action-btn action-permission" @click="handlePermission(row)">
                   <el-icon><Setting /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="编辑" placement="top">
-                <el-button link class="action-btn action-edit" @click="handleEdit(row)">
+                <el-button v-permission="'roles:update'" link class="action-btn action-edit" @click="handleEdit(row)">
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn action-delete" @click="handleDelete(row)">
+                <el-button v-permission="'roles:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
@@ -239,6 +239,20 @@
               <el-tag v-if="data.type === 1" size="small" type="info">目录</el-tag>
               <el-tag v-else-if="data.type === 2" size="small" type="success">菜单</el-tag>
               <el-tag v-else size="small" type="warning">按钮</el-tag>
+              <template v-if="data.type === 3 && data.apis && data.apis.length > 0">
+                <span v-for="(api, idx) in data.apis" :key="idx" style="margin-left: 6px;">
+                  <el-tag size="small" :type="getMethodTagType(api.apiMethod)" effect="plain">
+                    {{ api.apiMethod }}
+                  </el-tag>
+                  <span class="api-path-label">{{ api.apiPath }}</span>
+                </span>
+              </template>
+              <template v-else-if="data.type === 3 && data.apiPath">
+                <el-tag size="small" :type="getMethodTagType(data.apiMethod)" effect="plain" style="margin-left: 6px;">
+                  {{ data.apiMethod }}
+                </el-tag>
+                <span class="api-path-label">{{ data.apiPath }}</span>
+              </template>
             </div>
           </template>
         </el-tree>
@@ -357,6 +371,17 @@ const rules: FormRules = {
 const handleSearch = () => {
   // 搜索时自动回到第一页
   pagination.page = 1
+}
+
+// 获取HTTP方法标签类型
+const getMethodTagType = (method: string) => {
+  switch (method) {
+    case 'GET': return 'success'
+    case 'POST': return 'primary'
+    case 'PUT': return 'warning'
+    case 'DELETE': return 'danger'
+    default: return 'info'
+  }
 }
 
 // 重置搜索
@@ -993,5 +1018,11 @@ onMounted(() => {
   flex: 1;
   font-size: 14px;
   color: #303133;
+}
+
+.api-path-label {
+  font-size: 11px;
+  color: #909399;
+  margin-left: 4px;
 }
 </style>

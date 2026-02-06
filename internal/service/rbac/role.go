@@ -20,22 +20,30 @@
 package rbac
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ydcloud-dy/opshub/internal/biz/rbac"
+	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 )
 
 type RoleService struct {
-	roleUseCase *rbac.RoleUseCase
+	roleUseCase     *rbac.RoleUseCase
+	permissionCache *rbacdata.PermissionCache
 }
 
 func NewRoleService(roleUseCase *rbac.RoleUseCase) *RoleService {
 	return &RoleService{
 		roleUseCase: roleUseCase,
 	}
+}
+
+// SetPermissionCache 设置权限缓存
+func (s *RoleService) SetPermissionCache(cache *rbacdata.PermissionCache) {
+	s.permissionCache = cache
 }
 
 // CreateRole 创建角色
@@ -96,6 +104,11 @@ func (s *RoleService) UpdateRole(c *gin.Context) {
 		return
 	}
 
+	// 清除所有用户权限缓存
+	if s.permissionCache != nil {
+		s.permissionCache.ClearAllUserPermissions(context.Background())
+	}
+
 	response.Success(c, req)
 }
 
@@ -121,6 +134,11 @@ func (s *RoleService) DeleteRole(c *gin.Context) {
 	if err := s.roleUseCase.Delete(c.Request.Context(), uint(id)); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "删除失败: "+err.Error())
 		return
+	}
+
+	// 清除所有用户权限缓存
+	if s.permissionCache != nil {
+		s.permissionCache.ClearAllUserPermissions(context.Background())
 	}
 
 	response.SuccessWithMessage(c, "删除成功", nil)
@@ -238,6 +256,11 @@ func (s *RoleService) AssignRoleMenus(c *gin.Context) {
 	if err := s.roleUseCase.AssignMenus(c.Request.Context(), uint(id), req.MenuIDs); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "分配失败: "+err.Error())
 		return
+	}
+
+	// 清除所有用户权限缓存
+	if s.permissionCache != nil {
+		s.permissionCache.ClearAllUserPermissions(context.Background())
 	}
 
 	response.Success(c, nil)
