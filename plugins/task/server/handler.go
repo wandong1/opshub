@@ -146,6 +146,12 @@ func (h *Handler) CreateJobTask(c *gin.Context) {
 	}
 	jobTask.Status = "pending"
 	jobTask.CreatedBy = 1 // TODO: 从JWT获取
+	if jobTask.Result == "" {
+		jobTask.Result = "{}"
+	}
+	if jobTask.Parameters == "" {
+		jobTask.Parameters = "{}"
+	}
 	if err := h.db.Create(&jobTask).Error; err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败")
 		return
@@ -570,7 +576,8 @@ func (h *Handler) ExecuteTask(c *gin.Context) {
 		TaskType:    "manual",
 		Status:      "running",
 		TargetHosts: string(hostIDsJSON),
-		Parameters:  "", // 空字符串而不是nil
+		Parameters:  "{}",
+		Result:      "{}",
 		CreatedBy:   createdBy,
 		ExecuteTime: ptrTime(time.Now()),
 	}
@@ -1598,6 +1605,7 @@ func (h *Handler) DistributeFiles(c *gin.Context) {
 		Status:      "running",
 		TargetHosts: string(hostIDsJSON),
 		Parameters:  string(paramsJSON),
+		Result:      "{}",
 		CreatedBy:   createdBy,
 		ExecuteTime: ptrTime(time.Now()),
 	}
