@@ -3,11 +3,13 @@ import { defineStore } from 'pinia'
 export const usePermissionStore = defineStore('permission', {
   state: () => ({
     buttonCodes: new Set<string>(),
-    loaded: false
+    loaded: false,
+    isAdmin: false
   }),
   actions: {
-    loadPermissions(menuTree: any[]) {
+    loadPermissions(menuTree: any[], isAdmin = false) {
       this.buttonCodes.clear()
+      this.isAdmin = isAdmin
       this._extract(menuTree)
       this.loaded = true
     },
@@ -19,11 +21,13 @@ export const usePermissionStore = defineStore('permission', {
     },
     hasPermission(code: string): boolean {
       if (!this.loaded) return true
+      if (this.isAdmin) return true
       return this.buttonCodes.has(code)
     },
     clearPermissions() {
       this.buttonCodes.clear()
       this.loaded = false
+      this.isAdmin = false
     }
   }
 })

@@ -52,6 +52,144 @@ services:
     networks:
       - opshub-network
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    container_name: opshub-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-opshub}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-OpsHub@2026}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-default}
+      TZ: Asia/Shanghai
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_TCP_PORT:-9000}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "opshub", "--password", "OpsHub@2026", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opshub-network
+
+  mongodb:
+    image: mongo:7
+    container_name: opshub-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-opshub}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-OpsHub@2026}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-opshub}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "-u", "opshub", "-p", "OpsHub@2026", "--authenticationDatabase", "admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opshub-network
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: opshub-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      CLUSTER_ID: opshub-kafka-cluster-00001
+      TZ: Asia/Shanghai
+    ports:
+      - "${KAFKA_PORT:-9094}:9094"
+    volumes:
+      - kafka-data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - opshub-network
+
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.16
+    container_name: opshub-milvus-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    volumes:
+      - milvus-etcd-data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opshub-network
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2024-09-22T00-33-43Z
+    container_name: opshub-milvus-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - milvus-minio-data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opshub-network
+
+  milvus:
+    image: milvusdb/milvus:v2.4.17
+    container_name: opshub-milvus
+    restart: unless-stopped
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+      COMMON_SECURITY_AUTHORIZATIONENABLED: "true"
+      TZ: Asia/Shanghai
+    ports:
+      - "${MILVUS_PORT:-19530}:19530"
+      - "${MILVUS_GRPC_PORT:-9091}:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    command: ["milvus", "run", "standalone"]
+    depends_on:
+      milvus-etcd:
+        condition: service_healthy
+      milvus-minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - opshub-network
+
         #  backend:
         #    image: dyclouds/opshub-api:latest
         #    container_name: opshub-backend
@@ -102,6 +240,18 @@ volumes:
   mysql-data:
     driver: local
   redis-data:
+    driver: local
+  clickhouse-data:
+    driver: local
+  mongodb-data:
+    driver: local
+  kafka-data:
+    driver: local
+  milvus-etcd-data:
+    driver: local
+  milvus-minio-data:
+    driver: local
+  milvus-data:
     driver: local
 
 networks:

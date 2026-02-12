@@ -14,13 +14,14 @@
       <div class="header-actions">
         <el-button
           v-if="selectedIds.length > 0"
+          v-permission="'task-history:batch-delete'"
           type="danger"
           @click="handleBatchDelete"
         >
           <el-icon style="margin-right: 4px;"><Delete /></el-icon>
           删除选中 ({{ selectedIds.length }})
         </el-button>
-        <el-button @click="handleExport">
+        <el-button v-permission="'task-history:export'" @click="handleExport">
           <el-icon style="margin-right: 4px;"><Download /></el-icon>
           {{ selectedIds.length > 0 ? `导出选中 (${selectedIds.length})` : '导出全部' }}
         </el-button>
@@ -168,7 +169,7 @@
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn action-delete" @click="handleDelete(row)">
+                <el-button v-permission="'task-history:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>

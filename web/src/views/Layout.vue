@@ -19,13 +19,13 @@
       >
         <template v-for="menu in menuList" :key="menu.ID">
           <!-- 有子菜单的情况 -->
-          <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="String(menu.ID)" :class="{ 'menu-disabled': menu.status === 0 }">
+          <el-sub-menu v-if="menu.children && menu.children.filter(m => m.type !== 3).length > 0" :index="String(menu.ID)" :class="{ 'menu-disabled': menu.status === 0 }">
             <template #title>
               <el-icon><component :is="getIcon(menu.icon)" /></el-icon>
               <span>{{ menu.name }}</span>
             </template>
             <el-menu-item
-              v-for="subMenu in menu.children"
+              v-for="subMenu in menu.children.filter(m => m.type !== 3)"
               :key="subMenu.ID"
               :index="subMenu.status === 0 ? undefined : subMenu.path"
               :class="{ 'menu-disabled': subMenu.status === 0 }"
@@ -332,13 +332,11 @@ const buildPluginMenus = async (authorizedPaths: Set<string>) => {
 
 // 构建菜单树
 const buildMenuTree = (menus: any[]) => {
-  // 只过滤掉不可见的菜单，禁用的菜单仍然显示但标记为禁用状态
+  // 过滤掉不可见的菜单和按钮类型(type=3)，禁用的菜单仍然显示但标记为禁用状态
   const filteredMenus = menus.filter(menu => {
+    // type=3 是按钮权限，不在侧边栏显示
+    if (menu.type === 3) return false
     const isVisible = menu.visible === undefined || menu.visible === 1
-
-    if (!isVisible) {
-    }
-
     return isVisible
   })
 
@@ -490,7 +488,9 @@ const loadMenu = async () => {
 
     // 加载按钮权限标识到 store
     const permissionStore = usePermissionStore()
-    permissionStore.loadPermissions(systemMenus)
+    const roles = userStore.userInfo?.roles || []
+    const isSuperAdmin = roles.some((r: any) => r.code === 'admin')
+    permissionStore.loadPermissions(systemMenus, isSuperAdmin)
 
     // 2. 从系统菜单中提取所有授权的路径（用于插件菜单权限过滤）
     const pluginPathPrefixes = ['/kubernetes', '/monitor', '/task']
@@ -545,8 +545,6 @@ const loadMenu = async () => {
 
     // 检查用户是否有权限
     // 如果不是超级管理员且没有任何菜单，则显示无权限页面
-    const roles = userStore.userInfo?.roles || []
-    const isSuperAdmin = roles.some((r: any) => r.code === 'admin')
     if (!isSuperAdmin && menuList.value.length === 0) {
       hasNoPermission.value = true
     } else {
@@ -570,6 +568,16 @@ const handleLogout = () => {
   router.push('/login')
 }
 
+// 监听插件变化，自动刷新菜单
+const handlePluginChange = () => {
+  loadMenu()
+}
+
+// 在 await 之前注册生命周期钩子，避免 async setup 上下文丢失
+onUnmounted(() => {
+  window.removeEventListener('plugins-changed', handlePluginChange)
+})
+
 onMounted(async () => {
   // 加载系统配置
   if (!systemStore.loaded) {
@@ -588,20 +596,10 @@ onMounted(async () => {
   await new Promise(resolve => setTimeout(resolve, 100))
   loadMenu()
 
-  // 监听插件变化，自动刷新菜单
-  const handlePluginChange = () => {
-    loadMenu()
-  }
-
   // 移除旧的监听器(如果存在)避免重复
   window.removeEventListener('plugins-changed', handlePluginChange)
   // 添加新的监听器
   window.addEventListener('plugins-changed', handlePluginChange)
-
-  // 组件卸载时清理监听器
-  onUnmounted(() => {
-    window.removeEventListener('plugins-changed', handlePluginChange)
-  })
 })
 </script>
 

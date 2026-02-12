@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS `sys_menu` (
   `sort` int DEFAULT 0 COMMENT '排序',
   `visible` tinyint DEFAULT 1 COMMENT '是否显示 1:显示 0:隐藏',
   `status` tinyint DEFAULT 1 COMMENT '状态 1:启用 0:禁用',
+  `api_path` varchar(200) COMMENT '后端API路径',
+  `api_method` varchar(10) COMMENT 'HTTP方法(GET/POST/PUT/DELETE)',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` datetime COMMENT '删除时间',
@@ -149,6 +151,20 @@ CREATE TABLE IF NOT EXISTS `sys_role_menu` (
   CONSTRAINT `fk_role_menu_role` FOREIGN KEY (`role_id`) REFERENCES `sys_role` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_role_menu_menu` FOREIGN KEY (`menu_id`) REFERENCES `sys_menu` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 菜单-API关联表（一个按钮可绑定多个API）
+CREATE TABLE IF NOT EXISTS `sys_menu_api` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `menu_id` bigint unsigned NOT NULL COMMENT '菜单ID',
+  `api_path` varchar(200) NOT NULL COMMENT 'API路径',
+  `api_method` varchar(10) NOT NULL COMMENT 'HTTP方法',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` datetime COMMENT '删除时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_menu_id` (`menu_id`),
+  KEY `idx_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 用户-职位关联表
 CREATE TABLE IF NOT EXISTS `sys_user_position` (
@@ -386,6 +402,53 @@ CREATE TABLE IF NOT EXISTS `sys_role_asset_permission` (
   KEY `idx_deleted_at` (`deleted_at`),
   CONSTRAINT `fk_role_asset_perm_role` FOREIGN KEY (`role_id`) REFERENCES `sys_role` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_role_asset_perm_group` FOREIGN KEY (`asset_group_id`) REFERENCES `asset_group` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 中间件管理表
+CREATE TABLE IF NOT EXISTS `middlewares` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL COMMENT '中间件名称',
+  `type` varchar(20) NOT NULL COMMENT '类型: mysql/redis/clickhouse/mongodb/kafka/milvus',
+  `group_id` bigint unsigned DEFAULT 0 COMMENT '所属业务分组',
+  `host_id` bigint unsigned DEFAULT 0 COMMENT '关联主机（可选）',
+  `host` varchar(255) NOT NULL COMMENT '连接地址',
+  `port` int NOT NULL COMMENT '连接端口',
+  `username` varchar(100) COMMENT '用户名',
+  `password` varchar(500) COMMENT '密码（加密存储）',
+  `database_name` varchar(100) COMMENT '默认数据库/索引',
+  `connection_params` text COMMENT '额外连接参数（JSON）',
+  `tags` varchar(500) COMMENT '标签',
+  `description` varchar(500) COMMENT '备注',
+  `status` tinyint DEFAULT -1 COMMENT '状态 1:在线 0:离线 -1:未知',
+  `version` varchar(50) COMMENT '中间件版本',
+  `last_checked` datetime COMMENT '最后检测时间',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` datetime COMMENT '删除时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_type` (`type`),
+  KEY `idx_group_id` (`group_id`),
+  KEY `idx_host_id` (`host_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 角色中间件权限表
+CREATE TABLE IF NOT EXISTS `sys_role_middleware_permission` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `role_id` bigint unsigned NOT NULL COMMENT '角色ID',
+  `asset_group_id` bigint unsigned NOT NULL COMMENT '资产组ID',
+  `middleware_ids` json COMMENT '中间件ID列表（空=整个分组）',
+  `permissions` int unsigned DEFAULT 31 COMMENT '权限位',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` datetime COMMENT '删除时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_role_mw_group` (`role_id`, `asset_group_id`, `deleted_at`),
+  KEY `idx_asset_group_id` (`asset_group_id`),
+  KEY `idx_deleted_at` (`deleted_at`),
+  CONSTRAINT `fk_role_mw_perm_role` FOREIGN KEY (`role_id`) REFERENCES `sys_role` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_role_mw_perm_group` FOREIGN KEY (`asset_group_id`) REFERENCES `asset_group` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- SSH终端会话记录表（资产管理-终端审计）
@@ -1095,80 +1158,392 @@ VALUES
   (2, '普通用户', 'user', '普通用户，具有基本操作权限', 1, 1, NOW(), NOW());
 
 -- 插入默认菜单（从当前数据库导出的完整菜单结构）
-INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `created_at`, `updated_at`)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
 VALUES
   -- ========== 顶级菜单 ==========
-  (10, '仪表盘', 'dashboard', 1, 0, '/dashboard', '', 'HomeFilled', 0, 1, 1, NOW(), NOW()),
-  (15, '资产管理', 'asset-management', 1, 0, '/asset', '', 'Coin', 1, 1, 1, NOW(), NOW()),
-  (23, '操作审计', 'audit', 1, 0, '/audit', '', 'Document', 50, 1, 1, NOW(), NOW()),
-  (30, '插件管理', 'plugin', 1, 0, '/plugin', '', 'Grid', 80, 1, 1, NOW(), NOW()),
-  (42, '监控中心', '_monitor', 1, 0, '/monitor', '', 'Monitor', 80, 1, 1, NOW(), NOW()),
-  (61, '任务中心', '_task', 1, 0, '/task', '', 'Grid', 90, 1, 1, NOW(), NOW()),
-  (1, '系统管理', 'system', 1, 0, '', '', 'Setting', 100, 1, 1, NOW(), NOW()),
-  (29, '个人信息', 'profile', 2, 0, '/profile', 'Profile', 'UserFilled', 100, 0, 1, NOW(), NOW()),
-  (36, '容器管理', '_kubernetes', 1, 0, '/kubernetes', '', 'Platform', 100, 1, 1, NOW(), NOW()),
+  (10, '仪表盘', 'dashboard', 1, 0, '/dashboard', '', 'HomeFilled', 0, 1, 1, '', '', NOW(), NOW()),
+  (15, '资产管理', 'asset-management', 1, 0, '/asset', '', 'Coin', 1, 1, 1, '', '', NOW(), NOW()),
+  (23, '操作审计', 'audit', 1, 0, '/audit', '', 'Document', 50, 1, 1, '', '', NOW(), NOW()),
+  (30, '插件管理', 'plugin', 1, 0, '/plugin', '', 'Grid', 80, 1, 1, '', '', NOW(), NOW()),
+  (42, '监控中心', '_monitor', 1, 0, '/monitor', '', 'Monitor', 80, 1, 1, '', '', NOW(), NOW()),
+  (61, '任务中心', '_task', 1, 0, '/task', '', 'Grid', 90, 1, 1, '', '', NOW(), NOW()),
+  (1, '系统管理', 'system', 1, 0, '', '', 'Setting', 100, 1, 1, '', '', NOW(), NOW()),
+  (29, '个人信息', 'profile', 2, 0, '/profile', 'Profile', 'UserFilled', 100, 0, 1, '', '', NOW(), NOW()),
+  (36, '容器管理', '_kubernetes', 1, 0, '/kubernetes', '', 'Platform', 100, 1, 1, '', '', NOW(), NOW()),
 
   -- ========== 系统管理子菜单 (parent_id=1) ==========
-  (2, '用户管理', 'users', 2, 1, '/users', 'system/Users', 'User', 1, 1, 1, NOW(), NOW()),
-  (3, '角色管理', 'roles', 2, 1, '/roles', 'system/Roles', 'UserFilled', 2, 1, 1, NOW(), NOW()),
-  (5, '菜单管理', 'menus', 2, 1, '/menus', 'system/Menus', 'Menu', 4, 1, 1, NOW(), NOW()),
-  (11, '部门信息', 'dept-info', 2, 1, '/dept-info', 'system/DeptInfo', 'OfficeBuilding', 5, 1, 1, NOW(), NOW()),
-  (12, '岗位信息', 'position-info', 2, 1, '/position-info', 'system/PositionInfo', 'Avatar', 6, 1, 1, NOW(), NOW()),
-  (13, '系统配置', 'system-config', 2, 1, '/system-config', 'system/SystemConfig', 'Setting', 7, 1, 1, NOW(), NOW()),
+  (2, '用户管理', 'users', 2, 1, '/users', 'system/Users', 'User', 1, 1, 1, '', '', NOW(), NOW()),
+  (3, '角色管理', 'roles', 2, 1, '/roles', 'system/Roles', 'UserFilled', 2, 1, 1, '', '', NOW(), NOW()),
+  (5, '菜单管理', 'menus', 2, 1, '/menus', 'system/Menus', 'Menu', 4, 1, 1, '', '', NOW(), NOW()),
+  (11, '部门信息', 'dept-info', 2, 1, '/dept-info', 'system/DeptInfo', 'OfficeBuilding', 5, 1, 1, '', '', NOW(), NOW()),
+  (12, '岗位信息', 'position-info', 2, 1, '/position-info', 'system/PositionInfo', 'Avatar', 6, 1, 1, '', '', NOW(), NOW()),
+  (13, '系统配置', 'system-config', 2, 1, '/system-config', 'system/SystemConfig', 'Setting', 7, 1, 1, '', '', NOW(), NOW()),
 
   -- ========== 资产管理子菜单 (parent_id=15) ==========
-  (16, '主机管理', 'host-management', 2, 15, '/asset/hosts', 'asset/Hosts', 'Monitor', 1, 1, 1, NOW(), NOW()),
-  (19, '凭据管理', 'asset:credentials', 3, 15, '/asset/credentials', 'asset/Credentials', 'Lock', 2, 1, 1, NOW(), NOW()),
-  (17, '业务分组', 'business-group', 2, 15, '/asset/groups', 'asset/Groups', 'Collection', 3, 1, 1, NOW(), NOW()),
-  (27, '云账号管理', 'cloud-accounts', 2, 15, '/asset/cloud-accounts', 'asset/CloudAccounts', 'Cloudy', 5, 1, 1, NOW(), NOW()),
-  (34, '终端审计', 'asset_terminal_audit', 2, 15, '/asset/terminal-audit', '', 'View', 5, 1, 1, NOW(), NOW()),
-  (65, '权限配置', 'asset_permission', 2, 15, '/asset/permissions', 'views/asset/AssetPermission.vue', 'Lock', 6, 1, 1, NOW(), NOW()),
+  (16, '主机管理', 'host-management', 2, 15, '/asset/hosts', 'asset/Hosts', 'Monitor', 1, 1, 1, '', '', NOW(), NOW()),
+  (19, '凭据管理', 'asset:credentials', 2, 15, '/asset/credentials', 'asset/Credentials', 'Lock', 2, 1, 1, '', '', NOW(), NOW()),
+  (17, '业务分组', 'business-group', 2, 15, '/asset/groups', 'asset/Groups', 'Collection', 3, 1, 1, '', '', NOW(), NOW()),
+  (27, '云账号管理', 'cloud-accounts', 2, 15, '/asset/cloud-accounts', 'asset/CloudAccounts', 'Cloudy', 5, 1, 1, '', '', NOW(), NOW()),
+  (34, '终端审计', 'asset_terminal_audit', 2, 15, '/asset/terminal-audit', '', 'View', 5, 1, 1, '', '', NOW(), NOW()),
+  (65, '权限配置', 'asset_permission', 2, 15, '/asset/permissions', 'views/asset/AssetPermission.vue', 'Lock', 6, 1, 1, '', '', NOW(), NOW()),
 
   -- ========== 操作审计子菜单 (parent_id=23) ==========
-  (24, '操作日志', 'operation-logs', 2, 23, '/audit/operation-logs', 'audit/OperationLogs', 'Document', 1, 1, 1, NOW(), NOW()),
-  (25, '登录日志', 'login-logs', 2, 23, '/audit/login-logs', 'audit/LoginLogs', 'CircleCheck', 2, 1, 1, NOW(), NOW()),
+  (24, '操作日志', 'operation-logs', 2, 23, '/audit/operation-logs', 'audit/OperationLogs', 'Document', 1, 1, 1, '', '', NOW(), NOW()),
+  (25, '登录日志', 'login-logs', 2, 23, '/audit/login-logs', 'audit/LoginLogs', 'CircleCheck', 2, 1, 1, '', '', NOW(), NOW()),
+  (26, '数据日志', 'data-logs', 2, 23, '/audit/data-logs', 'audit/DataLogs', 'Notebook', 3, 1, 1, '', '', NOW(), NOW()),
 
   -- ========== 插件管理子菜单 (parent_id=30) ==========
-  (32, '插件列表', 'plugin-list', 2, 30, '/plugin/list', 'plugin/PluginList', 'Grid', 1, 1, 1, NOW(), NOW()),
-  (33, '插件安装', 'plugin-install', 2, 30, '/plugin/install', 'plugin/PluginInstall', 'Upload', 2, 1, 1, NOW(), NOW()),
+  (32, '插件列表', 'plugin-list', 2, 30, '/plugin/list', 'plugin/PluginList', 'Grid', 1, 1, 1, '', '', NOW(), NOW()),
+  (33, '插件安装', 'plugin-install', 2, 30, '/plugin/install', 'plugin/PluginInstall', 'Upload', 2, 1, 1, '', '', NOW(), NOW()),
 
   -- ========== 容器管理子菜单 (parent_id=36) ==========
-  (69, '集群管理', 'kubernetes_clusters', 2, 36, '/kubernetes/clusters', '', 'Connection', 1, 1, 1, NOW(), NOW()),
-  (70, '节点管理', 'kubernetes_nodes', 2, 36, '/kubernetes/nodes', '', 'Monitor', 2, 1, 1, NOW(), NOW()),
-  (71, '命名空间', 'kubernetes_namespaces', 2, 36, '/kubernetes/namespaces', '', 'FolderOpened', 3, 1, 1, NOW(), NOW()),
-  (72, '工作负载', 'kubernetes_workloads', 2, 36, '/kubernetes/workloads', '', 'Grid', 4, 1, 1, NOW(), NOW()),
-  (73, '网络管理', 'kubernetes_network', 2, 36, '/kubernetes/network', '', 'Connection', 5, 1, 1, NOW(), NOW()),
-  (74, '配置管理', 'kubernetes_config', 2, 36, '/kubernetes/config', '', 'Tools', 6, 1, 1, NOW(), NOW()),
-  (75, '存储管理', 'kubernetes_storage', 2, 36, '/kubernetes/storage', '', 'Files', 7, 1, 1, NOW(), NOW()),
-  (76, '访问控制', 'kubernetes_access', 2, 36, '/kubernetes/access', '', 'Lock', 8, 1, 1, NOW(), NOW()),
-  (77, '终端审计', 'kubernetes_audit', 2, 36, '/kubernetes/audit', '', 'Monitor', 9, 1, 1, NOW(), NOW()),
-  (85, '应用诊断', 'kubernetes_application_diagnosis', 2, 36, '/kubernetes/application-diagnosis', '', 'Grid', 10, 1, 1, NOW(), NOW()),
-  (86, '集群巡检', 'kubernetes_cluster_inspection', 2, 36, '/kubernetes/cluster-inspection', '', 'Grid', 11, 1, 1, NOW(), NOW()),
+  (69, '集群管理', 'kubernetes_clusters', 2, 36, '/kubernetes/clusters', '', 'Connection', 1, 1, 1, '', '', NOW(), NOW()),
+  (70, '节点管理', 'kubernetes_nodes', 2, 36, '/kubernetes/nodes', '', 'Monitor', 2, 1, 1, '', '', NOW(), NOW()),
+  (71, '命名空间', 'kubernetes_namespaces', 2, 36, '/kubernetes/namespaces', '', 'FolderOpened', 3, 1, 1, '', '', NOW(), NOW()),
+  (72, '工作负载', 'kubernetes_workloads', 2, 36, '/kubernetes/workloads', '', 'Grid', 4, 1, 1, '', '', NOW(), NOW()),
+  (73, '网络管理', 'kubernetes_network', 2, 36, '/kubernetes/network', '', 'Connection', 5, 1, 1, '', '', NOW(), NOW()),
+  (74, '配置管理', 'kubernetes_config', 2, 36, '/kubernetes/config', '', 'Tools', 6, 1, 1, '', '', NOW(), NOW()),
+  (75, '存储管理', 'kubernetes_storage', 2, 36, '/kubernetes/storage', '', 'Files', 7, 1, 1, '', '', NOW(), NOW()),
+  (76, '访问控制', 'kubernetes_access', 2, 36, '/kubernetes/access', '', 'Lock', 8, 1, 1, '', '', NOW(), NOW()),
+  (77, '终端审计', 'kubernetes_audit', 2, 36, '/kubernetes/audit', '', 'Monitor', 9, 1, 1, '', '', NOW(), NOW()),
+  (85, '应用诊断', 'kubernetes_application_diagnosis', 2, 36, '/kubernetes/application-diagnosis', '', 'Grid', 10, 1, 1, '', '', NOW(), NOW()),
+  (86, '集群巡检', 'kubernetes_cluster_inspection', 2, 36, '/kubernetes/cluster-inspection', '', 'Grid', 11, 1, 1, '', '', NOW(), NOW()),
 
   -- ========== 监控中心子菜单 (parent_id=42) ==========
-  (78, '域名监控', 'monitor_domain', 2, 42, '/monitor/domain', '', 'Monitor', 1, 1, 1, NOW(), NOW()),
-  (79, '告警通道', 'monitor_alert_channels', 2, 42, '/monitor/alert-channels', '', 'Grid', 2, 1, 1, NOW(), NOW()),
-  (80, '告警接收人', 'monitor_alert_receivers', 2, 42, '/monitor/alert-receivers', '', 'User', 3, 1, 1, NOW(), NOW()),
-  (81, '告警日志', 'monitor_alert_logs', 2, 42, '/monitor/alert-logs', '', 'Document', 4, 1, 1, NOW(), NOW()),
+  (78, '域名监控', 'monitor_domain', 2, 42, '/monitor/domain', '', 'Monitor', 1, 1, 1, '', '', NOW(), NOW()),
+  (79, '告警通道', 'monitor_alert_channels', 2, 42, '/monitor/alert-channels', '', 'Grid', 2, 1, 1, '', '', NOW(), NOW()),
+  (80, '告警接收人', 'monitor_alert_receivers', 2, 42, '/monitor/alert-receivers', '', 'User', 3, 1, 1, '', '', NOW(), NOW()),
+  (81, '告警日志', 'monitor_alert_logs', 2, 42, '/monitor/alert-logs', '', 'Document', 4, 1, 1, '', '', NOW(), NOW()),
 
   -- ========== 任务中心子菜单 (parent_id=61) ==========
-  (82, '任务模板', 'task_templates', 2, 61, '/task/templates', '', 'Document', 1, 1, 1, NOW(), NOW()),
-  (83, '执行任务', 'task_execute', 2, 61, '/task/execute', '', 'Tools', 2, 1, 1, NOW(), NOW()),
-  (84, '文件分发', 'task_file_distribution', 2, 61, '/task/file-distribution', '', 'Files', 3, 1, 1, NOW(), NOW());
+  (82, '任务模板', 'task_templates', 2, 61, '/task/templates', '', 'Document', 1, 1, 1, '', '', NOW(), NOW()),
+  (83, '执行任务', 'task_execute', 2, 61, '/task/execute', '', 'Tools', 2, 1, 1, '', '', NOW(), NOW()),
+  (84, '文件分发', 'task_file_distribution', 2, 61, '/task/file-distribution', '', 'Files', 3, 1, 1, '', '', NOW(), NOW()),
+  (87, '执行历史', 'task_execution_history', 2, 61, '/task/execution-history', '', 'Timer', 4, 1, 1, '', '', NOW(), NOW());
 
 -- 为管理员角色分配所有菜单权限
 INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
 VALUES
   (1, 1), (1, 2), (1, 3), (1, 5), (1, 10), (1, 11), (1, 12), (1, 13), (1, 15), (1, 16), (1, 17), (1, 19),
-  (1, 23), (1, 24), (1, 25), (1, 27), (1, 29), (1, 30), (1, 32), (1, 33), (1, 34), (1, 36),
+  (1, 23), (1, 24), (1, 25), (1, 26), (1, 27), (1, 29), (1, 30), (1, 32), (1, 33), (1, 34), (1, 36),
   (1, 42), (1, 61), (1, 65), (1, 69), (1, 70), (1, 71), (1, 72), (1, 73), (1, 74), (1, 75), (1, 76), (1, 77),
-  (1, 78), (1, 79), (1, 80), (1, 81), (1, 82), (1, 83), (1, 84), (1, 85), (1, 86);
+  (1, 78), (1, 79), (1, 80), (1, 81), (1, 82), (1, 83), (1, 84), (1, 85), (1, 86), (1, 87);
 
 -- 为普通用户角色分配基础菜单权限
 INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
 VALUES
   (2, 10), (2, 15), (2, 16), (2, 17), (2, 19), (2, 27), (2, 34), (2, 65),
   (2, 23), (2, 24), (2, 25), (2, 36), (2, 42), (2, 61);
+
+-- ============================================================
+-- 按钮权限数据 (type=3) — 前端 v-permission 对应的按钮级权限
+-- ============================================================
+
+-- 插入按钮权限菜单
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (200, '新增用户', 'users:create', 3, 2, '', '', '', 1, 1, 1, '/api/v1/users', 'POST', NOW(), NOW()),
+  (201, '编辑用户', 'users:update', 3, 2, '', '', '', 2, 1, 1, '/api/v1/users/:id', 'PUT', NOW(), NOW()),
+  (202, '删除用户', 'users:delete', 3, 2, '', '', '', 3, 1, 1, '/api/v1/users/:id', 'DELETE', NOW(), NOW()),
+  (203, '解锁用户', 'users:unlock', 3, 2, '', '', '', 4, 1, 1, '/api/v1/users/:id/unlock', 'PUT', NOW(), NOW()),
+  (204, '重置密码', 'users:reset-pwd', 3, 2, '', '', '', 5, 1, 1, '/api/v1/users/:id/reset-password', 'PUT', NOW(), NOW()),
+  (205, '新增角色', 'roles:create', 3, 3, '', '', '', 6, 1, 1, '/api/v1/roles', 'POST', NOW(), NOW()),
+  (206, '编辑角色', 'roles:update', 3, 3, '', '', '', 7, 1, 1, '/api/v1/roles/:id', 'PUT', NOW(), NOW()),
+  (207, '删除角色', 'roles:delete', 3, 3, '', '', '', 8, 1, 1, '/api/v1/roles/:id', 'DELETE', NOW(), NOW()),
+  (208, '分配菜单权限', 'roles:assign-menus', 3, 3, '', '', '', 9, 1, 1, '/api/v1/roles/:id/menus', 'PUT', NOW(), NOW()),
+  (209, '新增菜单', 'menus:create', 3, 5, '', '', '', 10, 1, 1, '/api/v1/menus', 'POST', NOW(), NOW()),
+  (210, '编辑菜单', 'menus:update', 3, 5, '', '', '', 11, 1, 1, '/api/v1/menus/:id', 'PUT', NOW(), NOW()),
+  (211, '删除菜单', 'menus:delete', 3, 5, '', '', '', 12, 1, 1, '/api/v1/menus/:id', 'DELETE', NOW(), NOW()),
+  (212, '新增部门', 'depts:create', 3, 11, '', '', '', 13, 1, 1, '/api/v1/departments', 'POST', NOW(), NOW()),
+  (213, '编辑部门', 'depts:update', 3, 11, '', '', '', 14, 1, 1, '/api/v1/departments/:id', 'PUT', NOW(), NOW()),
+  (214, '删除部门', 'depts:delete', 3, 11, '', '', '', 15, 1, 1, '/api/v1/departments/:id', 'DELETE', NOW(), NOW()),
+  (215, '新增岗位', 'positions:create', 3, 12, '', '', '', 16, 1, 1, '/api/v1/positions', 'POST', NOW(), NOW()),
+  (216, '编辑岗位', 'positions:update', 3, 12, '', '', '', 17, 1, 1, '/api/v1/positions/:id', 'PUT', NOW(), NOW()),
+  (217, '删除岗位', 'positions:delete', 3, 12, '', '', '', 18, 1, 1, '/api/v1/positions/:id', 'DELETE', NOW(), NOW()),
+  (218, '分配岗位用户', 'positions:assign-users', 3, 12, '', '', '', 19, 1, 1, '/api/v1/positions/:id/users', 'POST', NOW(), NOW()),
+  (219, '保存配置', 'system-config:update', 3, 13, '', '', '', 20, 1, 1, '/api/v1/system/config/basic', 'PUT', NOW(), NOW()),
+  (220, '新增主机', 'hosts:import', 3, 16, '', '', '', 21, 1, 1, '/api/v1/hosts', 'POST', NOW(), NOW()),
+  (221, '编辑主机', 'hosts:update', 3, 16, '', '', '', 22, 1, 1, '/api/v1/hosts/:id', 'PUT', NOW(), NOW()),
+  (222, '删除主机', 'hosts:delete', 3, 16, '', '', '', 23, 1, 1, '/api/v1/hosts/:id', 'DELETE', NOW(), NOW()),
+  (223, '批量删除', 'hosts:batch-delete', 3, 16, '', '', '', 24, 1, 1, '/api/v1/hosts/batch-delete', 'POST', NOW(), NOW()),
+  (224, '采集信息', 'hosts:collect', 3, 16, '', '', '', 25, 1, 1, '/api/v1/hosts/:id/collect', 'POST', NOW(), NOW()),
+  (225, '文件管理', 'hosts:file-manage', 3, 16, '', '', '', 26, 1, 1, '/api/v1/hosts/:id/files', 'GET', NOW(), NOW()),
+  (226, '新增分组', 'asset-groups:create', 3, 17, '', '', '', 27, 1, 1, '/api/v1/asset-groups', 'POST', NOW(), NOW()),
+  (227, '编辑分组', 'asset-groups:update', 3, 17, '', '', '', 28, 1, 1, '/api/v1/asset-groups/:id', 'PUT', NOW(), NOW()),
+  (228, '删除分组', 'asset-groups:delete', 3, 17, '', '', '', 29, 1, 1, '/api/v1/asset-groups/:id', 'DELETE', NOW(), NOW()),
+  (229, '新增凭据', 'credentials:create', 3, 19, '', '', '', 30, 1, 1, '/api/v1/credentials', 'POST', NOW(), NOW()),
+  (230, '编辑凭据', 'credentials:update', 3, 19, '', '', '', 31, 1, 1, '/api/v1/credentials/:id', 'PUT', NOW(), NOW()),
+  (231, '删除凭据', 'credentials:delete', 3, 19, '', '', '', 32, 1, 1, '/api/v1/credentials/:id', 'DELETE', NOW(), NOW()),
+  (232, '新增云账号', 'cloud-accounts:create', 3, 27, '', '', '', 33, 1, 1, '/api/v1/cloud-accounts', 'POST', NOW(), NOW()),
+  (233, '导入主机', 'cloud-accounts:import', 3, 27, '', '', '', 34, 1, 1, '/api/v1/cloud-accounts/import', 'POST', NOW(), NOW()),
+  (234, '编辑云账号', 'cloud-accounts:update', 3, 27, '', '', '', 35, 1, 1, '/api/v1/cloud-accounts/:id', 'PUT', NOW(), NOW()),
+  (235, '删除云账号', 'cloud-accounts:delete', 3, 27, '', '', '', 36, 1, 1, '/api/v1/cloud-accounts/:id', 'DELETE', NOW(), NOW()),
+  (236, '删除会话', 'terminal-sessions:delete', 3, 34, '', '', '', 37, 1, 1, '/api/v1/terminal-sessions/:id', 'DELETE', NOW(), NOW()),
+  (237, '添加权限', 'asset-perms:create', 3, 65, '', '', '', 38, 1, 1, '/api/v1/asset-permissions', 'POST', NOW(), NOW()),
+  (238, '编辑权限', 'asset-perms:update', 3, 65, '', '', '', 39, 1, 1, '/api/v1/asset-permissions/:id', 'PUT', NOW(), NOW()),
+  (239, '删除权限', 'asset-perms:delete', 3, 65, '', '', '', 40, 1, 1, '/api/v1/asset-permissions/:id', 'DELETE', NOW(), NOW()),
+  (240, '批量删除', 'op-logs:batch-delete', 3, 24, '', '', '', 41, 1, 1, '/api/v1/audit/operation-logs/batch-delete', 'POST', NOW(), NOW()),
+  (241, '删除日志', 'op-logs:delete', 3, 24, '', '', '', 42, 1, 1, '/api/v1/audit/operation-logs/:id', 'DELETE', NOW(), NOW()),
+  (242, '批量删除', 'login-logs:batch-delete', 3, 25, '', '', '', 43, 1, 1, '/api/v1/audit/login-logs/batch-delete', 'POST', NOW(), NOW()),
+  (243, '删除日志', 'login-logs:delete', 3, 25, '', '', '', 44, 1, 1, '/api/v1/audit/login-logs/:id', 'DELETE', NOW(), NOW()),
+  (244, '启用插件', 'plugins:enable', 3, 32, '', '', '', 45, 1, 1, '/api/v1/plugins/:name/enable', 'POST', NOW(), NOW()),
+  (245, '禁用插件', 'plugins:disable', 3, 32, '', '', '', 46, 1, 1, '/api/v1/plugins/:name/disable', 'POST', NOW(), NOW()),
+  (246, '卸载插件', 'plugins:uninstall', 3, 32, '', '', '', 47, 1, 1, '/api/v1/plugins/:name/uninstall', 'DELETE', NOW(), NOW()),
+  (247, '安装插件', 'plugins:install', 3, 33, '', '', '', 48, 1, 1, '/api/v1/plugins/upload', 'POST', NOW(), NOW()),
+  (248, '注册集群', 'k8s-clusters:create', 3, 69, '', '', '', 49, 1, 1, '/api/v1/plugins/kubernetes/clusters', 'POST', NOW(), NOW()),
+  (249, '编辑集群', 'k8s-clusters:update', 3, 69, '', '', '', 50, 1, 1, '/api/v1/plugins/kubernetes/clusters/:id', 'PUT', NOW(), NOW()),
+  (250, '删除集群', 'k8s-clusters:delete', 3, 69, '', '', '', 51, 1, 1, '/api/v1/plugins/kubernetes/clusters/:id', 'DELETE', NOW(), NOW()),
+  (251, '同步状态', 'k8s-clusters:sync', 3, 69, '', '', '', 52, 1, 1, '/api/v1/plugins/kubernetes/clusters/:id/sync', 'POST', NOW(), NOW()),
+  (252, '批量同步', 'k8s-clusters:batch-sync', 3, 69, '', '', '', 53, 1, 1, '/api/v1/plugins/kubernetes/clusters/:id/sync', 'POST', NOW(), NOW()),
+  (253, '批量删除', 'k8s-clusters:batch-delete', 3, 69, '', '', '', 54, 1, 1, '/api/v1/plugins/kubernetes/clusters/:id', 'DELETE', NOW(), NOW()),
+  (254, '凭据申请', 'k8s-clusters:apply-credential', 3, 69, '', '', '', 55, 1, 1, '/api/v1/plugins/kubernetes/clusters/kubeconfig', 'POST', NOW(), NOW()),
+  (255, '吊销凭据', 'k8s-clusters:revoke-credential', 3, 69, '', '', '', 56, 1, 1, '/api/v1/plugins/kubernetes/clusters/kubeconfig', 'DELETE', NOW(), NOW()),
+  (256, '新建命名空间', 'k8s-namespaces:create', 3, 71, '', '', '', 57, 1, 1, '/api/v1/plugins/kubernetes/resources/namespaces', 'POST', NOW(), NOW()),
+  (257, '创建工作负载', 'k8s-workloads:create', 3, 72, '', '', '', 58, 1, 1, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (258, '批量重启', 'k8s-workloads:batch-restart', 3, 72, '', '', '', 59, 1, 1, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (259, '批量停止', 'k8s-workloads:batch-stop', 3, 72, '', '', '', 60, 1, 1, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (260, '批量恢复', 'k8s-workloads:batch-resume', 3, 72, '', '', '', 61, 1, 1, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (261, '批量删除', 'k8s-workloads:batch-delete', 3, 72, '', '', '', 62, 1, 1, '/api/v1/plugins/kubernetes/workloads/delete', 'DELETE', NOW(), NOW()),
+  (262, '创建服务', 'k8s-services:create', 3, 73, '', '', '', 63, 1, 1, '/api/v1/plugins/kubernetes/resources/services/:ns/:name', 'POST', NOW(), NOW()),
+  (263, '编辑服务', 'k8s-services:update', 3, 73, '', '', '', 64, 1, 1, '/api/v1/plugins/kubernetes/resources/services/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (264, '删除服务', 'k8s-services:delete', 3, 73, '', '', '', 65, 1, 1, '/api/v1/plugins/kubernetes/resources/services/:ns/:name', 'DELETE', NOW(), NOW()),
+  (265, '创建Ingress', 'k8s-ingresses:create', 3, 73, '', '', '', 66, 1, 1, '/api/v1/plugins/kubernetes/resources/ingresses/:ns/:name', 'POST', NOW(), NOW()),
+  (266, '编辑Ingress', 'k8s-ingresses:update', 3, 73, '', '', '', 67, 1, 1, '/api/v1/plugins/kubernetes/resources/ingresses/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (267, '删除Ingress', 'k8s-ingresses:delete', 3, 73, '', '', '', 68, 1, 1, '/api/v1/plugins/kubernetes/resources/ingresses/:ns/:name', 'DELETE', NOW(), NOW()),
+  (268, '创建Endpoints', 'k8s-endpoints:create', 3, 73, '', '', '', 69, 1, 1, '/api/v1/plugins/kubernetes/resources/endpoints/:ns/yaml', 'POST', NOW(), NOW()),
+  (269, '编辑Endpoints', 'k8s-endpoints:update', 3, 73, '', '', '', 70, 1, 1, '/api/v1/plugins/kubernetes/resources/endpoints/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (270, '删除Endpoints', 'k8s-endpoints:delete', 3, 73, '', '', '', 71, 1, 1, '/api/v1/plugins/kubernetes/resources/endpoints/:ns/:name', 'DELETE', NOW(), NOW()),
+  (271, '创建网络策略', 'k8s-networkpolicies:create', 3, 73, '', '', '', 72, 1, 1, '/api/v1/plugins/kubernetes/resources/networkpolicies/:ns/yaml', 'POST', NOW(), NOW()),
+  (272, '编辑网络策略', 'k8s-networkpolicies:update', 3, 73, '', '', '', 73, 1, 1, '/api/v1/plugins/kubernetes/resources/networkpolicies/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (273, '删除网络策略', 'k8s-networkpolicies:delete', 3, 73, '', '', '', 74, 1, 1, '/api/v1/plugins/kubernetes/resources/networkpolicies/:ns/:name', 'DELETE', NOW(), NOW()),
+  (274, '创建ConfigMap', 'k8s-configmaps:create', 3, 74, '', '', '', 75, 1, 1, '/api/v1/plugins/kubernetes/resources/configmaps/:ns/yaml', 'POST', NOW(), NOW()),
+  (275, '编辑ConfigMap', 'k8s-configmaps:update', 3, 74, '', '', '', 76, 1, 1, '/api/v1/plugins/kubernetes/resources/configmaps/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (276, '删除ConfigMap', 'k8s-configmaps:delete', 3, 74, '', '', '', 77, 1, 1, '/api/v1/plugins/kubernetes/resources/configmaps/:ns/:name', 'DELETE', NOW(), NOW()),
+  (277, '创建Secret', 'k8s-secrets:create', 3, 74, '', '', '', 78, 1, 1, '/api/v1/plugins/kubernetes/resources/secrets/:ns/yaml', 'POST', NOW(), NOW()),
+  (278, '编辑Secret', 'k8s-secrets:update', 3, 74, '', '', '', 79, 1, 1, '/api/v1/plugins/kubernetes/resources/secrets/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (279, '删除Secret', 'k8s-secrets:delete', 3, 74, '', '', '', 80, 1, 1, '/api/v1/plugins/kubernetes/resources/secrets/:ns/:name', 'DELETE', NOW(), NOW()),
+  (280, '创建ResourceQuota', 'k8s-resourcequotas:create', 3, 74, '', '', '', 81, 1, 1, '/api/v1/plugins/kubernetes/resources/resourcequotas/:ns/yaml', 'POST', NOW(), NOW()),
+  (281, '编辑ResourceQuota', 'k8s-resourcequotas:update', 3, 74, '', '', '', 82, 1, 1, '/api/v1/plugins/kubernetes/resources/resourcequotas/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (282, '删除ResourceQuota', 'k8s-resourcequotas:delete', 3, 74, '', '', '', 83, 1, 1, '/api/v1/plugins/kubernetes/resources/resourcequotas/:ns/:name', 'DELETE', NOW(), NOW()),
+  (283, '创建LimitRange', 'k8s-limitranges:create', 3, 74, '', '', '', 84, 1, 1, '/api/v1/plugins/kubernetes/resources/limitranges/:ns/yaml', 'POST', NOW(), NOW()),
+  (284, '编辑LimitRange', 'k8s-limitranges:update', 3, 74, '', '', '', 85, 1, 1, '/api/v1/plugins/kubernetes/resources/limitranges/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (285, '删除LimitRange', 'k8s-limitranges:delete', 3, 74, '', '', '', 86, 1, 1, '/api/v1/plugins/kubernetes/resources/limitranges/:ns/:name', 'DELETE', NOW(), NOW()),
+  (286, '创建HPA', 'k8s-hpa:create', 3, 74, '', '', '', 87, 1, 1, '/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/:ns/yaml', 'POST', NOW(), NOW()),
+  (287, '编辑HPA', 'k8s-hpa:update', 3, 74, '', '', '', 88, 1, 1, '/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (288, '删除HPA', 'k8s-hpa:delete', 3, 74, '', '', '', 89, 1, 1, '/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/:ns/:name', 'DELETE', NOW(), NOW()),
+  (289, '创建PDB', 'k8s-pdb:create', 3, 74, '', '', '', 90, 1, 1, '/api/v1/plugins/kubernetes/resources/poddisruptionbudgets/:ns/yaml', 'POST', NOW(), NOW()),
+  (290, '编辑PDB', 'k8s-pdb:update', 3, 74, '', '', '', 91, 1, 1, '/api/v1/plugins/kubernetes/resources/poddisruptionbudgets/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (291, '删除PDB', 'k8s-pdb:delete', 3, 74, '', '', '', 92, 1, 1, '/api/v1/plugins/kubernetes/resources/poddisruptionbudgets/:ns/:name', 'DELETE', NOW(), NOW()),
+  (292, '创建PVC', 'k8s-pvc:create', 3, 75, '', '', '', 93, 1, 1, '/api/v1/plugins/kubernetes/resources/persistentvolumeclaims/:ns/yaml', 'POST', NOW(), NOW()),
+  (293, '编辑PVC', 'k8s-pvc:update', 3, 75, '', '', '', 94, 1, 1, '/api/v1/plugins/kubernetes/resources/persistentvolumeclaims/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (294, '删除PVC', 'k8s-pvc:delete', 3, 75, '', '', '', 95, 1, 1, '/api/v1/plugins/kubernetes/resources/persistentvolumeclaims/:ns/:name', 'DELETE', NOW(), NOW()),
+  (295, '创建PV', 'k8s-pv:create', 3, 75, '', '', '', 96, 1, 1, '/api/v1/plugins/kubernetes/resources/persistentvolumes/yaml', 'POST', NOW(), NOW()),
+  (296, '编辑PV', 'k8s-pv:update', 3, 75, '', '', '', 97, 1, 1, '/api/v1/plugins/kubernetes/resources/persistentvolumes/:name/yaml', 'PUT', NOW(), NOW()),
+  (297, '删除PV', 'k8s-pv:delete', 3, 75, '', '', '', 98, 1, 1, '/api/v1/plugins/kubernetes/resources/persistentvolumes/:name', 'DELETE', NOW(), NOW()),
+  (298, '创建StorageClass', 'k8s-storageclasses:create', 3, 75, '', '', '', 99, 1, 1, '/api/v1/plugins/kubernetes/resources/storageclasses/yaml', 'POST', NOW(), NOW()),
+  (299, '编辑StorageClass', 'k8s-storageclasses:update', 3, 75, '', '', '', 100, 1, 1, '/api/v1/plugins/kubernetes/resources/storageclasses/:name/yaml', 'PUT', NOW(), NOW()),
+  (300, '删除StorageClass', 'k8s-storageclasses:delete', 3, 75, '', '', '', 101, 1, 1, '/api/v1/plugins/kubernetes/resources/storageclasses/:name', 'DELETE', NOW(), NOW()),
+  (301, '编辑ServiceAccount', 'k8s-serviceaccounts:update', 3, 76, '', '', '', 102, 1, 1, '/api/v1/plugins/kubernetes/resources/serviceaccounts/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (302, '删除ServiceAccount', 'k8s-serviceaccounts:delete', 3, 76, '', '', '', 103, 1, 1, '/api/v1/plugins/kubernetes/resources/serviceaccounts/:ns/:name', 'DELETE', NOW(), NOW()),
+  (303, '编辑Role', 'k8s-roles:update', 3, 76, '', '', '', 104, 1, 1, '/api/v1/plugins/kubernetes/resources/roles/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (304, '删除Role', 'k8s-roles:delete', 3, 76, '', '', '', 105, 1, 1, '/api/v1/plugins/kubernetes/resources/roles/:ns/:name', 'DELETE', NOW(), NOW()),
+  (305, '编辑ClusterRole', 'k8s-clusterroles:update', 3, 76, '', '', '', 106, 1, 1, '/api/v1/plugins/kubernetes/resources/clusterroles/:name/yaml', 'PUT', NOW(), NOW()),
+  (306, '删除ClusterRole', 'k8s-clusterroles:delete', 3, 76, '', '', '', 107, 1, 1, '/api/v1/plugins/kubernetes/resources/clusterroles/:name', 'DELETE', NOW(), NOW()),
+  (307, '编辑RoleBinding', 'k8s-rolebindings:update', 3, 76, '', '', '', 108, 1, 1, '/api/v1/plugins/kubernetes/resources/rolebindings/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (308, '删除RoleBinding', 'k8s-rolebindings:delete', 3, 76, '', '', '', 109, 1, 1, '/api/v1/plugins/kubernetes/resources/rolebindings/:ns/:name', 'DELETE', NOW(), NOW()),
+  (309, '编辑ClusterRoleBinding', 'k8s-clusterrolebindings:update', 3, 76, '', '', '', 110, 1, 1, '/api/v1/plugins/kubernetes/resources/clusterrolebindings/:name/yaml', 'PUT', NOW(), NOW()),
+  (310, '删除ClusterRoleBinding', 'k8s-clusterrolebindings:delete', 3, 76, '', '', '', 111, 1, 1, '/api/v1/plugins/kubernetes/resources/clusterrolebindings/:name', 'DELETE', NOW(), NOW()),
+  (311, '开始巡检', 'k8s-inspection:start', 3, 86, '', '', '', 112, 1, 1, '/api/v1/plugins/kubernetes/inspection/start', 'POST', NOW(), NOW()),
+  (312, '创建模板', 'templates:create', 3, 82, '', '', '', 113, 1, 1, '/api/v1/plugins/task/templates', 'POST', NOW(), NOW()),
+  (313, '编辑模板', 'templates:update', 3, 82, '', '', '', 114, 1, 1, '/api/v1/plugins/task/templates/:id', 'PUT', NOW(), NOW()),
+  (314, '删除模板', 'templates:delete', 3, 82, '', '', '', 115, 1, 1, '/api/v1/plugins/task/templates/:id', 'DELETE', NOW(), NOW()),
+  (315, '执行任务', 'tasks:execute', 3, 83, '', '', '', 116, 1, 1, '/api/v1/plugins/task/execute', 'POST', NOW(), NOW()),
+  (316, '执行分发', 'task-distribute:execute', 3, 84, '', '', '', 117, 1, 1, '/api/v1/plugins/task/distribute', 'POST', NOW(), NOW()),
+  (317, '创建身份源', 'identity-sources:create', 3, 102, '', '', '', 118, 1, 1, '/api/v1/identity/sources', 'POST', NOW(), NOW()),
+  (318, '编辑身份源', 'identity-sources:update', 3, 102, '', '', '', 119, 1, 1, '/api/v1/identity/sources/:id', 'PUT', NOW(), NOW()),
+  (319, '删除身份源', 'identity-sources:delete', 3, 102, '', '', '', 120, 1, 1, '/api/v1/identity/sources/:id', 'DELETE', NOW(), NOW()),
+  (320, '创建应用', 'identity-apps:create', 3, 103, '', '', '', 121, 1, 1, '/api/v1/identity/apps', 'POST', NOW(), NOW()),
+  (321, '编辑应用', 'identity-apps:update', 3, 103, '', '', '', 122, 1, 1, '/api/v1/identity/apps/:id', 'PUT', NOW(), NOW()),
+  (322, '删除应用', 'identity-apps:delete', 3, 103, '', '', '', 123, 1, 1, '/api/v1/identity/apps/:id', 'DELETE', NOW(), NOW()),
+  (323, '创建凭证', 'identity-creds:create', 3, 104, '', '', '', 124, 1, 1, '/api/v1/identity/credentials', 'POST', NOW(), NOW()),
+  (324, '编辑凭证', 'identity-creds:update', 3, 104, '', '', '', 125, 1, 1, '/api/v1/identity/credentials/:id', 'PUT', NOW(), NOW()),
+  (325, '删除凭证', 'identity-creds:delete', 3, 104, '', '', '', 126, 1, 1, '/api/v1/identity/credentials/:id', 'DELETE', NOW(), NOW()),
+  (326, '创建权限', 'identity-perms:create', 3, 105, '', '', '', 127, 1, 1, '/api/v1/identity/permissions', 'POST', NOW(), NOW()),
+  (327, '删除权限', 'identity-perms:delete', 3, 105, '', '', '', 128, 1, 1, '/api/v1/identity/permissions/:id', 'DELETE', NOW(), NOW()),
+  -- 数据日志按钮 (parent_id=26)
+  (328, '批量删除', 'data-logs:batch-delete', 3, 26, '', '', '', 1, 1, 1, '/api/v1/audit/data-logs/batch-delete', 'POST', NOW(), NOW()),
+  (329, '删除日志', 'data-logs:delete', 3, 26, '', '', '', 2, 1, 1, '/api/v1/audit/data-logs/:id', 'DELETE', NOW(), NOW()),
+  -- 操作日志查询按钮 (parent_id=24)
+  (330, '查询日志', 'op-logs:search', 3, 24, '', '', '', 0, 1, 1, '/api/v1/audit/operation-logs', 'GET', NOW(), NOW()),
+  -- 登录日志查询按钮 (parent_id=25)
+  (331, '查询日志', 'login-logs:search', 3, 25, '', '', '', 0, 1, 1, '/api/v1/audit/login-logs', 'GET', NOW(), NOW()),
+  -- 执行历史按钮 (parent_id=87)
+  (332, '批量删除', 'task-history:batch-delete', 3, 87, '', '', '', 1, 1, 1, '/api/v1/plugins/task/execution-history/batch-delete', 'POST', NOW(), NOW()),
+  (333, '导出记录', 'task-history:export', 3, 87, '', '', '', 2, 1, 1, '/api/v1/plugins/task/execution-history/export', 'POST', NOW(), NOW()),
+  (334, '删除记录', 'task-history:delete', 3, 87, '', '', '', 3, 1, 1, '/api/v1/plugins/task/execution-history/:id', 'DELETE', NOW(), NOW());
+
+-- 插入菜单API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (200, '/api/v1/users', 'POST', NOW(), NOW()),
+  (201, '/api/v1/users/:id', 'PUT', NOW(), NOW()),
+  (202, '/api/v1/users/:id', 'DELETE', NOW(), NOW()),
+  (203, '/api/v1/users/:id/unlock', 'PUT', NOW(), NOW()),
+  (204, '/api/v1/users/:id/reset-password', 'PUT', NOW(), NOW()),
+  (205, '/api/v1/roles', 'POST', NOW(), NOW()),
+  (206, '/api/v1/roles/:id', 'PUT', NOW(), NOW()),
+  (207, '/api/v1/roles/:id', 'DELETE', NOW(), NOW()),
+  (208, '/api/v1/roles/:id/menus', 'PUT', NOW(), NOW()),
+  (209, '/api/v1/menus', 'POST', NOW(), NOW()),
+  (210, '/api/v1/menus/:id', 'PUT', NOW(), NOW()),
+  (211, '/api/v1/menus/:id', 'DELETE', NOW(), NOW()),
+  (212, '/api/v1/departments', 'POST', NOW(), NOW()),
+  (213, '/api/v1/departments/:id', 'PUT', NOW(), NOW()),
+  (214, '/api/v1/departments/:id', 'DELETE', NOW(), NOW()),
+  (215, '/api/v1/positions', 'POST', NOW(), NOW()),
+  (216, '/api/v1/positions/:id', 'PUT', NOW(), NOW()),
+  (217, '/api/v1/positions/:id', 'DELETE', NOW(), NOW()),
+  (218, '/api/v1/positions/:id/users', 'POST', NOW(), NOW()),
+  (219, '/api/v1/system/config/basic', 'PUT', NOW(), NOW()),
+  (219, '/api/v1/system/config/security', 'PUT', NOW(), NOW()),
+  (220, '/api/v1/hosts', 'POST', NOW(), NOW()),
+  (220, '/api/v1/hosts/import', 'POST', NOW(), NOW()),
+  (220, '/api/v1/cloud-accounts/import', 'POST', NOW(), NOW()),
+  (221, '/api/v1/hosts/:id', 'PUT', NOW(), NOW()),
+  (222, '/api/v1/hosts/:id', 'DELETE', NOW(), NOW()),
+  (223, '/api/v1/hosts/batch-delete', 'POST', NOW(), NOW()),
+  (224, '/api/v1/hosts/:id/collect', 'POST', NOW(), NOW()),
+  (225, '/api/v1/hosts/:id/files', 'GET', NOW(), NOW()),
+  (226, '/api/v1/asset-groups', 'POST', NOW(), NOW()),
+  (227, '/api/v1/asset-groups/:id', 'PUT', NOW(), NOW()),
+  (228, '/api/v1/asset-groups/:id', 'DELETE', NOW(), NOW()),
+  (229, '/api/v1/credentials', 'POST', NOW(), NOW()),
+  (230, '/api/v1/credentials/:id', 'PUT', NOW(), NOW()),
+  (231, '/api/v1/credentials/:id', 'DELETE', NOW(), NOW()),
+  (232, '/api/v1/cloud-accounts', 'POST', NOW(), NOW()),
+  (233, '/api/v1/cloud-accounts/import', 'POST', NOW(), NOW()),
+  (234, '/api/v1/cloud-accounts/:id', 'PUT', NOW(), NOW()),
+  (235, '/api/v1/cloud-accounts/:id', 'DELETE', NOW(), NOW()),
+  (236, '/api/v1/terminal-sessions/:id', 'DELETE', NOW(), NOW()),
+  (237, '/api/v1/asset-permissions', 'POST', NOW(), NOW()),
+  (238, '/api/v1/asset-permissions/:id', 'PUT', NOW(), NOW()),
+  (239, '/api/v1/asset-permissions/:id', 'DELETE', NOW(), NOW()),
+  (240, '/api/v1/audit/operation-logs/batch-delete', 'POST', NOW(), NOW()),
+  (241, '/api/v1/audit/operation-logs/:id', 'DELETE', NOW(), NOW()),
+  (242, '/api/v1/audit/login-logs/batch-delete', 'POST', NOW(), NOW()),
+  (243, '/api/v1/audit/login-logs/:id', 'DELETE', NOW(), NOW()),
+  (244, '/api/v1/plugins/:name/enable', 'POST', NOW(), NOW()),
+  (245, '/api/v1/plugins/:name/disable', 'POST', NOW(), NOW()),
+  (246, '/api/v1/plugins/:name/uninstall', 'DELETE', NOW(), NOW()),
+  (247, '/api/v1/plugins/upload', 'POST', NOW(), NOW()),
+  (248, '/api/v1/plugins/kubernetes/clusters', 'POST', NOW(), NOW()),
+  (249, '/api/v1/plugins/kubernetes/clusters/:id', 'PUT', NOW(), NOW()),
+  (250, '/api/v1/plugins/kubernetes/clusters/:id', 'DELETE', NOW(), NOW()),
+  (251, '/api/v1/plugins/kubernetes/clusters/:id/sync', 'POST', NOW(), NOW()),
+  (251, '/api/v1/plugins/kubernetes/clusters/sync-all', 'POST', NOW(), NOW()),
+  (252, '/api/v1/plugins/kubernetes/clusters/:id/sync', 'POST', NOW(), NOW()),
+  (253, '/api/v1/plugins/kubernetes/clusters/:id', 'DELETE', NOW(), NOW()),
+  (254, '/api/v1/plugins/kubernetes/clusters/kubeconfig', 'POST', NOW(), NOW()),
+  (255, '/api/v1/plugins/kubernetes/clusters/kubeconfig', 'DELETE', NOW(), NOW()),
+  (256, '/api/v1/plugins/kubernetes/resources/namespaces', 'POST', NOW(), NOW()),
+  (257, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (258, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (259, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (260, '/api/v1/plugins/kubernetes/workloads/update', 'POST', NOW(), NOW()),
+  (261, '/api/v1/plugins/kubernetes/workloads/delete', 'DELETE', NOW(), NOW()),
+  (262, '/api/v1/plugins/kubernetes/resources/services/:ns/:name', 'POST', NOW(), NOW()),
+  (263, '/api/v1/plugins/kubernetes/resources/services/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (264, '/api/v1/plugins/kubernetes/resources/services/:ns/:name', 'DELETE', NOW(), NOW()),
+  (265, '/api/v1/plugins/kubernetes/resources/ingresses/:ns/:name', 'POST', NOW(), NOW()),
+  (266, '/api/v1/plugins/kubernetes/resources/ingresses/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (267, '/api/v1/plugins/kubernetes/resources/ingresses/:ns/:name', 'DELETE', NOW(), NOW()),
+  (268, '/api/v1/plugins/kubernetes/resources/endpoints/:ns/yaml', 'POST', NOW(), NOW()),
+  (269, '/api/v1/plugins/kubernetes/resources/endpoints/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (270, '/api/v1/plugins/kubernetes/resources/endpoints/:ns/:name', 'DELETE', NOW(), NOW()),
+  (271, '/api/v1/plugins/kubernetes/resources/networkpolicies/:ns/yaml', 'POST', NOW(), NOW()),
+  (272, '/api/v1/plugins/kubernetes/resources/networkpolicies/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (273, '/api/v1/plugins/kubernetes/resources/networkpolicies/:ns/:name', 'DELETE', NOW(), NOW()),
+  (274, '/api/v1/plugins/kubernetes/resources/configmaps/:ns/yaml', 'POST', NOW(), NOW()),
+  (275, '/api/v1/plugins/kubernetes/resources/configmaps/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (276, '/api/v1/plugins/kubernetes/resources/configmaps/:ns/:name', 'DELETE', NOW(), NOW()),
+  (277, '/api/v1/plugins/kubernetes/resources/secrets/:ns/yaml', 'POST', NOW(), NOW()),
+  (278, '/api/v1/plugins/kubernetes/resources/secrets/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (279, '/api/v1/plugins/kubernetes/resources/secrets/:ns/:name', 'DELETE', NOW(), NOW()),
+  (280, '/api/v1/plugins/kubernetes/resources/resourcequotas/:ns/yaml', 'POST', NOW(), NOW()),
+  (281, '/api/v1/plugins/kubernetes/resources/resourcequotas/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (282, '/api/v1/plugins/kubernetes/resources/resourcequotas/:ns/:name', 'DELETE', NOW(), NOW()),
+  (283, '/api/v1/plugins/kubernetes/resources/limitranges/:ns/yaml', 'POST', NOW(), NOW()),
+  (284, '/api/v1/plugins/kubernetes/resources/limitranges/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (285, '/api/v1/plugins/kubernetes/resources/limitranges/:ns/:name', 'DELETE', NOW(), NOW()),
+  (286, '/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/:ns/yaml', 'POST', NOW(), NOW()),
+  (287, '/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (288, '/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/:ns/:name', 'DELETE', NOW(), NOW()),
+  (289, '/api/v1/plugins/kubernetes/resources/poddisruptionbudgets/:ns/yaml', 'POST', NOW(), NOW()),
+  (290, '/api/v1/plugins/kubernetes/resources/poddisruptionbudgets/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (291, '/api/v1/plugins/kubernetes/resources/poddisruptionbudgets/:ns/:name', 'DELETE', NOW(), NOW()),
+  (292, '/api/v1/plugins/kubernetes/resources/persistentvolumeclaims/:ns/yaml', 'POST', NOW(), NOW()),
+  (293, '/api/v1/plugins/kubernetes/resources/persistentvolumeclaims/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (294, '/api/v1/plugins/kubernetes/resources/persistentvolumeclaims/:ns/:name', 'DELETE', NOW(), NOW()),
+  (295, '/api/v1/plugins/kubernetes/resources/persistentvolumes/yaml', 'POST', NOW(), NOW()),
+  (296, '/api/v1/plugins/kubernetes/resources/persistentvolumes/:name/yaml', 'PUT', NOW(), NOW()),
+  (297, '/api/v1/plugins/kubernetes/resources/persistentvolumes/:name', 'DELETE', NOW(), NOW()),
+  (298, '/api/v1/plugins/kubernetes/resources/storageclasses/yaml', 'POST', NOW(), NOW()),
+  (299, '/api/v1/plugins/kubernetes/resources/storageclasses/:name/yaml', 'PUT', NOW(), NOW()),
+  (300, '/api/v1/plugins/kubernetes/resources/storageclasses/:name', 'DELETE', NOW(), NOW()),
+  (301, '/api/v1/plugins/kubernetes/resources/serviceaccounts/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (302, '/api/v1/plugins/kubernetes/resources/serviceaccounts/:ns/:name', 'DELETE', NOW(), NOW()),
+  (303, '/api/v1/plugins/kubernetes/resources/roles/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (304, '/api/v1/plugins/kubernetes/resources/roles/:ns/:name', 'DELETE', NOW(), NOW()),
+  (305, '/api/v1/plugins/kubernetes/resources/clusterroles/:name/yaml', 'PUT', NOW(), NOW()),
+  (306, '/api/v1/plugins/kubernetes/resources/clusterroles/:name', 'DELETE', NOW(), NOW()),
+  (307, '/api/v1/plugins/kubernetes/resources/rolebindings/:ns/:name/yaml', 'PUT', NOW(), NOW()),
+  (308, '/api/v1/plugins/kubernetes/resources/rolebindings/:ns/:name', 'DELETE', NOW(), NOW()),
+  (309, '/api/v1/plugins/kubernetes/resources/clusterrolebindings/:name/yaml', 'PUT', NOW(), NOW()),
+  (310, '/api/v1/plugins/kubernetes/resources/clusterrolebindings/:name', 'DELETE', NOW(), NOW()),
+  (311, '/api/v1/plugins/kubernetes/inspection/start', 'POST', NOW(), NOW()),
+  (312, '/api/v1/plugins/task/templates', 'POST', NOW(), NOW()),
+  (313, '/api/v1/plugins/task/templates/:id', 'PUT', NOW(), NOW()),
+  (314, '/api/v1/plugins/task/templates/:id', 'DELETE', NOW(), NOW()),
+  (315, '/api/v1/plugins/task/execute', 'POST', NOW(), NOW()),
+  (316, '/api/v1/plugins/task/distribute', 'POST', NOW(), NOW()),
+  (317, '/api/v1/identity/sources', 'POST', NOW(), NOW()),
+  (318, '/api/v1/identity/sources/:id', 'PUT', NOW(), NOW()),
+  (319, '/api/v1/identity/sources/:id', 'DELETE', NOW(), NOW()),
+  (320, '/api/v1/identity/apps', 'POST', NOW(), NOW()),
+  (321, '/api/v1/identity/apps/:id', 'PUT', NOW(), NOW()),
+  (322, '/api/v1/identity/apps/:id', 'DELETE', NOW(), NOW()),
+  (323, '/api/v1/identity/credentials', 'POST', NOW(), NOW()),
+  (324, '/api/v1/identity/credentials/:id', 'PUT', NOW(), NOW()),
+  (325, '/api/v1/identity/credentials/:id', 'DELETE', NOW(), NOW()),
+  (326, '/api/v1/identity/permissions', 'POST', NOW(), NOW()),
+  (327, '/api/v1/identity/permissions/:id', 'DELETE', NOW(), NOW()),
+  (328, '/api/v1/audit/data-logs/batch-delete', 'POST', NOW(), NOW()),
+  (329, '/api/v1/audit/data-logs/:id', 'DELETE', NOW(), NOW()),
+  (330, '/api/v1/audit/operation-logs', 'GET', NOW(), NOW()),
+  (331, '/api/v1/audit/login-logs', 'GET', NOW(), NOW()),
+  (332, '/api/v1/plugins/task/execution-history/batch-delete', 'POST', NOW(), NOW()),
+  (333, '/api/v1/plugins/task/execution-history/export', 'POST', NOW(), NOW()),
+  (334, '/api/v1/plugins/task/execution-history/:id', 'DELETE', NOW(), NOW());
+
+-- 为管理员角色分配所有按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 200), (1, 201), (1, 202), (1, 203), (1, 204), (1, 205), (1, 206), (1, 207), (1, 208), (1, 209),
+  (1, 210), (1, 211), (1, 212), (1, 213), (1, 214), (1, 215), (1, 216), (1, 217), (1, 218), (1, 219),
+  (1, 220), (1, 221), (1, 222), (1, 223), (1, 224), (1, 225), (1, 226), (1, 227), (1, 228), (1, 229),
+  (1, 230), (1, 231), (1, 232), (1, 233), (1, 234), (1, 235), (1, 236), (1, 237), (1, 238), (1, 239),
+  (1, 240), (1, 241), (1, 242), (1, 243), (1, 244), (1, 245), (1, 246), (1, 247), (1, 248), (1, 249),
+  (1, 250), (1, 251), (1, 252), (1, 253), (1, 254), (1, 255), (1, 256), (1, 257), (1, 258), (1, 259),
+  (1, 260), (1, 261), (1, 262), (1, 263), (1, 264), (1, 265), (1, 266), (1, 267), (1, 268), (1, 269),
+  (1, 270), (1, 271), (1, 272), (1, 273), (1, 274), (1, 275), (1, 276), (1, 277), (1, 278), (1, 279),
+  (1, 280), (1, 281), (1, 282), (1, 283), (1, 284), (1, 285), (1, 286), (1, 287), (1, 288), (1, 289),
+  (1, 290), (1, 291), (1, 292), (1, 293), (1, 294), (1, 295), (1, 296), (1, 297), (1, 298), (1, 299),
+  (1, 300), (1, 301), (1, 302), (1, 303), (1, 304), (1, 305), (1, 306), (1, 307), (1, 308), (1, 309),
+  (1, 310), (1, 311), (1, 312), (1, 313), (1, 314), (1, 315), (1, 316), (1, 317), (1, 318), (1, 319),
+  (1, 320), (1, 321), (1, 322), (1, 323), (1, 324), (1, 325), (1, 326), (1, 327),
+  (1, 328), (1, 329), (1, 330), (1, 331), (1, 332), (1, 333), (1, 334);
+
+-- Total: 128 button permissions, 132 API bindings
 
 -- ============================================================
 -- 11. 插件状态表
@@ -1218,3 +1593,76 @@ VALUES (1, 'admin', '$2a$10$RLkgoedTSa0dYj3ujbXMcunSED3c6GLvfdKYsmpz0l0YFZbVrSBq
 
 -- 关联admin用户到admin角色
 INSERT INTO `sys_user_role` (`user_id`, `role_id`) VALUES (1, 1);
+
+-- ============================================================
+-- 12. 中间件管理 — 菜单与按钮权限（增量）
+-- ============================================================
+
+-- 12.1 页面菜单：资产管理(parent_id=15)下新增两个子菜单
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (88, '中间件管理', 'middleware-management', 2, 15, '/asset/middlewares', 'asset/Middlewares', 'Coin', 7, 1, 1, '', '', NOW(), NOW()),
+  (89, '中间件权限', 'middleware-permission', 2, 15, '/asset/middleware-permissions', 'asset/MiddlewarePermission', 'Lock', 8, 1, 1, '', '', NOW(), NOW());
+
+-- 12.2 按钮权限(type=3)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  -- 中间件管理按钮 (parent_id=88)
+  (335, '新增中间件', 'middlewares:create', 3, 88, '', '', '', 1, 1, 1, '/api/v1/middlewares', 'POST', NOW(), NOW()),
+  (336, '编辑中间件', 'middlewares:update', 3, 88, '', '', '', 2, 1, 1, '/api/v1/middlewares/:id', 'PUT', NOW(), NOW()),
+  (337, '删除中间件', 'middlewares:delete', 3, 88, '', '', '', 3, 1, 1, '/api/v1/middlewares/:id', 'DELETE', NOW(), NOW()),
+  (338, '批量删除',   'middlewares:batch-delete', 3, 88, '', '', '', 4, 1, 1, '/api/v1/middlewares/batch-delete', 'POST', NOW(), NOW()),
+  (339, '测试连接',   'middlewares:connect', 3, 88, '', '', '', 5, 1, 1, '/api/v1/middlewares/:id/test', 'POST', NOW(), NOW()),
+  (340, '数据操作',   'middlewares:execute', 3, 88, '', '', '', 6, 1, 1, '/api/v1/middlewares/:id/execute', 'POST', NOW(), NOW()),
+  -- 中间件权限按钮 (parent_id=89)
+  (341, '添加权限', 'middleware-perms:create', 3, 89, '', '', '', 1, 1, 1, '/api/v1/middleware-permissions', 'POST', NOW(), NOW()),
+  (342, '编辑权限', 'middleware-perms:update', 3, 89, '', '', '', 2, 1, 1, '/api/v1/middleware-permissions/:id', 'PUT', NOW(), NOW()),
+  (343, '删除权限', 'middleware-perms:delete', 3, 89, '', '', '', 3, 1, 1, '/api/v1/middleware-permissions/:id', 'DELETE', NOW(), NOW());
+
+-- 12.3 菜单API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (335, '/api/v1/middlewares', 'POST', NOW(), NOW()),
+  (336, '/api/v1/middlewares/:id', 'PUT', NOW(), NOW()),
+  (337, '/api/v1/middlewares/:id', 'DELETE', NOW(), NOW()),
+  (338, '/api/v1/middlewares/batch-delete', 'POST', NOW(), NOW()),
+  (339, '/api/v1/middlewares/:id/test', 'POST', NOW(), NOW()),
+  (340, '/api/v1/middlewares/:id/execute', 'POST', NOW(), NOW()),
+  (341, '/api/v1/middleware-permissions', 'POST', NOW(), NOW()),
+  (342, '/api/v1/middleware-permissions/:id', 'PUT', NOW(), NOW()),
+  (343, '/api/v1/middleware-permissions/:id', 'DELETE', NOW(), NOW());
+
+-- 12.4 为管理员角色(role_id=1)分配中间件菜单和按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 88), (1, 89),
+  (1, 335), (1, 336), (1, 337), (1, 338), (1, 339), (1, 340),
+  (1, 341), (1, 342), (1, 343);
+
+-- ============================================================
+-- 13. 中间件审计日志菜单与按钮权限
+-- ============================================================
+
+-- 13.1 页面菜单：操作审计(parent_id=23)下新增中间件审计
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (344, '中间件审计', 'middleware-audit-logs', 2, 23, '/audit/middleware-audit-logs', 'audit/MiddlewareAuditLogs', 'DataLine', 4, 1, 1, '', '', NOW(), NOW());
+
+-- 13.2 按钮权限(type=3, parent_id=344)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (345, '查询日志', 'mw-audit:search', 3, 344, '', '', '', 0, 1, 1, '/api/v1/audit/middleware-audit-logs', 'GET', NOW(), NOW()),
+  (346, '批量删除', 'mw-audit:batch-delete', 3, 344, '', '', '', 1, 1, 1, '/api/v1/audit/middleware-audit-logs/batch-delete', 'POST', NOW(), NOW()),
+  (347, '删除日志', 'mw-audit:delete', 3, 344, '', '', '', 2, 1, 1, '/api/v1/audit/middleware-audit-logs/:id', 'DELETE', NOW(), NOW());
+
+-- 13.3 菜单API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (345, '/api/v1/audit/middleware-audit-logs', 'GET', NOW(), NOW()),
+  (346, '/api/v1/audit/middleware-audit-logs/batch-delete', 'POST', NOW(), NOW()),
+  (347, '/api/v1/audit/middleware-audit-logs/:id', 'DELETE', NOW(), NOW());
+
+-- 13.4 为管理员角色(role_id=1)分配中间件审计菜单和按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 344), (1, 345), (1, 346), (1, 347);

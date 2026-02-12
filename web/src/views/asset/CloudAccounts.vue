@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button @click="handleAdd" class="black-button">
+        <el-button v-permission="'cloud-accounts:create'" @click="handleAdd" class="black-button">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           新增账号
         </el-button>
@@ -103,16 +103,17 @@
             <el-button
               link
               :type="row.status === 1 ? 'primary' : 'info'"
+              v-permission="'cloud-accounts:import'"
               :disabled="row.status === 0"
               @click="handleImportHost(row)"
               title="导入主机"
             >
               <el-icon><Upload /></el-icon>
             </el-button>
-            <el-button link type="primary" @click="handleEdit(row)" title="编辑">
+            <el-button v-permission="'cloud-accounts:update'" link type="primary" @click="handleEdit(row)" title="编辑">
               <el-icon><Edit /></el-icon>
             </el-button>
-            <el-button link type="danger" @click="handleDelete(row)" title="删除">
+            <el-button v-permission="'cloud-accounts:delete'" link type="danger" @click="handleDelete(row)" title="删除">
               <el-icon><Delete /></el-icon>
             </el-button>
           </template>

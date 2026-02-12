@@ -89,13 +89,14 @@
       </div>
 
       <div class="action-buttons">
-        <el-button type="primary" @click="handleAddWorkloadYAML" class="add-button">
+        <el-button v-permission="'k8s-workloads:create'" type="primary" @click="handleAddWorkloadYAML" class="add-button">
           <el-icon><Document /></el-icon>
           YAML创建
         </el-button>
 
         <el-button
           v-if="selectedType !== 'Pod'"
+          v-permission="'k8s-workloads:create'"
           type="success"
           @click="handleAddWorkloadForm"
           class="add-button-form"
@@ -114,6 +115,7 @@
       <div class="batch-action-right">
         <el-button
           v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet' || selectedType === 'DaemonSet'"
+          v-permission="'k8s-workloads:batch-restart'"
           @click="handleBatchRestart"
           :loading="batchActionLoading"
           class="batch-btn"
@@ -123,6 +125,7 @@
         </el-button>
         <el-button
           v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
+          v-permission="'k8s-workloads:batch-stop'"
           @click="handleBatchPause"
           :loading="batchActionLoading"
           type="warning"
@@ -133,6 +136,7 @@
         </el-button>
         <el-button
           v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
+          v-permission="'k8s-workloads:batch-resume'"
           @click="handleBatchResume"
           :loading="batchActionLoading"
           type="success"
@@ -142,6 +146,7 @@
           批量恢复
         </el-button>
         <el-button
+          v-permission="'k8s-workloads:batch-delete'"
           @click="handleBatchDelete"
           :loading="batchActionLoading"
           type="danger"

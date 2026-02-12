@@ -52,11 +52,11 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="sync-button" @click="handleSyncAll" :loading="syncing">
+        <el-button v-permission="'k8s-clusters:sync'" class="sync-button" @click="handleSyncAll" :loading="syncing">
           <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
           同步状态
         </el-button>
-        <el-button v-if="isAdmin" class="black-button" @click="handleRegister">
+        <el-button v-if="isAdmin" v-permission="'k8s-clusters:create'" class="black-button" @click="handleRegister">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           注册集群
         </el-button>
@@ -134,10 +134,10 @@
           </el-checkbox>
         </div>
         <div class="batch-actions-right">
-          <el-button type="primary" :icon="Refresh" @click="handleBatchSync" plain>
+          <el-button v-permission="'k8s-clusters:batch-sync'" type="primary" :icon="Refresh" @click="handleBatchSync" plain>
             批量同步
           </el-button>
-          <el-button type="danger" :icon="Delete" @click="handleBatchDelete" plain>
+          <el-button v-permission="'k8s-clusters:batch-delete'" type="danger" :icon="Delete" @click="handleBatchDelete" plain>
             批量删除
           </el-button>
           <el-button @click="clearSelection">取消选择</el-button>
@@ -213,17 +213,17 @@
               </el-button>
             </el-tooltip>
             <el-tooltip content="同步" placement="top">
-              <el-button link class="action-btn action-sync" @click="handleSync(row)">
+              <el-button v-permission="'k8s-clusters:sync'" link class="action-btn action-sync" @click="handleSync(row)">
                 <el-icon><Refresh /></el-icon>
               </el-button>
             </el-tooltip>
             <el-tooltip content="编辑" placement="top">
-              <el-button v-if="isAdmin" link class="action-btn action-edit" @click="handleEdit(row)">
+              <el-button v-if="isAdmin" v-permission="'k8s-clusters:update'" link class="action-btn action-edit" @click="handleEdit(row)">
                 <el-icon><Edit /></el-icon>
               </el-button>
             </el-tooltip>
             <el-tooltip content="删除" placement="top">
-              <el-button v-if="isAdmin" link class="action-btn action-delete" @click="handleDelete(row)">
+              <el-button v-if="isAdmin" v-permission="'k8s-clusters:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-tooltip>
@@ -500,6 +500,7 @@
                 </div>
                 <div v-if="!generatedKubeConfig">
                   <el-button
+                    v-permission="'k8s-clusters:apply-credential'"
                     type="primary"
                     :icon="Download"
                     @click="handleApplyCredential"
@@ -510,6 +511,7 @@
                 </div>
                 <div v-else>
                   <el-button
+                    v-permission="'k8s-clusters:revoke-credential'"
                     type="danger"
                     :icon="Delete"
                     @click="handleRevokeCredential"

@@ -15,8 +15,8 @@
         },
         "version": "1.0"
     },
-    "host": "localhost:8080",
-    "basePath": "/api/v1",
+    "host": "",
+    "basePath": "/",
     "paths": {
         "/api/v1/asset-groups": {
             "post": {

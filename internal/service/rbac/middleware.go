@@ -58,10 +58,11 @@ func GetUsername(c *gin.Context) string {
 
 // AuthMiddleware JWT认证中间件
 type AuthMiddleware struct {
-	authService         *AuthService
-	assetPermissionRepo rbac.AssetPermissionRepo
-	menuRepo            rbac.MenuRepo
-	permissionCache     *rbacdata.PermissionCache
+	authService              *AuthService
+	assetPermissionRepo      rbac.AssetPermissionRepo
+	middlewarePermissionRepo rbac.MiddlewarePermissionRepo
+	menuRepo                 rbac.MenuRepo
+	permissionCache          *rbacdata.PermissionCache
 }
 
 func NewAuthMiddleware(authService *AuthService) *AuthMiddleware {
@@ -79,6 +80,11 @@ func (m *AuthMiddleware) SetPermissionDeps(menuRepo rbac.MenuRepo, cache *rbacda
 // SetAssetPermissionRepo 设置资产权限仓储
 func (m *AuthMiddleware) SetAssetPermissionRepo(repo rbac.AssetPermissionRepo) {
 	m.assetPermissionRepo = repo
+}
+
+// SetMiddlewarePermissionRepo 设置中间件权限仓储
+func (m *AuthMiddleware) SetMiddlewarePermissionRepo(repo rbac.MiddlewarePermissionRepo) {
+	m.middlewarePermissionRepo = repo
 }
 
 // AuthRequired JWT认证
@@ -194,6 +200,59 @@ func (m *AuthMiddleware) RequireHostPermission(operation uint) gin.HandlerFunc {
 			c.Request.Context(),
 			userID,
 			uint(hostID),
+			operation,
+		)
+
+		if err != nil {
+			response.ErrorCode(c, http.StatusInternalServerError, "权限检查失败")
+			c.Abort()
+			return
+		}
+
+		if !hasPermission {
+			response.ErrorCode(c, http.StatusForbidden, "权限不足")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// RequireMiddlewarePermission 检查中间件操作权限的中间件
+func (m *AuthMiddleware) RequireMiddlewarePermission(operation uint) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if m.middlewarePermissionRepo == nil {
+			response.ErrorCode(c, http.StatusInternalServerError, "中间件权限检查未初始化")
+			c.Abort()
+			return
+		}
+
+		userID := GetUserID(c)
+		if userID == 0 {
+			response.ErrorCode(c, http.StatusUnauthorized, "未登录")
+			c.Abort()
+			return
+		}
+
+		middlewareIDStr := c.Param("id")
+		if middlewareIDStr == "" {
+			// 对于没有 :id 的路由（如创建），暂不检查具体权限
+			c.Next()
+			return
+		}
+
+		middlewareID, err := strconv.ParseUint(middlewareIDStr, 10, 32)
+		if err != nil {
+			response.ErrorCode(c, http.StatusBadRequest, "无效的中间件ID")
+			c.Abort()
+			return
+		}
+
+		hasPermission, err := m.middlewarePermissionRepo.CheckMiddlewarePermission(
+			c.Request.Context(),
+			userID,
+			uint(middlewareID),
 			operation,
 		)
 

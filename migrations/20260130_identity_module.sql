@@ -165,4 +165,43 @@ INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
 VALUES
   (2, 100), (2, 101), (2, 104);
 
+-- ============================================================
+-- 身份认证模块按钮权限 (type=3)
+-- ============================================================
+
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (317, '创建身份源', 'identity-sources:create', 3, 102, '', '', '', 1, 1, 1, '/api/v1/identity/sources', 'POST', NOW(), NOW()),
+  (318, '编辑身份源', 'identity-sources:update', 3, 102, '', '', '', 2, 1, 1, '/api/v1/identity/sources/:id', 'PUT', NOW(), NOW()),
+  (319, '删除身份源', 'identity-sources:delete', 3, 102, '', '', '', 3, 1, 1, '/api/v1/identity/sources/:id', 'DELETE', NOW(), NOW()),
+  (320, '创建应用', 'identity-apps:create', 3, 103, '', '', '', 1, 1, 1, '/api/v1/identity/apps', 'POST', NOW(), NOW()),
+  (321, '编辑应用', 'identity-apps:update', 3, 103, '', '', '', 2, 1, 1, '/api/v1/identity/apps/:id', 'PUT', NOW(), NOW()),
+  (322, '删除应用', 'identity-apps:delete', 3, 103, '', '', '', 3, 1, 1, '/api/v1/identity/apps/:id', 'DELETE', NOW(), NOW()),
+  (323, '创建凭证', 'identity-creds:create', 3, 104, '', '', '', 1, 1, 1, '/api/v1/identity/credentials', 'POST', NOW(), NOW()),
+  (324, '编辑凭证', 'identity-creds:update', 3, 104, '', '', '', 2, 1, 1, '/api/v1/identity/credentials/:id', 'PUT', NOW(), NOW()),
+  (325, '删除凭证', 'identity-creds:delete', 3, 104, '', '', '', 3, 1, 1, '/api/v1/identity/credentials/:id', 'DELETE', NOW(), NOW()),
+  (326, '创建权限', 'identity-perms:create', 3, 105, '', '', '', 1, 1, 1, '/api/v1/identity/permissions', 'POST', NOW(), NOW()),
+  (327, '删除权限', 'identity-perms:delete', 3, 105, '', '', '', 2, 1, 1, '/api/v1/identity/permissions/:id', 'DELETE', NOW(), NOW());
+
+-- 身份认证按钮API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (317, '/api/v1/identity/sources', 'POST', NOW(), NOW()),
+  (318, '/api/v1/identity/sources/:id', 'PUT', NOW(), NOW()),
+  (319, '/api/v1/identity/sources/:id', 'DELETE', NOW(), NOW()),
+  (320, '/api/v1/identity/apps', 'POST', NOW(), NOW()),
+  (321, '/api/v1/identity/apps/:id', 'PUT', NOW(), NOW()),
+  (322, '/api/v1/identity/apps/:id', 'DELETE', NOW(), NOW()),
+  (323, '/api/v1/identity/credentials', 'POST', NOW(), NOW()),
+  (324, '/api/v1/identity/credentials/:id', 'PUT', NOW(), NOW()),
+  (325, '/api/v1/identity/credentials/:id', 'DELETE', NOW(), NOW()),
+  (326, '/api/v1/identity/permissions', 'POST', NOW(), NOW()),
+  (327, '/api/v1/identity/permissions/:id', 'DELETE', NOW(), NOW());
+
+-- 为管理员角色分配身份认证按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 317), (1, 318), (1, 319), (1, 320), (1, 321), (1, 322),
+  (1, 323), (1, 324), (1, 325), (1, 326), (1, 327);
+
 SET FOREIGN_KEY_CHECKS = 1;

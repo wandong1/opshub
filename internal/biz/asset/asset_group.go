@@ -32,7 +32,8 @@ type AssetGroup struct {
 	Description string        `gorm:"type:varchar(500);comment:分组描述" json:"description"`
 	Sort        int           `gorm:"type:int;default:0;comment:排序" json:"sort"`
 	Status      int           `gorm:"type:tinyint;default:1;comment:状态 1:启用 0:禁用" json:"status"`
-	HostCount   int           `gorm:"-" json:"hostCount"` // 主机数量（不存储在数据库）
+	HostCount   int           `gorm:"-" json:"hostCount"`       // 主机数量（不存储在数据库）
+	MiddlewareCount int       `gorm:"-" json:"middlewareCount"` // 中间件数量（不存储在数据库）
 }
 
 // AssetGroupRequest 资产分组请求
@@ -69,6 +70,7 @@ type AssetGroupInfoVO struct {
 	Sort        int                  `json:"sort"`
 	Status      int                  `json:"status"`
 	HostCount   int                  `json:"hostCount"`
+	MiddlewareCount int              `json:"middlewareCount"`
 	CreateTime  string               `json:"createTime"`
 	Children    []*AssetGroupInfoVO  `json:"children,omitempty"`
 }

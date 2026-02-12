@@ -72,7 +72,7 @@
           <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
           刷新
         </el-button>
-        <el-button class="black-button" @click="handleCreateNamespace">
+        <el-button v-permission="'k8s-namespaces:create'" class="black-button" @click="handleCreateNamespace">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           新建命名空间
         </el-button>

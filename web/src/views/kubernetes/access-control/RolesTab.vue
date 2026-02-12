@@ -29,10 +29,10 @@
 
         <el-table-column label="操作" width="100" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link @click="handleEdit(row)" class="action-btn">
+            <el-button v-permission="'k8s-roles:update'" link @click="handleEdit(row)" class="action-btn">
               <el-icon :size="18"><Edit /></el-icon>
             </el-button>
-            <el-button link @click="handleDelete(row)" class="action-btn danger">
+            <el-button v-permission="'k8s-roles:delete'" link @click="handleDelete(row)" class="action-btn danger">
               <el-icon :size="18"><Delete /></el-icon>
             </el-button>
           </template>

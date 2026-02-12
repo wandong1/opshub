@@ -37,9 +37,8 @@ body.el-popup-parent--hidden {
   width: 100% !important;
 }
 
-/* 隐藏弹窗遮罩层的滚动条 */
+/* 隐藏弹窗遮罩层的滚动条（但允许滚动） */
 .el-overlay {
-  overflow: hidden !important;
   scrollbar-width: none !important; /* Firefox */
   -ms-overflow-style: none !important; /* IE/Edge */
 }
@@ -50,9 +49,9 @@ body.el-popup-parent--hidden {
   height: 0 !important;
 }
 
-/* 弹窗wrapper也隐藏滚动条 */
+/* 弹窗wrapper允许滚动但隐藏滚动条 */
 .el-overlay-dialog {
-  overflow: hidden !important;
+  overflow: auto !important;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }

@@ -107,6 +107,7 @@
         <!-- 开始执行按钮 -->
         <div class="execute-actions">
           <el-button
+            v-permission="'task-distribute:execute'"
             size="large"
             :loading="distributing"
             :disabled="distributing"

@@ -22,7 +22,7 @@
       </div>
 
       <div class="search-bar-right">
-        <el-button type="primary" class="black-button create-btn" @click="handleCreate">
+        <el-button v-permission="'k8s-limitranges:create'" type="primary" class="black-button create-btn" @click="handleCreate">
           <el-icon style="margin-right: 4px;"><Plus /></el-icon>
           新增 LimitRange
         </el-button>
@@ -103,12 +103,12 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip content="编辑 YAML" placement="top">
-                <el-button link class="action-btn" @click="handleEditYAML(row)">
+                <el-button v-permission="'k8s-limitranges:update'" link class="action-btn" @click="handleEditYAML(row)">
                   <el-icon :size="18"><Document /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn danger" @click="handleDelete(row)">
+                <el-button v-permission="'k8s-limitranges:delete'" link class="action-btn danger" @click="handleDelete(row)">
                   <el-icon :size="18"><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
