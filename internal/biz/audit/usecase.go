@@ -119,3 +119,28 @@ func (uc *DataLogUseCase) Delete(ctx context.Context, id uint) error {
 func (uc *DataLogUseCase) DeleteBatch(ctx context.Context, ids []uint) error {
 	return uc.repo.DeleteBatch(ctx, ids)
 }
+
+// MiddlewareAuditLogUseCase 中间件审计日志用例
+type MiddlewareAuditLogUseCase struct {
+	repo MiddlewareAuditLogRepo
+}
+
+func NewMiddlewareAuditLogUseCase(repo MiddlewareAuditLogRepo) *MiddlewareAuditLogUseCase {
+	return &MiddlewareAuditLogUseCase{repo: repo}
+}
+
+func (uc *MiddlewareAuditLogUseCase) Create(ctx context.Context, log *SysMiddlewareAuditLog) error {
+	return uc.repo.Create(ctx, log)
+}
+
+func (uc *MiddlewareAuditLogUseCase) List(ctx context.Context, page, pageSize int, username, middlewareType, commandType, status, startTime, endTime string, middlewareID *uint) ([]*SysMiddlewareAuditLog, int64, error) {
+	return uc.repo.List(ctx, page, pageSize, username, middlewareType, commandType, status, startTime, endTime, middlewareID)
+}
+
+func (uc *MiddlewareAuditLogUseCase) Delete(ctx context.Context, id uint) error {
+	return uc.repo.Delete(ctx, id)
+}
+
+func (uc *MiddlewareAuditLogUseCase) DeleteBatch(ctx context.Context, ids []uint) error {
+	return uc.repo.DeleteBatch(ctx, ids)
+}

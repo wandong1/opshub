@@ -87,15 +87,16 @@ func (uc *AssetGroupUseCase) ToInfoVO(group *AssetGroup) *AssetGroupInfoVO {
 		return nil
 	}
 	vo := &AssetGroupInfoVO{
-		ID:          group.ID,
-		ParentID:    group.ParentID,
-		Name:        group.Name,
-		Code:        group.Code,
-		Description: group.Description,
-		Sort:        group.Sort,
-		Status:      group.Status,
-		HostCount:   group.HostCount,
-		CreateTime:  group.CreatedAt.Format("2006-01-02 15:04:05"),
+		ID:              group.ID,
+		ParentID:        group.ParentID,
+		Name:            group.Name,
+		Code:            group.Code,
+		Description:     group.Description,
+		Sort:            group.Sort,
+		Status:          group.Status,
+		HostCount:       group.HostCount,
+		MiddlewareCount: group.MiddlewareCount,
+		CreateTime:      group.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 	if len(group.Children) > 0 {
 		for _, child := range group.Children {

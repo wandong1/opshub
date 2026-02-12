@@ -22,12 +22,12 @@
       </div>
 
       <div class="search-bar-right">
-        <el-button type="primary" class="black-button" @click="handleCreateYAML">
+        <el-button v-permission="'k8s-configmaps:create'" type="primary" class="black-button" @click="handleCreateYAML">
           <el-icon style="margin-right: 4px;"><Document /></el-icon>
           YAML创建
         </el-button>
 
-        <el-button type="primary" class="black-button" @click="handleCreateForm">
+        <el-button v-permission="'k8s-configmaps:create'" type="primary" class="black-button" @click="handleCreateForm">
           <el-icon style="margin-right: 4px;"><Plus /></el-icon>
           表单创建
         </el-button>
@@ -80,17 +80,17 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip content="编辑 YAML" placement="top">
-                <el-button link class="action-btn" @click="handleEditYAML(row)">
+                <el-button v-permission="'k8s-configmaps:update'" link class="action-btn" @click="handleEditYAML(row)">
                   <el-icon :size="18"><Document /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="编辑" placement="top">
-                <el-button link class="action-btn" @click="handleEditForm(row)">
+                <el-button v-permission="'k8s-configmaps:update'" link class="action-btn" @click="handleEditForm(row)">
                   <el-icon :size="18"><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn danger" @click="handleDelete(row)">
+                <el-button v-permission="'k8s-configmaps:delete'" link class="action-btn danger" @click="handleDelete(row)">
                   <el-icon :size="18"><Delete /></el-icon>
                 </el-button>
               </el-tooltip>

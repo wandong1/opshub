@@ -78,6 +78,12 @@ const router = createRouter({
           meta: { title: '数据日志' }
         },
         {
+          path: 'audit/middleware-audit-logs',
+          name: 'MiddlewareAuditLogs',
+          component: () => import('@/views/audit/MiddlewareAuditLogs.vue'),
+          meta: { title: '中间件审计' }
+        },
+        {
           path: 'asset/hosts',
           name: 'AssetHosts',
           component: () => import('@/views/asset/Hosts.vue'),
@@ -112,6 +118,18 @@ const router = createRouter({
           name: 'AssetPermissions',
           component: () => import('@/views/asset/AssetPermission.vue'),
           meta: { title: '权限配置' }
+        },
+        {
+          path: 'asset/middlewares',
+          name: 'AssetMiddlewares',
+          component: () => import('@/views/asset/Middlewares.vue'),
+          meta: { title: '中间件管理' }
+        },
+        {
+          path: 'asset/middleware-permissions',
+          name: 'AssetMiddlewarePermissions',
+          component: () => import('@/views/asset/MiddlewarePermission.vue'),
+          meta: { title: '中间件权限' }
         },
         {
           path: 'profile',

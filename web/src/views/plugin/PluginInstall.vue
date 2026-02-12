@@ -113,6 +113,7 @@
         <!-- 操作按钮 -->
         <div class="upload-actions">
           <el-button
+            v-permission="'plugins:install'"
             type="primary"
             size="large"
             :disabled="!selectedFile || uploading"

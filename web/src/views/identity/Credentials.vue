@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
+        <el-button v-permission="'identity-creds:create'" class="black-button" @click="handleAdd">
           <el-icon style="margin-right: 6px;"><Plus /></el-icon>
           添加凭证
         </el-button>
@@ -57,8 +57,8 @@
             </div>
           </div>
           <div class="credential-footer">
-            <el-button class="black-button" size="small" @click="handleEdit(cred)">编辑</el-button>
-            <el-button type="danger" size="small" @click="handleDelete(cred)">删除</el-button>
+            <el-button v-permission="'identity-creds:update'" class="black-button" size="small" @click="handleEdit(cred)">编辑</el-button>
+            <el-button v-permission="'identity-creds:delete'" type="danger" size="small" @click="handleDelete(cred)">删除</el-button>
           </div>
         </div>
 

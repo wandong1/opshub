@@ -31,21 +31,25 @@ func NewAuditServices(db *gorm.DB) (
 	operationLogService *auditservice.OperationLogService,
 	loginLogService *auditservice.LoginLogService,
 	dataLogService *auditservice.DataLogService,
+	mwAuditLogService *auditservice.MiddlewareAuditLogService,
 ) {
 	// 初始化Repository
 	operationLogRepo := auditdata.NewOperationLogRepo(db)
 	loginLogRepo := auditdata.NewLoginLogRepo(db)
 	dataLogRepo := auditdata.NewDataLogRepo(db)
+	mwAuditLogRepo := auditdata.NewMiddlewareAuditLogRepo(db)
 
 	// 初始化UseCase
 	operationLogUseCase := audit.NewOperationLogUseCase(operationLogRepo)
 	loginLogUseCase := audit.NewLoginLogUseCase(loginLogRepo)
 	dataLogUseCase := audit.NewDataLogUseCase(dataLogRepo)
+	mwAuditLogUseCase := audit.NewMiddlewareAuditLogUseCase(mwAuditLogRepo)
 
 	// 初始化Service
 	operationLogService = auditservice.NewOperationLogService(operationLogUseCase)
 	loginLogService = auditservice.NewLoginLogService(loginLogUseCase)
 	dataLogService = auditservice.NewDataLogService(dataLogUseCase)
+	mwAuditLogService = auditservice.NewMiddlewareAuditLogService(mwAuditLogUseCase)
 
 	return
 }

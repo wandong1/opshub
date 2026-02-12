@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/ydcloud-dy/opshub/internal/plugin"
-	"github.com/ydcloud-dy/opshub/pkg/utils"
 	"github.com/ydcloud-dy/opshub/plugins/ssl-cert/deployer"
 	"github.com/ydcloud-dy/opshub/plugins/ssl-cert/model"
 	"github.com/ydcloud-dy/opshub/plugins/ssl-cert/server"
@@ -109,47 +108,7 @@ func (p *Plugin) Enable(db *gorm.DB) error {
 	p.scheduler = service.NewScheduler(db, deployerDeps, p.acmeEmail, p.acmeStaging, time.Hour)
 	p.scheduler.Start()
 
-	// 初始化插件按钮权限
-	p.initPermissions(db)
-
 	return nil
-}
-
-// initPermissions 初始化SSL-Cert插件按钮权限
-func (p *Plugin) initPermissions(db *gorm.DB) {
-	utils.EnsureMenu(db, "ssl-cert", "SSL证书", 1, "", "/ssl-cert", "", "Lock", 37)
-	utils.EnsureMenu(db, "ssl-certificates", "证书管理", 2, "ssl-cert", "/ssl-cert/certificates", "ssl-cert/Certificates", "Document", 1)
-	utils.EnsureMenu(db, "ssl-dns-providers", "DNS配置", 2, "ssl-cert", "/ssl-cert/dns-providers", "ssl-cert/DnsProviders", "Connection", 2)
-	utils.EnsureMenu(db, "ssl-deploy-configs", "部署配置", 2, "ssl-cert", "/ssl-cert/deploy-configs", "ssl-cert/DeployConfigs", "Upload", 3)
-
-	// 证书管理
-	utils.EnsureMenuPermissions(db, "ssl-certificates", []utils.MenuPermission{
-		{Code: "certs:list", Name: "查看证书列表", ApiMethod: "GET", ApiPath: "/api/v1/plugins/ssl-cert/certificates", Sort: 1},
-		{Code: "certs:create", Name: "创建证书", ApiMethod: "POST", ApiPath: "/api/v1/plugins/ssl-cert/certificates", Sort: 2},
-		{Code: "certs:update", Name: "编辑证书", ApiMethod: "PUT", ApiPath: "/api/v1/plugins/ssl-cert/certificates/:id", Sort: 3},
-		{Code: "certs:delete", Name: "删除证书", ApiMethod: "DELETE", ApiPath: "/api/v1/plugins/ssl-cert/certificates/:id", Sort: 4},
-		{Code: "certs:renew", Name: "续期证书", ApiMethod: "POST", ApiPath: "/api/v1/plugins/ssl-cert/certificates/:id/renew", Sort: 5},
-		{Code: "certs:download", Name: "下载证书", ApiMethod: "GET", ApiPath: "/api/v1/plugins/ssl-cert/certificates/:id/download", Sort: 6},
-	})
-
-	// DNS提供商
-	utils.EnsureMenuPermissions(db, "ssl-dns-providers", []utils.MenuPermission{
-		{Code: "dns-providers:list", Name: "查看DNS提供商", ApiMethod: "GET", ApiPath: "/api/v1/plugins/ssl-cert/dns-providers", Sort: 1},
-		{Code: "dns-providers:create", Name: "创建DNS提供商", ApiMethod: "POST", ApiPath: "/api/v1/plugins/ssl-cert/dns-providers", Sort: 2},
-		{Code: "dns-providers:update", Name: "编辑DNS提供商", ApiMethod: "PUT", ApiPath: "/api/v1/plugins/ssl-cert/dns-providers/:id", Sort: 3},
-		{Code: "dns-providers:delete", Name: "删除DNS提供商", ApiMethod: "DELETE", ApiPath: "/api/v1/plugins/ssl-cert/dns-providers/:id", Sort: 4},
-	})
-
-	// 部署配置
-	utils.EnsureMenuPermissions(db, "ssl-deploy-configs", []utils.MenuPermission{
-		{Code: "deploy-configs:list", Name: "查看部署配置", ApiMethod: "GET", ApiPath: "/api/v1/plugins/ssl-cert/deploy-configs", Sort: 1},
-		{Code: "deploy-configs:create", Name: "创建部署配置", ApiMethod: "POST", ApiPath: "/api/v1/plugins/ssl-cert/deploy-configs", Sort: 2},
-		{Code: "deploy-configs:update", Name: "编辑部署配置", ApiMethod: "PUT", ApiPath: "/api/v1/plugins/ssl-cert/deploy-configs/:id", Sort: 3},
-		{Code: "deploy-configs:delete", Name: "删除部署配置", ApiMethod: "DELETE", ApiPath: "/api/v1/plugins/ssl-cert/deploy-configs/:id", Sort: 4},
-		{Code: "deploy-configs:deploy", Name: "执行部署", ApiMethod: "POST", ApiPath: "/api/v1/plugins/ssl-cert/deploy-configs/:id/deploy", Sort: 5},
-	})
-
-	utils.AssignMenusToAdminRole(db)
 }
 
 // Disable 禁用插件

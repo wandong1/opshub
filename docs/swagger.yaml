@@ -1,4 +1,4 @@
-basePath: /api/v1
+basePath: /
 definitions:
   asset.AssetGroupRequest:
     properties:
@@ -750,7 +750,7 @@ definitions:
       region:
         type: string
     type: object
-host: localhost:8080
+host: ""
 info:
   contact:
     email: support@swagger.io

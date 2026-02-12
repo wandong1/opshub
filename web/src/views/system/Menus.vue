@@ -825,7 +825,11 @@ const handleEditPluginSort = (row: any) => {
 
 const handleDelete = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确定要删除该菜单吗？', '提示', { type: 'warning' })
+    const hasChildren = row.children && row.children.length > 0
+    const msg = hasChildren
+      ? '该菜单包含子菜单，删除后将同时删除所有子菜单及其关联的权限配置，确定要删除吗？'
+      : '确定要删除该菜单吗？'
+    await ElMessageBox.confirm(msg, '提示', { type: 'warning' })
     await deleteMenu(row.ID || row.id)
     ElMessage.success('删除成功')
     loadMenus()

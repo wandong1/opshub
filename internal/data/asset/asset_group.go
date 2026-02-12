@@ -88,6 +88,24 @@ func (r *assetGroupRepo) GetTree(ctx context.Context) ([]*asset.AssetGroup, erro
 		group.HostCount = hostCounts[group.ID]
 	}
 
+	// 统计每个分组的中间件数量
+	mwCounts := make(map[uint]int)
+	var mwResults []struct {
+		GroupID uint
+		Count   int64
+	}
+	err = r.db.WithContext(ctx).Model(&asset.Middleware{}).Select("group_id, COUNT(*) as count").Where("group_id > 0").Group("group_id").Scan(&mwResults).Error
+	if err == nil {
+		for _, result := range mwResults {
+			mwCounts[result.GroupID] = int(result.Count)
+		}
+	}
+
+	// 为每个分组设置中间件数量
+	for _, group := range groups {
+		group.MiddlewareCount = mwCounts[group.ID]
+	}
+
 	return r.buildTree(groups, 0), nil
 }
 
@@ -101,6 +119,7 @@ func (r *assetGroupRepo) buildTree(groups []*asset.AssetGroup, parentID uint) []
 				// 累加子分组的主机数量
 				for _, child := range children {
 					group.HostCount += child.HostCount
+					group.MiddlewareCount += child.MiddlewareCount
 				}
 			}
 			tree = append(tree, group)

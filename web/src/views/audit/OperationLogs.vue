@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleSearch">
+        <el-button v-permission="'op-logs:search'" class="black-button" @click="handleSearch">
           <el-icon style="margin-right: 6px;"><Search /></el-icon>
           查询
         </el-button>

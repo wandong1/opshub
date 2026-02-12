@@ -74,3 +74,26 @@ export const deleteDataLog = (id: number) => {
 export const deleteDataLogsBatch = (ids: number[]) => {
   return request.post('/api/v1/audit/data-logs/batch-delete', { ids })
 }
+
+// 中间件审计日志相关接口
+export const getMiddlewareAuditLogList = (params: {
+  page?: number
+  pageSize?: number
+  username?: string
+  middlewareType?: string
+  commandType?: string
+  status?: string
+  startTime?: string
+  endTime?: string
+  middlewareId?: number
+}) => {
+  return request.get('/api/v1/audit/middleware-audit-logs', { params })
+}
+
+export const deleteMiddlewareAuditLog = (id: number) => {
+  return request.delete(`/api/v1/audit/middleware-audit-logs/${id}`)
+}
+
+export const deleteMiddlewareAuditLogsBatch = (ids: number[]) => {
+  return request.post('/api/v1/audit/middleware-audit-logs/batch-delete', { ids })
+}

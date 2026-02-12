@@ -75,6 +75,7 @@
       <!-- 开始执行按钮 -->
       <div class="execute-button-section">
         <el-button
+          v-permission="'tasks:execute'"
           type="primary"
           size="large"
           :loading="executing"

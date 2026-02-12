@@ -15,8 +15,8 @@
       </div>
 
       <div class="search-bar-right">
-        <el-button class="black-button" @click="handleCreate">创建 Ingress</el-button>
-        <el-button class="black-button" @click="handleCreateYAML">
+        <el-button v-permission="'k8s-ingresses:create'" class="black-button" @click="handleCreate">创建 Ingress</el-button>
+        <el-button v-permission="'k8s-ingresses:create'" class="black-button" @click="handleCreateYAML">
           <el-icon><Document /></el-icon> YAML创建
         </el-button>
       </div>
@@ -71,17 +71,17 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip content="编辑 YAML" placement="top">
-                <el-button link class="action-btn" @click="handleEditYAML(row)">
+                <el-button v-permission="'k8s-ingresses:update'" link class="action-btn" @click="handleEditYAML(row)">
                   <el-icon :size="18"><Document /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="编辑" placement="top">
-                <el-button link class="action-btn" @click="handleEdit(row)">
+                <el-button v-permission="'k8s-ingresses:update'" link class="action-btn" @click="handleEdit(row)">
                   <el-icon :size="18"><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn danger" @click="handleDelete(row)">
+                <el-button v-permission="'k8s-ingresses:delete'" link class="action-btn danger" @click="handleDelete(row)">
                   <el-icon :size="18"><Delete /></el-icon>
                 </el-button>
               </el-tooltip>

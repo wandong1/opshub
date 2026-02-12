@@ -113,6 +113,38 @@ func (SysDataLog) Table() string {
 	return "sys_data_log"
 }
 
+// SysMiddlewareAuditLog 中间件审计日志表
+type SysMiddlewareAuditLog struct {
+	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	CreatedAt time.Time      `json:"createdAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"deletedAt,omitempty"`
+
+	// 用户信息
+	UserID   uint   `gorm:"index;comment:用户ID" json:"userId"`
+	Username string `gorm:"type:varchar(50);index;comment:用户名" json:"username"`
+
+	// 中间件信息
+	MiddlewareID   uint   `gorm:"index;comment:中间件ID" json:"middlewareId"`
+	MiddlewareName string `gorm:"type:varchar(100);comment:中间件名称" json:"middlewareName"`
+	MiddlewareType string `gorm:"type:varchar(20);index;comment:类型(mysql/redis/clickhouse/mongodb/kafka/milvus)" json:"middlewareType"`
+	Database       string `gorm:"type:varchar(100);comment:操作的数据库" json:"database"`
+
+	// 操作信息
+	Command      string `gorm:"type:longtext;comment:执行的命令" json:"command"`
+	CommandType  string `gorm:"type:varchar(20);index;comment:命令类型(query/insert/update/delete/ddl/admin/other)" json:"commandType"`
+	Status       string `gorm:"type:varchar(10);comment:执行结果(success/failed)" json:"status"`
+	ErrorMsg     string `gorm:"type:text;comment:错误信息" json:"errorMsg,omitempty"`
+	Duration     int64  `gorm:"type:bigint;comment:耗时(ms)" json:"duration"`
+	AffectedRows int64  `gorm:"type:bigint;comment:影响行数" json:"affectedRows"`
+
+	// 环境信息
+	IP string `gorm:"type:varchar(50);comment:IP地址" json:"ip"`
+}
+
+func (SysMiddlewareAuditLog) TableName() string {
+	return "sys_middleware_audit_log"
+}
+
 // TableName 指定表名
 func (SysOperationLog) TableName() string {
 	return "sys_operation_log"

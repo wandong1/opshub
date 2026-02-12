@@ -20,7 +20,7 @@
           <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
           重置
         </el-button>
-        <el-button class="black-button danger" @click="handleBatchDelete" :disabled="selectedIds.length === 0">
+        <el-button v-permission="'data-logs:batch-delete'" class="black-button danger" @click="handleBatchDelete" :disabled="selectedIds.length === 0">
           <el-icon style="margin-right: 6px;"><Delete /></el-icon>
           批量删除
         </el-button>
@@ -126,7 +126,7 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn danger" @click="handleDelete(row)">
+                <el-button v-permission="'data-logs:delete'" link class="action-btn danger" @click="handleDelete(row)">
                   <el-icon :size="18"><Delete /></el-icon>
                 </el-button>
               </el-tooltip>

@@ -332,6 +332,7 @@
                   <el-tooltip content="采集信息" placement="top">
                     <el-button
                       v-if="hasHostPermission(row.id, PERMISSION.COLLECT)"
+                      v-permission="'hosts:collect'"
                       link
                       class="action-btn action-refresh"
                       @click="handleCollectHost(row)"
@@ -342,6 +343,7 @@
                   <el-tooltip content="文件管理" placement="top">
                     <el-button
                       v-if="hasHostPermission(row.id, PERMISSION.FILE)"
+                      v-permission="'hosts:file-manage'"
                       link
                       class="action-btn action-files"
                       @click="handleFileManager(row)"

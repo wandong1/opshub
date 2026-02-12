@@ -56,28 +56,37 @@ func (r *menuRepo) Update(ctx context.Context, menu *rbac.SysMenu) error {
 
 func (r *menuRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 删除角色菜单关联
-		if err := tx.Where("menu_id = ?", id).Delete(&rbac.SysRoleMenu{}).Error; err != nil {
-			return err
-		}
-
-		// 删除菜单API关联
-		if err := tx.Where("menu_id = ?", id).Delete(&rbac.SysMenuAPI{}).Error; err != nil {
-			return err
-		}
-
-		// 检查是否有子菜单
-		var count int64
-		if err := tx.Model(&rbac.SysMenu{}).Where("parent_id = ?", id).Count(&count).Error; err != nil {
-			return err
-		}
-		if count > 0 {
-			return gorm.ErrRegistered // 存在子菜单，不能删除
-		}
-
-		// 删除菜单
-		return tx.Delete(&rbac.SysMenu{}, id).Error
+		return r.deleteRecursive(tx, id)
 	})
+}
+
+// deleteRecursive 递归删除菜单及其所有子菜单
+func (r *menuRepo) deleteRecursive(tx *gorm.DB, id uint) error {
+	// 查找所有子菜单
+	var childIDs []uint
+	if err := tx.Model(&rbac.SysMenu{}).Where("parent_id = ?", id).Pluck("id", &childIDs).Error; err != nil {
+		return err
+	}
+
+	// 递归删除子菜单
+	for _, childID := range childIDs {
+		if err := r.deleteRecursive(tx, childID); err != nil {
+			return err
+		}
+	}
+
+	// 删除角色菜单关联
+	if err := tx.Where("menu_id = ?", id).Delete(&rbac.SysRoleMenu{}).Error; err != nil {
+		return err
+	}
+
+	// 删除菜单API关联
+	if err := tx.Where("menu_id = ?", id).Delete(&rbac.SysMenuAPI{}).Error; err != nil {
+		return err
+	}
+
+	// 删除菜单本身
+	return tx.Delete(&rbac.SysMenu{}, id).Error
 }
 
 func (r *menuRepo) GetByID(ctx context.Context, id uint) (*rbac.SysMenu, error) {

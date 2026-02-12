@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleSave" :loading="saving">
+        <el-button v-permission="'system-config:update'" class="black-button" @click="handleSave" :loading="saving">
           <el-icon style="margin-right: 6px;"><Check /></el-icon>
           保存配置
         </el-button>

@@ -50,3 +50,11 @@ type DataLogRepo interface {
 	Delete(ctx context.Context, id uint) error
 	DeleteBatch(ctx context.Context, ids []uint) error
 }
+
+// MiddlewareAuditLogRepo 中间件审计日志仓储接口
+type MiddlewareAuditLogRepo interface {
+	Create(ctx context.Context, log *SysMiddlewareAuditLog) error
+	List(ctx context.Context, page, pageSize int, username, middlewareType, commandType, status, startTime, endTime string, middlewareID *uint) ([]*SysMiddlewareAuditLog, int64, error)
+	Delete(ctx context.Context, id uint) error
+	DeleteBatch(ctx context.Context, ids []uint) error
+}

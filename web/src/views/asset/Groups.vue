@@ -96,6 +96,12 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="中间件数量" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag type="warning">{{ row.middlewareCount || 0 }}</el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'danger'" effect="dark">

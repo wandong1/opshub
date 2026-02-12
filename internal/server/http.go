@@ -29,6 +29,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/ydcloud-dy/opshub/docs"
 	"github.com/ydcloud-dy/opshub/internal/conf"
 	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	"github.com/ydcloud-dy/opshub/internal/plugin"
@@ -136,7 +137,9 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisCl
 
 // registerRoutes 注册路由
 func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
-	// Swagger 文档
+	// Swagger 文档 — 动态设置，让 Swagger UI 使用当前页面地址
+	docs.SwaggerInfo.Host = ""
+	docs.SwaggerInfo.BasePath = "/"
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 健康检查
@@ -160,17 +163,21 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	userService.SetConfigUseCase(configUseCase)
 
 	// 创建 Audit 服务
-	operationLogService, loginLogService, dataLogService := auditserver.NewAuditServices(s.db)
+	operationLogService, loginLogService, dataLogService, mwAuditLogService := auditserver.NewAuditServices(s.db)
 
 	// 创建 Asset 服务
-	assetGroupService, hostService, terminalManager := assetserver.NewAssetServices(s.db)
+	assetGroupService, hostService, middlewareService, mwPermissionService, terminalManager := assetserver.NewAssetServices(s.db)
 
 	// 设置authMiddleware的assetPermissionRepo
 	assetPermissionRepo := rbacdata.NewAssetPermissionRepo(s.db)
 	authMiddleware.SetAssetPermissionRepo(assetPermissionRepo)
 
+	// 设置authMiddleware的middlewarePermissionRepo
+	mwPermissionRepo := rbacdata.NewMiddlewarePermissionRepo(s.db)
+	authMiddleware.SetMiddlewarePermissionRepo(mwPermissionRepo)
+
 	// Asset 路由
-	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, terminalManager, s.db, authMiddleware)
+	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, terminalManager, s.db, authMiddleware)
 
 	// API v1 - 公开接口(不需要认证)
 	public := router.Group("/api/v1/public")
@@ -184,7 +191,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	v1.Use(authMiddleware.RequirePermission())
 	{
 		// Audit 路由
-		auditHTTPServer := auditserver.NewHTTPService(operationLogService, loginLogService, dataLogService)
+		auditHTTPServer := auditserver.NewHTTPService(operationLogService, loginLogService, dataLogService, mwAuditLogService)
 		auditHTTPServer.RegisterRoutes(v1)
 
 		// 注册 Asset 路由

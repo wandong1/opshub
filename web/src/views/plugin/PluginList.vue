@@ -90,6 +90,7 @@
           <template #default="{ row }">
             <el-button
               v-if="!row.enabled"
+              v-permission="'plugins:enable'"
               type="primary"
               size="small"
               @click="handleEnable(row)"
@@ -100,6 +101,7 @@
             </el-button>
             <el-button
               v-else
+              v-permission="'plugins:disable'"
               type="danger"
               size="small"
               @click="handleDisable(row)"
@@ -109,6 +111,7 @@
               禁用
             </el-button>
             <el-button
+              v-permission="'plugins:uninstall'"
               type="danger"
               size="small"
               @click="handleUninstall(row)"

@@ -28,17 +28,20 @@ type HTTPService struct {
 	operationLogService *audit.OperationLogService
 	loginLogService     *audit.LoginLogService
 	dataLogService      *audit.DataLogService
+	mwAuditLogService   *audit.MiddlewareAuditLogService
 }
 
 func NewHTTPService(
 	operationLogService *audit.OperationLogService,
 	loginLogService *audit.LoginLogService,
 	dataLogService *audit.DataLogService,
+	mwAuditLogService *audit.MiddlewareAuditLogService,
 ) *HTTPService {
 	return &HTTPService{
 		operationLogService: operationLogService,
 		loginLogService:     loginLogService,
 		dataLogService:      dataLogService,
+		mwAuditLogService:   mwAuditLogService,
 	}
 }
 
@@ -72,6 +75,14 @@ func (s *HTTPService) RegisterRoutes(r *gin.RouterGroup) {
 			dataLogs.GET("/:id", s.dataLogService.GetDataLog)
 			dataLogs.DELETE("/:id", s.dataLogService.DeleteDataLog)
 			dataLogs.POST("/batch-delete", s.dataLogService.DeleteDataLogsBatch)
+		}
+
+		// 中间件审计日志路由
+		mwAuditLogs := audit.Group("/middleware-audit-logs")
+		{
+			mwAuditLogs.GET("", s.mwAuditLogService.ListMiddlewareAuditLogs)
+			mwAuditLogs.DELETE("/:id", s.mwAuditLogService.DeleteMiddlewareAuditLog)
+			mwAuditLogs.POST("/batch-delete", s.mwAuditLogService.DeleteMiddlewareAuditLogsBatch)
 		}
 	}
 }

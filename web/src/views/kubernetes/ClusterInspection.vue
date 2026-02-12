@@ -28,7 +28,7 @@
             :value="cluster.id"
           />
         </el-select>
-        <el-button class="black-button" @click="handleStartInspection" :loading="inspecting" :disabled="!selectedClusterId">
+        <el-button v-permission="'k8s-inspection:start'" class="black-button" @click="handleStartInspection" :loading="inspecting" :disabled="!selectedClusterId">
           <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
           {{ inspecting ? '巡检中...' : '开始巡检' }}
         </el-button>
@@ -99,7 +99,7 @@
             <span>容量规划</span>
           </div>
         </div>
-        <el-button class="black-button start-btn" size="large" @click="handleStartInspection" :disabled="!selectedClusterId">
+        <el-button v-permission="'k8s-inspection:start'" class="black-button start-btn" size="large" @click="handleStartInspection" :disabled="!selectedClusterId">
           <el-icon style="margin-right: 8px;"><Refresh /></el-icon>
           立即开始巡检
         </el-button>
@@ -588,7 +588,7 @@
           <el-icon style="margin-right: 6px;"><Download /></el-icon>
           导出Excel报告
         </el-button>
-        <el-button @click="handleStartInspection" :disabled="inspecting">
+        <el-button v-permission="'k8s-inspection:start'" @click="handleStartInspection" :disabled="inspecting">
           <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
           重新巡检
         </el-button>

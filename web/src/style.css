@@ -45,9 +45,9 @@ body.el-popup-parent--hidden {
   overflow: hidden !important;
 }
 
-/* 确保 Dialog 遮罩层不影响布局 */
+/* 确保 Dialog 遮罩层不影响布局（允许弹窗内容滚动） */
 .el-overlay {
-  overflow: hidden !important;
+  scrollbar-width: none !important;
 }
 
 a {
