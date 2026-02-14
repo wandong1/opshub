@@ -5,7 +5,7 @@ APP_NAME=opshub
 BUILD_DIR=bin
 CONFIG_FILE=config/config.yaml
 GO_FILES=$(shell find . -name '*.go' -type f)
-LDFLAGS=-ldflags "-X main.Version=1.0.0 -X main.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.BuildTime=$(shell date -u '+%Y-%m-%d_%H:%M:%S')"
+LDFLAGS=-ldflags "-X github.com/ydcloud-dy/opshub/pkg/version.Version=$(shell printf 'v1.0.0-%s-%s' $$(date -u '+%Y%m%d') $$(head -c2 /dev/urandom | od -An -tx1 | tr -d ' ')) -X github.com/ydcloud-dy/opshub/pkg/version.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X github.com/ydcloud-dy/opshub/pkg/version.BuildDate=$(shell date -u '+%Y-%m-%d_%H:%M:%S')"
 
 # 默认目标
 all: swagger build

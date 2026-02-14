@@ -33,6 +33,7 @@ import (
 	"github.com/ydcloud-dy/opshub/internal/biz"
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	auditmodel "github.com/ydcloud-dy/opshub/internal/biz/audit"
+	inspectionbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
 	rbacmodel "github.com/ydcloud-dy/opshub/internal/biz/rbac"
 	systemmodel "github.com/ydcloud-dy/opshub/internal/biz/system"
 	"github.com/ydcloud-dy/opshub/internal/conf"
@@ -202,6 +203,12 @@ func autoMigrate(db *gorm.DB) error {
 		&auditmodel.SysLoginLog{},
 		&auditmodel.SysDataLog{},
 		&auditmodel.SysMiddlewareAuditLog{},
+		// 智能巡检相关表
+		&inspectionbiz.ProbeConfig{},
+		&inspectionbiz.ProbeTask{},
+		&inspectionbiz.ProbeResult{},
+		&inspectionbiz.PushgatewayConfig{},
+		&inspectionbiz.ProbeTaskConfig{},
 	); err != nil {
 		return err
 	}

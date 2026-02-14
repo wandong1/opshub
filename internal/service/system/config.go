@@ -31,6 +31,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/ydcloud-dy/opshub/internal/biz/system"
 	"github.com/ydcloud-dy/opshub/pkg/response"
+	"github.com/ydcloud-dy/opshub/pkg/version"
 )
 
 // ConfigService 系统配置服务
@@ -296,6 +297,7 @@ func (s *ConfigService) GetPublicConfig(c *gin.Context) {
 		"systemLogo":        basicConfig.SystemLogo,
 		"systemDescription": basicConfig.SystemDescription,
 		"enableCaptcha":     securityConfig.EnableCaptcha,
+		"version":           version.GetVersion(),
 	})
 }
 
