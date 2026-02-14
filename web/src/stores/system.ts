@@ -5,6 +5,7 @@ interface SystemState {
   systemName: string
   systemLogo: string
   systemDescription: string
+  version: string
   loaded: boolean
 }
 
@@ -13,6 +14,7 @@ export const useSystemStore = defineStore('system', {
     systemName: 'OpsHub',
     systemLogo: '',
     systemDescription: '运维管理平台',
+    version: '',
     loaded: false
   }),
 
@@ -25,6 +27,7 @@ export const useSystemStore = defineStore('system', {
           this.systemName = res.systemName || 'OpsHub'
           this.systemLogo = res.systemLogo || ''
           this.systemDescription = res.systemDescription || '运维管理平台'
+          this.version = res.version || ''
           this.loaded = true
           this.updatePageMeta()
         }
@@ -43,6 +46,11 @@ export const useSystemStore = defineStore('system', {
           this.systemDescription = res.basic.systemDescription || '运维管理平台'
           this.loaded = true
           this.updatePageMeta()
+        }
+        // version comes from public config
+        if (!this.version) {
+          const pub = await getPublicConfig()
+          if (pub?.version) this.version = pub.version
         }
       } catch (error) {
         console.error('加载系统配置失败', error)

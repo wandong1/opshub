@@ -47,34 +47,10 @@
         </template>
       </el-menu>
 
-      <!-- 用户信息区域 - 放在底部 -->
-      <div class="user-section">
-        <el-dropdown trigger="click" @command="handleUserCommand">
-          <div class="user-info-wrapper">
-            <div class="user-avatar">
-              <el-avatar :size="40" :src="avatarUrl" :key="userStore.avatarTimestamp">
-                <el-icon><UserFilled /></el-icon>
-              </el-avatar>
-            </div>
-            <div class="user-details">
-              <div class="user-name">{{ userStore.userInfo?.realName || userStore.userInfo?.username }}</div>
-              <div class="user-role">{{ userRoleDisplay }}</div>
-            </div>
-            <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
-          </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="profile">
-                <el-icon><User /></el-icon>
-                <span>个人信息</span>
-              </el-dropdown-item>
-              <el-dropdown-item command="logout" divided>
-                <el-icon><SwitchButton /></el-icon>
-                <span>退出登录</span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+      <!-- 系统信息区域 - 放在底部 -->
+      <div class="system-info-section">
+        <div class="system-env" v-if="systemStore.systemDescription">{{ systemStore.systemDescription }}</div>
+        <div class="system-version" v-if="systemStore.version">{{ systemStore.version }}</div>
       </div>
     </el-aside>
 
@@ -91,6 +67,29 @@
                 {{ currentRoute.meta.title }}
               </el-breadcrumb-item>
             </el-breadcrumb>
+          </div>
+          <div class="header-user">
+            <el-dropdown trigger="click" @command="handleUserCommand">
+              <div class="header-user-wrapper">
+                <el-avatar :size="32" :src="avatarUrl" :key="userStore.avatarTimestamp">
+                  <el-icon><UserFilled /></el-icon>
+                </el-avatar>
+                <span class="header-user-name">{{ userStore.userInfo?.realName || userStore.userInfo?.username }}</span>
+                <el-icon class="header-dropdown-icon"><ArrowDown /></el-icon>
+              </div>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">
+                    <el-icon><User /></el-icon>
+                    <span>个人信息</span>
+                  </el-dropdown-item>
+                  <el-dropdown-item command="logout" divided>
+                    <el-icon><SwitchButton /></el-icon>
+                    <span>退出登录</span>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </el-header>
@@ -659,80 +658,27 @@ onMounted(async () => {
   line-height: 1;
 }
 
-/* 用户信息区域 */
-.user-section {
-  padding: 0;
+/* 侧边栏底部系统信息 */
+.system-info-section {
+  padding: 12px 20px;
   flex-shrink: 0;
-  width: 100%;
-  min-width: 260px;
-  max-width: 260px;
-}
-
-.user-info-wrapper {
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: #000000;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  width: 100%;
-  min-width: 260px;
-  max-width: 260px;
-  box-sizing: border-box;
+  text-align: center;
 }
 
-.user-info-wrapper:hover {
-  background-color: rgba(255, 175, 53, 0.1);
-}
-
-/* 确保 dropdown 也填满宽度 */
-.user-section :deep(.el-dropdown) {
-  width: 100%;
-}
-
-.user-avatar :deep(.el-avatar) {
-  background-color: #FFAF35;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.user-avatar :deep(.el-icon) {
-  font-size: 20px;
-  color: #fff;
-}
-
-.user-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.user-name {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-role {
+.system-env {
   color: hsla(0, 0%, 100%, 0.45);
   font-size: 12px;
+  margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.dropdown-icon {
-  color: hsla(0, 0%, 100%, 0.45);
-  font-size: 14px;
-  transition: transform 0.3s;
-}
-
-:deep(.el-dropdown:hover .dropdown-icon) {
-  transform: rotate(180deg);
+.system-version {
+  color: hsla(0, 0%, 100%, 0.3);
+  font-size: 11px;
+  font-family: monospace;
 }
 
 /* 下拉菜单样式 */
@@ -970,6 +916,54 @@ onMounted(async () => {
   flex: 1;
   display: flex;
   align-items: center;
+}
+
+/* 右上角用户信息 */
+.header-user {
+  flex-shrink: 0;
+}
+
+.header-user-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.header-user-wrapper:hover {
+  background-color: #f5f7fa;
+}
+
+.header-user-wrapper :deep(.el-avatar) {
+  background-color: #FFAF35;
+}
+
+.header-user-wrapper :deep(.el-avatar .el-icon) {
+  font-size: 16px;
+  color: #fff;
+}
+
+.header-user-name {
+  font-size: 14px;
+  color: #303133;
+  font-weight: 500;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-dropdown-icon {
+  color: #909399;
+  font-size: 12px;
+  transition: transform 0.3s;
+}
+
+.header-user-wrapper:hover .header-dropdown-icon {
+  transform: rotate(180deg);
 }
 
 .el-main {
