@@ -4,112 +4,120 @@
     <div class="action-bar">
       <div class="page-info">
         <div class="info-icon">
-          <el-icon><User /></el-icon>
+          <icon-user />
         </div>
         <div class="info-text">
           <div class="info-title">已申请凭据的用户</div>
           <div class="info-desc">共 {{ uniqueCredentialUsers.length }} 位用户已申请该集群的 kubeconfig 访问凭据</div>
         </div>
       </div>
-      <el-button @click="handleRefresh" :loading="loading">
-        <el-icon><Refresh /></el-icon>
+      <a-button @click="handleRefresh" :loading="loading">
+        <icon-refresh />
         刷新
-      </el-button>
+      </a-button>
     </div>
 
     <!-- 用户表格 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="uniqueCredentialUsers"
-        v-loading="loading"
+        :loading="loading"
         class="user-table"
         :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
-      >
-        <el-table-column width="60">
-          <template #default="{ row }">
+       :columns="tableColumns">
+          <template #col_0="{ record }">
             <div class="table-avatar">
-              <el-icon><User /></el-icon>
+              <icon-user />
             </div>
           </template>
-        </el-table-column>
-        <el-table-column prop="realName" label="用户名" min-width="120">
-          <template #default="{ row }">
+          <template #realName="{ record }">
             <div class="user-cell">
-              <div class="user-name">{{ row.realName || row.username }}</div>
-              <div class="user-username">@{{ row.username }}</div>
+              <div class="user-name">{{ record.realName || record.username }}</div>
+              <div class="user-username">@{{ record.username }}</div>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column prop="serviceAccount" label="ServiceAccount" min-width="180">
-          <template #default="{ row }">
-            <span class="mono-text">{{ row.serviceAccount }}</span>
+          <template #serviceAccount="{ record }">
+            <span class="mono-text">{{ record.serviceAccount }}</span>
           </template>
-        </el-table-column>
-        <el-table-column prop="namespace" label="命名空间" width="150">
-          <template #default="{ row }">
-            <span class="mono-text">{{ row.namespace }}</span>
+          <template #namespace="{ record }">
+            <span class="mono-text">{{ record.namespace }}</span>
           </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="申请时间" width="170">
-          <template #default="{ row }">
-            <span class="time-text">{{ formatDate(row.createdAt) }}</span>
+          <template #createdAt="{ record }">
+            <span class="time-text">{{ formatDate(record.createdAt) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="状态" width="90" align="center">
-          <template #default>
-            <el-tag type="success" effect="plain" size="small">已授权</el-tag>
+          <template #status="{ record }">
+            <a-tag color="green" size="small">
+              <span class="status-dot status-dot-active"></span>
+              凭据已申请
+            </a-tag>
+            <a-tag
+              v-if="userRoleCounts[record.userId] > 0"
+              color="arcoblue"
+              size="small"
+              style="margin-left: 4px;"
+            >
+              {{ userRoleCounts[record.userId] }} 个角色
+            </a-tag>
+            <a-tag
+              v-else-if="userRoleCounts[record.userId] === 0"
+              color="orangered"
+              size="small"
+              style="margin-left: 4px;"
+            >
+              未分配角色
+            </a-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row }">
-            <div class="table-actions">
-              <el-button link class="action-authorize" @click="handleAuthorize(row)" title="授权">
-                <el-icon><Plus /></el-icon>
-              </el-button>
-              <el-button link class="action-view" @click="handleViewCredential(row)" title="查看凭据">
-                <el-icon><Document /></el-icon>
-              </el-button>
-              <el-button link class="action-revoke" @click="handleRevoke(row)" title="吊销">
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </div>
+          <template #actions="{ record }">
+            <a-space>
+              <a-button type="text" size="small" class="action-authorize" @click="handleAuthorize(record)">
+                <template #icon><icon-safe /></template>
+                授权角色
+              </a-button>
+              <a-button type="text" size="small" class="action-view" @click="handleViewCredential(record)">
+                <template #icon><icon-file /></template>
+                凭据
+              </a-button>
+              <a-button type="text" size="small" class="action-revoke" @click="handleRevoke(record)">
+                <template #icon><icon-delete /></template>
+                吊销
+              </a-button>
+            </a-space>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
     </div>
 
-    <el-empty
+    <a-empty
       v-if="!loading && !uniqueCredentialUsers.length"
       description="暂无用户申请凭据"
       :image-size="100"
     />
 
     <!-- KubeConfig 查看对话框 -->
-    <el-dialog
-      v-model="showKubeConfigDialog"
+    <a-modal
+      v-model:visible="showKubeConfigDialog"
       title="查看 KubeConfig 凭据"
       width="800px"
-      append-to-body
+      :render-to-body="true"
     >
       <div class="kubeconfig-dialog">
         <div class="kubeconfig-info">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="用户名">{{ currentUser?.username }}</el-descriptions-item>
-            <el-descriptions-item label="真实姓名">{{ currentUser?.realName }}</el-descriptions-item>
-            <el-descriptions-item label="ServiceAccount">{{ currentUser?.serviceAccount }}</el-descriptions-item>
-            <el-descriptions-item label="命名空间">{{ currentUser?.namespace }}</el-descriptions-item>
-          </el-descriptions>
+          <a-descriptions :column="2" :bordered="true">
+            <a-descriptions-item label="用户名">{{ currentUser?.username }}</a-descriptions-item>
+            <a-descriptions-item label="真实姓名">{{ currentUser?.realName }}</a-descriptions-item>
+            <a-descriptions-item label="ServiceAccount">{{ currentUser?.serviceAccount }}</a-descriptions-item>
+            <a-descriptions-item label="命名空间">{{ currentUser?.namespace }}</a-descriptions-item>
+          </a-descriptions>
         </div>
 
         <div class="kubeconfig-actions">
-          <el-button type="primary" @click="handleCopyKubeConfig">
-            <el-icon><DocumentCopy /></el-icon>
+          <a-button type="primary" @click="handleCopyKubeConfig">
+            <icon-copy />
             复制
-          </el-button>
-          <el-button @click="handleDownloadKubeConfig">
-            <el-icon><Download /></el-icon>
+          </a-button>
+          <a-button @click="handleDownloadKubeConfig">
+            <icon-download />
             下载
-          </el-button>
+          </a-button>
         </div>
 
         <div class="code-editor-wrapper">
@@ -125,25 +133,26 @@
         </div>
 
         <div class="code-tip">
-          <el-icon><Warning /></el-icon>
+          <icon-exclamation-circle />
           <span>此凭据文件包含您的集群访问权限，请妥善保管，不要泄露给他人</span>
         </div>
       </div>
-    </el-dialog>
+    </a-modal>
 
     <!-- 授权对话框 -->
-    <el-dialog
-      v-model="showAuthorizeDialog"
+    <a-modal
+      v-model:visible="showAuthorizeDialog"
       title="授予用户权限"
       width="800px"
-      append-to-body
+      :render-to-body="true"
       @close="handleAuthorizeDialogClose"
     >
-      <div class="authorize-dialog" v-loading="authorizeLoading">
+      <div class="authorize-dialog">
+        <a-spin :loading="authorizeLoading" style="width: 100%">
         <!-- 用户信息 -->
         <div class="user-info-section">
           <div class="user-info-header">
-            <el-icon><User /></el-icon>
+            <icon-user />
             <span>用户信息</span>
           </div>
           <div class="user-info-content">
@@ -161,7 +170,7 @@
         <!-- 已有权限 -->
         <div class="existing-permissions-section">
           <div class="section-header">
-            <el-icon><Key /></el-icon>
+            <icon-safe />
             <span>角色</span>
           </div>
 
@@ -169,7 +178,7 @@
           <div class="permission-group" v-if="existingClusterRoles.length > 0">
             <div class="permission-group-title">集群级别</div>
             <div class="permission-tags">
-              <el-tag
+              <a-tag
                 v-for="role in existingClusterRoles"
                 :key="role.roleName"
                 type="danger"
@@ -177,7 +186,7 @@
                 @close="handleRemoveExistingRole(role)"
               >
                 {{ role.roleName }}
-              </el-tag>
+              </a-tag>
             </div>
           </div>
 
@@ -194,7 +203,7 @@
               >
                 <div class="namespace-name">{{ nsPerm.namespace }}</div>
                 <div class="namespace-roles">
-                  <el-tag
+                  <a-tag
                     v-for="role in nsPerm.roles"
                     :key="role.id"
                     type="primary"
@@ -202,13 +211,13 @@
                     @close="handleRemoveExistingRole(role)"
                   >
                     {{ role.roleName }}
-                  </el-tag>
+                  </a-tag>
                 </div>
               </div>
             </div>
           </div>
 
-          <el-empty
+          <a-empty
             v-if="existingClusterRoles.length === 0 && existingNamespacePermissions.length === 0"
             description="暂无权限"
             :image-size="60"
@@ -218,23 +227,23 @@
         <!-- 添加新权限 -->
         <div class="add-permission-section">
           <div class="section-header">
-            <el-icon><Plus /></el-icon>
+            <icon-plus />
             <span>添加新权限</span>
           </div>
 
-          <el-form :model="authorizeForm" label-width="100px">
+          <a-form :model="authorizeForm" label-width="100px">
             <!-- 权限级别 -->
-            <el-form-item label="权限级别">
-              <el-radio-group v-model="authorizeForm.permissionLevel" @change="handlePermissionLevelChange">
-                <el-radio-button label="cluster">集群级别</el-radio-button>
-                <el-radio-button label="namespace">命名空间级别</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
+            <a-form-item label="权限级别">
+              <a-radio-group v-model="authorizeForm.permissionLevel" @change="handlePermissionLevelChange">
+                <a-radio value="cluster">集群级别</a-radio>
+                <a-radio value="namespace">命名空间级别</a-radio>
+              </a-radio-group>
+            </a-form-item>
 
             <!-- 集群角色选择 -->
             <template v-if="authorizeForm.permissionLevel === 'cluster'">
-              <el-form-item label="集群角色">
-                <el-select
+              <a-form-item label="集群角色">
+                <a-select
                   v-model="authorizeForm.clusterRoleNames"
                   placeholder="请选择集群角色"
                   filterable
@@ -243,25 +252,25 @@
                   :loading="loadingRoles"
                   style="width: 100%"
                 >
-                  <el-option
+                  <a-option
                     v-for="role in clusterRoles"
                     :key="role.name"
                     :label="role.name"
                     :value="role.name"
                   >
                     <div class="role-option">
-                      <el-icon class="role-icon"><Key /></el-icon>
+                      <icon-safe />
                       <span>{{ role.name }}</span>
                     </div>
-                  </el-option>
-                </el-select>
-              </el-form-item>
+                  </a-option>
+                </a-select>
+              </a-form-item>
             </template>
 
             <!-- 命名空间角色选择 -->
             <template v-if="authorizeForm.permissionLevel === 'namespace'">
-              <el-form-item label="命名空间">
-                <el-select
+              <a-form-item label="命名空间">
+                <a-select
                   v-model="authorizeForm.namespace"
                   placeholder="请选择命名空间"
                   filterable
@@ -270,22 +279,22 @@
                   :loading="loadingNamespaces"
                   style="width: 100%"
                 >
-                  <el-option
+                  <a-option
                     v-for="ns in namespaces"
                     :key="ns.name"
                     :label="ns.name"
                     :value="ns.name"
                   >
                     <div class="namespace-option">
-                      <el-icon><FolderOpened /></el-icon>
+                      <icon-folder />
                       <span>{{ ns.name }}</span>
                     </div>
-                  </el-option>
-                </el-select>
-              </el-form-item>
+                  </a-option>
+                </a-select>
+              </a-form-item>
 
-              <el-form-item label="角色">
-                <el-select
+              <a-form-item label="角色">
+                <a-select
                   v-model="authorizeForm.namespaceRoleNames"
                   placeholder="请先选择命名空间"
                   filterable
@@ -295,49 +304,49 @@
                   :loading="loadingRoles"
                   style="width: 100%"
                 >
-                  <el-option
+                  <a-option
                     v-for="role in namespaceRoles"
                     :key="role.name"
                     :label="role.name"
                     :value="role.name"
                   >
                     <div class="role-option">
-                      <el-icon class="role-icon"><Key /></el-icon>
+                      <icon-safe />
                       <span>{{ role.name }}</span>
                     </div>
-                  </el-option>
-                </el-select>
-              </el-form-item>
+                  </a-option>
+                </a-select>
+              </a-form-item>
             </template>
-          </el-form>
+          </a-form>
         </div>
+        </a-spin>
       </div>
 
       <template #footer>
-        <el-button @click="showAuthorizeDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirmAuthorize" :loading="authorizeLoading">
+        <a-button @click="showAuthorizeDialog = false">取消</a-button>
+        <a-button type="primary" @click="handleConfirmAuthorize" :loading="authorizeLoading">
           确认授权
-        </el-button>
+        </a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { slotName: 'col_0', width: 60 },
+  { title: '用户名', dataIndex: 'realName', slotName: 'realName', width: 120 },
+  { title: 'ServiceAccount', dataIndex: 'serviceAccount', slotName: 'serviceAccount', width: 180 },
+  { title: '命名空间', dataIndex: 'namespace', slotName: 'namespace', width: 150 },
+  { title: '申请时间', dataIndex: 'createdAt', slotName: 'createdAt', width: 170 },
+  { title: '状态', slotName: 'status', width: 200 },
+  { title: '操作', slotName: 'actions', width: 260, fixed: 'right' }
+]
+
 import { ref, computed, watch, nextTick } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  User,
-  Refresh,
-  FolderOpened,
-  Document,
-  DocumentCopy,
-  Download,
-  Delete,
-  Warning,
-  Plus,
-  Key
-} from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import {
   getServiceAccountKubeConfig,
   getClusterCredentialUsers,
@@ -381,6 +390,7 @@ const clusterRoles = ref<Role[]>([])
 const namespaces = ref<{ name: string; podCount?: number }[]>([])
 const namespaceRoles = ref<Role[]>([])
 const existingBindings = ref<UserRoleBinding[]>([])
+const userRoleCounts = ref<Record<number, number>>({})
 
 const authorizeForm = ref({
   permissionLevel: 'cluster',
@@ -446,10 +456,38 @@ watch(currentKubeConfig, () => {
   configLineCount.value = currentKubeConfig.value.split('\n').length || 1
 })
 
+// 加载每个用户的角色数量
+const loadUserRoleCounts = async () => {
+  if (!props.cluster) return
+  const users = uniqueCredentialUsers.value
+  if (users.length === 0) return
+
+  const counts: Record<number, number> = {}
+  await Promise.all(
+    users.map(async (user) => {
+      try {
+        const bindings = await getUserRoleBindings(props.cluster!.id, user.userId)
+        counts[user.userId] = bindings?.length || 0
+      } catch {
+        counts[user.userId] = 0
+      }
+    })
+  )
+  userRoleCounts.value = counts
+}
+
+// 监听用户列表变化，加载角色数量
+watch(uniqueCredentialUsers, (newUsers) => {
+  if (newUsers.length > 0) {
+    loadUserRoleCounts()
+  }
+}, { immediate: true })
+
 // 方法
 const handleRefresh = () => {
   emit('refresh')
-  ElMessage.success('刷新成功')
+  loadUserRoleCounts()
+  Message.success('刷新成功')
 }
 
 const handleViewCredential = async (user: any) => {
@@ -461,7 +499,7 @@ const handleViewCredential = async (user: any) => {
     currentKubeConfig.value = result.kubeconfig
     showKubeConfigDialog.value = true
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取 kubeconfig 失败')
+    Message.error(error.response?.data?.message || '获取 kubeconfig 失败')
   } finally {
     loading.value = false
   }
@@ -470,9 +508,9 @@ const handleViewCredential = async (user: any) => {
 const handleCopyKubeConfig = async () => {
   try {
     await navigator.clipboard.writeText(currentKubeConfig.value)
-    ElMessage.success('复制成功')
+    Message.success('复制成功')
   } catch {
-    ElMessage.error('复制失败')
+    Message.error('复制失败')
   }
 }
 
@@ -486,12 +524,12 @@ const handleDownloadKubeConfig = () => {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
-  ElMessage.success('下载成功')
+  Message.success('下载成功')
 }
 
 const handleRevoke = async (user: any) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要吊销用户 "${user.realName || user.username}" 的凭据吗？\n\n吊销将同时删除：\n• K8s 中的 ServiceAccount\n• 所有相关的 RoleBinding\n• 数据库中的凭据记录\n\n吊销后用户将无法访问该集群！`,
       '确认吊销',
       {
@@ -506,11 +544,11 @@ const handleRevoke = async (user: any) => {
 
     loading.value = true
     await revokeCredentialFully(props.cluster.id, user.serviceAccount, user.username)
-    ElMessage.success('吊销成功')
+    Message.success('吊销成功')
     emit('refresh')
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '吊销失败')
+      Message.error(error.response?.data?.message || '吊销失败')
     }
   } finally {
     loading.value = false
@@ -614,7 +652,7 @@ const loadClusterRoles = async () => {
 
     clusterRoles.value = roles || []
   } catch (error) {
-    ElMessage.error('加载集群角色失败')
+    Message.error('加载集群角色失败')
   } finally {
     loadingRoles.value = false
   }
@@ -627,7 +665,7 @@ const loadNamespaces = async () => {
     const nsList = await getNamespacesForRoles(props.cluster.id)
     namespaces.value = nsList
   } catch (error) {
-    ElMessage.error('加载命名空间失败')
+    Message.error('加载命名空间失败')
   } finally {
     loadingNamespaces.value = false
   }
@@ -667,7 +705,7 @@ const loadNamespaceRoles = async () => {
 
     namespaceRoles.value = roles || []
   } catch (error) {
-    ElMessage.error('加载命名空间角色失败')
+    Message.error('加载命名空间角色失败')
   } finally {
     loadingRoles.value = false
   }
@@ -679,16 +717,16 @@ const handleConfirmAuthorize = async () => {
   // 验证表单
   if (authorizeForm.value.permissionLevel === 'cluster') {
     if (!authorizeForm.value.clusterRoleNames || authorizeForm.value.clusterRoleNames.length === 0) {
-      ElMessage.warning('请选择集群角色')
+      Message.warning('请选择集群角色')
       return
     }
   } else {
     if (!authorizeForm.value.namespace) {
-      ElMessage.warning('请选择命名空间')
+      Message.warning('请选择命名空间')
       return
     }
     if (!authorizeForm.value.namespaceRoleNames || authorizeForm.value.namespaceRoleNames.length === 0) {
-      ElMessage.warning('请选择角色')
+      Message.warning('请选择角色')
       return
     }
   }
@@ -712,7 +750,7 @@ const handleConfirmAuthorize = async () => {
       })
     }
 
-    ElMessage.success('授权成功')
+    Message.success('授权成功')
     // 重新加载用户权限
     const bindings = await getUserRoleBindings(props.cluster.id, authorizeUser.value.userId)
     existingBindings.value = bindings
@@ -724,8 +762,10 @@ const handleConfirmAuthorize = async () => {
       namespaceRoleNames: []
     }
     emit('refresh')
+    // 刷新角色计数
+    loadUserRoleCounts()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '授权失败')
+    Message.error(error.response?.data?.message || '授权失败')
   } finally {
     authorizeLoading.value = false
   }
@@ -734,7 +774,7 @@ const handleConfirmAuthorize = async () => {
 // 删除已有权限
 const handleRemoveExistingRole = async (role: any) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除角色 "${role.roleName}" 吗？`,
       '确认删除',
       { type: 'warning' }
@@ -750,14 +790,16 @@ const handleRemoveExistingRole = async (role: any) => {
       roleNamespace: role.roleNamespace
     })
 
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     // 重新加载用户权限
     const bindings = await getUserRoleBindings(props.cluster.id, authorizeUser.value.userId)
     existingBindings.value = bindings
     emit('refresh')
+    // 刷新角色计数
+    loadUserRoleCounts()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '删除失败')
+      Message.error(error.response?.data?.message || '删除失败')
     }
   } finally {
     authorizeLoading.value = false
@@ -777,9 +819,9 @@ const handleRemoveExistingRole = async (role: any) => {
   align-items: center;
   margin-bottom: 20px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  background: #fff;
   border-radius: 12px;
-  border: 1px solid #d4af37;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
 .page-info {
@@ -792,12 +834,11 @@ const handleRemoveExistingRole = async (role: any) => {
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border: 1px solid #d4af37;
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 20px;
   flex-shrink: 0;
 }
@@ -811,12 +852,12 @@ const handleRemoveExistingRole = async (role: any) => {
 .info-title {
   font-size: 16px;
   font-weight: 600;
-  color: #d4af37;
+  color: #1d2129;
 }
 
 .info-desc {
   font-size: 12px;
-  color: #909399;
+  color: #86909c;
 }
 
 /* 表格容器 */
@@ -830,11 +871,11 @@ const handleRemoveExistingRole = async (role: any) => {
 .user-table {
   width: 100%;
 
-  :deep(.el-table__body-wrapper) {
+  :deep(.arco-table__body-wrapper) {
     border-radius: 0 0 12px 12px;
   }
 
-  :deep(.el-table__row) {
+  :deep(.arco-table__row) {
     transition: background-color 0.2s ease;
 
     &:hover {
@@ -842,7 +883,7 @@ const handleRemoveExistingRole = async (role: any) => {
     }
   }
 
-  :deep(.el-table__cell) {
+  :deep(.arco-table__cell) {
     padding: 12px 0;
   }
 }
@@ -852,12 +893,11 @@ const handleRemoveExistingRole = async (role: any) => {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border: 1px solid #d4af37;
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 16px;
   margin: 0 auto;
 }
@@ -906,45 +946,54 @@ const handleRemoveExistingRole = async (role: any) => {
   line-height: 1.5;
 }
 
-/* 表格操作 */
-.table-actions {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+/* 状态指示点 */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
 }
 
+.status-dot-active {
+  background-color: #00b42a;
+  box-shadow: 0 0 4px rgba(0, 180, 42, 0.4);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* 表格操作 */
 .action-authorize {
-  color: #67c23a;
+  color: #00b42a;
   font-weight: 500;
 
   &:hover {
-    color: #67c23a;
-    background-color: #f0f9ff;
+    color: #00b42a;
+    background-color: #e8ffea;
   }
 }
 
 .action-view {
-  color: #000;
+  color: #165dff;
   font-weight: 500;
 
   &:hover {
-    color: #d4af37;
-  }
-
-  // 当只有图标时的样式
-  &:has(> .el-icon:only-child) {
-    :deep(.el-icon) {
-      margin-right: 0;
-    }
+    color: #4080ff;
+    background-color: #e8f3ff;
   }
 }
 
 .action-revoke {
-  color: #f56c6c;
+  color: #f53f3f;
 
   &:hover {
-    color: #f56c6c;
-    background-color: #fef0f0;
+    color: #f53f3f;
+    background-color: #ffece8;
   }
 }
 
@@ -1012,7 +1061,7 @@ const handleRemoveExistingRole = async (role: any) => {
     color: #f56c6c;
     font-size: 13px;
 
-    :deep(.el-icon) {
+    :deep(.arco-icon) {
       font-size: 16px;
     }
   }
@@ -1036,8 +1085,8 @@ const handleRemoveExistingRole = async (role: any) => {
     color: #303133;
     font-size: 14px;
 
-    :deep(.el-icon) {
-      color: #d4af37;
+    :deep(.arco-icon) {
+      color: #165dff;
       font-size: 18px;
     }
   }
@@ -1093,8 +1142,8 @@ const handleRemoveExistingRole = async (role: any) => {
     color: #303133;
     font-size: 14px;
 
-    :deep(.el-icon) {
-      color: #d4af37;
+    :deep(.arco-icon) {
+      color: #165dff;
       font-size: 18px;
     }
   }
@@ -1151,7 +1200,7 @@ const handleRemoveExistingRole = async (role: any) => {
     gap: 8px;
 
     .role-icon {
-      color: #d4af37;
+      color: #165dff;
     }
   }
 
