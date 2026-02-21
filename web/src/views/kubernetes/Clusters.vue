@@ -1,290 +1,283 @@
 <template>
   <div class="clusters-container">
     <!-- 统计卡片 -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-blue">
-          <el-icon><Platform /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">集群总数</div>
-          <div class="stat-value">{{ clusterList.length }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-green">
-          <el-icon><CircleCheck /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">运行正常</div>
-          <div class="stat-value">{{ clusterList.filter(c => c.status === 1).length }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon stat-orange">
-          <el-icon><Odometer /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">总节点数</div>
-          <div class="stat-value">{{ totalNodeCount }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-purple">
-          <el-icon><Connection /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">自建集群</div>
-          <div class="stat-value">{{ clusterList.filter(c => c.provider === 'native').length }}</div>
-        </div>
-      </div>
-    </div>
+    <a-row :gutter="20" class="stats-row">
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: var(--ops-primary, #165dff)">
+              <icon-apps :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ clusterList.length }}</div>
+              <div class="stat-label">集群总数</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: var(--ops-success, #00b42a)">
+              <icon-check-circle :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ clusterList.filter(c => c.status === 1).length }}</div>
+              <div class="stat-label">运行正常</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: var(--ops-warning, #ff7d00)">
+              <icon-dashboard :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ totalNodeCount }}</div>
+              <div class="stat-label">总节点数</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: #722ed1">
+              <icon-link :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ clusterList.filter(c => c.provider === 'native').length }}</div>
+              <div class="stat-label">自建集群</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
 
     <!-- 页面标题和操作按钮 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Platform /></el-icon>
+    <a-card class="page-header-card">
+      <div class="page-header">
+        <div class="page-title-group">
+          <div class="page-title-icon">
+            <icon-apps />
+          </div>
+          <div>
+            <h2 class="page-title">集群管理</h2>
+            <p class="page-subtitle">管理您的 Kubernetes 集群，支持多云平台统一管理</p>
+          </div>
         </div>
-        <div>
-          <h2 class="page-title">集群管理</h2>
-          <p class="page-subtitle">管理您的 Kubernetes 集群，支持多云平台统一管理</p>
+        <div class="header-actions">
+          <a-button v-permission="'k8s-clusters:sync'" status="success" @click="handleSyncAll" :loading="syncing">
+            <template #icon><icon-refresh /></template>
+            同步状态
+          </a-button>
+          <a-button v-if="isAdmin" v-permission="'k8s-clusters:create'" type="primary" @click="handleRegister">
+            <template #icon><icon-plus /></template>
+            注册集群
+          </a-button>
         </div>
       </div>
-      <div class="header-actions">
-        <el-button v-permission="'k8s-clusters:sync'" class="sync-button" @click="handleSyncAll" :loading="syncing">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
-          同步状态
-        </el-button>
-        <el-button v-if="isAdmin" v-permission="'k8s-clusters:create'" class="black-button" @click="handleRegister">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
-          注册集群
-        </el-button>
-      </div>
-    </div>
+    </a-card>
 
     <!-- 搜索和筛选 -->
-    <div class="search-bar">
-      <div class="search-inputs">
-        <el-input
-          v-model="searchForm.keyword"
-          placeholder="搜索集群名称或别名..."
-          clearable
-          @clear="handleSearch"
-          @keyup.enter="handleSearch"
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
-
-        <el-select
-          v-model="searchForm.status"
-          placeholder="集群状态"
-          clearable
-          @change="handleSearch"
-          class="filter-select"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><CircleCheck /></el-icon>
-          </template>
-          <el-option label="正常" :value="1" />
-          <el-option label="连接失败" :value="2" />
-          <el-option label="不可用" :value="3" />
-        </el-select>
-
-        <el-input
-          v-model="searchForm.version"
-          placeholder="集群版本..."
-          clearable
-          @clear="handleSearch"
-          @keyup.enter="handleSearch"
-          class="filter-select"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><InfoFilled /></el-icon>
-          </template>
-        </el-input>
-      </div>
-
-      <div class="search-actions">
-        <el-button class="reset-btn" @click="handleReset">
-          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
-          重置
-        </el-button>
-        <el-button class="search-btn" type="primary" @click="handleSearch">
-          <el-icon style="margin-right: 4px;"><Search /></el-icon>
-          搜索
-        </el-button>
-      </div>
-    </div>
+    <a-card class="search-card">
+      <a-form :model="searchForm" layout="inline" class="search-form">
+        <a-form-item>
+          <a-input
+            v-model="searchForm.keyword"
+            placeholder="搜索集群名称或别名..."
+            allow-clear
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+            style="width: 260px"
+          >
+            <template #prefix>
+              <icon-search />
+            </template>
+          </a-input>
+        </a-form-item>
+        <a-form-item>
+          <a-select
+            v-model="searchForm.status"
+            placeholder="集群状态"
+            allow-clear
+            @change="handleSearch"
+            style="width: 150px"
+          >
+            <a-option label="正常" :value="1" />
+            <a-option label="连接失败" :value="2" />
+            <a-option label="不可用" :value="3" />
+          </a-select>
+        </a-form-item>
+        <a-form-item>
+          <a-input
+            v-model="searchForm.version"
+            placeholder="集群版本..."
+            allow-clear
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+            style="width: 150px"
+          >
+            <template #prefix>
+              <icon-info-circle />
+            </template>
+          </a-input>
+        </a-form-item>
+        <a-form-item>
+          <a-space>
+            <a-button @click="handleReset">
+              <template #icon><icon-undo /></template>
+              重置
+            </a-button>
+            <a-button type="primary" @click="handleSearch">
+              <template #icon><icon-search /></template>
+              搜索
+            </a-button>
+          </a-space>
+        </a-form-item>
+      </a-form>
+    </a-card>
 
     <!-- 集群列表 -->
-    <div class="table-wrapper">
+    <a-card class="table-card">
       <!-- 批量操作栏 -->
       <div v-if="selectedClusters.length > 0" class="batch-actions-bar">
         <div class="batch-actions-left">
-          <el-checkbox
+          <a-checkbox
             v-model="selectAllCurrentPage"
             :indeterminate="isIndeterminate"
             @change="handleSelectAllCurrentPage"
           >
             <span class="selected-count">已选择 {{ selectedClusters.length }} 个集群</span>
-          </el-checkbox>
+          </a-checkbox>
         </div>
-        <div class="batch-actions-right">
-          <el-button v-permission="'k8s-clusters:batch-sync'" type="primary" :icon="Refresh" @click="handleBatchSync" plain>
+        <a-space>
+          <a-button v-permission="'k8s-clusters:batch-sync'" type="primary" @click="handleBatchSync">
             批量同步
-          </el-button>
-          <el-button v-permission="'k8s-clusters:batch-delete'" type="danger" :icon="Delete" @click="handleBatchDelete" plain>
+          </a-button>
+          <a-button v-permission="'k8s-clusters:batch-delete'" status="danger" @click="handleBatchDelete">
             批量删除
-          </el-button>
-          <el-button @click="clearSelection">取消选择</el-button>
-        </div>
+          </a-button>
+          <a-button @click="clearSelection">取消选择</a-button>
+        </a-space>
       </div>
 
-      <el-table
+      <a-table
         ref="clusterTableRef"
         :data="paginatedClusterList"
-        v-loading="loading"
-        class="modern-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :loading="loading"
+        :bordered="false"
         @selection-change="handleSelectionChange"
+        :columns="tableColumns"
+        :row-selection="{ type: 'checkbox', showCheckedAll: true }"
+        :pagination="false"
       >
-      <el-table-column type="selection" width="55" />
-      <el-table-column prop="name" min-width="180">
-        <template #header>
-          <span class="header-with-icon">
-            <el-icon class="header-icon header-icon-blue"><Platform /></el-icon>
-            集群名称
-          </span>
+        <template #name="{ record }">
+          <a-button type="text" @click="handleViewDetail(record)" class="cluster-name-link">
+            {{ record.name }}
+          </a-button>
         </template>
-        <template #default="{ row }">
-          <el-button link @click="handleViewDetail(row)" class="cluster-name-link">
-            {{ row.name }}
-          </el-button>
+          <template #alias="{ record }">
+          {{ record.alias || '-' }}
         </template>
-      </el-table-column>
-      <el-table-column prop="alias" label="别名" min-width="120">
-        <template #default="{ row }">
-          {{ row.alias || '-' }}
+          <template #status="{ record }">
+          <a-tag :color="getStatusType(record.status)" size="small">
+            <span class="status-dot" :class="'status-dot-' + record.status"></span>
+            {{ getStatusText(record.status) }}
+          </a-tag>
         </template>
-      </el-table-column>
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)" effect="dark">
-            {{ getStatusText(row.status) }}
-          </el-tag>
+          <template #provider="{ record }">
+          {{ getProviderText(record.provider) }}
         </template>
-      </el-table-column>
-      <el-table-column prop="version" width="120">
-        <template #header>
-          <span class="header-with-icon">
-            <el-icon class="header-icon header-icon-purple"><InfoFilled /></el-icon>
-            版本
-          </span>
+          <template #region="{ record }">
+          {{ record.region || '-' }}
         </template>
-      </el-table-column>
-      <el-table-column prop="nodeCount" label="节点数" width="100" />
-      <el-table-column prop="provider" label="服务商" width="120">
-        <template #default="{ row }">
-          {{ getProviderText(row.provider) }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="region" label="区域" width="120">
-        <template #default="{ row }">
-          {{ row.region || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="备注" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="createdAt" label="创建时间" width="180" />
-      <el-table-column label="操作" width="220" fixed="right">
-        <template #default="{ row }">
+          <template #actions="{ record }">
           <div class="action-buttons">
-            <el-tooltip content="凭证" placement="top">
-              <el-button v-if="isAdmin" link class="action-btn" @click="handleViewConfig(row)">
-                <el-icon><Key /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="授权" placement="top">
-              <el-button link class="action-btn action-auth" @click="handleAuthorize(row)">
-                <el-icon><Lock /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="同步" placement="top">
-              <el-button v-permission="'k8s-clusters:sync'" link class="action-btn action-sync" @click="handleSync(row)">
-                <el-icon><Refresh /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="编辑" placement="top">
-              <el-button v-if="isAdmin" v-permission="'k8s-clusters:update'" link class="action-btn action-edit" @click="handleEdit(row)">
-                <el-icon><Edit /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="删除" placement="top">
-              <el-button v-if="isAdmin" v-permission="'k8s-clusters:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </el-tooltip>
+            <a-tooltip content="凭证" placement="top">
+              <a-button v-if="isAdmin" type="text" class="action-btn" @click="handleViewConfig(record)">
+                <icon-safe />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip content="授权" placement="top">
+              <a-button type="text" class="action-btn action-auth" @click="handleAuthorize(record)">
+                <icon-lock />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip content="同步" placement="top">
+              <a-button v-permission="'k8s-clusters:sync'" type="text" class="action-btn action-sync" @click="handleSync(record)">
+                <icon-refresh />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip content="编辑" placement="top">
+              <a-button v-if="isAdmin" v-permission="'k8s-clusters:update'" type="text" class="action-btn action-edit" @click="handleEdit(record)">
+                <icon-edit />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip content="删除" placement="top">
+              <a-button v-if="isAdmin" v-permission="'k8s-clusters:delete'" type="text" class="action-btn action-delete" @click="handleDelete(record)">
+                <icon-delete />
+              </a-button>
+            </a-tooltip>
           </div>
         </template>
-      </el-table-column>
-    </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
+        <a-pagination
+          v-model:current="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredClusterList.length"
-          layout="total, sizes, prev, pager, next, jumper"
+          show-total show-page-size show-jumper
           @current-change="handlePageChange"
           @size-change="handleSizeChange"
         />
       </div>
-    </div>
+    </a-card>
 
     <!-- 注册/编辑集群对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="isEdit ? '编辑集群' : '注册集群'"
       width="70%"
       class="cluster-edit-dialog"
       @close="handleDialogClose"
     >
-      <el-form :model="clusterForm" :rules="rules" ref="formRef" label-width="100px">
+      <a-form :model="clusterForm" :rules="rules" ref="formRef" label-width="100px">
         <!-- 基本信息 -->
         <div class="form-section">
           <div class="section-title">基本信息</div>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="集群名称" prop="name">
-                <el-input v-model="clusterForm.name" placeholder="请输入集群名称"  />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="集群别名">
-                <el-input v-model="clusterForm.alias" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
+          <a-row :gutter="20">
+            <a-col :span="12">
+              <a-form-item label="集群名称" field="name">
+                <a-input v-model="clusterForm.name" placeholder="请输入集群名称"  />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="集群别名">
+                <a-input v-model="clusterForm.alias" placeholder="可选" />
+              </a-form-item>
+            </a-col>
+          </a-row>
         </div>
 
         <!-- 认证配置 -->
         <div class="form-section">
           <div class="section-title">认证配置</div>
-          <el-form-item label="认证方式">
-            <el-radio-group v-model="authType" @change="handleAuthTypeChange">
-              <el-radio-button label="config">KubeConfig 文件</el-radio-button>
-              <el-radio-button label="token">Service Account Token</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
+          <a-form-item label="认证方式">
+            <a-radio-group v-model="authType" @change="handleAuthTypeChange">
+              <a-radio value="config">KubeConfig 文件</a-radio>
+              <a-radio value="token">Service Account Token</a-radio>
+            </a-radio-group>
+          </a-form-item>
 
           <!-- KubeConfig 方式 -->
           <template v-if="authType === 'config'">
-            <el-alert
+            <a-alert
               v-if="isEdit"
               title="配置信息"
               type="info"
@@ -306,13 +299,13 @@
                   </p>
                 </div>
               </template>
-            </el-alert>
-            <el-form-item label="配置内容" prop="kubeConfig">
+            </a-alert>
+            <a-form-item label="配置内容" field="kubeConfig">
               <div style="margin-bottom: 8px;">
-                <el-button size="small" @click="handleUploadKubeConfig">
-                  <el-icon><Upload /></el-icon>
+                <a-button size="small" @click="handleUploadKubeConfig">
+                  <icon-upload />
                   上传 KubeConfig 文件
-                </el-button>
+                </a-button>
                 <input
                   ref="fileInputRef"
                   type="file"
@@ -334,32 +327,32 @@
                 ></textarea>
               </div>
               <div class="code-tip" v-if="!isEdit">
-                <el-icon><InfoFilled /></el-icon>
+                <icon-info-circle />
                 <span>如何获取 KubeConfig？通常位于 ~/.kube/config 文件中</span>
               </div>
-            </el-form-item>
+            </a-form-item>
           </template>
 
           <!-- Token 方式 -->
           <template v-if="authType === 'token'">
-            <el-form-item label="API 地址" prop="apiEndpoint">
-              <el-input
+            <a-form-item label="API 地址" field="apiEndpoint">
+              <a-input
                 v-model="clusterForm.apiEndpoint"
                 placeholder="https://k8s-api.example.com:6443"
 
               >
                 <template #prepend>
-                  <el-icon><Connection /></el-icon>
+                  <icon-link />
                 </template>
-              </el-input>
-            </el-form-item>
-            <el-form-item label="TLS 验证">
-              <el-switch v-model="skipTLSVerify" active-text="跳过验证" inactive-text="验证证书" />
+              </a-input>
+            </a-form-item>
+            <a-form-item label="TLS 验证">
+              <a-switch v-model="skipTLSVerify" active-text="跳过验证" inactive-text="验证证书" />
               <span style="margin-left: 12px; font-size: 12px; color: #909399;">
                 ⚠️ 跳过 TLS 验证仅适用于测试环境，生产环境请提供 CA 证书
               </span>
-            </el-form-item>
-            <el-form-item label="Token" prop="token">
+            </a-form-item>
+            <a-form-item label="Token" field="token">
               <div class="code-editor-wrapper">
                 <div class="line-numbers">
                   <div v-for="n in tokenLineCount" :key="n" class="line-number">{{ n }}</div>
@@ -374,80 +367,80 @@
                 ></textarea>
               </div>
               <div class="code-tip">
-                <el-icon><InfoFilled /></el-icon>
+                <icon-info-circle />
                 <span>如何获取 Token？使用 kubectl create token 命令创建</span>
               </div>
-            </el-form-item>
+            </a-form-item>
           </template>
         </div>
 
         <!-- 集群信息 -->
         <div class="form-section">
           <div class="section-title">集群信息</div>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="服务商">
-                <el-select v-model="clusterForm.provider" placeholder="请选择" style="width: 100%">
-                  <el-option label="自建集群" value="native" />
-                  <el-option label="阿里云 ACK" value="aliyun" />
-                  <el-option label="腾讯云 TKE" value="tencent" />
-                  <el-option label="AWS EKS" value="aws" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="区域">
-                <el-input v-model="clusterForm.region" placeholder="例如: cn-beijing" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="备注">
-            <el-input
+          <a-row :gutter="20">
+            <a-col :span="12">
+              <a-form-item label="服务商">
+                <a-select v-model="clusterForm.provider" placeholder="请选择" style="width: 100%">
+                  <a-option label="自建集群" value="native" />
+                  <a-option label="阿里云 ACK" value="aliyun" />
+                  <a-option label="腾讯云 TKE" value="tencent" />
+                  <a-option label="AWS EKS" value="aws" />
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="区域">
+                <a-input v-model="clusterForm.region" placeholder="例如: cn-beijing" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-form-item label="备注">
+            <a-input
               v-model="clusterForm.description"
               type="textarea"
               :rows="2"
               placeholder="请输入集群备注（可选）"
             />
-          </el-form-item>
+          </a-form-item>
         </div>
-      </el-form>
+      </a-form>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleSubmit" :loading="submitLoading">
+          <a-button @click="dialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSubmit" :loading="submitLoading">
             {{ isEdit ? '保存' : '注册集群' }}
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 查看集群凭证对话框 -->
-    <el-dialog
-      v-model="configDialogVisible"
+    <a-modal
+      v-model:visible="configDialogVisible"
       title="集群凭证"
       width="700px"
     >
       <div style="margin-bottom: 16px;">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="集群名称">{{ currentCluster?.name }}</el-descriptions-item>
-          <el-descriptions-item label="别名">{{ currentCluster?.alias || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="API Endpoint">{{ currentCluster?.apiEndpoint }}</el-descriptions-item>
-          <el-descriptions-item label="版本">{{ currentCluster?.version }}</el-descriptions-item>
-        </el-descriptions>
+        <a-descriptions :column="2" :bordered="true">
+          <a-descriptions-item label="集群名称">{{ currentCluster?.name }}</a-descriptions-item>
+          <a-descriptions-item label="别名">{{ currentCluster?.alias || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="API Endpoint">{{ currentCluster?.apiEndpoint }}</a-descriptions-item>
+          <a-descriptions-item label="版本">{{ currentCluster?.version }}</a-descriptions-item>
+        </a-descriptions>
       </div>
 
       <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
         <span style="font-weight: 500;">KubeConfig 配置</span>
         <div>
-          <el-button size="small" @click="handleCopyConfig">
-            <el-icon><DocumentCopy /></el-icon>
+          <a-button size="small" @click="handleCopyConfig">
+            <icon-copy />
             复制
-          </el-button>
-          <el-button size="small" @click="handleDownloadConfig">
-            <el-icon><Download /></el-icon>
+          </a-button>
+          <a-button size="small" @click="handleDownloadConfig">
+            <icon-download />
             下载
-          </el-button>
+          </a-button>
         </div>
       </div>
 
@@ -464,77 +457,77 @@
       </div>
 
       <div class="code-tip">
-        <el-icon><Warning /></el-icon>
+        <icon-exclamation-circle />
         <span>请妥善保管集群凭证，不要泄露给他人</span>
       </div>
-    </el-dialog>
+    </a-modal>
 
     <!-- 授权对话框 -->
-    <el-dialog
-      v-model="authorizeDialogVisible"
+    <a-modal
+      v-model:visible="authorizeDialogVisible"
       title="集群授权"
       width="900px"
     >
-      <el-tabs v-model="activeAuthTab" type="border-card">
+      <a-tabs v-model:active-key="activeAuthTab" type="border-card">
         <!-- 连接信息 -->
-        <el-tab-pane label="连接信息" name="connection">
+        <a-tab-pane title="连接信息" key="connection">
           <div class="connection-info">
             <div class="info-section">
               <div class="section-title">
-                <el-icon><Connection /></el-icon>
+                <icon-link />
                 <span>集群连接信息</span>
               </div>
-              <el-descriptions :column="2" border style="margin-top: 16px;">
-                <el-descriptions-item label="集群名称">{{ currentCluster?.name }}</el-descriptions-item>
-                <el-descriptions-item label="别名">{{ currentCluster?.alias || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="API Endpoint">{{ currentCluster?.apiEndpoint }}</el-descriptions-item>
-                <el-descriptions-item label="版本">{{ currentCluster?.version }}</el-descriptions-item>
-              </el-descriptions>
+              <a-descriptions :column="2" :bordered="true" style="margin-top: 16px;">
+                <a-descriptions-item label="集群名称">{{ currentCluster?.name }}</a-descriptions-item>
+                <a-descriptions-item label="别名">{{ currentCluster?.alias || '-' }}</a-descriptions-item>
+                <a-descriptions-item label="API Endpoint">{{ currentCluster?.apiEndpoint }}</a-descriptions-item>
+                <a-descriptions-item label="版本">{{ currentCluster?.version }}</a-descriptions-item>
+              </a-descriptions>
             </div>
 
             <div class="credential-section">
               <div class="section-header">
                 <div class="section-title">
-                  <el-icon><Key /></el-icon>
+                  <icon-safe />
                   <span>凭据管理</span>
                 </div>
                 <div v-if="!generatedKubeConfig">
-                  <el-button
+                  <a-button
                     v-permission="'k8s-clusters:apply-credential'"
                     type="primary"
-                    :icon="Download"
+                   
                     @click="handleApplyCredential"
                     :loading="credentialLoading"
                   >
                     凭据申请
-                  </el-button>
+                  </a-button>
                 </div>
                 <div v-else>
-                  <el-button
+                  <a-button
                     v-permission="'k8s-clusters:revoke-credential'"
                     type="danger"
-                    :icon="Delete"
+                   
                     @click="handleRevokeCredential"
                     :loading="revokeLoading"
                   >
                     吊销凭据
-                  </el-button>
+                  </a-button>
                 </div>
               </div>
 
               <div v-if="generatedKubeConfig" class="kubeconfig-display">
                 <div class="kubeconfig-header">
                   <span style="font-weight: 500;">生成的 KubeConfig 凭据</span>
-                  <el-button
+                  <a-button
                     type="primary"
-                    :icon="DocumentCopy"
+                   
                     @click="handleCopyKubeConfig"
                     size="small"
                   >
                     复制
-                  </el-button>
+                  </a-button>
                 </div>
-                <el-input
+                <a-input
                   v-model="generatedKubeConfig"
                   type="textarea"
                   :rows="10"
@@ -542,27 +535,27 @@
                   class="kubeconfig-textarea"
                 />
                 <div class="code-tip">
-                  <el-icon><Warning /></el-icon>
+                  <icon-exclamation-circle />
                   <span>此凭据文件包含您的集群访问权限，请妥善保管，不要泄露给他人</span>
                 </div>
               </div>
 
               <div v-else class="no-credential-tip">
-                <el-empty description="暂无凭据，请点击上方按钮申请">
+                <a-empty description="暂无凭据，请点击上方按钮申请">
                   <template #image>
-                    <el-icon :size="60" color="#909399"><Key /></el-icon>
+                    <icon-safe />
                   </template>
-                </el-empty>
+                </a-empty>
               </div>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
         <!-- 用户 -->
-        <el-tab-pane v-if="isAdmin" name="users">
+        <a-tab-pane v-if="isAdmin" key="users">
           <template #label>
             <span class="tab-label">
-              <el-icon class="tab-icon"><User /></el-icon>
+              <icon-user />
               用户
             </span>
           </template>
@@ -574,15 +567,15 @@
               :credential-users="clusterCredentialUsers"
               @refresh="loadClusterCredentials"
             />
-            <el-empty v-else description="请先选择集群" />
+            <a-empty v-else description="请先选择集群" />
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
         <!-- 角色 -->
-        <el-tab-pane v-if="isAdmin" name="roles">
+        <a-tab-pane v-if="isAdmin" key="roles">
           <template #label>
             <span class="tab-label">
-              <el-icon class="tab-icon"><Key /></el-icon>
+              <icon-safe />
               角色
             </span>
           </template>
@@ -591,45 +584,39 @@
               v-if="currentCluster"
               :cluster="currentCluster"
             />
-            <el-empty v-else description="请先选择集群" />
+            <a-empty v-else description="请先选择集群" />
           </div>
-        </el-tab-pane>
-      </el-tabs>
+        </a-tab-pane>
+      </a-tabs>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="authorizeDialogVisible = false">关闭</el-button>
+          <a-button @click="authorizeDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '集群名称', dataIndex: 'name', slotName: 'name', width: 180 },
+  { title: '别名', dataIndex: 'alias', slotName: 'alias', width: 120 },
+  { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
+  { title: '版本', dataIndex: 'version', width: 120 },
+  { title: '节点数', dataIndex: 'nodeCount', width: 100 },
+  { title: '服务商', dataIndex: 'provider', slotName: 'provider', width: 120 },
+  { title: '区域', dataIndex: 'region', slotName: 'region', width: 120 },
+  { title: '备注', dataIndex: 'description', width: 150, ellipsis: true, tooltip: true },
+  { title: '创建时间', dataIndex: 'createdAt', width: 180 },
+  { title: '操作', slotName: 'actions', width: 220, fixed: 'right' }
+]
+
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance } from 'element-plus'
-import {
-  Search,
-  InfoFilled,
-  Connection,
-  Upload,
-  Platform,
-  Key,
-  Refresh,
-  RefreshLeft,
-  Plus,
-  Edit,
-  Delete,
-  Lock,
-  DocumentCopy,
-  Download,
-  Warning,
-  Odometer,
-  CircleCheck,
-  User
-} from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+
 import {
   getClusterList,
   createCluster,
@@ -680,7 +667,7 @@ const revokeLoading = ref(false)
 const generatedKubeConfig = ref('')
 const currentCredentialUsername = ref('')
 const submitLoading = ref(false)
-const formRef = ref<FormInstance>()
+const formRef = ref()
 const fileInputRef = ref<HTMLInputElement>()
 const authType = ref('config')
 const skipTLSVerify = ref(true)  // 默认跳过 TLS 验证，适用于自签名证书
@@ -726,11 +713,11 @@ const clusterForm = reactive({
 })
 
 const rules = {
-  name: [{ required: true, message: '请输入集群名称', trigger: 'blur' }],
+  name: [{ required: true, content: '请输入集群名称', trigger: 'blur' }],
   kubeConfig: [
     {
       required: true,
-      message: '请输入 KubeConfig',
+      content: '请输入 KubeConfig',
       trigger: 'blur',
       validator: (rule: any, value: any, callback: any) => {
         // 新增模式必须填写，编辑模式可以留空
@@ -745,7 +732,7 @@ const rules = {
   apiEndpoint: [
     {
       required: true,
-      message: '请输入 API Endpoint',
+      content: '请输入 API Endpoint',
       trigger: 'blur',
       validator: (rule: any, value: any, callback: any) => {
         // 新增模式必须填写，编辑模式可以留空
@@ -760,7 +747,7 @@ const rules = {
   token: [
     {
       required: true,
-      message: '请输入 Token',
+      content: '请输入 Token',
       trigger: 'blur',
       validator: (rule: any, value: any, callback: any) => {
         // 新增模式必须填写，编辑模式可以留空
@@ -824,7 +811,7 @@ const loadClusters = async () => {
     // 恢复分页状态
     restorePaginationState()
   } catch (error) {
-    ElMessage.error('获取集群列表失败')
+    Message.error('获取集群列表失败')
   } finally {
     loading.value = false
   }
@@ -926,7 +913,7 @@ const handleEdit = async (row: Cluster) => {
     // 更新行号
     updateLineCount()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取集群配置失败')
+    Message.error(error.response?.data?.message || '获取集群配置失败')
     // 即使失败也打开对话框，但不显示配置
     Object.assign(clusterForm, {
       name: row.name,
@@ -945,8 +932,8 @@ const handleEdit = async (row: Cluster) => {
 
 // 同步集群信息
 const handleSync = async (row: Cluster) => {
-  const loadingMsg = ElMessage.info({
-    message: '正在同步集群信息...',
+  const loadingMsg = Message.loading({
+    content: '正在同步集群信息...',
     duration: 0,
     type: 'info'
   })
@@ -958,14 +945,14 @@ const handleSync = async (row: Cluster) => {
     // 等待一小段时间让同步完成
     await new Promise(resolve => setTimeout(resolve, 2000))
 
-    loadingMsg.close()
+    Message.clear()
 
     // 重新加载列表
     await loadClusters()
-    ElMessage.success('同步成功')
+    Message.success('同步成功')
   } catch (error: any) {
-    loadingMsg.close()
-    ElMessage.error(error.response?.data?.message || '同步失败')
+    Message.clear()
+    Message.error(error.response?.data?.message || '同步失败')
   }
 }
 
@@ -980,9 +967,9 @@ const handleSyncAll = async () => {
 
     // 重新加载列表
     await loadClusters()
-    ElMessage.success('批量同步任务已启动，请稍后刷新查看')
+    Message.success('批量同步任务已启动，请稍后刷新查看')
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '同步失败')
+    Message.error(error.response?.data?.message || '同步失败')
   } finally {
     syncing.value = false
   }
@@ -1055,7 +1042,7 @@ const clearSelection = () => {
 // 批量同步集群
 const handleBatchSync = async () => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要同步选中的 ${selectedClusters.value.length} 个集群吗？`,
       '批量同步确认',
       {
@@ -1065,8 +1052,8 @@ const handleBatchSync = async () => {
       }
     )
 
-    const loadingMsg = ElMessage.info({
-      message: `正在同步 ${selectedClusters.value.length} 个集群，请稍候...`,
+    const loadingMsg = Message.loading({
+      content: `正在同步 ${selectedClusters.value.length} 个集群，请稍候...`,
       duration: 0,
       type: 'info'
     })
@@ -1075,13 +1062,13 @@ const handleBatchSync = async () => {
     const syncPromises = selectedClusters.value.map(cluster => syncClusterStatus(cluster.id))
     await Promise.all(syncPromises)
 
-    loadingMsg.close()
+    Message.clear()
     clearSelection()
     await loadClusters()
-    ElMessage.success('同步成功')
+    Message.success('同步成功')
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '同步失败')
+      Message.error(error.response?.data?.message || '同步失败')
     }
   }
 }
@@ -1089,12 +1076,12 @@ const handleBatchSync = async () => {
 // 批量删除集群
 const handleBatchDelete = async () => {
   if (selectedClusters.value.length === 0) {
-    ElMessage.warning('请选择要删除的集群')
+    Message.warning('请选择要删除的集群')
     return
   }
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除选中的 ${selectedClusters.value.length} 个集群吗？此操作不可恢复！`,
       '批量删除确认',
       {
@@ -1105,8 +1092,8 @@ const handleBatchDelete = async () => {
     )
 
     // 显示正在删除的提示
-    const loadingMsg = ElMessage.info({
-      message: `正在删除 ${selectedClusters.value.length} 个集群，请稍候...`,
+    const loadingMsg = Message.loading({
+      content: `正在删除 ${selectedClusters.value.length} 个集群，请稍候...`,
       duration: 0,
       type: 'info'
     })
@@ -1115,13 +1102,13 @@ const handleBatchDelete = async () => {
     const deletePromises = selectedClusters.value.map(cluster => deleteCluster(cluster.id))
     await Promise.all(deletePromises)
 
-    loadingMsg.close()
+    Message.clear()
     clearSelection()
     await loadClusters()
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '删除失败')
+      Message.error(error.response?.data?.message || '删除失败')
     }
   }
 }
@@ -1163,10 +1150,10 @@ const handleFileChange = (event: Event) => {
     const content = e.target?.result as string
     clusterForm.kubeConfig = content
     updateLineCount()
-    ElMessage.success('文件读取成功')
+    Message.success('文件读取成功')
   }
   reader.onerror = () => {
-    ElMessage.error('文件读取失败')
+    Message.error('文件读取失败')
   }
   reader.readAsText(file)
 
@@ -1213,7 +1200,7 @@ const handleSubmit = async () => {
           }
 
           await updateCluster(editClusterId.value, updateData)
-          ElMessage.success('更新成功')
+          Message.success('更新成功')
         } else {
           // 新增模式
           const requestData: any = {
@@ -1231,11 +1218,11 @@ const handleSubmit = async () => {
           if (clusterForm.description) requestData.description = clusterForm.description
 
           const newCluster = await createCluster(requestData)
-          ElMessage.success('集群注册成功')
+          Message.success('集群注册成功')
 
           // 注册成功后立即创建默认集群角色和常用命名空间角色
-          const roleLoadingMsg = ElMessage.info({
-            message: '正在初始化默认角色，请稍候...',
+          const roleLoadingMsg = Message.loading({
+            content: '正在初始化默认角色，请稍候...',
             duration: 0,
             showClose: false
           })
@@ -1250,21 +1237,21 @@ const handleSubmit = async () => {
               })
             ])
 
-            roleLoadingMsg.close()
+            Message.clear()
 
             const clusterCount = clusterRolesResult?.created?.length || 0
             const namespaceCount = namespaceRolesResult?.created?.length || 0
-            ElMessage.success(`默认角色初始化完成（集群角色：${clusterCount}个，命名空间角色：${namespaceCount}个）`)
+            Message.success(`默认角色初始化完成（集群角色：${clusterCount}个，命名空间角色：${namespaceCount}个）`)
           } catch (roleError) {
-            roleLoadingMsg.close()
-            ElMessage.warning('集群注册成功，但创建默认角色失败，请稍后在角色管理页面手动创建')
+            Message.clear()
+            Message.warning('集群注册成功，但创建默认角色失败，请稍后在角色管理页面手动创建')
           }
         }
 
         dialogVisible.value = false
         loadClusters()
       } catch (error: any) {
-        ElMessage.error(error.response?.data?.message || '操作失败')
+        Message.error(error.response?.data?.message || '操作失败')
       } finally {
         submitLoading.value = false
       }
@@ -1301,30 +1288,30 @@ users:
 
 // 测试连接
 const handleTestConnection = async (row: Cluster) => {
-  const loadingMsg = ElMessage.info({
-    message: '正在测试连接...',
+  const loadingMsg = Message.loading({
+    content: '正在测试连接...',
     duration: 0,
     type: 'info'
   })
 
   try {
     const result = await testClusterConnection(row.id)
-    loadingMsg.close()
+    Message.clear()
 
     // 重新加载列表以更新节点数
     await loadClusters()
 
-    ElMessage.success(`连接成功！版本: ${result.version}`)
+    Message.success(`连接成功！版本: ${result.version}`)
   } catch (error: any) {
-    loadingMsg.close()
-    ElMessage.error(error.response?.data?.message || '连接失败')
+    Message.clear()
+    Message.error(error.response?.data?.message || '连接失败')
   }
 }
 
 // 删除集群
 const handleDelete = async (row: Cluster) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `<div style="line-height: 1.8;">
         <p style="margin-bottom: 12px; font-weight: 600; color: #f56c6c;">
           <i class="el-icon-warning" style="margin-right: 4px;"></i>
@@ -1356,19 +1343,19 @@ const handleDelete = async (row: Cluster) => {
     )
 
     // 显示正在删除的提示
-    const loadingMsg = ElMessage.info({
-      message: '正在删除集群，请稍候...',
+    const loadingMsg = Message.loading({
+      content: '正在删除集群，请稍候...',
       duration: 0,
       type: 'info'
     })
 
     await deleteCluster(row.id)
-    loadingMsg.close()
-    ElMessage.success('集群已删除，所有相关资源已清理')
+    Message.clear()
+    Message.success('集群已删除，所有相关资源已清理')
     loadClusters()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '删除失败')
+      Message.error(error.response?.data?.message || '删除失败')
     }
   }
 }
@@ -1385,7 +1372,7 @@ const handleViewConfig = async (row: Cluster) => {
 
     configDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取集群凭证失败')
+    Message.error(error.response?.data?.message || '获取集群凭证失败')
   }
 }
 
@@ -1399,9 +1386,9 @@ watch(currentConfig, () => {
 const handleCopyConfig = async () => {
   try {
     await navigator.clipboard.writeText(currentConfig.value)
-    ElMessage.success('复制成功')
+    Message.success('复制成功')
   } catch (error) {
-    ElMessage.error('复制失败，请手动复制')
+    Message.error('复制失败，请手动复制')
   }
 }
 
@@ -1415,7 +1402,7 @@ const handleDownloadConfig = () => {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
-  ElMessage.success('下载成功')
+  Message.success('下载成功')
 }
 
 // 加载集群凭据用户列表
@@ -1427,7 +1414,7 @@ const loadClusterCredentials = async () => {
     clusterCredentialUsers.value = users
     // 不再自动刷新当前用户凭据，避免误清空
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '加载凭据用户失败')
+    Message.error(error.response?.data?.message || '加载凭据用户失败')
   }
 }
 
@@ -1500,7 +1487,7 @@ const handleAuthorize = async (row: Cluster) => {
     // 加载凭据用户列表（从后端API获取）
     await loadClusterCredentials()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取集群信息失败')
+    Message.error(error.response?.data?.message || '获取集群信息失败')
   }
 }
 
@@ -1525,9 +1512,9 @@ const handleApplyCredential = async () => {
     localStorage.setItem(storageKey, result.kubeconfig)
     localStorage.setItem(usernameKey, result.username)
 
-    ElMessage.success('凭据申请成功')
+    Message.success('凭据申请成功')
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '凭据申请失败')
+    Message.error(error.response?.data?.message || '凭据申请失败')
   } finally {
     credentialLoading.value = false
   }
@@ -1538,7 +1525,7 @@ const handleRevokeCredential = async () => {
   if (!currentCluster.value || !currentCredentialUsername.value) return
 
   try {
-    await ElMessageBox.confirm('确定要吊销该凭据吗？吊销后将无法使用该 KubeConfig 访问集群。', '提示', {
+    await confirmModal('确定要吊销该凭据吗？吊销后将无法使用该 KubeConfig 访问集群。', '提示', {
       type: 'warning',
       confirmButtonText: '确定',
       cancelButtonText: '取消'
@@ -1560,10 +1547,10 @@ const handleRevokeCredential = async () => {
     localStorage.removeItem(storageKey)
     localStorage.removeItem(usernameKey)
 
-    ElMessage.success('凭据吊销成功')
+    Message.success('凭据吊销成功')
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '凭据吊销失败')
+      Message.error(error.response?.data?.message || '凭据吊销失败')
     }
   } finally {
     revokeLoading.value = false
@@ -1588,9 +1575,9 @@ const getCurrentUsername = () => {
 const handleCopyKubeConfig = async () => {
   try {
     await navigator.clipboard.writeText(generatedKubeConfig.value)
-    ElMessage.success('复制成功')
+    Message.success('复制成功')
   } catch (error) {
-    ElMessage.error('复制失败，请手动复制')
+    Message.error('复制失败，请手动复制')
   }
 }
 
@@ -1617,11 +1604,11 @@ const handleDialogClose = () => {
 // 获取状态类型
 const getStatusType = (status: number) => {
   const statusMap: Record<number, string> = {
-    1: 'success',
-    2: 'danger',
-    3: 'info'
+    1: 'green',
+    2: 'red',
+    3: 'orangered'
   }
-  return statusMap[status] || 'info'
+  return statusMap[status] || 'gray'
 }
 
 // 获取状态文本
@@ -1684,159 +1671,114 @@ watch(paginatedClusterList, () => {
 <style scoped>
 .clusters-container {
   padding: 0;
-  background-color: transparent;
 }
 
 /* 统计卡片 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 12px;
+.stats-row {
+  margin-bottom: 16px;
 }
 
 .stat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  transition: all 0.3s ease;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+.stat-content {
+  display: flex;
+  align-items: center;
 }
 
 .stat-icon {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  margin-right: 16px;
   flex-shrink: 0;
 }
 
-.stat-icon-blue {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-icon-green {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-orange {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-icon-purple {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-content {
+.stat-info {
   flex: 1;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 8px;
 }
 
 .stat-value {
   font-size: 28px;
-  font-weight: 700;
-  color: #d4af37;
+  font-weight: 600;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1;
+  margin-bottom: 6px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 /* 页面头部 */
+.page-header-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  align-items: center;
 }
 
 .page-title-group {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 14px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  width: 44px;
+  height: 44px;
+  background: var(--ops-primary, #165dff);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   line-height: 1.4;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
+/* 搜索卡片 */
+.search-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
 
-.sync-button {
-  background: linear-gradient(135deg, #67C23A 0%, #85CE61 100%);
-  color: #fff;
-  border: none;
-  font-weight: 500;
-  padding: 10px 20px;
-  font-size: 14px;
-  border-radius: 8px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.2);
+.search-form :deep(.arco-form-item) {
+  margin-bottom: 0;
+}
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
-    background: linear-gradient(135deg, #85CE61 0%, #67C23A 100%);
-  }
-
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(103, 194, 58, 0.3);
-  }
+/* 表格卡片 */
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 /* 批量操作栏 */
@@ -1844,24 +1786,11 @@ watch(paginatedClusterList, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 12px 16px;
   margin-bottom: 16px;
-  background: #fff;
-  border: 2px solid rgba(212, 175, 55, 0.3);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.15);
-  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  background: var(--ops-primary-bg, #e8f0ff);
+  border: 1px solid var(--ops-primary-lighter, #6694ff);
+  border-radius: var(--ops-border-radius-sm, 4px);
 }
 
 .batch-actions-left {
@@ -1869,385 +1798,85 @@ watch(paginatedClusterList, () => {
   align-items: center;
 }
 
-.batch-actions-left :deep(.el-checkbox__label) {
-  font-size: 15px;
-  color: #1a1a1a;
-  font-weight: 600;
-}
-
-/* 批量操作栏内的复选框样式 */
-.batch-actions-left :deep(.el-checkbox) {
-  display: flex;
-  align-items: center;
-  height: auto;
-}
-
-.batch-actions-left :deep(.el-checkbox__input) {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  white-space: nowrap;
-  cursor: pointer;
-  outline: none;
-  line-height: 1;
-}
-
-.batch-actions-left :deep(.el-checkbox__inner) {
-  border: 2px solid #d4af37;
-  background: #ffffff;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-
-.batch-actions-left :deep(.el-checkbox__inner:hover) {
-  border-color: #c9a227;
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
-  border-color: #ffffff;
-  border-width: 2px;
-  height: 11px;
-  left: 6px;
-  width: 5px;
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
-  background-color: #ffffff;
-  height: 2px;
-  top: 10px;
-  width: 10px;
-  left: 6px;
-}
-
-.batch-actions-left :deep(.el-checkbox__label) {
-  font-size: 15px;
-  color: #1a1a1a;
-  font-weight: 600;
-  line-height: 22px;
-  padding-left: 8px;
-}
-
 .selected-count {
-  font-size: 15px;
-  color: #1a1a1a;
-  font-weight: 600;
-}
-
-.batch-actions-right {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.batch-actions-right .el-button {
-  border-radius: 8px;
-  font-weight: 600;
   font-size: 14px;
-  padding: 10px 18px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid;
-  background: #1a1a1a;
-  color: #ffffff;
-  border-color: #1a1a1a;
-}
-
-.batch-actions-right .el-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-  background: #333333;
-  border-color: #333333;
-  color: #ffffff;
-}
-
-/* 移除特定按钮类型的颜色样式，统一使用黑底白字 */
-.batch-actions-right .el-button--primary,
-.batch-actions-right .el-button--warning,
-.batch-actions-right .el-button--info,
-.batch-actions-right .el-button--danger,
-.batch-actions-right .el-button--success {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: #ffffff;
-}
-
-.batch-actions-right .el-button--primary:hover,
-.batch-actions-right .el-button--warning:hover,
-.batch-actions-right .el-button--info:hover,
-.batch-actions-right .el-button--danger:hover,
-.batch-actions-right .el-button--success:hover {
-  background: #333333;
-  border-color: #333333;
-  color: #ffffff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-}
-
-/* 表格复选框金色样式 */
-.modern-table :deep(.el-checkbox__inner) {
-  border: 2px solid #d4af37;
-  background: #ffffff;
-  border-radius: 4px;
-}
-
-.modern-table :deep(.el-checkbox__inner:hover) {
-  border-color: #c9a227;
-}
-
-.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
-  border-color: #ffffff;
-  border-width: 2px;
-}
-
-.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
-  background-color: #ffffff;
-}
-
-/* 搜索栏 */
-.search-bar {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.search-inputs {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-}
-
-.search-input {
-  width: 280px;
-}
-
-.filter-select {
-  width: 150px;
-}
-
-.search-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.reset-btn {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #606266;
-}
-
-.reset-btn:hover {
-  background: #e6e8eb;
-  border-color: #c0c4cc;
-}
-
-.search-btn {
-  background: #000;
-  border-color: #000;
-}
-
-.search-btn:hover {
-  background: #333;
-  border-color: #333;
-}
-
-/* 表格容器 */
-.table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
+  color: var(--ops-text-primary, #1d2129);
+  font-weight: 500;
 }
 
 /* 分页 */
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
-.modern-table :deep(.el-button--link) {
-  transition: all 0.2s ease;
-}
-
+/* 集群名称链接 */
 .cluster-name-link {
-  color: #303133 !important;
+  color: var(--ops-primary, #165dff) !important;
   font-size: 14px;
   font-weight: 500;
 }
 
 .cluster-name-link:hover {
-  color: #409eff !important;
-}
-
-.modern-table :deep(.el-tag) {
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-weight: 500;
-}
-
-/* 搜索框样式优化 */
-.search-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.search-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
-}
-
-.search-bar :deep(.el-select .el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-/* 表头图标 */
-.header-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-icon {
-  font-size: 16px;
-}
-
-.header-icon-blue {
-  color: #d4af37;
-}
-
-.header-icon-purple {
-  color: #d4af37;
+  color: var(--ops-primary-light, #306fff) !important;
 }
 
 /* 操作按钮 */
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
 }
 
 .action-btn {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
-  display: flex;
+  padding: 0;
+  border-radius: var(--ops-border-radius-sm, 4px);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
+  color: var(--ops-text-secondary, #4e5969);
+  font-size: 16px;
 }
 
-.action-btn :deep(.el-icon) {
+.action-btn:deep(.arco-btn-icon) {
   font-size: 16px;
 }
 
 .action-btn:hover {
-  background-color: #f5f7fa;
-  transform: scale(1.1);
+  background-color: var(--ops-primary-bg, #e8f0ff);
+  color: var(--ops-primary, #165dff);
 }
 
 .action-auth:hover {
-  background-color: #e8f4ff;
-  color: #409eff;
+  background-color: var(--ops-primary-bg, #e8f0ff);
+  color: var(--ops-primary, #165dff);
 }
 
 .action-sync:hover {
-  background-color: #e8f8f0;
-  color: #67c23a;
+  background-color: #e8ffea;
+  color: var(--ops-success, #00b42a);
 }
 
 .action-edit:hover {
-  background-color: #e8f4ff;
-  color: #409eff;
+  background-color: #fff7e8;
+  color: var(--ops-warning, #ff7d00);
 }
 
 .action-delete:hover {
-  background-color: #fee;
-  color: #f56c6c;
+  background-color: #ffece8;
+  color: var(--ops-danger, #f53f3f);
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
+/* 表单分区 */
 .form-section {
   margin-bottom: 24px;
   padding-bottom: 20px;
-  border-bottom: 1px dashed #dcdfe6;
+  border-bottom: 1px dashed var(--ops-border-color, #e5e6eb);
 }
 
 .form-section:last-of-type {
@@ -2259,17 +1888,18 @@ watch(paginatedClusterList, () => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   margin-bottom: 16px;
   padding-left: 8px;
-  border-left: 3px solid #000000;
+  border-left: 3px solid var(--ops-primary, #165dff);
 }
 
+/* 代码编辑器 */
 .code-editor-wrapper {
   display: flex;
   width: 100%;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: var(--ops-border-radius-sm, 4px);
   overflow: hidden;
   background-color: #282c34;
 }
@@ -2286,7 +1916,7 @@ watch(paginatedClusterList, () => {
 }
 
 .line-number {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.6;
   color: #5c6370;
@@ -2297,7 +1927,7 @@ watch(paginatedClusterList, () => {
   flex: 1;
   min-height: 200px;
   padding: 12px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.6;
   color: #abb2bf;
@@ -2305,16 +1935,10 @@ watch(paginatedClusterList, () => {
   border: none;
   outline: none;
   resize: vertical;
-  font-feature-settings: "liga" 0;
 }
 
 .code-textarea::placeholder {
   color: #5c6370;
-}
-
-.code-textarea:focus {
-  background-color: #282c34;
-  color: #abb2bf;
 }
 
 .code-tip {
@@ -2323,15 +1947,10 @@ watch(paginatedClusterList, () => {
   gap: 6px;
   margin-top: 8px;
   padding: 8px 12px;
-  background-color: #f4f4f5;
-  border-radius: 4px;
+  background-color: #f7f8fa;
+  border-radius: var(--ops-border-radius-sm, 4px);
   font-size: 12px;
-  color: #606266;
-}
-
-.code-tip .el-icon {
-  color: #409eff;
-  font-size: 14px;
+  color: var(--ops-text-secondary, #4e5969);
 }
 
 .dialog-footer {
@@ -2340,23 +1959,13 @@ watch(paginatedClusterList, () => {
   gap: 12px;
 }
 
-/* 授权对话框样式 */
+/* 授权对话框 */
 .connection-info {
-  padding: 20px;
+  padding: 16px;
 }
 
 .info-section {
   margin-bottom: 24px;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  font-size: 15px;
-  color: #303133;
-  margin-bottom: 12px;
 }
 
 .credential-section {
@@ -2381,11 +1990,11 @@ watch(paginatedClusterList, () => {
   margin-bottom: 12px;
 }
 
-.kubeconfig-textarea :deep(.el-textarea__inner) {
+.kubeconfig-textarea :deep(.arco-textarea__inner) {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 12px;
   line-height: 1.5;
-  background-color: #f5f7fa;
+  background-color: #f7f8fa;
 }
 
 .no-credential-tip {
@@ -2394,64 +2003,59 @@ watch(paginatedClusterList, () => {
 }
 
 .tab-content {
-  padding: 20px;
-  text-align: center;
+  padding: 16px;
 }
 
-/* 授权对话框标签页样式 */
 .tab-label {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.tab-icon {
-  font-size: 16px;
-  color: #d4af37;
-}
-
-:deep(.el-tabs__item) {
-  &.is-active {
-    .tab-icon {
-      color: #d4af37;
-    }
-  }
-}
-
-/* 删除集群确认对话框样式 */
-:deep(.delete-cluster-confirm) {
-  .el-message-box__message {
-    p {
-      line-height: 1.8;
-    }
-  }
-
-  .el-message-box__btns {
-    .el-button--primary {
-      background: #f56c6c;
-      border-color: #f56c6c;
-
-      &:hover {
-        background: #f78989;
-        border-color: #f78989;
-      }
-
-      &:active {
-        background: #dd6161;
-        border-color: #dd6161;
-      }
-    }
-  }
-}
-
-/* 集群编辑对话框样式 */
+/* 对话框样式 */
 :deep(.cluster-edit-dialog) {
   width: 70% !important;
   max-width: 90vw;
 }
 
-:deep(.cluster-edit-dialog .el-dialog__body) {
+:deep(.cluster-edit-dialog .arco-modal__body) {
   max-height: 70vh;
   overflow-y: auto;
+}
+
+/* 状态指示点 */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.status-dot-1 {
+  background-color: #00b42a;
+  box-shadow: 0 0 4px rgba(0, 180, 42, 0.4);
+  animation: pulse-green 2s infinite;
+}
+
+.status-dot-2 {
+  background-color: #f53f3f;
+  box-shadow: 0 0 4px rgba(245, 63, 63, 0.4);
+}
+
+.status-dot-3 {
+  background-color: #ff7d00;
+  box-shadow: 0 0 4px rgba(255, 125, 0, 0.4);
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@media (max-width: 1200px) {
+  .stat-value { font-size: 24px; }
+  .stat-icon { width: 48px; height: 48px; }
 }
 </style>
