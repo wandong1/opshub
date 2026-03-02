@@ -57,7 +57,7 @@ func (p *HTTPProber) ProbeApp(config *AppProbeConfig) *AppResult {
 
 	// Build transport
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: config.SkipVerify},
 	}
 	if config.ProxyURL != "" {
 		proxyURL, err := url.Parse(config.ProxyURL)

@@ -3,538 +3,242 @@
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
       <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Document /></el-icon>
-        </div>
+        <div class="page-title-icon"><icon-file /></div>
         <div>
           <h2 class="page-title">操作日志</h2>
           <p class="page-subtitle">记录系统内的所有操作行为</p>
         </div>
       </div>
       <div class="header-actions">
-        <el-button v-permission="'op-logs:search'" class="black-button" @click="handleSearch">
-          <el-icon style="margin-right: 6px;"><Search /></el-icon>
+        <a-button v-permission="'op-logs:search'" type="primary" @click="handleSearch">
+          <template #icon><icon-search /></template>
           查询
-        </el-button>
-        <el-button class="black-button" @click="handleReset">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-button>
+        <a-button @click="handleReset">
+          <template #icon><icon-refresh /></template>
           重置
-        </el-button>
-        <el-button v-permission="'op-logs:batch-delete'" class="black-button danger" @click="handleBatchDelete" :disabled="selectedIds.length === 0">
-          <el-icon style="margin-right: 6px;"><Delete /></el-icon>
+        </a-button>
+        <a-button v-permission="'op-logs:batch-delete'" status="danger" :disabled="selectedIds.length === 0" @click="handleBatchDelete">
+          <template #icon><icon-delete /></template>
           批量删除
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 筛选栏 -->
     <div class="filter-bar">
-      <el-input
-        v-model="searchForm.username"
-        placeholder="搜索用户名..."
-        clearable
-        class="filter-input"
-      >
-        <template #prefix>
-          <el-icon class="filter-icon"><User /></el-icon>
-        </template>
-      </el-input>
-      <el-select
-        v-model="searchForm.module"
-        placeholder="选择模块"
-        clearable
-        class="filter-select"
-      >
-        <el-option label="系统管理" value="系统管理" />
-        <el-option label="个人信息" value="个人信息" />
-        <el-option label="操作审计" value="操作审计" />
-        <el-option label="资产管理" value="资产管理" />
-        <el-option label="容器管理" value="容器管理" />
-        <el-option label="监控中心" value="监控中心" />
-        <el-option label="任务中心" value="任务中心" />
-      </el-select>
-      <el-select
-        v-model="searchForm.action"
-        placeholder="操作类型"
-        clearable
-        class="filter-select"
-      >
-        <el-option label="查询" value="查询" />
-        <el-option label="创建" value="创建" />
-        <el-option label="更新" value="更新" />
-        <el-option label="删除" value="删除" />
-        <el-option label="登录" value="登录" />
-        <el-option label="登出" value="登出" />
-      </el-select>
-      <el-select
-        v-model="searchForm.status"
-        placeholder="状态码"
-        clearable
-        class="filter-select"
-      >
-        <el-option label="成功 (2xx)" value="2xx" />
-        <el-option label="重定向 (3xx)" value="3xx" />
-        <el-option label="客户端错误 (4xx)" value="4xx" />
-        <el-option label="服务器错误 (5xx)" value="5xx" />
-      </el-select>
-      <el-date-picker
-        v-model="dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="YYYY-MM-DD"
-        class="filter-date"
-      />
+      <a-input v-model="searchForm.username" placeholder="搜索用户名..." allow-clear class="filter-input">
+        <template #prefix><icon-user /></template>
+      </a-input>
+      <a-select v-model="searchForm.module" placeholder="选择模块" allow-clear class="filter-select" @change="handleSearch">
+        <a-option value="系统管理">系统管理</a-option>
+        <a-option value="个人信息">个人信息</a-option>
+        <a-option value="操作审计">操作审计</a-option>
+        <a-option value="资产管理">资产管理</a-option>
+        <a-option value="容器管理">容器管理</a-option>
+        <a-option value="监控中心">监控中心</a-option>
+        <a-option value="任务中心">任务中心</a-option>
+      </a-select>
+      <a-select v-model="searchForm.action" placeholder="操作类型" allow-clear class="filter-select" @change="handleSearch">
+        <a-option value="查询">查询</a-option>
+        <a-option value="创建">创建</a-option>
+        <a-option value="更新">更新</a-option>
+        <a-option value="删除">删除</a-option>
+        <a-option value="登录">登录</a-option>
+        <a-option value="登出">登出</a-option>
+      </a-select>
+      <a-select v-model="searchForm.status" placeholder="状态码" allow-clear class="filter-select" @change="handleSearch">
+        <a-option value="2xx">成功 (2xx)</a-option>
+        <a-option value="3xx">重定向 (3xx)</a-option>
+        <a-option value="4xx">客户端错误 (4xx)</a-option>
+        <a-option value="5xx">服务器错误 (5xx)</a-option>
+      </a-select>
+      <a-range-picker v-model="dateRange" style="width: 260px;" @change="handleDateChange" />
     </div>
 
     <!-- 数据表格 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="logList"
-        v-loading="loading"
+        :loading="loading"
+        :bordered="{ cell: true }"
+        stripe
+        row-key="id"
+        :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: false }"
         @selection-change="handleSelectionChange"
-        class="modern-table"
-        size="default"
+        :pagination="{ current: pagination.page, pageSize: pagination.pageSize, total: pagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50, 100] }"
+        @page-change="(p: number) => { pagination.page = p; loadLogList() }"
+        @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadLogList() }"
       >
-        <el-table-column type="selection" width="55" />
-        <el-table-column label="ID" prop="id" width="80" align="center">
-          <template #default="{ row }">
-            <span class="id-text">#{{ row.id }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作用户" prop="username" min-width="140">
-          <template #default="{ row }">
-            <div class="user-cell">
-              <el-icon class="user-icon"><User /></el-icon>
-              <span>{{ row.realName || row.username || '-' }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="模块" prop="module" min-width="120">
-          <template #default="{ row }">
-            <el-tag size="small" type="info">{{ row.module }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" prop="action" width="90">
-          <template #default="{ row }">
-            <el-tag :type="getActionType(row.action)" size="small">
-              {{ row.action }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作描述" prop="description" min-width="200" show-overflow-tooltip />
-        <el-table-column label="请求方法" prop="method" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getMethodType(row.method)" size="small">
-              {{ row.method }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="请求路径" prop="path" min-width="180" show-overflow-tooltip />
-        <el-table-column label="状态" prop="status" width="80" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.status >= 200 && row.status < 300 ? 'success' : 'danger'" size="small">
-              {{ row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="耗时" prop="costTime" width="100" align="right">
-          <template #default="{ row }">
-            <span :class="['cost-text', { 'slow-cost': row.costTime > 1000 }]">
-              {{ row.costTime }}ms
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="IP地址" prop="ip" width="130" />
-        <el-table-column label="操作时间" prop="createdAt" width="170" />
-        <el-table-column label="操作" width="80" fixed="right" align="center">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'op-logs:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="pagination.total"
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadLogList"
-          @current-change="loadLogList"
-        />
-      </div>
+        <template #columns>
+          <a-table-column title="ID" :width="80" align="center">
+            <template #cell="{ record }">
+              <span class="id-text">#{{ record.id }}</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="操作用户" :min-width="140">
+            <template #cell="{ record }">
+              <div class="user-cell">
+                <icon-user style="color: var(--ops-primary); flex-shrink: 0;" />
+                <span>{{ record.realName || record.username || '-' }}</span>
+              </div>
+            </template>
+          </a-table-column>
+          <a-table-column title="模块" :min-width="120">
+            <template #cell="{ record }">
+              <a-tag color="gray" size="small">{{ record.module }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="操作" :width="90">
+            <template #cell="{ record }">
+              <a-tag :color="getActionColor(record.action)" size="small">{{ record.action }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="操作描述" data-index="description" :min-width="200" ellipsis tooltip />
+          <a-table-column title="请求方法" :width="100">
+            <template #cell="{ record }">
+              <a-tag :color="getMethodColor(record.method)" size="small">{{ record.method }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="请求路径" data-index="path" :min-width="180" ellipsis tooltip />
+          <a-table-column title="状态" :width="80" align="center">
+            <template #cell="{ record }">
+              <a-tag :color="record.status >= 200 && record.status < 300 ? 'green' : 'red'" size="small">{{ record.status }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="耗时" :width="100" align="right">
+            <template #cell="{ record }">
+              <span :class="['cost-text', { 'slow-cost': record.costTime > 1000 }]">{{ record.costTime }}ms</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="IP地址" data-index="ip" :width="130" />
+          <a-table-column title="操作时间" data-index="createdAt" :width="170" />
+          <a-table-column title="操作" :width="80" fixed="right" align="center">
+            <template #cell="{ record }">
+              <a-tooltip content="删除" position="top">
+                <a-button v-permission="'op-logs:delete'" type="text" class="action-btn action-delete" @click="handleDelete(record)">
+                  <template #icon><icon-delete /></template>
+                </a-button>
+              </a-tooltip>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Delete, Search, Refresh, User } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import { IconFile, IconSearch, IconRefresh, IconDelete, IconUser } from '@arco-design/web-vue/es/icon'
 import { getOperationLogList, deleteOperationLog, deleteOperationLogsBatch } from '@/api/audit'
 
-// 搜索表单
 const searchForm = reactive({
-  username: '',
-  module: '',
-  action: '',
-  status: '',
-  startTime: '',
-  endTime: ''
+  username: '', module: '', action: '', status: '', startTime: '', endTime: ''
 })
+const dateRange = ref<(string | Date)[]>([])
+const logList = ref<any[]>([])
+const loading = ref(false)
+const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const selectedIds = ref<number[]>([])
 
-// 日期范围
-const dateRange = ref<[string, string]>([])
-
-// 监听日期范围变化
-watch(dateRange, (newVal) => {
-  if (newVal && newVal.length === 2) {
-    searchForm.startTime = newVal[0]
-    searchForm.endTime = newVal[1]
+const handleDateChange = (val: (string | Date | undefined)[] | undefined) => {
+  if (val && val.length === 2 && val[0] && val[1]) {
+    searchForm.startTime = String(val[0])
+    searchForm.endTime = String(val[1])
   } else {
     searchForm.startTime = ''
     searchForm.endTime = ''
   }
-})
+  handleSearch()
+}
 
-// 日志列表
-const logList = ref<any[]>([])
-const loading = ref(false)
-
-// 分页
-const pagination = reactive({
-  page: 1,
-  pageSize: 10,
-  total: 0
-})
-
-// 选中的ID
-const selectedIds = ref<number[]>([])
-
-// 加载日志列表
 const loadLogList = async () => {
   loading.value = true
   try {
-    const res: any = await getOperationLogList({
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-      ...searchForm
-    })
+    const res: any = await getOperationLogList({ page: pagination.page, pageSize: pagination.pageSize, ...searchForm })
     logList.value = res.list || []
     pagination.total = res.total || 0
-  } catch (error) {
-    ElMessage.error('获取日志列表失败')
-  } finally {
-    loading.value = false
-  }
+  } catch (error) { /* 错误已由 request 拦截器处理 */ }
+  finally { loading.value = false }
 }
 
-// 搜索
-const handleSearch = () => {
-  pagination.page = 1
-  loadLogList()
-}
-
-// 重置
+const handleSearch = () => { pagination.page = 1; loadLogList() }
 const handleReset = () => {
-  searchForm.username = ''
-  searchForm.module = ''
-  searchForm.action = ''
-  searchForm.status = ''
-  searchForm.startTime = ''
-  searchForm.endTime = ''
+  Object.assign(searchForm, { username: '', module: '', action: '', status: '', startTime: '', endTime: '' })
   dateRange.value = []
   pagination.page = 1
   loadLogList()
 }
 
-// 删除
 const handleDelete = (row: any) => {
-  ElMessageBox.confirm('确定要删除这条日志吗?', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteOperationLog(row.id)
-      ElMessage.success('删除成功')
-      loadLogList()
-    } catch (error) {
-      ElMessage.error('删除失败')
+  Modal.warning({
+    title: '提示', content: '确定要删除这条日志吗？', hideCancel: false,
+    onOk: async () => {
+      try { await deleteOperationLog(row.id); Message.success('删除成功'); loadLogList() }
+      catch (error) { /* 错误已由 request 拦截器处理 */ }
     }
   })
 }
 
-// 批量删除
 const handleBatchDelete = () => {
-  ElMessageBox.confirm(`确定要删除选中的 ${selectedIds.value.length} 条日志吗?`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteOperationLogsBatch(selectedIds.value)
-      ElMessage.success('删除成功')
-      selectedIds.value = []
-      loadLogList()
-    } catch (error) {
-      ElMessage.error('删除失败')
+  Modal.warning({
+    title: '提示', content: `确定要删除选中的 ${selectedIds.value.length} 条日志吗？`, hideCancel: false,
+    onOk: async () => {
+      try { await deleteOperationLogsBatch(selectedIds.value); Message.success('删除成功'); selectedIds.value = []; loadLogList() }
+      catch (error) { /* 错误已由 request 拦截器处理 */ }
     }
   })
 }
 
-// 选择变化
-const handleSelectionChange = (selection: any[]) => {
-  selectedIds.value = selection.map(item => item.id)
+const handleSelectionChange = (keys: (string | number)[]) => { selectedIds.value = keys.map(Number) }
+const getActionColor = (action: string) => {
+  const map: Record<string, string> = { '查询': 'gray', '创建': 'green', '更新': 'orangered', '删除': 'red', '登录': 'green', '登出': 'gray' }
+  return map[action] || 'gray'
 }
 
-// 获取操作类型标签样式
-const getActionType = (action: string) => {
-  const map: Record<string, string> = {
-    '查询': 'info',
-    '创建': 'success',
-    '更新': 'warning',
-    '删除': 'danger',
-    '登录': 'success',
-    '登出': 'info'
-  }
-  return map[action] || 'info'
+const getMethodColor = (method: string) => {
+  const map: Record<string, string> = { GET: 'gray', POST: 'green', PUT: 'orangered', DELETE: 'red' }
+  return map[method] || 'gray'
 }
 
-// 获取请求方法标签样式
-const getMethodType = (method: string) => {
-  const map: Record<string, string> = {
-    'GET': 'info',
-    'POST': 'success',
-    'PUT': 'warning',
-    'DELETE': 'danger'
-  }
-  return map[method] || 'info'
-}
-
-// 实时搜索
-watch([() => searchForm.username, () => searchForm.module, () => searchForm.action, () => searchForm.status], () => {
-  pagination.page = 1
-  loadLogList()
-})
-
-onMounted(() => {
-  loadLogList()
-})
+onMounted(() => { loadLogList() })
 </script>
 
 <style scoped>
-.operation-logs-container {
-  padding: 0;
-  background-color: transparent;
-}
+.operation-logs-container { padding: 0; background-color: transparent; }
 
-/* 页面头部 */
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 12px; padding: 16px 20px; background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px); box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
+.page-title-group { display: flex; align-items: flex-start; gap: 16px; }
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #d4af37;
-  font-size: 22px;
-  flex-shrink: 0;
-  border: 1px solid #d4af37;
+  width: 36px; height: 36px; background: var(--ops-primary, #165dff);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 18px; flex-shrink: 0;
 }
+.page-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--ops-text-primary, #1d2129); }
+.page-subtitle { margin: 4px 0 0 0; font-size: 13px; color: var(--ops-text-tertiary, #86909c); }
+.header-actions { display: flex; gap: 12px; align-items: center; }
 
-.page-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  line-height: 1.3;
-}
-
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 13px;
-  color: #909399;
-  line-height: 1.4;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.black-button.danger {
-  background-color: #f56c6c !important;
-  border-color: #f56c6c !important;
-}
-
-.black-button.danger:hover {
-  background-color: #f78989 !important;
-}
-
-.black-button:disabled {
-  background-color: #c0c4cc !important;
-  border-color: #c0c4cc !important;
-}
-
-/* 筛选栏 */
 .filter-bar {
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  gap: 12px;
-  align-items: center;
+  margin-bottom: 12px; padding: 12px 16px; background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px); box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
 }
+.filter-input { width: 200px; }
+.filter-select { width: 150px; }
 
-.filter-input {
-  width: 200px;
-}
-
-.filter-select {
-  width: 140px;
-}
-
-.filter-date {
-  width: 260px;
-}
-
-.filter-icon {
-  color: #d4af37;
-}
-
-/* 表格容器 */
 .table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
+  background: #fff; border-radius: var(--ops-border-radius-md, 8px);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04); overflow: hidden; padding: 16px;
 }
-
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row td) {
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
-.id-text {
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 12px;
-  color: #909399;
-}
-
-.user-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.user-icon {
-  color: #d4af37;
-  font-size: 16px;
-}
-
-.cost-text {
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 13px;
-  color: #606266;
-}
-
-.cost-text.slow-cost {
-  color: #f56c6c;
-  font-weight: 600;
-}
-
-/* 操作按钮 */
-.action-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-}
-
-.action-btn {
-  color: #d4af37;
-  padding: 4px;
-}
-
-.action-btn:hover {
-  color: #bfa13f;
-}
-
-.action-btn.danger {
-  color: #f56c6c;
-}
-
-.action-btn.danger:hover {
-  color: #f78989;
-}
-
-/* 分页 */
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
-}
+.id-text { font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: var(--ops-text-tertiary, #86909c); }
+.user-cell { display: flex; align-items: center; gap: 8px; }
+.cost-text { font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; color: var(--ops-text-secondary, #4e5969); }
+.cost-text.slow-cost { color: var(--ops-danger, #f53f3f); font-weight: 600; }
+.action-btn { width: 32px; height: 32px; border-radius: 6px; transition: all 0.2s ease; }
+.action-delete:hover { background-color: #ffece8; color: var(--ops-danger, #f53f3f); transform: scale(1.1); }
 </style>

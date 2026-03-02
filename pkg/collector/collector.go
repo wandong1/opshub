@@ -83,17 +83,30 @@ type DiskInfo struct {
 	Usage      float64 `json:"usage"`      // 使用率百分比
 }
 
-// Collector 采集器
-type Collector struct {
-	sshClient *sshclient.Client
-	timeout   time.Duration
+// CommandExecutor 命令执行器接口，SSH和Agent都可以实现
+type CommandExecutor interface {
+	Execute(cmd string) (string, error)
 }
 
-// NewCollector 创建采集器
+// Collector 采集器
+type Collector struct {
+	executor CommandExecutor
+	timeout  time.Duration
+}
+
+// NewCollector 创建采集器（兼容旧接口）
 func NewCollector(sshClient *sshclient.Client) *Collector {
 	return &Collector{
-		sshClient: sshClient,
-		timeout:   30 * time.Second,
+		executor: sshClient,
+		timeout:  30 * time.Second,
+	}
+}
+
+// NewCollectorWithExecutor 使用CommandExecutor创建采集器
+func NewCollectorWithExecutor(executor CommandExecutor) *Collector {
+	return &Collector{
+		executor: executor,
+		timeout:  30 * time.Second,
 	}
 }
 
@@ -146,29 +159,29 @@ func (c *Collector) CollectAll() (*SystemInfo, error) {
 // CollectSystemInfo 采集系统基本信息
 func (c *Collector) CollectSystemInfo() (os, kernel, arch, hostname string, err error) {
 	// 获取操作系统信息
-	osOutput, err := c.sshClient.Execute(". /etc/os-release && echo $PRETTY_NAME")
+	osOutput, err := c.executor.Execute(". /etc/os-release && echo $PRETTY_NAME")
 	if err == nil && osOutput != "" {
 		os = strings.TrimSpace(osOutput)
 	} else {
 		// 尝试其他方法
-		osOutput, _ = c.sshClient.Execute("cat /etc/redhat-release 2>/dev/null || cat /etc/issue 2>/dev/null | head -1")
+		osOutput, _ = c.executor.Execute("cat /etc/redhat-release 2>/dev/null || cat /etc/issue 2>/dev/null | head -1")
 		os = strings.TrimSpace(osOutput)
 	}
 
 	// 获取内核版本
-	kernelOutput, err := c.sshClient.Execute("uname -r")
+	kernelOutput, err := c.executor.Execute("uname -r")
 	if err == nil {
 		kernel = strings.TrimSpace(kernelOutput)
 	}
 
 	// 获取架构
-	archOutput, err := c.sshClient.Execute("uname -m")
+	archOutput, err := c.executor.Execute("uname -m")
 	if err == nil {
 		arch = strings.TrimSpace(archOutput)
 	}
 
 	// 获取主机名
-	hostnameOutput, err := c.sshClient.Execute("hostname")
+	hostnameOutput, err := c.executor.Execute("hostname")
 	if err == nil {
 		hostname = strings.TrimSpace(hostnameOutput)
 	}
@@ -182,7 +195,7 @@ func (c *Collector) CollectCPU() (CPUInfo, error) {
 
 	// 获取CPU信息（兼容不同系统）
 	cmd := "lscpu 2>/dev/null || cat /proc/cpuinfo"
-	output, err := c.sshClient.Execute(cmd)
+	output, err := c.executor.Execute(cmd)
 	if err != nil {
 		return info, fmt.Errorf("获取CPU信息失败: %w", err)
 	}
@@ -224,7 +237,7 @@ func (c *Collector) CollectCPU() (CPUInfo, error) {
 	}
 
 	// 计算CPU使用率
-	usageOutput, err := c.sshClient.Execute("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1")
+	usageOutput, err := c.executor.Execute("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1")
 	if err == nil {
 		info.Usage, _ = strconv.ParseFloat(strings.TrimSpace(usageOutput), 64)
 	}
@@ -236,7 +249,7 @@ func (c *Collector) CollectCPU() (CPUInfo, error) {
 func (c *Collector) CollectMemory() (MemoryInfo, error) {
 	info := MemoryInfo{}
 
-	output, err := c.sshClient.Execute("free -b")
+	output, err := c.executor.Execute("free -b")
 	if err != nil {
 		return info, fmt.Errorf("获取内存信息失败: %w", err)
 	}
@@ -275,7 +288,7 @@ func (c *Collector) CollectMemory() (MemoryInfo, error) {
 // CollectDisk 采集磁盘信息
 func (c *Collector) CollectDisk() ([]DiskInfo, error) {
 	// 只统计根目录 / 的磁盘信息
-	output, err := c.sshClient.Execute("df -B1 /")
+	output, err := c.executor.Execute("df -B1 /")
 	if err != nil {
 		return nil, fmt.Errorf("获取磁盘信息失败: %w", err)
 	}
@@ -319,7 +332,7 @@ func (c *Collector) CollectDisk() ([]DiskInfo, error) {
 		// 获取文件系统类型
 		fstype := "unknown"
 		if strings.Contains(disk.Device, "/dev/") || strings.Contains(disk.Device, "mapper") {
-			fsOutput, _ := c.sshClient.Execute(fmt.Sprintf("blkid -o value -s TYPE %s 2>/dev/null", disk.Device))
+			fsOutput, _ := c.executor.Execute(fmt.Sprintf("blkid -o value -s TYPE %s 2>/dev/null", disk.Device))
 			fstype = strings.TrimSpace(fsOutput)
 			if fstype == "" {
 				fstype = "ext4" // 默认
@@ -337,7 +350,7 @@ func (c *Collector) CollectDisk() ([]DiskInfo, error) {
 
 // CollectProcessCount 采集进程数量
 func (c *Collector) CollectProcessCount() (int, error) {
-	output, err := c.sshClient.Execute("ps aux | wc -l")
+	output, err := c.executor.Execute("ps aux | wc -l")
 	if err != nil {
 		return 0, fmt.Errorf("获取进程数量失败: %w", err)
 	}
@@ -348,7 +361,7 @@ func (c *Collector) CollectProcessCount() (int, error) {
 
 // CollectPortCount 采集端口监听数量
 func (c *Collector) CollectPortCount() (int, error) {
-	output, err := c.sshClient.Execute("ss -tlna 2>/dev/null | wc -l || netstat -tlna 2>/dev/null | wc -l")
+	output, err := c.executor.Execute("ss -tlna 2>/dev/null | wc -l || netstat -tlna 2>/dev/null | wc -l")
 	if err != nil {
 		return 0, fmt.Errorf("获取端口数量失败: %w", err)
 	}
@@ -363,7 +376,7 @@ func (c *Collector) CollectPortCount() (int, error) {
 
 // CollectUptime 采集运行时间
 func (c *Collector) CollectUptime() (string, error) {
-	output, err := c.sshClient.Execute("uptime -p 2>/dev/null || uptime")
+	output, err := c.executor.Execute("uptime -p 2>/dev/null || uptime")
 	if err != nil {
 		return "", fmt.Errorf("获取运行时间失败: %w", err)
 	}

@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><Connection /></el-icon>
+          <icon-link />
         </div>
         <div>
           <h2 class="page-title">网络管理</h2>
@@ -12,26 +12,26 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-select
+        <a-select
           v-model="selectedClusterId"
           placeholder="选择集群"
           class="cluster-select"
           @change="handleClusterChange"
         >
           <template #prefix>
-            <el-icon class="search-icon"><Platform /></el-icon>
+            <icon-apps />
           </template>
-          <el-option
+          <a-option
             v-for="cluster in clusterList"
             :key="cluster.id"
             :label="cluster.alias || cluster.name"
             :value="cluster.id"
           />
-        </el-select>
-        <el-button class="black-button" @click="loadCurrentResources">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-select>
+        <a-button @click="loadCurrentResources">
+          <icon-refresh />
           刷新
-        </el-button>
+        </a-button>
       </div>
     </div>
 
@@ -43,9 +43,7 @@
         :class="['type-tab', { active: activeTab === type.value }]"
         @click="handleTabChange(type.value)"
       >
-        <el-icon class="type-icon">
           <component :is="type.icon" />
-        </el-icon>
         <span class="type-label">{{ type.label }}</span>
         <span v-if="type.count !== undefined" class="type-count">({{ type.count }})</span>
       </div>
@@ -103,8 +101,8 @@
     </div>
 
     <!-- 终端对话框 -->
-    <el-dialog
-      v-model="terminalDialogVisible"
+    <a-modal
+      v-model:visible="terminalDialogVisible"
       :title="`终端 - Pod: ${terminalData.pod} | 容器: ${terminalData.container}`"
       width="90%"
       :close-on-click-modal="false"
@@ -114,21 +112,21 @@
     >
       <div class="terminal-container">
         <div v-if="!terminalConnected" class="terminal-loading-overlay">
-          <el-icon class="is-loading"><Loading /></el-icon>
+          <icon-loading />
           <span>正在连接终端...</span>
         </div>
         <div class="terminal-wrapper" ref="terminalWrapper"></div>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="terminalDialogVisible = false">关闭</el-button>
+          <a-button @click="terminalDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 日志对话框 -->
-    <el-dialog
-      v-model="logsDialogVisible"
+    <a-modal
+      v-model:visible="logsDialogVisible"
       :title="`日志 - Pod: ${logsData.pod} | 容器: ${logsData.container}`"
       width="90%"
       :close-on-click-modal="false"
@@ -136,63 +134,57 @@
       @opened="handleLogsDialogOpened"
     >
       <div class="logs-toolbar">
-        <el-button size="small" @click="handleRefreshLogs" :loading="logsLoading">
-          <el-icon><Refresh /></el-icon>
+        <a-button size="small" @click="handleRefreshLogs" :loading="logsLoading">
+          <icon-refresh />
           刷新
-        </el-button>
-        <el-button size="small" @click="handleDownloadLogs">
-          <el-icon><Download /></el-icon>
+        </a-button>
+        <a-button size="small" @click="handleDownloadLogs">
+          <icon-download />
           下载
-        </el-button>
-        <el-button size="small" @click="logsAutoScroll = !logsAutoScroll" :type="logsAutoScroll ? 'primary' : 'default'">
-          <el-icon><Bottom /></el-icon>
+        </a-button>
+        <a-button size="small" @click="logsAutoScroll = !logsAutoScroll" :type="logsAutoScroll ? 'primary' : 'default'">
+          <icon-down />
           {{ logsAutoScroll ? '自动滚动' : '停止滚动' }}
-        </el-button>
-        <el-select v-model="logsTailLines" size="small" style="width: 120px; margin-left: 10px;">
-          <el-option label="最近100行" :value="100" />
-          <el-option label="最近500行" :value="500" />
-          <el-option label="最近1000行" :value="1000" />
-          <el-option label="全部" :value="0" />
-        </el-select>
+        </a-button>
+        <a-select v-model="logsTailLines" size="small" style="width: 120px; margin-left: 10px;">
+          <a-option label="最近100行" :value="100" />
+          <a-option label="最近500行" :value="500" />
+          <a-option label="最近1000行" :value="1000" />
+          <a-option label="全部" :value="0" />
+        </a-select>
       </div>
       <div class="logs-wrapper" ref="logsWrapper">
         <pre v-if="logsContent" class="logs-content">{{ logsContent }}</pre>
-        <el-empty v-else-if="!logsLoading" description="暂无日志" />
+        <a-empty v-else-if="!logsLoading" description="暂无日志" />
         <div v-if="logsLoading" class="logs-loading">
-          <el-icon class="is-loading"><Loading /></el-icon>
+          <icon-loading />
           <span>正在加载日志...</span>
         </div>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="logsDialogVisible = false">关闭</el-button>
+          <a-button @click="logsDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import {
-  Platform,
-  Refresh,
-  Connection,
-  Service,
-  Link,
-  Lock,
-  Position,
-  Loading,
-  Download,
-  Bottom
-} from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getClusterList, type Cluster } from '@/api/kubernetes'
 import axios from 'axios'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
+import {
+  IconLink,
+  IconLock,
+  IconLocation,
+  IconShareInternal
+} from '@arco-design/web-vue/es/icon'
 import ServiceList from './network-components/ServiceList.vue'
 import IngressList from './network-components/IngressList.vue'
 import NetworkPolicyList from './network-components/NetworkPolicyList.vue'
@@ -207,10 +199,10 @@ interface NetworkType {
 }
 
 const networkTypes = ref<NetworkType[]>([
-  { label: 'Services', value: 'services', icon: Service, count: 0 },
-  { label: 'Ingress', value: 'ingresses', icon: Link, count: 0 },
-  { label: 'Network Policies', value: 'networkpolicies', icon: Lock, count: 0 },
-  { label: 'Endpoints', value: 'endpoints', icon: Position, count: 0 },
+  { label: 'Services', value: 'services', icon: IconShareInternal, count: 0 },
+  { label: 'Ingress', value: 'ingresses', icon: IconLink, count: 0 },
+  { label: 'Network Policies', value: 'networkpolicies', icon: IconLock, count: 0 },
+  { label: 'Endpoints', value: 'endpoints', icon: IconLocation, count: 0 },
 ])
 
 const clusterList = ref<Cluster[]>([])
@@ -244,7 +236,7 @@ const loadClusters = async () => {
       }
     }
   } catch (error) {
-    ElMessage.error('获取集群列表失败')
+    Message.error('获取集群列表失败')
   }
 }
 
@@ -290,29 +282,29 @@ const loadCurrentResources = () => {
 
 // Service 操作
 const handleEditService = (service: any) => {
-  ElMessage.info('编辑 Service 功能开发中...')
+  Message.info('编辑 Service 功能开发中...')
 }
 
 const handleEditServiceYAML = (service: any) => {
-  ElMessage.info('编辑 Service YAML 功能开发中...')
+  Message.info('编辑 Service YAML 功能开发中...')
 }
 
 // Ingress 操作
 const handleEditIngress = (ingress: any) => {
-  ElMessage.info('编辑 Ingress 功能开发中...')
+  Message.info('编辑 Ingress 功能开发中...')
 }
 
 const handleEditIngressYAML = (ingress: any) => {
-  ElMessage.info('编辑 Ingress YAML 功能开发中...')
+  Message.info('编辑 Ingress YAML 功能开发中...')
 }
 
 // NetworkPolicy 操作
 const handleEditNetworkPolicy = (policy: any) => {
-  ElMessage.info('编辑 NetworkPolicy 功能开发中...')
+  Message.info('编辑 NetworkPolicy 功能开发中...')
 }
 
 const handleEditNetworkPolicyYAML = (policy: any) => {
-  ElMessage.info('编辑 NetworkPolicy YAML 功能开发中...')
+  Message.info('编辑 NetworkPolicy YAML 功能开发中...')
 }
 
 // 终端相关
@@ -353,7 +345,7 @@ const handleTerminal = async (data: { namespace: string; name: string }) => {
     const pod = response.data.data
     const containers = pod.spec?.containers || []
     if (containers.length === 0) {
-      ElMessage.error('Pod没有容器')
+      Message.error('Pod没有容器')
       return
     }
     // 默认使用第一个容器
@@ -365,7 +357,7 @@ const handleTerminal = async (data: { namespace: string; name: string }) => {
     terminalConnected.value = false
     terminalDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('获取Pod详情失败')
+    Message.error('获取Pod详情失败')
   }
 }
 
@@ -381,7 +373,7 @@ const handleLogs = async (data: { namespace: string; name: string }) => {
     const pod = response.data.data
     const containers = pod.spec?.containers || []
     if (containers.length === 0) {
-      ElMessage.error('Pod没有容器')
+      Message.error('Pod没有容器')
       return
     }
     // 默认使用第一个容器
@@ -393,7 +385,7 @@ const handleLogs = async (data: { namespace: string; name: string }) => {
     logsContent.value = ''
     logsDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('获取Pod详情失败')
+    Message.error('获取Pod详情失败')
   }
 }
 
@@ -588,7 +580,7 @@ const handleLoadLogs = async () => {
       }, 100)
     }
   } catch (error: any) {
-    ElMessage.error(`获取日志失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取日志失败: ${error.response?.data?.message || error.message}`)
   } finally {
     logsLoading.value = false
   }
@@ -660,8 +652,8 @@ onUnmounted(() => {
   margin-bottom: 16px;
   padding: 16px 20px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  border-radius: var(--ops-border-radius-md, 8px);
+  border: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
 .page-title-group {
@@ -673,34 +665,28 @@ onUnmounted(() => {
 .page-title-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: var(--ops-primary, #165dff);
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
-}
-
-.page-title-icon .el-icon {
-  font-size: 22px;
-  color: #d4af37;
 }
 
 .page-title {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   line-height: 1.4;
 }
 
@@ -714,24 +700,6 @@ onUnmounted(() => {
   width: 280px;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
 /* 网络类型标签栏 */
 .network-types-bar {
   display: flex;
@@ -739,8 +707,8 @@ onUnmounted(() => {
   margin-bottom: 12px;
   padding: 12px 20px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  border-radius: var(--ops-border-radius-md, 8px);
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   flex-wrap: wrap;
 }
 
@@ -748,29 +716,26 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  background: #1a1a1a;
-  color: #fff;
-  border-radius: 8px;
+  padding: 8px 16px;
+  background: var(--ops-content-bg, #f7f8fa);
+  color: var(--ops-text-secondary, #4e5969);
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   font-size: 14px;
   font-weight: 500;
+  border: 1px solid transparent;
 }
 
 .type-tab:hover {
-  background: #2a2a2a;
+  background: #e8f3ff;
+  color: var(--ops-primary, #165dff);
 }
 
 .type-tab.active {
-  background: #d4af37;
-  color: #000;
-  border: 1px solid #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
-}
-
-.type-icon {
-  font-size: 16px;
+  background: var(--ops-primary, #165dff);
+  color: #fff;
+  border-color: var(--ops-primary, #165dff);
 }
 
 .type-label {
@@ -788,12 +753,12 @@ onUnmounted(() => {
   background: transparent;
 }
 
-.cluster-select :deep(.el-input__wrapper) {
-  border-radius: 8px;
+.cluster-select :deep(.arco-input__wrapper) {
+  border-radius: 6px;
 }
 
 /* 终端对话框样式 */
-.terminal-dialog :deep(.el-dialog__body) {
+.terminal-dialog :deep(.arco-modal-body) {
   padding: 0;
   height: 60vh;
 }
@@ -826,7 +791,7 @@ onUnmounted(() => {
 }
 
 /* 日志对话框样式 */
-.logs-dialog :deep(.el-dialog__body) {
+.logs-dialog :deep(.arco-modal-body) {
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -838,8 +803,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  border-bottom: 1px solid #e8e8e8;
-  background: #fafbfc;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
+  background: var(--ops-content-bg, #f7f8fa);
 }
 
 .logs-wrapper {
@@ -866,6 +831,12 @@ onUnmounted(() => {
   justify-content: center;
   gap: 12px;
   height: 100%;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

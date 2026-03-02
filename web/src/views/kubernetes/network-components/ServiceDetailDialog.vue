@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <a-modal
     v-model="dialogVisible"
     :title="`Service 详情: ${serviceData?.name || ''}`"
     width="1400px"
@@ -8,7 +8,7 @@
     class="service-detail-dialog"
   >
     <div v-if="loading" class="loading-container">
-      <el-icon class="is-loading" :size="30"><Loading /></el-icon>
+      <icon-loading />
       <span>加载中...</span>
     </div>
 
@@ -30,9 +30,9 @@
           </div>
           <div class="info-item">
             <label>类型</label>
-            <el-tag :type="getTypeTagType(serviceData.type)" size="small">
+            <a-tag :type="getTypeTagType(serviceData.type)" size="small">
               {{ serviceData.type }}
-            </el-tag>
+            </a-tag>
           </div>
           <div class="info-item">
             <label>Cluster IP</label>
@@ -52,14 +52,14 @@
         <div class="tags-section" v-if="hasLabels">
           <label>标签</label>
           <div class="tags-container">
-            <el-tag
+            <a-tag
               v-for="(value, key) in serviceData.labels"
               :key="key"
               size="small"
               class="tag-item"
             >
               {{ key }}: {{ value }}
-            </el-tag>
+            </a-tag>
           </div>
         </div>
 
@@ -67,7 +67,7 @@
         <div class="selector-section" v-if="hasSelector">
           <label>选择器</label>
           <div class="tags-container">
-            <el-tag
+            <a-tag
               v-for="(value, key) in serviceData.selector"
               :key="key"
               size="small"
@@ -75,7 +75,7 @@
               class="tag-item"
             >
               {{ key }}: {{ value }}
-            </el-tag>
+            </a-tag>
           </div>
         </div>
 
@@ -89,120 +89,115 @@
               class="annotation-item"
             >
               <span class="annotation-key">{{ key }}:</span>
-              <el-tooltip :content="value" placement="top" effect="light" :show-after="500">
+              <a-tooltip :content="value" placement="top" effect="light" :show-after="500">
                 <span class="annotation-value truncated">{{ value }}</span>
-              </el-tooltip>
+              </a-tooltip>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Tab 内容 -->
-      <el-tabs v-model="activeTab" class="detail-tabs">
+      <a-tabs v-model:active-key="activeTab" class="detail-tabs">
         <!-- 容器组 -->
-        <el-tab-pane label="容器组" name="pods">
+        <a-tab-pane title="容器组" key="pods">
           <div v-if="podsLoading" class="loading-container">
-            <el-icon class="is-loading" :size="24"><Loading /></el-icon>
+            <icon-loading />
             <span>加载中...</span>
           </div>
           <div v-else-if="pods.length > 0">
-            <el-table :data="pods" size="default" class="modern-table">
-              <el-table-column label="名称" prop="name" min-width="200" fixed>
-                <template #default="{ row }">
+            <a-table :data="pods" size="default" class="modern-table" :columns="tableColumns2">
+          <template #name="{ record }">
                   <div class="name-cell">
-                    <el-icon class="name-icon"><Box /></el-icon>
-                    <span class="name-text">{{ row.name }}</span>
+                    <icon-storage />
+                    <span class="name-text">{{ record.name }}</span>
                   </div>
                 </template>
-              </el-table-column>
-              <el-table-column label="镜像" min-width="200">
-                <template #default="{ row }">
-                  <span class="image-text">{{ row.image }}</span>
+          <template #image="{ record }">
+                  <span class="image-text">{{ record.image }}</span>
                 </template>
-              </el-table-column>
-              <el-table-column label="状态" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="getStatusType(row.status)" size="small">
-                    {{ row.status }}
-                  </el-tag>
+          <template #status="{ record }">
+                  <a-tag :color="getStatusType(record.status)" size="small">
+                    {{ record.status }}
+                  </a-tag>
                 </template>
-              </el-table-column>
-              <el-table-column label="重启次数" prop="restarts" width="100" align="center" />
-              <el-table-column label="节点" prop="node" width="150" />
-              <el-table-column label="CPU" width="100">
-                <template #default="{ row }">
-                  <span>{{ row.cpu || '-' }}</span>
+          <template #cpu="{ record }">
+                  <span>{{ record.cpu || '-' }}</span>
                 </template>
-              </el-table-column>
-              <el-table-column label="Memory" width="100">
-                <template #default="{ row }">
-                  <span>{{ row.memory || '-' }}</span>
+          <template #col_Memory="{ record }">
+                  <span>{{ record.memory || '-' }}</span>
                 </template>
-              </el-table-column>
-              <el-table-column label="存活时间" prop="age" width="120" />
-              <el-table-column label="操作" width="120" fixed="right" align="center">
-                <template #default="{ row }">
+          <template #actions="{ record }">
                   <div class="action-buttons">
-                    <el-tooltip content="终端" placement="top">
-                      <el-button link class="action-btn" @click="handleTerminal(row)">
-                        <el-icon :size="18"><Monitor /></el-icon>
-                      </el-button>
-                    </el-tooltip>
-                    <el-tooltip content="日志" placement="top">
-                      <el-button link class="action-btn" @click="handleLogs(row)">
-                        <el-icon :size="18"><Document /></el-icon>
-                      </el-button>
-                    </el-tooltip>
+                    <a-tooltip content="终端" placement="top">
+                      <a-button type="text" class="action-btn" @click="handleTerminal(record)">
+                        <icon-desktop />
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip content="日志" placement="top">
+                      <a-button type="text" class="action-btn" @click="handleLogs(record)">
+                        <icon-file />
+                      </a-button>
+                    </a-tooltip>
                   </div>
                 </template>
-              </el-table-column>
-            </el-table>
+        </a-table>
           </div>
           <div v-else class="empty-container">
-            <el-empty description="暂无容器组" :image-size="80" />
+            <a-empty description="暂无容器组" :image-size="80" />
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
         <!-- 端口 -->
-        <el-tab-pane label="端口" name="ports">
+        <a-tab-pane title="端口" key="ports">
           <div v-if="serviceData.ports && serviceData.ports.length > 0">
-            <el-table :data="serviceData.ports" size="default" class="modern-table">
-              <el-table-column label="名称" prop="name" min-width="150">
-                <template #default="{ row }">
-                  <span>{{ row.name || '-' }}</span>
+            <a-table :data="serviceData.ports" size="default" class="modern-table" :columns="tableColumns">
+          <template #name="{ record }">
+                  <span>{{ record.name || '-' }}</span>
                 </template>
-              </el-table-column>
-              <el-table-column label="端口" prop="port" width="100" align="center" />
-              <el-table-column label="协议" prop="protocol" width="100" align="center">
-                <template #default="{ row }">
-                  <el-tag size="small" type="info">{{ row.protocol }}</el-tag>
+          <template #protocol="{ record }">
+                  <a-tag size="small" color="gray">{{ record.protocol }}</a-tag>
                 </template>
-              </el-table-column>
-              <el-table-column label="TargetPort" width="120" align="center">
-                <template #default="{ row }">
-                  <span>{{ row.targetPort || '-' }}</span>
+          <template #col_TargetPort="{ record }">
+                  <span>{{ record.targetPort || '-' }}</span>
                 </template>
-              </el-table-column>
-              <el-table-column label="NodePort" width="120" align="center">
-                <template #default="{ row }">
-                  <span>{{ row.nodePort || '-' }}</span>
+          <template #col_NodePort="{ record }">
+                  <span>{{ record.nodePort || '-' }}</span>
                 </template>
-              </el-table-column>
-            </el-table>
+        </a-table>
           </div>
           <div v-else class="empty-container">
-            <el-empty description="暂无端口配置" :image-size="80" />
+            <a-empty description="暂无端口配置" :image-size="80" />
           </div>
-        </el-tab-pane>
-      </el-tabs>
+        </a-tab-pane>
+      </a-tabs>
     </div>
-  </el-dialog>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
+const tableColumns2 = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 200 },
+  { title: '镜像', slotName: 'image', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '重启次数', dataIndex: 'restarts', width: 100, align: 'center' },
+  { title: '节点', dataIndex: 'node', width: 150 },
+  { title: 'CPU', slotName: 'cpu', width: 100 },
+  { title: 'Memory', slotName: 'col_Memory', width: 100 },
+  { title: '存活时间', dataIndex: 'age', width: 120 },
+  { title: '操作', slotName: 'actions', width: 120, fixed: 'right', align: 'center' }
+]
+
+const tableColumns = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 150 },
+  { title: '端口', dataIndex: 'port', width: 100, align: 'center' },
+  { title: '协议', dataIndex: 'protocol', slotName: 'protocol', width: 100, align: 'center' },
+  { title: 'TargetPort', slotName: 'col_TargetPort', width: 120, align: 'center' },
+  { title: 'NodePort', slotName: 'col_NodePort', width: 120, align: 'center' }
+]
+
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Loading, Box, Monitor, Document } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getPods, getPodDetail, getServiceYAML, type PodInfo } from '@/api/kubernetes'
 
 interface ServiceDetail {
@@ -308,7 +303,7 @@ const loadServiceDetail = async (namespace: string, name: string) => {
     // 加载关联的Pods
     await loadPods()
   } catch (error) {
-    ElMessage.error('加载Service详情失败: ' + (error as any).message)
+    Message.error('加载Service详情失败: ' + (error as any).message)
   } finally {
     loading.value = false
   }
@@ -376,7 +371,7 @@ const loadPods = async () => {
 
     pods.value = detailedPods
   } catch (error) {
-    ElMessage.error('加载Pod列表失败')
+    Message.error('加载Pod列表失败')
   } finally {
     podsLoading.value = false
   }
@@ -441,7 +436,7 @@ defineExpose({
 </script>
 
 <style scoped>
-.service-detail-dialog :deep(.el-dialog__body) {
+.service-detail-dialog :deep(.arco-dialog__body) {
   padding: 0;
   max-height: 70vh;
   overflow-y: auto;
@@ -476,7 +471,7 @@ defineExpose({
   gap: 8px;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #d4af37;
+  border-bottom: 2px solid #165dff;
 }
 
 .section-icon {
@@ -486,7 +481,7 @@ defineExpose({
 .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #1d2129;
 }
 
 .info-grid {
@@ -510,7 +505,7 @@ defineExpose({
 
 .info-item span {
   font-size: 14px;
-  color: #1a1a1a;
+  color: #1d2129;
   font-weight: 500;
 }
 
@@ -594,11 +589,11 @@ defineExpose({
   border: 1px solid #e8e8e8;
 }
 
-.detail-tabs :deep(.el-tabs__header) {
+.detail-tabs :deep(.arco-tabs__header) {
   margin-bottom: 16px;
 }
 
-.detail-tabs :deep(.el-tabs__item) {
+.detail-tabs :deep(.arco-tabs__item) {
   font-size: 14px;
   font-weight: 500;
 }
@@ -608,11 +603,11 @@ defineExpose({
   background: #fff;
 }
 
-.modern-table :deep(.el-table__header-wrapper) {
+.modern-table :deep(.arco-table__header-wrapper) {
   background: #fafbfc;
 }
 
-.modern-table :deep(.el-table__header th) {
+.modern-table :deep(.arco-table__header th) {
   background: #fafbfc;
   color: #606266;
   font-weight: 600;
@@ -625,13 +620,13 @@ defineExpose({
 }
 
 .name-icon {
-  color: #d4af37;
+  color: #165dff;
   font-size: 16px;
 }
 
 .name-text {
   font-weight: 500;
-  color: #1a1a1a;
+  color: #1d2129;
 }
 
 .image-text {
@@ -649,11 +644,11 @@ defineExpose({
 }
 
 .action-btn {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 /* 空状态 */

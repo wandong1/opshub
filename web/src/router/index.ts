@@ -132,6 +132,12 @@ const router = createRouter({
           meta: { title: '中间件权限' }
         },
         {
+          path: 'asset/service-labels',
+          name: 'AssetServiceLabels',
+          component: () => import('@/views/asset/ServiceLabels.vue'),
+          meta: { title: '服务标签' }
+        },
+        {
           path: 'profile',
           name: 'Profile',
           component: () => import('@/views/Profile.vue'),
@@ -141,7 +147,7 @@ const router = createRouter({
           path: 'terminal',
           name: 'Terminal',
           component: () => import('@/views/asset/Terminal.vue'),
-          meta: { title: 'Web终端', hideSidebar: true }
+          meta: { title: 'Web终端', hideSidebar: true, fullContent: true }
         },
         {
           path: 'plugin/list',
@@ -191,6 +197,31 @@ const router = createRouter({
           name: 'IdentityLogs',
           component: () => import('@/views/identity/AuthLogs.vue'),
           meta: { title: '认证日志' }
+        },
+        // 智能巡检
+        {
+          path: 'inspection/probes',
+          name: 'InspectionProbes',
+          component: () => import('@/views/inspection/ProbeManagement.vue'),
+          meta: { title: '拨测管理' }
+        },
+        {
+          path: 'inspection/tasks',
+          name: 'InspectionTasks',
+          component: () => import('@/views/inspection/TaskSchedule.vue'),
+          meta: { title: '任务调度' }
+        },
+        {
+          path: 'inspection/pushgateways',
+          name: 'InspectionPushgateways',
+          component: () => import('@/views/inspection/PushgatewayConfig.vue'),
+          meta: { title: 'Pushgateway配置' }
+        },
+        {
+          path: 'inspection/variables',
+          name: 'InspectionVariables',
+          component: () => import('@/views/inspection/VariableManagement.vue'),
+          meta: { title: '环境变量' }
         }
       ]
     }

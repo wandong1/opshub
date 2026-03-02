@@ -39,7 +39,9 @@ import (
 	"github.com/ydcloud-dy/opshub/internal/conf"
 	dataPkg "github.com/ydcloud-dy/opshub/internal/data"
 	systemdata "github.com/ydcloud-dy/opshub/internal/data/system"
+	agentmodel "github.com/ydcloud-dy/opshub/internal/agent"
 	"github.com/ydcloud-dy/opshub/internal/server"
+	agentserver "github.com/ydcloud-dy/opshub/internal/server/agent"
 	"github.com/ydcloud-dy/opshub/internal/service"
 	rbacservice "github.com/ydcloud-dy/opshub/internal/service/rbac"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
@@ -55,6 +57,7 @@ var (
 	globalData       *dataPkg.Data
 	globalRedis      *dataPkg.Redis
 	globalHTTPServer *server.HTTPServer
+	globalGRPCServer *agentserver.GRPCServer
 )
 
 var Cmd = &cobra.Command{
@@ -157,9 +160,25 @@ func runServer() (*conf.Config, error) {
 		return nil, fmt.Errorf("初始化默认数据失败: %w", err)
 	}
 
+	// 启动Agent gRPC服务器（在HTTP服务器之前创建，以便注册路由）
+	var grpcServer *agentserver.GRPCServer
+	if cfg.Agent.Enabled {
+		grpcServer = agentserver.NewGRPCServer(cfg, data.DB())
+		globalGRPCServer = grpcServer
+	}
+
 	// 初始化HTTP服务器
-	httpServer := server.NewHTTPServer(cfg, svc, data.DB(), redis.Get())
+	httpServer := server.NewHTTPServer(cfg, svc, data.DB(), redis.Get(), grpcServer)
 	globalHTTPServer = httpServer // 保存到全局变量
+
+	// 启动gRPC服务器
+	if grpcServer != nil {
+		go func() {
+			if err := grpcServer.Start(); err != nil {
+				appLogger.Fatal("Agent gRPC服务器启动失败", zap.Error(err))
+			}
+		}()
+	}
 
 	// 启动服务器
 	go func() {
@@ -191,6 +210,8 @@ func autoMigrate(db *gorm.DB) error {
 		&rbacmodel.SysRoleMiddlewarePermission{},
 		// 中间件管理表
 		&assetbiz.Middleware{},
+		// 主机管理表（含Agent字段）
+		&assetbiz.Host{},
 		// 系统配置相关表
 		&systemmodel.SysConfig{},
 		&systemmodel.SysUserLoginAttempt{},
@@ -209,6 +230,13 @@ func autoMigrate(db *gorm.DB) error {
 		&inspectionbiz.ProbeResult{},
 		&inspectionbiz.PushgatewayConfig{},
 		&inspectionbiz.ProbeTaskConfig{},
+		&inspectionbiz.ProbeVariable{},
+		// Agent相关表
+		&agentmodel.AgentInfo{},
+		// 终端会话审计表
+		&assetbiz.TerminalSession{},
+		// 服务标签表
+		&assetbiz.ServiceLabel{},
 	); err != nil {
 		return err
 	}
@@ -318,11 +346,119 @@ func initDefaultData(db *gorm.DB) error {
 		appLogger.Info("系统默认配置初始化完成")
 	}
 
+	// 初始化默认服务标签
+	initDefaultServiceLabels(db)
+
+	// 初始化服务标签菜单
+	initServiceLabelMenus(db)
+
 	return nil
+}
+
+// initDefaultServiceLabels 初始化默认服务标签
+func initDefaultServiceLabels(db *gorm.DB) {
+	var count int64
+	db.Model(&assetbiz.ServiceLabel{}).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	labels := []assetbiz.ServiceLabel{
+		{Name: "mysqld", MatchProcesses: "mysqld", Description: "MySQL数据库", Status: 1},
+		{Name: "redis-server", MatchProcesses: "redis-server", Description: "Redis缓存", Status: 1},
+		{Name: "mongodb", MatchProcesses: "mongod,mongos", Description: "MongoDB数据库", Status: 1},
+		{Name: "milvus", MatchProcesses: "milvus", Description: "Milvus向量数据库", Status: 1},
+		{Name: "kafka", MatchProcesses: "kafka", Description: "Kafka消息队列", Status: 1},
+		{Name: "zookeeper", MatchProcesses: "zookeeper,QuorumPeerMain", Description: "ZooKeeper", Status: 1},
+		{Name: "nfs", MatchProcesses: "nfsd,rpc.nfsd", Description: "NFS文件服务", Status: 1},
+		{Name: "harbor", MatchProcesses: "harbor-core,harbor-jobservice", Description: "Harbor镜像仓库", Status: 1},
+		{Name: "docker", MatchProcesses: "dockerd,containerd", Description: "Docker容器引擎", Status: 1},
+		{Name: "k8s-master", MatchProcesses: "kube-apiserver,kube-controller-manager,kube-scheduler", Description: "Kubernetes Master节点", Status: 1},
+		{Name: "k8s-node", MatchProcesses: "kubelet,kube-proxy", Description: "Kubernetes Worker节点", Status: 1},
+		{Name: "clickhouse-server", MatchProcesses: "clickhouse-server,clickhouse", Description: "ClickHouse数据库", Status: 1},
+		{Name: "doris", MatchProcesses: "doris_be,doris_fe,PaloFe,PaloBe", Description: "Apache Doris", Status: 1},
+	}
+
+	for _, label := range labels {
+		db.Create(&label)
+	}
+	appLogger.Info("默认服务标签初始化完成", zap.Int("count", len(labels)))
+}
+
+// initServiceLabelMenus 初始化服务标签菜单（幂等）
+func initServiceLabelMenus(db *gorm.DB) {
+	// 检查菜单是否已存在
+	var count int64
+	db.Model(&rbacmodel.SysMenu{}).Where("code = ?", "service-label-management").Count(&count)
+	if count > 0 {
+		return
+	}
+
+	// 查找资产管理菜单ID
+	var assetMenu rbacmodel.SysMenu
+	if err := db.Where("code = ?", "asset-management").First(&assetMenu).Error; err != nil {
+		appLogger.Warn("未找到资产管理菜单，跳过服务标签菜单初始化")
+		return
+	}
+
+	// 创建服务标签页面菜单
+	slMenu := &rbacmodel.SysMenu{
+		Name:      "服务标签",
+		Code:      "service-label-management",
+		Type:      2,
+		ParentID:  assetMenu.ID,
+		Path:      "/asset/service-labels",
+		Component: "asset/ServiceLabels",
+		Icon:      "PriceTag",
+		Sort:      9,
+		Visible:   1,
+		Status:    1,
+	}
+	if err := db.Create(slMenu).Error; err != nil {
+		appLogger.Warn("创建服务标签菜单失败", zap.Error(err))
+		return
+	}
+
+	// 创建按钮权限
+	buttons := []rbacmodel.SysMenu{
+		{Name: "新增标签", Code: "service-labels:create", Type: 3, ParentID: slMenu.ID, Sort: 1, Visible: 1, Status: 1, ApiPath: "/api/v1/service-labels", ApiMethod: "POST"},
+		{Name: "编辑标签", Code: "service-labels:update", Type: 3, ParentID: slMenu.ID, Sort: 2, Visible: 1, Status: 1, ApiPath: "/api/v1/service-labels/:id", ApiMethod: "PUT"},
+		{Name: "删除标签", Code: "service-labels:delete", Type: 3, ParentID: slMenu.ID, Sort: 3, Visible: 1, Status: 1, ApiPath: "/api/v1/service-labels/:id", ApiMethod: "DELETE"},
+	}
+	for i := range buttons {
+		db.Create(&buttons[i])
+	}
+
+	// 为管理员角色分配菜单权限
+	var adminRole rbacmodel.SysRole
+	if err := db.Where("code = ?", "admin").First(&adminRole).Error; err == nil {
+		db.Exec("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRole.ID, slMenu.ID)
+		for _, btn := range buttons {
+			db.Exec("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRole.ID, btn.ID)
+		}
+	}
+
+	// 创建菜单API关联
+	for _, btn := range buttons {
+		if btn.ApiPath != "" {
+			db.Create(&rbacmodel.SysMenuAPI{
+				MenuID:    btn.ID,
+				ApiPath:   btn.ApiPath,
+				ApiMethod: btn.ApiMethod,
+			})
+		}
+	}
+
+	appLogger.Info("服务标签菜单初始化完成")
 }
 
 func stopServer(ctx context.Context, cfg *conf.Config) error {
 	appLogger.Info("服务正在关闭...")
+
+	// 停止gRPC服务器
+	if globalGRPCServer != nil {
+		globalGRPCServer.Stop()
+	}
 
 	// 停止HTTP服务器
 	if globalHTTPServer != nil {

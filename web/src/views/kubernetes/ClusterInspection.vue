@@ -1,113 +1,113 @@
 <template>
   <div class="inspection-container">
     <!-- 页面标题和操作按钮 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><DocumentChecked /></el-icon>
+    <a-card class="page-header-card">
+      <div class="page-header">
+        <div class="page-title-group">
+          <div class="page-title-icon">
+            <icon-file-search />
+          </div>
+          <div>
+            <h2 class="page-title">集群巡检</h2>
+            <p class="page-subtitle">对 Kubernetes 集群进行健康检查，生成巡检报告</p>
+          </div>
         </div>
-        <div>
-          <h2 class="page-title">集群巡检</h2>
-          <p class="page-subtitle">对 Kubernetes 集群进行健康检查，生成巡检报告</p>
+        <div class="header-actions">
+          <a-select
+            v-model="selectedClusterId"
+            placeholder="选择集群"
+            style="width: 260px"
+            @change="handleClusterChange"
+          >
+            <template #prefix>
+              <icon-apps />
+            </template>
+            <a-option
+              v-for="cluster in clusterList"
+              :key="cluster.id"
+              :label="cluster.alias || cluster.name"
+              :value="cluster.id"
+            />
+          </a-select>
+          <a-button v-permission="'k8s-inspection:start'" type="primary" @click="handleStartInspection" :loading="inspecting" :disabled="!selectedClusterId">
+            <template #icon><icon-refresh /></template>
+            {{ inspecting ? '巡检中...' : '开始巡检' }}
+          </a-button>
+          <a-button @click="historyDialogVisible = true">
+            <template #icon><icon-clock-circle /></template>
+            历史记录
+          </a-button>
         </div>
       </div>
-      <div class="header-actions">
-        <el-select
-          v-model="selectedClusterId"
-          placeholder="选择集群"
-          class="cluster-select"
-          @change="handleClusterChange"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Platform /></el-icon>
-          </template>
-          <el-option
-            v-for="cluster in clusterList"
-            :key="cluster.id"
-            :label="cluster.alias || cluster.name"
-            :value="cluster.id"
-          />
-        </el-select>
-        <el-button v-permission="'k8s-inspection:start'" class="black-button" @click="handleStartInspection" :loading="inspecting" :disabled="!selectedClusterId">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
-          {{ inspecting ? '巡检中...' : '开始巡检' }}
-        </el-button>
-        <el-button @click="historyDialogVisible = true">
-          <el-icon style="margin-right: 6px;"><Clock /></el-icon>
-          历史记录
-        </el-button>
-      </div>
-    </div>
+    </a-card>
 
     <!-- 巡检进度 -->
-    <div class="progress-section" v-if="inspecting">
-      <div class="progress-card">
-        <div class="progress-header">
-          <div class="progress-animation">
-            <div class="progress-spinner"></div>
-          </div>
-          <div class="progress-info">
-            <span class="progress-title">正在巡检集群...</span>
-            <span class="progress-step">{{ progressInfo.currentStep }}</span>
-          </div>
+    <a-card class="progress-card" v-if="inspecting">
+      <div class="progress-header">
+        <div class="progress-animation">
+          <div class="progress-spinner"></div>
         </div>
-        <el-progress
-          :percentage="progressInfo.progress"
-          :stroke-width="16"
-          :color="progressColors"
-          striped
-          striped-flow
-        >
-          <template #default="{ percentage }">
-            <span class="progress-text">{{ percentage }}%</span>
-          </template>
-        </el-progress>
+        <div class="progress-info">
+          <span class="progress-title">正在巡检集群...</span>
+          <span class="progress-step">{{ progressInfo.currentStep }}</span>
+        </div>
       </div>
-    </div>
+      <a-progress
+        :percentage="progressInfo.progress"
+        :stroke-width="16"
+        :color="progressColors"
+        striped
+        striped-flow
+      >
+        <template #default="{ percentage }">
+          <span class="progress-text">{{ percentage }}%</span>
+        </template>
+      </a-progress>
+    </a-card>
 
     <!-- 空状态 - 未执行巡检 -->
-    <div class="empty-state" v-if="!inspecting && !inspectionResult">
+    <a-card v-if="!inspecting && !inspectionResult" class="empty-card">
       <div class="empty-content">
         <div class="empty-icon">
-          <el-icon><DocumentChecked /></el-icon>
+          <icon-file-search />
         </div>
         <h3 class="empty-title">开始集群健康巡检</h3>
         <p class="empty-desc">选择一个 Kubernetes 集群，执行全面的健康检查，包括节点状态、工作负载、网络、存储、安全配置等多个维度</p>
         <div class="empty-features">
           <div class="feature-item">
-            <el-icon><Monitor /></el-icon>
+            <icon-desktop />
             <span>节点健康</span>
           </div>
           <div class="feature-item">
-            <el-icon><Box /></el-icon>
+            <icon-storage />
             <span>工作负载</span>
           </div>
           <div class="feature-item">
-            <el-icon><Connection /></el-icon>
+            <icon-link />
             <span>网络状态</span>
           </div>
           <div class="feature-item">
-            <el-icon><Files /></el-icon>
+            <icon-storage />
             <span>存储管理</span>
           </div>
           <div class="feature-item">
-            <el-icon><Lock /></el-icon>
+            <icon-lock />
             <span>安全配置</span>
           </div>
           <div class="feature-item">
-            <el-icon><DataAnalysis /></el-icon>
+            <icon-line-chart />
             <span>容量规划</span>
           </div>
         </div>
-        <el-button v-permission="'k8s-inspection:start'" class="black-button start-btn" size="large" @click="handleStartInspection" :disabled="!selectedClusterId">
-          <el-icon style="margin-right: 8px;"><Refresh /></el-icon>
+        <a-button v-permission="'k8s-inspection:start'" type="primary" size="large" @click="handleStartInspection" :disabled="!selectedClusterId">
+          <template #icon><icon-refresh /></template>
           立即开始巡检
-        </el-button>
+        </a-button>
       </div>
-    </div>
+    </a-card>
 
     <!-- 巡检结果详情 -->
-    <div class="result-section" v-if="inspectionResult && !inspecting">
+    <a-card v-if="inspectionResult && !inspecting" class="result-card">
       <!-- 统计卡片 -->
       <div class="stats-grid">
         <div class="stat-card score-card">
@@ -127,7 +127,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-icon stat-icon-blue">
-            <el-icon><DocumentChecked /></el-icon>
+            <icon-file-search />
           </div>
           <div class="stat-content">
             <div class="stat-label">检查项目</div>
@@ -136,7 +136,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-icon stat-icon-green">
-            <el-icon><CircleCheckFilled /></el-icon>
+            <icon-check-circle-fill />
           </div>
           <div class="stat-content">
             <div class="stat-label">通过项</div>
@@ -145,7 +145,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-icon" :class="getIssueIconClass()">
-            <el-icon><WarnTriangleFilled /></el-icon>
+            <icon-exclamation-circle-fill />
           </div>
           <div class="stat-content">
             <div class="stat-label">发现问题</div>
@@ -156,7 +156,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-icon stat-icon-blue">
-            <el-icon><Timer /></el-icon>
+            <icon-clock-circle />
           </div>
           <div class="stat-content">
             <div class="stat-label">巡检耗时</div>
@@ -164,23 +164,23 @@
           </div>
         </div>
       </div>
-      <el-tabs v-model="activeTab" class="inspection-tabs">
-        <el-tab-pane label="概览" name="overview">
+      <a-tabs v-model:active-key="activeTab" class="inspection-tabs">
+        <a-tab-pane title="概览" key="overview">
           <div class="overview-content">
             <!-- 结果统计 -->
             <div class="result-summary">
               <div class="summary-item success">
-                <el-icon><CircleCheckFilled /></el-icon>
+                <icon-check-circle-fill />
                 <span class="summary-label">正常</span>
                 <span class="summary-value">{{ inspectionResult.summary.passedChecks }}</span>
               </div>
               <div class="summary-item warning">
-                <el-icon><WarningFilled /></el-icon>
+                <icon-exclamation-circle-fill />
                 <span class="summary-label">警告</span>
                 <span class="summary-value">{{ inspectionResult.summary.warningChecks }}</span>
               </div>
               <div class="summary-item error">
-                <el-icon><CircleCloseFilled /></el-icon>
+                <icon-close-circle-fill />
                 <span class="summary-label">异常</span>
                 <span class="summary-value">{{ inspectionResult.summary.failedChecks }}</span>
               </div>
@@ -188,25 +188,18 @@
 
             <!-- 检查项列表 -->
             <div class="check-items-table">
-              <el-table :data="allCheckItems" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="allCheckItems" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns13">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" show-overflow-tooltip />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="集群信息" name="cluster">
+        <a-tab-pane title="集群信息" key="cluster">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -227,24 +220,18 @@
               </div>
             </div>
             <div class="check-items-table">
-              <el-table :data="inspectionResult.clusterInfo.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.clusterInfo.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns12">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="节点健康" name="nodes">
+        <a-tab-pane title="节点健康" key="nodes">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -271,46 +258,32 @@
             <!-- 节点资源利用率表格 -->
             <div class="check-items-table" v-if="inspectionResult.nodeHealth.nodeUtilization.length">
               <h4 class="table-title">节点资源利用率</h4>
-              <el-table :data="inspectionResult.nodeHealth.nodeUtilization" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="name" label="节点名称" min-width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="row.status === 'Ready' ? 'success' : 'danger'" effect="dark" size="small">
-                      {{ row.status }}
-                    </el-tag>
+              <a-table :data="inspectionResult.nodeHealth.nodeUtilization" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns11">
+          <template #status="{ record }">
+                    <a-tag :type="record.status === 'Ready' ? 'success' : 'danger'" size="small">
+                      {{ record.status }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="cpuCapacity" label="CPU容量" width="120" />
-                <el-table-column prop="memoryCapacity" label="内存容量" width="120" />
-                <el-table-column label="Pod数量" width="120">
-                  <template #default="{ row }">
-                    {{ row.podCount }}/{{ row.podCapacity }}
+          <template #podCount="{ record }">
+                    {{ record.podCount }}/{{ record.podCapacity }}
                   </template>
-                </el-table-column>
-              </el-table>
+        </a-table>
             </div>
             <!-- 检查项 -->
             <div class="check-items-table">
               <h4 class="table-title">检查项</h4>
-              <el-table :data="inspectionResult.nodeHealth.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.nodeHealth.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns10">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="工作负载" name="workloads">
+        <a-tab-pane title="工作负载" key="workloads">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -333,36 +306,25 @@
             <!-- 异常工作负载 -->
             <div class="check-items-table" v-if="inspectionResult.workloads.unhealthyWorkloads.length">
               <h4 class="table-title">异常工作负载</h4>
-              <el-table :data="inspectionResult.workloads.unhealthyWorkloads" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="kind" label="类型" width="120" />
-                <el-table-column prop="namespace" label="命名空间" width="150" />
-                <el-table-column prop="name" label="名称" min-width="200" />
-                <el-table-column prop="ready" label="就绪状态" width="120" />
-                <el-table-column prop="reason" label="原因" min-width="200" />
-              </el-table>
+              <a-table :data="inspectionResult.workloads.unhealthyWorkloads" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns9">
+          
+        </a-table>
             </div>
             <!-- 检查项 -->
             <div class="check-items-table">
               <h4 class="table-title">检查项</h4>
-              <el-table :data="inspectionResult.workloads.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.workloads.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns8">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="网络" name="network">
+        <a-tab-pane title="网络" key="network">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -385,24 +347,18 @@
               </div>
             </div>
             <div class="check-items-table">
-              <el-table :data="inspectionResult.network.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.network.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns7">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="存储" name="storage">
+        <a-tab-pane title="存储" key="storage">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -425,25 +381,18 @@
               </div>
             </div>
             <div class="check-items-table">
-              <el-table :data="inspectionResult.storage.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.storage.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns6">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="安全" name="security">
+        <a-tab-pane title="安全" key="security">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -468,25 +417,18 @@
               </div>
             </div>
             <div class="check-items-table">
-              <el-table :data="inspectionResult.security.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.security.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns5">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="容量" name="capacity">
+        <a-tab-pane title="容量" key="capacity">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -513,25 +455,18 @@
               </div>
             </div>
             <div class="check-items-table">
-              <el-table :data="inspectionResult.capacity.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.capacity.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns4">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="事件" name="events">
+        <a-tab-pane title="事件" key="events">
           <div class="tab-content">
             <div class="info-grid">
               <div class="info-item">
@@ -550,129 +485,204 @@
             <!-- 最近事件 -->
             <div class="check-items-table" v-if="inspectionResult.events.recentEvents.length">
               <h4 class="table-title">最近告警事件</h4>
-              <el-table :data="inspectionResult.events.recentEvents" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="type" label="类型" width="100" />
-                <el-table-column prop="reason" label="原因" width="150" />
-                <el-table-column prop="object" label="对象" width="200" show-overflow-tooltip />
-                <el-table-column prop="namespace" label="命名空间" width="120" />
-                <el-table-column prop="count" label="次数" width="80" />
-                <el-table-column prop="lastSeen" label="最后发生" width="180" />
-                <el-table-column prop="message" label="消息" min-width="300" show-overflow-tooltip />
-              </el-table>
+              <a-table :data="inspectionResult.events.recentEvents" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns3">
+          
+        </a-table>
             </div>
             <!-- 检查项 -->
             <div class="check-items-table">
               <h4 class="table-title">检查项</h4>
-              <el-table :data="inspectionResult.events.items" style="width: 100%" :header-cell-style="tableHeaderStyle">
-                <el-table-column prop="category" label="类别" width="120" />
-                <el-table-column prop="name" label="检查项" width="200" />
-                <el-table-column label="状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
+              <a-table :data="inspectionResult.events.items" style="width: 100%" :header-cell-style="tableHeaderStyle" :columns="tableColumns2">
+          <template #status="{ record }">
+                    <a-tag :type="getStatusTagType(record.status)" size="small">
+                      {{ getStatusText(record.status) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column prop="value" label="检查值" width="150" />
-                <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
-              </el-table>
+        </a-table>
             </div>
           </div>
-        </el-tab-pane>
-      </el-tabs>
+        </a-tab-pane>
+      </a-tabs>
 
       <!-- 导出按钮 -->
       <div class="export-actions">
-        <el-button class="black-button" @click="handleExportExcel" :loading="exporting">
-          <el-icon style="margin-right: 6px;"><Download /></el-icon>
+        <a-button type="primary" @click="handleExportExcel" :loading="exporting">
+          <template #icon><icon-download /></template>
           导出Excel报告
-        </el-button>
-        <el-button v-permission="'k8s-inspection:start'" @click="handleStartInspection" :disabled="inspecting">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-button>
+        <a-button v-permission="'k8s-inspection:start'" @click="handleStartInspection" :disabled="inspecting">
+          <template #icon><icon-refresh /></template>
           重新巡检
-        </el-button>
+        </a-button>
       </div>
-    </div>
+    </a-card>
 
     <!-- 历史记录对话框 -->
-    <el-dialog v-model="historyDialogVisible" title="巡检历史记录" width="900px">
+    <a-modal v-model:visible="historyDialogVisible" title="巡检历史记录" width="900px">
       <template v-if="historyList.length === 0 && !historyLoading">
         <div class="history-empty">
-          <el-icon class="history-empty-icon"><Clock /></el-icon>
+          <icon-clock-circle />
           <p class="history-empty-text">暂无巡检记录</p>
           <p class="history-empty-hint">执行集群巡检后，历史记录将会显示在这里</p>
         </div>
       </template>
       <template v-else>
-        <el-table :data="historyList" style="width: 100%" :header-cell-style="tableHeaderStyle" v-loading="historyLoading">
-          <el-table-column prop="clusterName" label="集群" width="150" />
-          <el-table-column label="评分" width="100">
-            <template #default="{ row }">
-              <span :class="getScoreClass(row.score)">{{ row.score }}/100</span>
+        <a-table :data="historyList" style="width: 100%" :header-cell-style="tableHeaderStyle" v-loading="historyLoading" :columns="tableColumns">
+          <template #col_8565="{ record }">
+              <span :class="getScoreClass(record.score)">{{ record.score }}/100</span>
             </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 'completed' ? 'success' : row.status === 'running' ? 'warning' : 'danger'" size="small">
-                {{ row.status === 'completed' ? '完成' : row.status === 'running' ? '进行中' : '失败' }}
-              </el-tag>
+          <template #status="{ record }">
+              <a-tag :type="record.status === 'completed' ? 'success' : record.status === 'running' ? 'warning' : 'danger'" size="small">
+                {{ record.status === 'completed' ? '完成' : record.status === 'running' ? '进行中' : '失败' }}
+              </a-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="checkCount" label="检查项" width="80" />
-          <el-table-column prop="passCount" label="通过" width="80" />
-          <el-table-column prop="warningCount" label="警告" width="80" />
-          <el-table-column prop="failCount" label="失败" width="80" />
-          <el-table-column prop="duration" label="耗时(s)" width="80" />
-          <el-table-column prop="createdAt" label="时间" width="180" />
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button type="primary" link size="small" @click="handleViewHistory(row)" :disabled="row.status !== 'completed'">
+          <template #actions="{ record }">
+              <a-button type="text" size="small" @click="handleViewHistory(record)" :disabled="record.status !== 'completed'">
                 查看
-              </el-button>
-              <el-button type="danger" link size="small" @click="handleDeleteHistory(row)">
+              </a-button>
+              <a-button status="danger" type="text" size="small" @click="handleDeleteHistory(record)">
                 删除
-              </el-button>
+              </a-button>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
         <div class="pagination-wrapper" v-if="historyTotal > 0">
-          <el-pagination
-            v-model:current-page="historyPage"
+          <a-pagination
+            v-model:current="historyPage"
             v-model:page-size="historyPageSize"
             :total="historyTotal"
-            :page-sizes="[10, 20, 50]"
+            :page-size-options="[10, 20, 50]"
             layout="total, sizes, prev, pager, next"
             @size-change="loadHistory"
             @current-change="loadHistory"
           />
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns13 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150, ellipsis: true, tooltip: true },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true },
+  { title: '建议', dataIndex: 'suggestion', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns12 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns11 = [
+  { title: '节点名称', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: 'CPU容量', dataIndex: 'cpuCapacity', width: 120 },
+  { title: '内存容量', dataIndex: 'memoryCapacity', width: 120 },
+  { title: 'Pod数量', slotName: 'podCount', width: 120 }
+]
+
+const tableColumns10 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true },
+  { title: '建议', dataIndex: 'suggestion', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns9 = [
+  { title: '类型', dataIndex: 'kind', width: 120 },
+  { title: '命名空间', dataIndex: 'namespace', width: 150 },
+  { title: '名称', dataIndex: 'name', width: 200 },
+  { title: '就绪状态', dataIndex: 'ready', width: 120 },
+  { title: '原因', dataIndex: 'reason', width: 200 }
+]
+
+const tableColumns8 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true },
+  { title: '建议', dataIndex: 'suggestion', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns7 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns6 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true },
+  { title: '建议', dataIndex: 'suggestion', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns5 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true },
+  { title: '建议', dataIndex: 'suggestion', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns4 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true },
+  { title: '建议', dataIndex: 'suggestion', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns3 = [
+  { title: '类型', dataIndex: 'type', width: 100 },
+  { title: '原因', dataIndex: 'reason', width: 150 },
+  { title: '对象', dataIndex: 'object', width: 200, ellipsis: true, tooltip: true },
+  { title: '命名空间', dataIndex: 'namespace', width: 120 },
+  { title: '次数', dataIndex: 'count', width: 80 },
+  { title: '最后发生', dataIndex: 'lastSeen', width: 180 },
+  { title: '消息', dataIndex: 'message', width: 300, ellipsis: true, tooltip: true }
+]
+
+const tableColumns2 = [
+  { title: '类别', dataIndex: 'category', width: 120 },
+  { title: '检查项', dataIndex: 'name', width: 200 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查值', dataIndex: 'value', width: 150 },
+  { title: '详情', dataIndex: 'detail', width: 200, ellipsis: true, tooltip: true },
+  { title: '建议', dataIndex: 'suggestion', width: 200, ellipsis: true, tooltip: true }
+]
+
+const tableColumns = [
+  { title: '集群', dataIndex: 'clusterName', width: 150 },
+  { title: '评分', slotName: 'col_8565', width: 100 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '检查项', dataIndex: 'checkCount', width: 80 },
+  { title: '通过', dataIndex: 'passCount', width: 80 },
+  { title: '警告', dataIndex: 'warningCount', width: 80 },
+  { title: '失败', dataIndex: 'failCount', width: 80 },
+  { title: '耗时(s)', dataIndex: 'duration', width: 80 },
+  { title: '时间', dataIndex: 'createdAt', width: 180 },
+  { title: '操作', slotName: 'actions', width: 150, fixed: 'right' }
+]
+
 import { ref, onMounted, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  DocumentChecked,
-  Platform,
-  Refresh,
-  Clock,
-  Timer,
-  WarnTriangleFilled,
-  CircleCheckFilled,
-  WarningFilled,
-  CircleCloseFilled,
-  Download,
-  Monitor,
-  Box,
-  Connection,
-  Files,
-  Lock,
-  DataAnalysis
-} from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getClusterList, type Cluster } from '@/api/kubernetes'
 import {
   startInspection,
@@ -723,8 +733,8 @@ const progressColors = [
 
 // 表格头样式
 const tableHeaderStyle = {
-  background: '#000',
-  color: '#fff',
+  background: '#fafbfc',
+  color: '#4e5969',
   fontSize: '14px',
   fontWeight: '600'
 }
@@ -826,7 +836,7 @@ const loadClusters = async () => {
       selectedClusterId.value = clusterList.value[0].id
     }
   } catch (error: any) {
-    ElMessage.error('获取集群列表失败: ' + (error.message || '未知错误'))
+    Message.error('获取集群列表失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -839,7 +849,7 @@ const handleClusterChange = () => {
 // 开始巡检
 const handleStartInspection = async () => {
   if (!selectedClusterId.value) {
-    ElMessage.warning('请先选择集群')
+    Message.warning('请先选择集群')
     return
   }
 
@@ -862,7 +872,7 @@ const handleStartInspection = async () => {
     pollProgress()
   } catch (error: any) {
     inspecting.value = false
-    ElMessage.error('启动巡检失败: ' + (error.message || '未知错误'))
+    Message.error('启动巡检失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -877,10 +887,10 @@ const pollProgress = async () => {
     if (data.status === 'completed') {
       inspecting.value = false
       await loadInspectionResult()
-      ElMessage.success('巡检完成')
+      Message.success('巡检完成')
     } else if (data.status === 'failed') {
       inspecting.value = false
-      ElMessage.error('巡检失败')
+      Message.error('巡检失败')
     } else {
       setTimeout(pollProgress, 1000)
     }
@@ -898,7 +908,7 @@ const loadInspectionResult = async () => {
     currentInspection.value = data.inspection
     inspectionResult.value = data.result
   } catch (error: any) {
-    ElMessage.error('获取巡检结果失败: ' + (error.message || '未知错误'))
+    Message.error('获取巡检结果失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -919,9 +929,9 @@ const handleExportExcel = async () => {
     link.download = `cluster-inspection-${currentInspection.value?.clusterName || 'report'}-${new Date().toISOString().slice(0, 10)}.xlsx`
     link.click()
     window.URL.revokeObjectURL(url)
-    ElMessage.success('导出成功')
+    Message.success('导出成功')
   } catch (error: any) {
-    ElMessage.error('导出失败: ' + (error.message || '未知错误'))
+    Message.error('导出失败: ' + (error.message || '未知错误'))
   } finally {
     exporting.value = false
   }
@@ -939,7 +949,7 @@ const loadHistory = async () => {
     historyList.value = data.list || []
     historyTotal.value = data.total
   } catch (error: any) {
-    ElMessage.error('获取历史记录失败: ' + (error.message || '未知错误'))
+    Message.error('获取历史记录失败: ' + (error.message || '未知错误'))
   } finally {
     historyLoading.value = false
   }
@@ -955,15 +965,15 @@ const handleViewHistory = async (item: InspectionHistoryItem) => {
 // 删除历史记录
 const handleDeleteHistory = async (item: InspectionHistoryItem) => {
   try {
-    await ElMessageBox.confirm('确定要删除这条巡检记录吗?', '提示', {
+    await confirmModal('确定要删除这条巡检记录吗?', '提示', {
       type: 'warning'
     })
     await deleteInspection(item.id)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     loadHistory()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + (error.message || '未知错误'))
+      Message.error('删除失败: ' + (error.message || '未知错误'))
     }
   }
 }
@@ -979,50 +989,49 @@ onMounted(() => {
   background-color: transparent;
 }
 
-/* 页面头部 */
+/* 页面头部卡片 */
+.page-header-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  align-items: center;
 }
 
 .page-title-group {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 14px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  width: 44px;
+  height: 44px;
+  background: var(--ops-primary, #165dff);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   line-height: 1.4;
 }
 
@@ -1032,34 +1041,10 @@ onMounted(() => {
   align-items: center;
 }
 
-.cluster-select {
-  width: 280px;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-/* 进度条 */
-.progress-section {
-  margin-bottom: 16px;
-}
-
+/* 进度卡片 */
 .progress-card {
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .progress-header {
@@ -1080,8 +1065,8 @@ onMounted(() => {
 .progress-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #f0f0f0;
-  border-top-color: #d4af37;
+  border: 3px solid var(--ops-border-color, #e5e6eb);
+  border-top-color: var(--ops-primary, #165dff);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1098,60 +1083,57 @@ onMounted(() => {
   display: block;
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   margin-bottom: 4px;
 }
 
 .progress-step {
   font-size: 14px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 .progress-text {
   font-size: 14px;
   font-weight: 600;
-  color: #d4af37;
+  color: var(--ops-primary, #165dff);
 }
 
-/* 空状态 */
-.empty-state {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 60px 40px;
+/* 空状态卡片 */
+.empty-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .empty-content {
   max-width: 600px;
   margin: 0 auto;
   text-align: center;
+  padding: 40px 0;
 }
 
 .empty-icon {
   width: 100px;
   height: 100px;
   margin: 0 auto 24px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: var(--ops-primary, #165dff);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 48px;
-  border: 2px solid #d4af37;
 }
 
 .empty-title {
   margin: 0 0 12px;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
 }
 
 .empty-desc {
   margin: 0 0 32px;
   font-size: 14px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   line-height: 1.6;
 }
 
@@ -1168,29 +1150,20 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #f5f7fa;
+  background: var(--ops-content-bg, #f7f8fa);
   border-radius: 20px;
   font-size: 13px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
 }
 
-.feature-item .el-icon {
+.feature-item :deep(.arco-icon) {
   font-size: 16px;
-  color: #d4af37;
+  color: var(--ops-primary, #165dff);
 }
 
-.start-btn {
-  height: 44px;
-  padding: 0 32px;
-  font-size: 15px;
-}
-
-/* 结果部分 */
-.result-section {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 20px;
+/* 结果卡片 */
+.result-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 /* 统计卡片 */
@@ -1206,8 +1179,8 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  background: var(--ops-content-bg, #f7f8fa);
+  border-radius: var(--ops-border-radius-md, 8px);
   transition: all 0.3s ease;
 }
 
@@ -1220,7 +1193,7 @@ onMounted(() => {
   grid-row: span 1;
   justify-content: center;
   padding: 20px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #1d2129 0%, #2a2f38 100%);
 }
 
 .score-circle {
@@ -1243,22 +1216,22 @@ onMounted(() => {
 
 .score-circle .score-progress {
   fill: none;
-  stroke: #d4af37;
+  stroke: var(--ops-primary, #165dff);
   stroke-width: 8;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.8s ease;
 }
 
 .score-circle.score-excellent .score-progress {
-  stroke: #52c41a;
+  stroke: var(--ops-success, #00b42a);
 }
 
 .score-circle.score-good .score-progress {
-  stroke: #faad14;
+  stroke: var(--ops-warning, #ff7d00);
 }
 
 .score-circle.score-poor .score-progress {
-  stroke: #ff4d4f;
+  stroke: var(--ops-danger, #f53f3f);
 }
 
 .score-value {
@@ -1277,7 +1250,7 @@ onMounted(() => {
   left: 50%;
   transform: translate(-50%, 50%);
   font-size: 12px;
-  color: #909399;
+  color: #86909c;
 }
 
 .stat-icon {
@@ -1291,33 +1264,29 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.stat-icon .el-icon {
+.stat-icon :deep(.arco-icon) {
   font-size: 24px;
   color: inherit;
 }
 
 .stat-icon-blue {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
+  background: rgba(22, 93, 255, 0.1);
+  color: var(--ops-primary, #165dff);
 }
 
 .stat-icon-green {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #52c41a;
-  border: 1px solid #52c41a;
+  background: rgba(0, 180, 42, 0.1);
+  color: var(--ops-success, #00b42a);
 }
 
 .stat-icon-orange {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #faad14;
-  border: 1px solid #faad14;
+  background: rgba(255, 125, 0, 0.1);
+  color: var(--ops-warning, #ff7d00);
 }
 
 .stat-icon-red {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #ff4d4f;
-  border: 1px solid #ff4d4f;
+  background: rgba(245, 63, 63, 0.1);
+  color: var(--ops-danger, #f53f3f);
 }
 
 .stat-content {
@@ -1326,45 +1295,37 @@ onMounted(() => {
 
 .stat-label {
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   margin-bottom: 4px;
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1;
 }
 
 .stat-value.score-excellent {
-  color: #52c41a;
+  color: var(--ops-success, #00b42a);
 }
 
 .stat-value.score-good {
-  color: #faad14;
+  color: var(--ops-warning, #ff7d00);
 }
 
 .stat-value.score-poor {
-  color: #ff4d4f;
+  color: var(--ops-danger, #f53f3f);
 }
 
 .inspection-tabs {
-  :deep(.el-tabs__header) {
+  :deep(.arco-tabs__header) {
     margin-bottom: 20px;
   }
 
-  :deep(.el-tabs__item) {
+  :deep(.arco-tabs__item) {
     font-size: 14px;
     font-weight: 500;
-  }
-
-  :deep(.el-tabs__item.is-active) {
-    color: #d4af37;
-  }
-
-  :deep(.el-tabs__active-bar) {
-    background-color: #d4af37;
   }
 }
 
@@ -1378,8 +1339,8 @@ onMounted(() => {
   gap: 40px;
   margin-bottom: 24px;
   padding: 20px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--ops-content-bg, #f7f8fa);
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .summary-item {
@@ -1388,31 +1349,31 @@ onMounted(() => {
   gap: 12px;
 }
 
-.summary-item .el-icon {
+.summary-item :deep(.arco-icon) {
   font-size: 24px;
 }
 
-.summary-item.success .el-icon {
-  color: #52c41a;
+.summary-item.success :deep(.arco-icon) {
+  color: var(--ops-success, #00b42a);
 }
 
-.summary-item.warning .el-icon {
-  color: #faad14;
+.summary-item.warning :deep(.arco-icon) {
+  color: var(--ops-warning, #ff7d00);
 }
 
-.summary-item.error .el-icon {
-  color: #ff4d4f;
+.summary-item.error :deep(.arco-icon) {
+  color: var(--ops-danger, #f53f3f);
 }
 
 .summary-label {
   font-size: 14px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 .summary-value {
   font-size: 24px;
   font-weight: 700;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
 }
 
 /* Tab内容 */
@@ -1426,8 +1387,8 @@ onMounted(() => {
   gap: 16px;
   margin-bottom: 24px;
   padding: 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--ops-content-bg, #f7f8fa);
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .info-item {
@@ -1438,25 +1399,25 @@ onMounted(() => {
 
 .info-label {
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 .info-value {
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
 }
 
 .success-text {
-  color: #52c41a;
+  color: var(--ops-success, #00b42a);
 }
 
 .warning-text {
-  color: #faad14;
+  color: var(--ops-warning, #ff7d00);
 }
 
 .error-text {
-  color: #ff4d4f;
+  color: var(--ops-danger, #f53f3f);
 }
 
 /* 表格 */
@@ -1468,7 +1429,7 @@ onMounted(() => {
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
 }
 
 /* 导出按钮 */
@@ -1478,7 +1439,7 @@ onMounted(() => {
   gap: 16px;
   margin-top: 24px;
   padding-top: 24px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
 /* 分页 */
@@ -1543,19 +1504,19 @@ onMounted(() => {
 
 .history-empty-icon {
   font-size: 64px;
-  color: #dcdfe6;
+  color: var(--ops-border-color, #e5e6eb);
   margin-bottom: 16px;
 }
 
 .history-empty-text {
   margin: 0 0 8px;
   font-size: 16px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
 }
 
 .history-empty-hint {
   margin: 0;
   font-size: 14px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 </style>

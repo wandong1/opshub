@@ -16,113 +16,55 @@ html,
 body,
 #app {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* 全局字体大小增加 */
 html {
-  font-size: 20px; /* 增加到20px */
-  overflow-y: scroll; /* 始终显示滚动条，防止弹窗打开时页面抖动 */
+  font-size: 14px;
+  overflow-y: scroll;
 }
 
 body {
-  font-size: 1rem; /* 20px */
+  font-size: 14px;
+  color: var(--ops-text-primary, #1d2129);
+  background-color: #fff;
 }
 
-/* 修复 Element Plus Dialog 打开时页面抖动 */
+/* ===== Element Plus 兼容覆盖（未迁移页面） ===== */
 body.el-popup-parent--hidden {
   padding-right: 0 !important;
   overflow: hidden !important;
   width: 100% !important;
 }
 
-/* 隐藏弹窗遮罩层的滚动条（但允许滚动） */
 .el-overlay {
-  scrollbar-width: none !important; /* Firefox */
-  -ms-overflow-style: none !important; /* IE/Edge */
+  scrollbar-width: none !important;
 }
-
 .el-overlay::-webkit-scrollbar {
-  display: none !important; /* Chrome/Safari/Opera */
+  display: none !important;
   width: 0 !important;
-  height: 0 !important;
 }
-
-/* 弹窗wrapper允许滚动但隐藏滚动条 */
 .el-overlay-dialog {
   overflow: auto !important;
   scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
 }
-
 .el-overlay-dialog::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
-  height: 0 !important;
 }
 
-/* 调整Element Plus组件字体大小 */
-.el-button {
-  font-size: 17px !important;
-}
-
-.el-input__inner,
-.el-textarea__inner {
-  font-size: 17px !important;
-}
-
-.el-form-item__label {
-  font-size: 17px !important;
-}
-
-.el-table {
-  font-size: 17px !important;
-}
-
-.el-table th,
-.el-table td {
-  font-size: 17px !important;
-}
-
-.el-menu-item {
-  font-size: 17px !important;
-}
-
-.el-dropdown-menu__item {
-  font-size: 17px !important;
-}
-
-.el-dialog__title {
-  font-size: 20px !important;
-}
-
-.el-breadcrumb__inner {
-  font-size: 17px !important;
-}
-
-.el-tag {
-  font-size: 16px !important;
-}
-
-.el-pagination {
-  font-size: 17px !important;
-}
-
-.el-card__header {
-  font-size: 18px !important;
-}
-
-/* 侧边栏特殊字体 */
-.el-aside .user-name {
-  font-size: 16px !important;
-}
-
-.el-aside .user-role {
-  font-size: 14px !important;
-}
-
-.logo h3 {
-  font-size: 22px !important;
-}
+/* Element Plus 字体大小保持一致（兼容未迁移页面） */
+.el-button { font-size: 14px !important; }
+.el-input__inner, .el-textarea__inner { font-size: 14px !important; }
+.el-form-item__label { font-size: 14px !important; }
+.el-table { font-size: 14px !important; }
+.el-table th, .el-table td { font-size: 14px !important; }
+.el-menu-item { font-size: 14px !important; }
+.el-dropdown-menu__item { font-size: 14px !important; }
+.el-dialog__title { font-size: 16px !important; }
+.el-breadcrumb__inner { font-size: 14px !important; }
+.el-tag { font-size: 12px !important; }
+.el-pagination { font-size: 14px !important; }
+.el-card__header { font-size: 14px !important; }
 </style>

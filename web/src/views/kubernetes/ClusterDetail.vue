@@ -4,28 +4,28 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-top">
-          <el-button class="back-btn" @click="handleBack" :icon="ArrowLeft">返回列表</el-button>
+          <a-button class="back-btn" @click="handleBack" :icon="ArrowLeft">返回列表</a-button>
         </div>
         <div class="cluster-name-section">
           <h1 class="cluster-title">
-            <el-icon class="title-icon" :size="28"><Platform /></el-icon>
+            <icon-apps />
             {{ clusterInfo?.alias || clusterInfo?.name }}
           </h1>
-          <el-tag :type="getStatusType(clusterInfo?.status || 1)" size="large" class="status-tag">
+          <a-tag :color="getStatusType(clusterInfo?.status || 1)" size="large" class="status-tag">
             {{ getStatusText(clusterInfo?.status || 1) }}
-          </el-tag>
+          </a-tag>
         </div>
         <div class="cluster-meta">
           <span class="meta-item">
-            <el-icon><Connection /></el-icon>
+            <icon-link />
             {{ clusterInfo?.apiEndpoint }}
           </span>
           <span class="meta-item">
-            <el-icon><InfoFilled /></el-icon>
+            <icon-info-circle />
             {{ clusterInfo?.version }}
           </span>
           <span class="meta-item" v-if="clusterInfo?.provider">
-            <el-icon><Shop /></el-icon>
+            <icon-apps />
             {{ getProviderText(clusterInfo.provider) }}
           </span>
         </div>
@@ -36,16 +36,16 @@
     <div class="quick-stats">
       <div class="stat-card" v-for="(stat, index) in quickStats" :key="index" :style="{ '--delay': index * 0.1 + 's' }">
         <div class="stat-icon-wrapper" :style="{ background: stat.color }">
-          <el-icon :size="32" :color="stat.iconColor">
+          <span style="font-size: 32px; color: stat.iconColor">
             <component :is="stat.icon" />
-          </el-icon>
+          </span>
         </div>
         <div class="stat-info">
           <div class="stat-value">{{ stat.value }}</div>
           <div class="stat-label">{{ stat.label }}</div>
         </div>
         <div class="stat-trend" v-if="stat.trend">
-          <el-icon :size="16"><TrendCharts /></el-icon>
+          <icon-rise />
         </div>
       </div>
     </div>
@@ -55,24 +55,18 @@
       <!-- 左侧列 -->
       <div class="left-column">
         <!-- 资源使用率 -->
-        <el-card shadow="hover" class="modern-card">
-          <template #header>
-            <div class="card-title-section">
-              <el-icon class="card-icon" :size="20" color="#D4AF37"><DataAnalysis /></el-icon>
-              <span class="card-title">资源使用率</span>
-            </div>
-          </template>
+        <a-card shadow="hover" class="modern-card">
           <div class="resource-usage">
             <div class="usage-item">
               <div class="usage-header">
                 <div class="usage-label">
-                  <el-icon color="#D4AF37" :size="18"><Cpu /></el-icon>
+                  <icon-thunderbolt />
                   <span>CPU 使用率</span>
                 </div>
                 <span class="usage-value">{{ Math.round(clusterStats.cpuUsage) }}%</span>
               </div>
               <div class="progress-wrapper">
-                <el-progress
+                <a-progress
                   :percentage="Math.round(clusterStats.cpuUsage)"
                   :color="getProgressColor(clusterStats.cpuUsage)"
                   :show-text="false"
@@ -88,13 +82,13 @@
             <div class="usage-item">
               <div class="usage-header">
                 <div class="usage-label">
-                  <el-icon color="#D4AF37" :size="18"><Coin /></el-icon>
+                  <icon-common />
                   <span>内存使用率</span>
                 </div>
                 <span class="usage-value">{{ Math.round(clusterStats.memoryUsage) }}%</span>
               </div>
               <div class="progress-wrapper">
-                <el-progress
+                <a-progress
                   :percentage="Math.round(clusterStats.memoryUsage)"
                   :color="getProgressColor(clusterStats.memoryUsage)"
                   :show-text="false"
@@ -107,54 +101,42 @@
               </div>
             </div>
           </div>
-        </el-card>
+        </a-card>
 
         <!-- 网络配置 -->
-        <el-card shadow="hover" class="modern-card">
-          <template #header>
-            <div class="card-title-section">
-              <el-icon class="card-icon" :size="20" color="#D4AF37"><Connection /></el-icon>
-              <span class="card-title">网络配置</span>
-            </div>
-          </template>
+        <a-card shadow="hover" class="modern-card">
           <div class="network-config">
             <div class="config-grid">
               <div class="config-item">
                 <div class="config-label">API Server</div>
-                <el-tag type="primary" size="large">{{ networkInfo.apiServerAddress || '-' }}</el-tag>
+                <a-tag type="primary" size="large">{{ networkInfo.apiServerAddress || '-' }}</a-tag>
               </div>
               <div class="config-item">
                 <div class="config-label">Service CIDR</div>
-                <el-tag type="info" size="large">{{ networkInfo.serviceCIDR || '-' }}</el-tag>
+                <a-tag color="gray" size="large">{{ networkInfo.serviceCIDR || '-' }}</a-tag>
               </div>
               <div class="config-item">
                 <div class="config-label">Pod CIDR</div>
-                <el-tag type="success" size="large">{{ networkInfo.podCIDR || '-' }}</el-tag>
+                <a-tag color="green" size="large">{{ networkInfo.podCIDR || '-' }}</a-tag>
               </div>
               <div class="config-item">
                 <div class="config-label">网络插件</div>
-                <el-tag type="warning" size="large">{{ networkInfo.networkPlugin || '-' }}</el-tag>
+                <a-tag color="orangered" size="large">{{ networkInfo.networkPlugin || '-' }}</a-tag>
               </div>
               <div class="config-item">
                 <div class="config-label">Proxy 模式</div>
-                <el-tag type="primary" size="large">{{ networkInfo.proxyMode || '-' }}</el-tag>
+                <a-tag type="primary" size="large">{{ networkInfo.proxyMode || '-' }}</a-tag>
               </div>
               <div class="config-item">
                 <div class="config-label">DNS 服务</div>
-                <el-tag type="success" size="large">{{ networkInfo.dnsService || '-' }}</el-tag>
+                <a-tag color="green" size="large">{{ networkInfo.dnsService || '-' }}</a-tag>
               </div>
             </div>
           </div>
-        </el-card>
+        </a-card>
 
         <!-- 集群信息 -->
-        <el-card shadow="hover" class="modern-card">
-          <template #header>
-            <div class="card-title-section">
-              <el-icon class="card-icon" :size="20" color="#D4AF37"><InfoFilled /></el-icon>
-              <span class="card-title">集群信息</span>
-            </div>
-          </template>
+        <a-card shadow="hover" class="modern-card">
           <div class="cluster-info-grid">
             <div class="info-row">
               <span class="info-label">集群名称</span>
@@ -185,24 +167,18 @@
               <span class="info-value">{{ clusterInfo?.description || '-' }}</span>
             </div>
           </div>
-        </el-card>
+        </a-card>
       </div>
 
       <!-- 右侧列 -->
       <div class="right-column">
         <!-- 组件信息 -->
-        <el-card shadow="hover" class="modern-card">
-          <template #header>
-            <div class="card-title-section">
-              <el-icon class="card-icon" :size="20" color="#D4AF37"><Files /></el-icon>
-              <span class="card-title">组件信息</span>
-            </div>
-          </template>
+        <a-card shadow="hover" class="modern-card">
 
           <!-- 运行时环境 -->
           <div class="component-section">
             <div class="section-header">
-              <el-icon :size="16"><Monitor /></el-icon>
+              <icon-desktop />
               <span>运行时环境</span>
             </div>
             <div class="runtime-cards">
@@ -220,7 +196,7 @@
           <!-- 控制平面组件 -->
           <div class="component-section" v-if="componentInfo.components.length > 0">
             <div class="section-header">
-              <el-icon :size="16"><Setting /></el-icon>
+              <icon-settings />
               <span>控制平面组件</span>
             </div>
             <div class="component-list">
@@ -230,18 +206,18 @@
                 class="component-item"
               >
                 <div class="component-main">
-                  <el-icon class="component-icon" :size="20" color="#D4AF37"><CircleCheck /></el-icon>
+                  <icon-check-circle />
                   <div class="component-info">
                     <div class="component-name">{{ component.name }}</div>
-                    <el-tag size="small" type="info">{{ component.version }}</el-tag>
+                    <a-tag size="small" color="gray">{{ component.version }}</a-tag>
                   </div>
                 </div>
-                <el-tag
+                <a-tag
                   :type="component.status === 'Running' ? 'success' : 'danger'"
                   size="small"
                 >
                   {{ component.status }}
-                </el-tag>
+                </a-tag>
               </div>
             </div>
           </div>
@@ -249,7 +225,7 @@
           <!-- 存储类 -->
           <div class="component-section" v-if="componentInfo.storage.length > 0">
             <div class="section-header">
-              <el-icon :size="16"><Folder /></el-icon>
+              <icon-folder />
               <span>存储类</span>
             </div>
             <div class="storage-list">
@@ -259,38 +235,31 @@
                 class="storage-item"
               >
                 <div class="storage-main">
-                  <el-icon class="storage-icon" :size="18" color="#D4AF37"><Folder /></el-icon>
+                  <icon-folder />
                   <div class="storage-info">
                     <div class="storage-name">{{ storage.name }}</div>
                     <div class="storage-provisioner">{{ storage.provisioner }}</div>
                   </div>
                 </div>
-                <el-tag
+                <a-tag
                   :type="storage.reclaimPolicy === 'Delete' ? 'danger' : 'warning'"
                   size="small"
                 >
                   {{ storage.reclaimPolicy }}
-                </el-tag>
+                </a-tag>
               </div>
             </div>
           </div>
-        </el-card>
+        </a-card>
       </div>
     </div>
 
     <!-- 节点信息 -->
-    <el-card shadow="hover" class="modern-card full-width-card">
-      <template #header>
-        <div class="card-title-section">
-          <el-icon class="card-icon" :size="20" color="#D4AF37"><Monitor /></el-icon>
-          <span class="card-title">节点信息</span>
-          <span class="node-count">{{ filteredNodeList.length }}个节点</span>
-        </div>
-      </template>
+    <a-card shadow="hover" class="modern-card full-width-card">
 
       <!-- 搜索框 -->
       <div class="node-search-bar">
-        <el-input
+        <a-input
           v-model="nodeSearchKeyword"
           placeholder="搜索节点名称、IP地址..."
           clearable
@@ -299,119 +268,94 @@
           class="search-input"
         >
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
-        <el-button class="search-button" @click="handleNodeSearch">搜索</el-button>
+        </a-input>
+        <a-button class="search-button" @click="handleNodeSearch">搜索</a-button>
       </div>
 
-      <el-table
+      <a-table
         :data="paginatedNodeList"
         stripe
         style="width: 100%"
         v-loading="nodesLoading"
-      >
-        <el-table-column prop="name" label="节点名称" min-width="150">
-          <template #default="{ row }">
-            <span class="node-name-link">{{ row.name }}</span>
+       :columns="tableColumns2">
+          <template #name="{ record }">
+            <span class="node-name-link">{{ record.name }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="角色" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getNodeRoleType(row.roles)" size="small">
-              {{ row.roles || 'Worker' }}
-            </el-tag>
+          <template #role="{ record }">
+            <a-tag :type="getNodeRoleType(record.roles)" size="small">
+              {{ record.roles || 'Worker' }}
+            </a-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'Ready' ? 'success' : 'danger'" size="small">
-              {{ row.status }}
-            </el-tag>
+          <template #status="{ record }">
+            <a-tag :type="record.status === 'Ready' ? 'success' : 'danger'" size="small">
+              {{ record.status }}
+            </a-tag>
           </template>
-        </el-table-column>
-        <el-table-column prop="internalIP" label="内部IP" width="150" />
-        <el-table-column prop="externalIP" label="外部IP" width="150">
-          <template #default="{ row }">
-            {{ row.externalIP || '无' }}
+          <template #externalIP="{ record }">
+            {{ record.externalIP || '无' }}
           </template>
-        </el-table-column>
-        <el-table-column prop="version" label="K8s版本" width="120" />
-        <el-table-column prop="osImage" label="操作系统" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="age" label="创建时间" width="180" />
-      </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="node-pagination-wrapper">
-        <el-pagination
-          v-model:current-page="nodeCurrentPage"
+        <a-pagination
+          v-model:current="nodeCurrentPage"
           v-model:page-size="nodePageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredNodeList.length"
           layout="total, sizes, prev, pager, next"
           @current-change="handleNodePageChange"
           @size-change="handleNodeSizeChange"
         />
       </div>
-    </el-card>
+    </a-card>
 
     <!-- 最近事件 -->
-    <el-card shadow="hover" class="modern-card full-width-card">
-      <template #header>
-        <div class="card-title-section">
-          <el-icon class="card-icon" :size="20" color="#D4AF37"><Document /></el-icon>
-          <span class="card-title">最近事件</span>
-          <span class="event-count">最近50条</span>
-        </div>
-      </template>
-      <el-table
+    <a-card shadow="hover" class="modern-card full-width-card">
+      <a-table
         :data="eventList"
         stripe
         style="width: 100%"
         v-loading="eventsLoading"
         :empty-text="'No Data'"
-      >
-        <el-table-column label="类型" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.type === 'Normal' ? 'success' : 'warning'" size="small">
-              {{ row.type }}
-            </el-tag>
+       :columns="tableColumns">
+          <template #type="{ record }">
+            <a-tag :type="record.type === 'Normal' ? 'success' : 'warning'" size="small">
+              {{ record.type }}
+            </a-tag>
           </template>
-        </el-table-column>
-        <el-table-column prop="reason" label="原因" width="150" show-overflow-tooltip />
-        <el-table-column prop="message" label="消息" min-width="300" show-overflow-tooltip />
-        <el-table-column prop="source" label="来源" width="200" show-overflow-tooltip />
-        <el-table-column prop="count" label="次数" width="80" align="center" />
-        <el-table-column prop="lastTimestamp" label="最后发生时间" width="180" />
-      </el-table>
-    </el-card>
+        </a-table>
+    </a-card>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns2 = [
+  { title: '节点名称', dataIndex: 'name', slotName: 'name', width: 150 },
+  { title: '角色', slotName: 'role', width: 100 },
+  { title: '状态', slotName: 'status', width: 100 },
+  { title: '内部IP', dataIndex: 'internalIP', width: 150 },
+  { title: '外部IP', dataIndex: 'externalIP', slotName: 'externalIP', width: 150 },
+  { title: 'K8s版本', dataIndex: 'version', width: 120 },
+  { title: '操作系统', dataIndex: 'osImage', width: 180, ellipsis: true, tooltip: true },
+  { title: '创建时间', dataIndex: 'age', width: 180 }
+]
+
+const tableColumns = [
+  { title: '类型', slotName: 'type', width: 100 },
+  { title: '原因', dataIndex: 'reason', width: 150, ellipsis: true, tooltip: true },
+  { title: '消息', dataIndex: 'message', width: 300, ellipsis: true, tooltip: true },
+  { title: '来源', dataIndex: 'source', width: 200, ellipsis: true, tooltip: true },
+  { title: '次数', dataIndex: 'count', width: 80, align: 'center' },
+  { title: '最后发生时间', dataIndex: 'lastTimestamp', width: 180 }
+]
+
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import axios from 'axios'
-import {
-  ArrowLeft,
-  Platform,
-  Connection,
-  InfoFilled,
-  Monitor,
-  Files,
-  Box,
-  Cpu,
-  TrendCharts,
-  Shop,
-  DataAnalysis,
-  Coin,
-  Setting,
-  Folder,
-  CircleCheck,
-  Refresh,
-  Document
-} from '@element-plus/icons-vue'
 import {
   getClusterDetail,
   getClusterStats,
@@ -566,13 +510,13 @@ const loadClusterDetail = async () => {
     if (!errorMessageShown) {
       errorMessageShown = true
       if (error.response?.status === 403 || error.response?.status === 401) {
-        ElMessage.error({
-          message: '您没有权限访问该集群，请联系管理员授权',
+        Message.error({
+          content: '您没有权限访问该集群，请联系管理员授权',
           duration: 5000,
           showClose: true
         })
       } else {
-        ElMessage.error(error.response?.data?.message || '获取集群信息失败')
+        Message.error(error.response?.data?.message || '获取集群信息失败')
       }
     }
   }
@@ -758,12 +702,12 @@ onMounted(() => {
         box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
       }
 
-      :deep(.el-icon) {
+      :deep(.arco-icon) {
         font-size: 16px;
         transition: transform 0.3s;
       }
 
-      &:hover :deep(.el-icon) {
+      &:hover :deep(.arco-icon) {
         transform: translateX(-3px);
       }
     }
@@ -903,12 +847,12 @@ onMounted(() => {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
   }
 
-  :deep(.el-card__header) {
+  :deep(.arco-card__header) {
     padding: 20px 24px;
     border-bottom: 1px solid #f0f0f0;
   }
 
-  :deep(.el-card__body) {
+  :deep(.arco-card__body) {
     padding: 24px;
   }
 
@@ -1062,7 +1006,7 @@ onMounted(() => {
         }
       }
 
-      .el-tag {
+      .arco-tag {
         width: 100%;
         justify-content: center;
       }

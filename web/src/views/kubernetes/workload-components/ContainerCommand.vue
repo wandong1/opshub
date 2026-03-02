@@ -4,7 +4,7 @@
     <div class="form-row-group">
       <div class="form-row-item full-width">
         <label class="form-label">工作目录</label>
-        <el-input
+        <a-input
           v-model="localContainer.workingDir"
           placeholder="容器的工作目录，如: /app"
           clearable
@@ -18,16 +18,16 @@
       <label class="form-label">运行命令 (Command)</label>
       <div class="command-list">
         <div v-for="(cmd, index) in localContainer.command" :key="'cmd-'+index" class="command-item">
-          <el-input v-model="localContainer.command[index]" placeholder="命令参数" @input="update">
+          <a-input v-model="localContainer.command[index]" placeholder="命令参数" @input="update">
             <template #prepend>{{ index + 1 }}</template>
-          </el-input>
-          <el-button type="danger" link @click="removeCommand(index)" :icon="Delete" />
+          </a-input>
+          <a-button status="danger" type="text" @click="removeCommand(index)" />
         </div>
       </div>
       <div class="add-btn-wrapper">
-        <el-button class="add-btn" type="primary" size="small" @click="addCommand" :icon="Plus">
+        <a-button class="add-btn" type="primary" size="small" @click="addCommand">
           添加命令
-        </el-button>
+        </a-button>
       </div>
     </div>
 
@@ -36,16 +36,16 @@
       <label class="form-label">启动参数 (Args)</label>
       <div class="command-list">
         <div v-for="(arg, index) in localContainer.args" :key="'arg-'+index" class="command-item">
-          <el-input v-model="localContainer.args[index]" placeholder="参数值" @input="update">
+          <a-input v-model="localContainer.args[index]" placeholder="参数值" @input="update">
             <template #prepend>{{ index + 1 }}</template>
-          </el-input>
-          <el-button type="danger" link @click="removeArg(index)" :icon="Delete" />
+          </a-input>
+          <a-button status="danger" type="text" @click="removeArg(index)" />
         </div>
       </div>
       <div class="add-btn-wrapper">
-        <el-button class="add-btn" type="primary" size="small" @click="addArg" :icon="Plus">
+        <a-button class="add-btn" type="primary" size="small" @click="addArg">
           添加参数
-        </el-button>
+        </a-button>
       </div>
     </div>
 
@@ -53,8 +53,8 @@
     <div class="form-section-block">
       <label class="form-label">交互选项</label>
       <div class="checkbox-group">
-        <el-checkbox v-model="localContainer.stdin" @change="update">保持标准输入开启 (stdin)</el-checkbox>
-        <el-checkbox v-model="localContainer.tty" @change="update">分配终端 (TTY)</el-checkbox>
+        <a-checkbox v-model="localContainer.stdin" @change="update">保持标准输入开启 (stdin)</a-checkbox>
+        <a-checkbox v-model="localContainer.tty" @change="update">分配终端 (TTY)</a-checkbox>
       </div>
     </div>
   </div>
@@ -62,7 +62,6 @@
 
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
-import { Delete, Plus } from '@element-plus/icons-vue'
 
 interface Container {
   workingDir?: string
@@ -181,7 +180,7 @@ const removeArg = (index: number) => {
   align-items: center;
 }
 
-.command-item .el-input :deep(.el-input__wrapper) {
+.command-item .arco-input :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -189,12 +188,12 @@ const removeArg = (index: number) => {
   transition: all 0.3s ease;
 }
 
-.command-item .el-input :deep(.el-input__wrapper:hover) {
+.command-item .arco-input :deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.command-item .el-input :deep(.el-input-group__prepend) {
+.command-item .arco-input :deep(.arco-input-group__prepend) {
   background: #f5f5f5;
   border: 1px solid #e0e0e0;
   color: #d4af37;
@@ -230,20 +229,20 @@ const removeArg = (index: number) => {
   border: 1px solid #e8e8e8;
 }
 
-.checkbox-group :deep(.el-checkbox) {
+.checkbox-group :deep(.arco-checkbox) {
   font-weight: 500;
 }
 
-.checkbox-group :deep(.el-checkbox__label) {
+.checkbox-group :deep(.arco-checkbox__label) {
   color: #333;
 }
 
-.checkbox-group :deep(.el-checkbox__inner) {
+.checkbox-group :deep(.arco-checkbox__inner) {
   background: #ffffff;
   border: 1px solid #d0d0d0;
 }
 
-.checkbox-group :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+.checkbox-group :deep(.arco-checkbox__input.is-checked .arco-checkbox__inner) {
   background: #d4af37;
   border-color: #d4af37;
 }

@@ -280,15 +280,16 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 
 		// 保存会话记录到数据库
 		terminalSession := &assetbiz.TerminalSession{
-			HostID:        session.HostID,
-			HostName:      session.HostName,
-			HostIP:        session.HostIP,
-			UserID:        session.UserID,
-			Username:      session.Username,
-			RecordingPath: recordingPath,
-			Duration:      duration,
-			FileSize:      fileSize,
-			Status:        "completed",
+			HostID:         session.HostID,
+			HostName:       session.HostName,
+			HostIP:         session.HostIP,
+			UserID:         session.UserID,
+			Username:       session.Username,
+			RecordingPath:  recordingPath,
+			Duration:       duration,
+			FileSize:       fileSize,
+			Status:         "completed",
+			ConnectionType: "ssh",
 		}
 
 		appLogger.Info("准备保存终端会话记录到数据库",

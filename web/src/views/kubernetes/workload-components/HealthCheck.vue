@@ -5,10 +5,10 @@
       <div class="probe-item">
         <div class="probe-header">
           <div class="probe-title">
-            <el-icon><Monitor /></el-icon>
+            <icon-desktop />
             <span>存活探针 (Liveness Probe)</span>
           </div>
-          <el-switch v-model="livenessProbe.enabled" @change="handleLivenessChange" />
+          <a-switch v-model="livenessProbe.enabled" @change="handleLivenessChange" />
         </div>
         <div v-if="livenessProbe.enabled" class="probe-config">
           <ProbeConfig v-model="livenessProbe" @update="updateLiveness" />
@@ -19,10 +19,10 @@
       <div class="probe-item">
         <div class="probe-header">
           <div class="probe-title">
-            <el-icon><CircleCheck /></el-icon>
+            <icon-check-circle />
             <span>就绪探针 (Readiness Probe)</span>
           </div>
-          <el-switch v-model="readinessProbe.enabled" @change="handleReadinessChange" />
+          <a-switch v-model="readinessProbe.enabled" @change="handleReadinessChange" />
         </div>
         <div v-if="readinessProbe.enabled" class="probe-config">
           <ProbeConfig v-model="readinessProbe" @update="updateReadiness" />
@@ -33,10 +33,10 @@
       <div class="probe-item">
         <div class="probe-header">
           <div class="probe-title">
-            <el-icon><Odometer /></el-icon>
+            <icon-dashboard />
             <span>启动探针 (Startup Probe)</span>
           </div>
-          <el-switch v-model="startupProbe.enabled" @change="handleStartupChange" />
+          <a-switch v-model="startupProbe.enabled" @change="handleStartupChange" />
         </div>
         <div v-if="startupProbe.enabled" class="probe-config">
           <ProbeConfig v-model="startupProbe" @update="updateStartup" />
@@ -48,7 +48,6 @@
 
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
-import { Monitor, CircleCheck, Odometer } from '@element-plus/icons-vue'
 import ProbeConfig from './ProbeConfig.vue'
 
 interface Probe {
@@ -174,8 +173,8 @@ const handleStartupChange = (enabled: boolean) => {
 }
 
 .probe-item:hover {
-  border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+  border-color: #165dff;
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.1);
 }
 
 .probe-header {
@@ -196,9 +195,9 @@ const handleStartupChange = (enabled: boolean) => {
   color: #303133;
 }
 
-.probe-title .el-icon {
+.probe-title .arco-icon {
   font-size: 18px;
-  color: #409eff;
+  color: #165dff;
 }
 
 .probe-config {

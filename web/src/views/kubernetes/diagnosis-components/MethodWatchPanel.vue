@@ -1,11 +1,11 @@
 <template>
   <div class="method-watch-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
     <div v-else class="panel-content">
@@ -14,7 +14,7 @@
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">类名</span>
-            <el-input
+            <a-input
               v-model="classPattern"
               placeholder="类名表达式 (如: com.example.service.*)"
               style="width: 300px"
@@ -23,13 +23,13 @@
               :disabled="watching"
             >
               <template #prefix>
-                <el-icon><Folder /></el-icon>
+                <icon-folder />
               </template>
-            </el-input>
+            </a-input>
           </div>
           <div class="input-group">
             <span class="input-label">方法名</span>
-            <el-input
+            <a-input
               v-model="methodPattern"
               placeholder="方法名 (如: doSomething)"
               style="width: 200px"
@@ -38,26 +38,26 @@
               :disabled="watching"
             >
               <template #prefix>
-                <el-icon><Promotion /></el-icon>
+                <icon-send />
               </template>
-            </el-input>
+            </a-input>
           </div>
         </div>
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">监测点</span>
-            <el-checkbox-group v-model="watchPoints" :disabled="watching">
-              <el-checkbox label="-b">方法入口 (before)</el-checkbox>
-              <el-checkbox label="-e">方法异常 (exception)</el-checkbox>
-              <el-checkbox label="-s">方法返回 (return)</el-checkbox>
-              <el-checkbox label="-f">方法结束 (finish)</el-checkbox>
-            </el-checkbox-group>
+            <a-checkbox-group v-model="watchPoints" :disabled="watching">
+              <a-checkbox label="-b">方法入口 (before)</a-checkbox>
+              <a-checkbox label="-e">方法异常 (exception)</a-checkbox>
+              <a-checkbox label="-s">方法返回 (return)</a-checkbox>
+              <a-checkbox label="-f">方法结束 (finish)</a-checkbox>
+            </a-checkbox-group>
           </div>
         </div>
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">观察表达式</span>
-            <el-input
+            <a-input
               v-model="expression"
               placeholder="OGNL 表达式 (如: {params, returnObj, throwExp})"
               style="width: 350px"
@@ -66,13 +66,13 @@
               :disabled="watching"
             >
               <template #prefix>
-                <el-icon><View /></el-icon>
+                <icon-eye />
               </template>
-            </el-input>
+            </a-input>
           </div>
           <div class="input-group">
             <span class="input-label">条件表达式</span>
-            <el-input
+            <a-input
               v-model="condition"
               placeholder="条件 (如: params[0]>100)"
               style="width: 200px"
@@ -81,15 +81,15 @@
               :disabled="watching"
             >
               <template #prefix>
-                <el-icon><Filter /></el-icon>
+                <icon-filter />
               </template>
-            </el-input>
+            </a-input>
           </div>
         </div>
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">最大次数</span>
-            <el-input-number
+            <a-input-number
               v-model="maxCount"
               :min="1"
               :max="1000"
@@ -100,7 +100,7 @@
           </div>
           <div class="input-group">
             <span class="input-label">展开层数</span>
-            <el-input-number
+            <a-input-number
               v-model="expandLevel"
               :min="0"
               :max="5"
@@ -109,36 +109,36 @@
               style="width: 100px"
             />
           </div>
-          <el-checkbox v-model="sizeLimit" :disabled="watching">
+          <a-checkbox v-model="sizeLimit" :disabled="watching">
             限制字符串长度
-          </el-checkbox>
+          </a-checkbox>
         </div>
         <div class="toolbar-row actions">
-          <el-button
+          <a-button
             type="primary"
             @click="startWatch"
             :loading="starting"
             :disabled="watching || !classPattern || !methodPattern"
           >
-            <el-icon><VideoPlay /></el-icon>
+            <icon-play-arrow />
             {{ starting ? '启动中...' : '开始监测' }}
-          </el-button>
-          <el-button
+          </a-button>
+          <a-button
             @click="stopWatch"
             :disabled="!watching"
             type="danger"
           >
-            <el-icon><VideoPause /></el-icon> 停止监测
-          </el-button>
-          <el-button @click="clearOutput">
-            <el-icon><Delete /></el-icon> 清空输出
-          </el-button>
-          <el-divider direction="vertical" />
-          <el-tag v-if="watching" type="success" effect="dark">
-            <el-icon class="is-loading"><Loading /></el-icon>
+            <icon-pause-circle /> 停止监测
+          </a-button>
+          <a-button @click="clearOutput">
+            <icon-delete /> 清空输出
+          </a-button>
+          <a-divider direction="vertical" />
+          <a-tag v-if="watching" color="green">
+            <icon-loading />
             监测中...
-          </el-tag>
-          <el-tag v-else type="info">未监测</el-tag>
+          </a-tag>
+          <a-tag v-else color="gray">未监测</a-tag>
           <span class="watch-count" v-if="watchCount > 0">
             已捕获: {{ watchCount }} 次调用
           </span>
@@ -146,8 +146,8 @@
       </div>
 
       <!-- 使用说明 -->
-      <el-collapse v-model="showHelp" class="help-collapse">
-        <el-collapse-item title="使用说明" name="help">
+      <a-collapse v-model="showHelp" class="help-collapse">
+        <a-collapse-item title="使用说明" name="help">
           <div class="help-content">
             <p><strong>watch 命令</strong> 可以观察方法执行时的入参、返回值和异常信息。</p>
 
@@ -177,27 +177,27 @@
 
             <p class="tip">提示: 展开层数控制对象打印的深度，层数越大输出越详细但可能影响性能。</p>
           </div>
-        </el-collapse-item>
-      </el-collapse>
+        </a-collapse-item>
+      </a-collapse>
 
       <!-- 快捷模板 -->
       <div class="template-bar">
         <span class="template-label">快捷模板:</span>
-        <el-button size="small" @click="applyTemplate('params')" :disabled="watching">
+        <a-button size="small" @click="applyTemplate('params')" :disabled="watching">
           查看入参
-        </el-button>
-        <el-button size="small" @click="applyTemplate('return')" :disabled="watching">
+        </a-button>
+        <a-button size="small" @click="applyTemplate('return')" :disabled="watching">
           查看返回值
-        </el-button>
-        <el-button size="small" @click="applyTemplate('all')" :disabled="watching">
+        </a-button>
+        <a-button size="small" @click="applyTemplate('all')" :disabled="watching">
           查看全部
-        </el-button>
-        <el-button size="small" @click="applyTemplate('exception')" :disabled="watching">
+        </a-button>
+        <a-button size="small" @click="applyTemplate('exception')" :disabled="watching">
           捕获异常
-        </el-button>
-        <el-button size="small" @click="applyTemplate('cost')" :disabled="watching">
+        </a-button>
+        <a-button size="small" @click="applyTemplate('cost')" :disabled="watching">
           耗时分析
-        </el-button>
+        </a-button>
       </div>
 
       <!-- 监测输出 -->
@@ -205,16 +205,16 @@
         <div class="section-header">
           <span>监测输出</span>
           <span class="output-info">
-            <el-tag size="small" type="info">{{ outputLineCount }} 行</el-tag>
+            <a-tag size="small" color="gray">{{ outputLineCount }} 行</a-tag>
           </span>
         </div>
         <div class="watch-output" ref="outputRef">
           <div v-if="!rawOutput && !watching" class="empty-output">
-            <el-empty description="等待监测结果...">
+            <a-empty description="等待监测结果...">
               <template #image>
-                <el-icon :size="40" color="#c0c4cc"><View /></el-icon>
+                <icon-eye />
               </template>
-            </el-empty>
+            </a-empty>
           </div>
           <pre v-else>{{ cleanOutput }}</pre>
         </div>
@@ -225,8 +225,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, VideoPlay, VideoPause, Delete, Folder, Promotion, Filter, View, Loading } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { createArthasWebSocket, type ArthasWSMessage } from '@/api/arthas'
 
 const props = defineProps<{
@@ -334,17 +333,17 @@ const applyTemplate = (template: string) => {
 // 开始监测
 const startWatch = async () => {
   if (!classPattern.value || !methodPattern.value) {
-    ElMessage.warning('请输入类名和方法名')
+    Message.warning('请输入类名和方法名')
     return
   }
 
   if (watchPoints.value.length === 0) {
-    ElMessage.warning('请至少选择一个监测点')
+    Message.warning('请至少选择一个监测点')
     return
   }
 
   if (!props.clusterId || !props.namespace || !props.pod || !props.container) {
-    ElMessage.warning('请先选择 Pod 和容器')
+    Message.warning('请先选择 Pod 和容器')
     return
   }
 
@@ -374,7 +373,7 @@ const startWatch = async () => {
       ws?.send(JSON.stringify(msg))
       watching.value = true
       starting.value = false
-      ElMessage.success('开始监测')
+      Message.success('开始监测')
     }
 
     ws.onmessage = (event) => {
@@ -394,7 +393,7 @@ const startWatch = async () => {
           scrollToBottom()
         } else if (data.type === 'error') {
           rawOutput.value += `\n[ERROR] ${data.content}\n`
-          ElMessage.error(data.content)
+          Message.error(data.content)
         } else if (data.type === 'info') {
           rawOutput.value += `[INFO] ${data.content}\n`
         }
@@ -408,7 +407,7 @@ const startWatch = async () => {
       rawOutput.value += '\n[ERROR] WebSocket 连接错误\n'
       watching.value = false
       starting.value = false
-      ElMessage.error('WebSocket 连接失败')
+      Message.error('WebSocket 连接失败')
     }
 
     ws.onclose = () => {
@@ -418,7 +417,7 @@ const startWatch = async () => {
     }
 
   } catch (error: any) {
-    ElMessage.error('启动监测失败: ' + (error.message || '未知错误'))
+    Message.error('启动监测失败: ' + (error.message || '未知错误'))
     starting.value = false
   }
 }
@@ -435,7 +434,7 @@ const stopWatch = () => {
   }
   watching.value = false
   rawOutput.value += '\n[INFO] 用户停止监测\n'
-  ElMessage.info('已停止监测')
+  Message.info('已停止监测')
 }
 
 // 清空输出
@@ -539,7 +538,7 @@ watch(() => props.attached, (newVal) => {
   border-radius: 6px;
 }
 
-.help-collapse :deep(.el-collapse-item__header) {
+.help-collapse :deep(.arco-collapse-item__header) {
   padding: 0 16px;
   font-size: 13px;
   color: #606266;
@@ -687,7 +686,7 @@ watch(() => props.attached, (newVal) => {
     width: 100%;
   }
 
-  .input-group :deep(.el-input) {
+  .input-group :deep(.arco-input) {
     width: 100% !important;
   }
 

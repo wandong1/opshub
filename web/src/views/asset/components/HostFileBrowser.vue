@@ -1,14 +1,15 @@
 <template>
-  <el-dialog
-    v-model="dialogVisible"
+  <a-modal
+    v-model:visible="dialogVisible"
     :title="`文件管理 - ${hostName}`"
-    width="1000px"
-    :close-on-click-modal="false"
+    :width="1000"
+    :mask-closable="false"
+    unmount-on-close
     @close="handleClose"
     class="file-browser-dialog"
   >
     <div v-if="loading" class="loading-container">
-      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+      <a-spin :size="32" />
       <span class="loading-text">加载中...</span>
     </div>
 
@@ -16,214 +17,207 @@
       <!-- 路径导航 -->
       <div class="breadcrumb-card">
         <div class="breadcrumb-header">
-          <el-icon class="location-icon"><Location /></el-icon>
+          <icon-location class="location-icon" />
           <span class="breadcrumb-title">当前位置</span>
         </div>
-        <el-breadcrumb separator="/" class="path-breadcrumb">
-          <el-breadcrumb-item @click="navigateTo('~')" class="breadcrumb-home">
-            <el-icon><HomeFilled /></el-icon>
+        <a-breadcrumb separator="/" class="path-breadcrumb">
+          <a-breadcrumb-item @click="navigateTo('~')" class="breadcrumb-home">
+            <icon-home />
             <span>主目录</span>
-          </el-breadcrumb-item>
-          <el-breadcrumb-item
+          </a-breadcrumb-item>
+          <a-breadcrumb-item
             v-for="(segment, index) in pathSegments"
             :key="index"
             @click="navigateToSegment(index)"
             class="breadcrumb-segment"
           >
             {{ segment }}
-          </el-breadcrumb-item>
-        </el-breadcrumb>
+          </a-breadcrumb-item>
+        </a-breadcrumb>
         <div class="current-path-display">
-          <el-icon class="path-icon"><FolderOpened /></el-icon>
-          <el-input
+          <icon-folder class="path-icon" />
+          <a-input
             v-model="pathInput"
             placeholder="输入路径后按回车跳转"
             class="path-input"
+            allow-clear
             @keyup.enter="handlePathInput"
-            clearable
           >
             <template #prefix>
               <code class="path-prefix">路径:</code>
             </template>
-          </el-input>
+          </a-input>
         </div>
       </div>
 
       <!-- 工具栏 -->
       <div class="toolbar-actions">
         <div class="toolbar-left">
-          <el-button size="default" @click="refreshFiles" :loading="loading" class="toolbar-btn">
-            <el-icon><Refresh /></el-icon>
+          <a-button @click="refreshFiles" :loading="loading" class="toolbar-btn">
+            <template #icon><icon-refresh /></template>
             <span>刷新</span>
-          </el-button>
-          <el-button
-            size="default"
+          </a-button>
+          <a-button
             @click="navigateUp"
             :disabled="currentPath === '~' || currentPath === '/'"
             class="toolbar-btn"
           >
-            <el-icon><Back /></el-icon>
+            <template #icon><icon-left /></template>
             <span>返回上级</span>
-          </el-button>
+          </a-button>
         </div>
         <div class="toolbar-right">
-          <el-upload
-            :action="uploadUrl"
-            :headers="uploadHeaders"
-            :data="uploadData"
+          <a-upload
+            :auto-upload="false"
             :show-file-list="false"
-            :http-request="handleCustomUpload"
-            :before-upload="beforeUpload"
+            @change="handleUploadChange"
           >
-            <el-button size="default" :loading="uploading" class="upload-btn">
-              <el-icon><Upload /></el-icon>
-              <span>上传文件</span>
-            </el-button>
-          </el-upload>
+            <template #upload-button>
+              <a-button :loading="uploading" class="upload-btn">
+                <template #icon><icon-upload /></template>
+                <span>上传文件</span>
+              </a-button>
+            </template>
+          </a-upload>
         </div>
       </div>
 
       <!-- 上传进度条 -->
       <div v-if="uploading" class="upload-progress-container">
         <div class="upload-info">
-          <el-icon class="upload-icon"><Upload /></el-icon>
+          <icon-upload class="upload-icon" />
           <span class="upload-filename">{{ uploadingFileName }}</span>
           <span class="upload-status">{{ uploadStatusText }}</span>
         </div>
-        <el-progress
-          :percentage="uploadProgress"
+        <a-progress
+          :percent="uploadProgress / 100"
           :stroke-width="8"
-          :status="uploadProgress === 100 ? 'success' : undefined"
-          :indeterminate="isProcessing"
+          :status="uploadProgress === 100 ? 'success' : 'normal'"
+          :animation="isProcessing"
         />
       </div>
 
       <!-- 文件列表 -->
       <div class="file-list-container">
-        <el-table
+        <a-table
           :data="files"
-          class="file-table"
-          v-loading="loading"
+          :loading="loading"
+          :bordered="{ cell: true }"
           stripe
-          :header-cell-style="{ background: '#f5f7fa', color: '#606266', fontWeight: '600' }"
+          class="file-table"
+          :pagination="false"
         >
-          <el-table-column width="60" align="center">
-            <template #default="{ row }">
-              <div class="file-icon-wrapper">
-                <el-icon :size="24" :class="getFileIconClass(row)">
-                  <Folder v-if="row.isDir" />
-                  <Document v-else />
-                </el-icon>
-              </div>
-            </template>
-          </el-table-column>
+          <template #columns>
+            <a-table-column :width="60" align="center">
+              <template #cell="{ record }">
+                <div class="file-icon-wrapper">
+                  <icon-folder v-if="record.isDir" :size="24" :class="getFileIconClass(record)" />
+                  <icon-file v-else :size="24" :class="getFileIconClass(record)" />
+                </div>
+              </template>
+            </a-table-column>
 
-          <el-table-column label="名称" min-width="280">
-            <template #default="{ row }">
-              <div
-                class="file-name-cell"
-                :class="{ 'is-directory': row.isDir }"
-                @click="handleFileClick(row)"
-              >
-                <span class="file-name-text">{{ row.name }}</span>
-                <el-tag v-if="row.isDir" size="small" type="info" class="dir-tag">目录</el-tag>
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="大小" width="120" align="right">
-            <template #default="{ row }">
-              <span class="file-size">{{ row.isDir ? '-' : formatSize(row.size) }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="权限" width="130" align="center">
-            <template #default="{ row }">
-              <el-tag class="permission-tag" size="small">{{ row.mode || '-' }}</el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="修改时间" width="180">
-            <template #default="{ row }">
-              <div class="time-cell">
-                <el-icon class="time-icon"><Clock /></el-icon>
-                <span>{{ row.modTime }}</span>
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="操作" width="180" align="center" fixed="right">
-            <template #default="{ row }">
-              <div class="action-buttons">
-                <el-button
-                  v-if="!row.isDir"
-                  type="primary"
-                  link
-                  size="small"
-                  @click="downloadFile(row)"
-                  :loading="downloadingFiles[row.name]"
-                  class="action-btn"
+            <a-table-column title="名称" :min-width="280">
+              <template #cell="{ record }">
+                <div
+                  class="file-name-cell"
+                  :class="{ 'is-directory': record.isDir }"
+                  @click="handleFileClick(record)"
                 >
-                  <el-icon><Download /></el-icon>
-                  <span>下载</span>
-                </el-button>
-                <el-popconfirm
-                  title="确定删除此文件吗?"
-                  @confirm="deleteFile(row)"
-                  v-if="!row.isDir"
-                  width="200"
-                >
-                  <template #reference>
-                    <el-button
-                      type="danger"
-                      link
+                  <span class="file-name-text">{{ record.name }}</span>
+                  <a-tag v-if="record.isDir" size="small" color="arcoblue" class="dir-tag">目录</a-tag>
+                </div>
+              </template>
+            </a-table-column>
+
+            <a-table-column title="大小" :width="120" align="right">
+              <template #cell="{ record }">
+                <span class="file-size">{{ record.isDir ? '-' : formatSize(record.size) }}</span>
+              </template>
+            </a-table-column>
+
+            <a-table-column title="权限" :width="130" align="center">
+              <template #cell="{ record }">
+                <a-tag class="permission-tag" size="small">{{ record.mode || '-' }}</a-tag>
+              </template>
+            </a-table-column>
+
+            <a-table-column title="修改时间" :width="180">
+              <template #cell="{ record }">
+                <div class="time-cell">
+                  <icon-clock-circle class="time-icon" />
+                  <span>{{ record.modTime }}</span>
+                </div>
+              </template>
+            </a-table-column>
+
+            <a-table-column title="操作" :width="180" align="center" fixed="right">
+              <template #cell="{ record }">
+                <div class="action-buttons">
+                  <a-button
+                    v-if="!record.isDir"
+                    type="text"
+                    size="small"
+                    @click="downloadFile(record)"
+                    :loading="downloadingFiles[record.name]"
+                    class="action-btn"
+                  >
+                    <template #icon><icon-download /></template>
+                    <span>下载</span>
+                  </a-button>
+                  <a-popconfirm
+                    content="确定删除此文件吗?"
+                    @ok="deleteFile(record)"
+                    v-if="!record.isDir"
+                  >
+                    <a-button
+                      type="text"
+                      status="danger"
                       size="small"
-                      :loading="deletingFiles[row.name]"
+                      :loading="deletingFiles[record.name]"
                       class="action-btn"
                     >
-                      <el-icon><Delete /></el-icon>
+                      <template #icon><icon-delete /></template>
                       <span>删除</span>
-                    </el-button>
-                  </template>
-                </el-popconfirm>
-                <span v-if="row.isDir" class="no-action">-</span>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
+                    </a-button>
+                  </a-popconfirm>
+                  <span v-if="record.isDir" class="no-action">-</span>
+                </div>
+              </template>
+            </a-table-column>
+          </template>
+        </a-table>
 
-        <el-empty
+        <a-empty
           v-if="!loading && files.length === 0"
           description="此目录为空"
-          :image-size="120"
         >
           <template #image>
-            <el-icon :size="80" color="#c0c4cc"><FolderOpened /></el-icon>
+            <icon-folder :size="80" style="color: #c0c4cc" />
           </template>
-        </el-empty>
+        </a-empty>
       </div>
     </div>
-  </el-dialog>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import {
-  Loading,
-  HomeFilled,
-  Refresh,
-  Back,
-  Folder,
-  Document,
-  Download,
-  Upload,
-  Delete,
-  Clock,
-  Location,
-  FolderOpened
-} from '@element-plus/icons-vue'
+  IconLocation,
+  IconHome,
+  IconRefresh,
+  IconLeft,
+  IconFolder,
+  IconFile,
+  IconDownload,
+  IconUpload,
+  IconDelete,
+  IconClockCircle
+} from '@arco-design/web-vue/es/icon'
 import { listHostFiles, downloadHostFile, deleteHostFile } from '@/api/host'
+import { listAgentFiles, downloadAgentFile, deleteAgentFile } from '@/api/agent'
 
 interface FileInfo {
   name: string
@@ -237,6 +231,8 @@ const props = defineProps<{
   visible: boolean
   hostId: number
   hostName: string
+  connectionMode?: string
+  agentStatus?: string
 }>()
 
 const emit = defineEmits<{
@@ -276,9 +272,13 @@ const pathSegments = computed(() => {
   return path ? path.split('/').filter(p => p) : []
 })
 
+const isAgent = computed(() => props.connectionMode === 'agent' && props.agentStatus === 'online')
+
 // 上传相关
 const uploadUrl = computed(() => {
-  return `/api/v1/hosts/${props.hostId}/files/upload`
+  return isAgent.value
+    ? `/api/v1/agents/${props.hostId}/files/upload`
+    : `/api/v1/hosts/${props.hostId}/files/upload`
 })
 
 const uploadHeaders = computed(() => {
@@ -312,11 +312,13 @@ const formatSize = (size: number): string => {
 const loadFiles = async (path: string = '~') => {
   loading.value = true
   try {
-    const response = await listHostFiles(props.hostId, path)
+    const response = isAgent.value
+      ? await listAgentFiles(props.hostId, path)
+      : await listHostFiles(props.hostId, path)
     // 响应拦截器已经返回了 data，所以直接使用 response
     files.value = response || []
   } catch (error: any) {
-    ElMessage.error('获取文件列表失败: ' + (error.message || '未知错误'))
+    Message.error('获取文件列表失败: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
@@ -334,7 +336,7 @@ const navigateTo = (path: string) => {
 
 const handlePathInput = () => {
   if (!pathInput.value || pathInput.value.trim() === '') {
-    ElMessage.warning('请输入有效的路径')
+    Message.warning('请输入有效的路径')
     return
   }
   navigateTo(pathInput.value.trim())
@@ -386,17 +388,17 @@ const handleFileClick = (file: FileInfo) => {
   }
 }
 
-const beforeUpload = (file: File) => {
-  uploading.value = true
-  uploadProgress.value = 0
-  uploadingFileName.value = file.name
-  isProcessing.value = false
-  return true
+const handleUploadChange = (_fileList: any[], fileItem: any) => {
+  if (fileItem.file) {
+    uploading.value = true
+    uploadProgress.value = 0
+    uploadingFileName.value = fileItem.file.name
+    isProcessing.value = false
+    handleCustomUpload(fileItem.file)
+  }
 }
 
-const handleCustomUpload = async (options: any) => {
-  const { file } = options
-
+const handleCustomUpload = async (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('path', currentPath.value)
@@ -432,7 +434,7 @@ const handleCustomUpload = async (options: any) => {
           uploading.value = false
           uploadProgress.value = 0
           uploadingFileName.value = ''
-          ElMessage.success('文件上传成功')
+          Message.success('文件上传成功')
           refreshFiles()
           resolve(xhr.response)
         }, 500)
@@ -450,7 +452,7 @@ const handleCustomUpload = async (options: any) => {
           errorMsg = xhr.statusText || errorMsg
         }
 
-        ElMessage.error('文件上传失败: ' + errorMsg)
+        Message.error('文件上传失败: ' + errorMsg)
         reject(new Error(errorMsg))
       }
     })
@@ -461,7 +463,7 @@ const handleCustomUpload = async (options: any) => {
       uploadProgress.value = 0
       uploadingFileName.value = ''
       isProcessing.value = false
-      ElMessage.error('文件上传失败: 网络错误')
+      Message.error('文件上传失败: 网络错误')
       reject(new Error('网络错误'))
     })
 
@@ -471,12 +473,14 @@ const handleCustomUpload = async (options: any) => {
       uploadProgress.value = 0
       uploadingFileName.value = ''
       isProcessing.value = false
-      ElMessage.warning('文件上传已取消')
+      Message.warning('文件上传已取消')
       reject(new Error('上传已取消'))
     })
 
     // 打开请求
-    xhr.open('POST', `/api/v1/hosts/${props.hostId}/files/upload`)
+    xhr.open('POST', isAgent.value
+      ? `/api/v1/agents/${props.hostId}/files/upload`
+      : `/api/v1/hosts/${props.hostId}/files/upload`)
 
     // 设置请求头
     if (token) {
@@ -495,7 +499,9 @@ const downloadFile = async (file: FileInfo) => {
       ? (currentPath.value === '~' ? '~/' : '/') + file.name
       : currentPath.value + '/' + file.name
 
-    const response = await downloadHostFile(props.hostId, filePath)
+    const response = isAgent.value
+      ? await downloadAgentFile(props.hostId, filePath)
+      : await downloadHostFile(props.hostId, filePath)
 
     // 创建下载链接
     const url = window.URL.createObjectURL(new Blob([response.data]))
@@ -507,9 +513,9 @@ const downloadFile = async (file: FileInfo) => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
 
-    ElMessage.success('文件下载成功')
+    Message.success('文件下载成功')
   } catch (error: any) {
-    ElMessage.error('文件下载失败: ' + (error.message || '未知错误'))
+    Message.error('文件下载失败: ' + (error.message || '未知错误'))
   } finally {
     downloadingFiles.value[file.name] = false
   }
@@ -522,11 +528,13 @@ const deleteFile = async (file: FileInfo) => {
       ? (currentPath.value === '~' ? '~/' : '/') + file.name
       : currentPath.value + '/' + file.name
 
-    await deleteHostFile(props.hostId, filePath)
-    ElMessage.success('文件删除成功')
+    isAgent.value
+      ? await deleteAgentFile(props.hostId, filePath)
+      : await deleteHostFile(props.hostId, filePath)
+    Message.success('文件删除成功')
     refreshFiles()
   } catch (error: any) {
-    ElMessage.error('文件删除失败: ' + (error.message || '未知错误'))
+    Message.error('文件删除失败: ' + (error.message || '未知错误'))
   } finally {
     deletingFiles.value[file.name] = false
   }
@@ -548,13 +556,12 @@ watch(() => props.visible, (visible) => {
 
 <style scoped lang="scss">
 .file-browser-dialog {
-  :deep(.el-dialog__header) {
-    border-bottom: 1px solid #e4e7ed;
+  :deep(.arco-modal-header) {
+    border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
     padding: 20px 24px;
-    margin-right: 0;
   }
 
-  :deep(.el-dialog__body) {
+  :deep(.arco-modal-body) {
     padding: 24px;
   }
 }
@@ -569,7 +576,7 @@ watch(() => props.visible, (visible) => {
 
   .loading-text {
     font-size: 14px;
-    color: #909399;
+    color: var(--ops-text-tertiary, #86909c);
   }
 }
 
@@ -580,7 +587,7 @@ watch(() => props.visible, (visible) => {
     padding: 20px;
     border-radius: 8px;
     margin-bottom: 20px;
-    border: 1px solid #e4e7ed;
+    border: 1px solid var(--ops-border-color, #e5e6eb);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 
     .breadcrumb-header {
@@ -591,43 +598,37 @@ watch(() => props.visible, (visible) => {
 
       .location-icon {
         font-size: 18px;
-        color: #409eff;
+        color: var(--ops-primary, #165dff);
       }
 
       .breadcrumb-title {
         font-size: 14px;
         font-weight: 600;
-        color: #303133;
+        color: var(--ops-text-primary, #1d2129);
       }
     }
 
     .path-breadcrumb {
       margin-bottom: 12px;
 
-      :deep(.el-breadcrumb__item) {
-        .el-breadcrumb__inner {
-          color: #606266;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.3s;
-          display: flex;
-          align-items: center;
-          gap: 6px;
+      :deep(.arco-breadcrumb-item) {
+        color: var(--ops-text-secondary, #4e5969);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
 
-          &:hover {
-            color: #409eff;
-          }
-        }
-
-        .el-breadcrumb__separator {
-          color: #c0c4cc;
+        &:hover {
+          color: var(--ops-primary, #165dff);
         }
       }
 
       .breadcrumb-home {
-        :deep(.el-breadcrumb__inner) {
+        :deep(.arco-breadcrumb-item-link) {
           font-weight: 600;
-          color: #409eff;
+          color: var(--ops-primary, #165dff);
         }
       }
     }
@@ -639,34 +640,33 @@ watch(() => props.visible, (visible) => {
 
       .path-icon {
         font-size: 16px;
-        color: #409eff;
+        color: var(--ops-primary, #165dff);
         flex-shrink: 0;
       }
 
       .path-input {
         flex: 1;
 
-        :deep(.el-input__wrapper) {
-          background: #f5f7fa;
+        :deep(.arco-input-wrapper) {
+          background: #f7f8fa;
           border-radius: 6px;
-          border: 1px solid #e4e7ed;
-          box-shadow: none;
+          border: 1px solid var(--ops-border-color, #e5e6eb);
           transition: all 0.3s;
 
           &:hover {
-            border-color: #c0c4cc;
+            border-color: #c9cdd4;
           }
 
-          &.is-focus {
-            border-color: #409eff;
+          &.arco-input-focus {
+            border-color: var(--ops-primary, #165dff);
             background: #ffffff;
           }
         }
 
-        :deep(.el-input__inner) {
+        :deep(.arco-input) {
           font-family: 'Consolas', 'Monaco', monospace;
           font-size: 13px;
-          color: #303133;
+          color: var(--ops-text-primary, #1d2129);
           font-weight: 500;
           letter-spacing: 0.5px;
         }
@@ -674,7 +674,7 @@ watch(() => props.visible, (visible) => {
         .path-prefix {
           font-family: 'Consolas', 'Monaco', monospace;
           font-size: 12px;
-          color: #909399;
+          color: var(--ops-text-tertiary, #86909c);
           margin-right: 6px;
         }
       }
@@ -710,8 +710,8 @@ watch(() => props.visible, (visible) => {
       border-radius: 8px;
       padding: 10px 24px;
       font-weight: 500;
-      background-color: #303133;
-      border-color: #303133;
+      background-color: #232324;
+      border-color: #232324;
       color: #ffffff;
       transition: all 0.3s;
 
@@ -728,9 +728,9 @@ watch(() => props.visible, (visible) => {
   .upload-progress-container {
     margin-bottom: 20px;
     padding: 16px;
-    background: #f5f7fa;
+    background: #f7f8fa;
     border-radius: 8px;
-    border: 1px solid #e4e7ed;
+    border: 1px solid var(--ops-border-color, #e5e6eb);
 
     .upload-info {
       display: flex;
@@ -740,48 +740,32 @@ watch(() => props.visible, (visible) => {
 
       .upload-icon {
         font-size: 18px;
-        color: #409eff;
+        color: var(--ops-primary, #165dff);
         animation: upload-pulse 1.5s ease-in-out infinite;
       }
 
       .upload-filename {
         flex: 1;
         font-size: 14px;
-        color: #303133;
+        color: var(--ops-text-primary, #1d2129);
         font-weight: 500;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      .upload-percent {
-        font-size: 14px;
-        font-weight: 600;
-        color: #409eff;
-        min-width: 45px;
-        text-align: right;
-      }
-
       .upload-status {
         font-size: 13px;
         font-weight: 600;
-        color: #409eff;
+        color: var(--ops-primary, #165dff);
         margin-left: auto;
         white-space: nowrap;
       }
     }
 
-    :deep(.el-progress) {
-      .el-progress__text {
+    :deep(.arco-progress) {
+      .arco-progress-line-text {
         display: none;
-      }
-
-      .el-progress-bar__outer {
-        background-color: #e4e7ed;
-      }
-
-      .el-progress-bar__inner {
-        transition: width 0.3s ease;
       }
     }
   }
@@ -804,22 +788,13 @@ watch(() => props.visible, (visible) => {
       overflow: hidden;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 
-      :deep(.el-table__body tr) {
-        transition: all 0.3s;
-
-        &:hover {
-          background-color: #f5f7fa;
-          transform: scale(1.001);
-        }
-      }
-
       .file-icon-wrapper {
         display: flex;
         align-items: center;
         justify-content: center;
 
         .icon-directory {
-          color: #409eff;
+          color: var(--ops-primary, #165dff);
           transition: all 0.3s;
 
           &:hover {
@@ -828,7 +803,7 @@ watch(() => props.visible, (visible) => {
         }
 
         .icon-file {
-          color: #909399;
+          color: var(--ops-text-tertiary, #86909c);
         }
       }
 
@@ -840,7 +815,7 @@ watch(() => props.visible, (visible) => {
 
         .file-name-text {
           font-size: 14px;
-          color: #303133;
+          color: var(--ops-text-primary, #1d2129);
           font-weight: 500;
         }
 
@@ -848,7 +823,7 @@ watch(() => props.visible, (visible) => {
           cursor: pointer;
 
           .file-name-text {
-            color: #409eff;
+            color: var(--ops-primary, #165dff);
           }
 
           &:hover {
@@ -860,8 +835,6 @@ watch(() => props.visible, (visible) => {
 
         .dir-tag {
           border: none;
-          background: #ecf5ff;
-          color: #409eff;
           font-size: 12px;
         }
       }
@@ -869,16 +842,16 @@ watch(() => props.visible, (visible) => {
       .file-size {
         font-family: 'Consolas', 'Monaco', monospace;
         font-size: 13px;
-        color: #606266;
+        color: var(--ops-text-secondary, #4e5969);
         font-weight: 500;
       }
 
       .permission-tag {
         font-family: 'Consolas', 'Monaco', monospace;
         font-size: 12px;
-        background: #f4f4f5;
-        color: #606266;
-        border: 1px solid #e4e7ed;
+        background: #f2f3f5;
+        color: var(--ops-text-secondary, #4e5969);
+        border: 1px solid var(--ops-border-color, #e5e6eb);
         border-radius: 6px;
         padding: 4px 10px;
       }
@@ -888,11 +861,11 @@ watch(() => props.visible, (visible) => {
         align-items: center;
         gap: 6px;
         font-size: 13px;
-        color: #606266;
+        color: var(--ops-text-secondary, #4e5969);
 
         .time-icon {
           font-size: 14px;
-          color: #909399;
+          color: var(--ops-text-tertiary, #86909c);
         }
       }
 
@@ -912,24 +885,14 @@ watch(() => props.visible, (visible) => {
         }
 
         .no-action {
-          color: #c0c4cc;
+          color: #c9cdd4;
           font-size: 14px;
         }
       }
     }
 
-    :deep(.el-empty) {
+    :deep(.arco-empty) {
       padding: 60px 0;
-
-      .el-empty__image {
-        margin-bottom: 20px;
-      }
-
-      .el-empty__description {
-        margin-top: 16px;
-        font-size: 14px;
-        color: #909399;
-      }
     }
   }
 }

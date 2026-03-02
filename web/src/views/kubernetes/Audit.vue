@@ -1,133 +1,116 @@
 <template>
   <div class="audit-container">
     <!-- 页面标题和操作按钮 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Monitor /></el-icon>
+    <a-card class="page-header-card">
+      <div class="page-header">
+        <div class="page-title-group">
+          <div class="page-title-icon">
+            <icon-desktop />
+          </div>
+          <div>
+            <h2 class="page-title">终端审计</h2>
+            <p class="page-subtitle">查看用户终端操作记录和会话回放</p>
+          </div>
         </div>
-        <div>
-          <h2 class="page-title">终端审计</h2>
-          <p class="page-subtitle">查看用户终端操作记录和会话回放</p>
+        <div class="header-actions">
+          <a-button type="primary" @click="loadSessions">
+            <template #icon><icon-refresh /></template>
+            刷新
+          </a-button>
         </div>
       </div>
-      <div class="header-actions">
-        <el-button class="black-button" @click="loadSessions">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
-          刷新
-        </el-button>
-      </div>
-    </div>
+    </a-card>
 
     <!-- 搜索栏 -->
-    <div class="search-bar">
-      <el-input
-        v-model="searchPod"
-        placeholder="搜索 Pod 名称..."
-        clearable
-        class="search-input"
-        @input="handleSearch"
-      >
-        <template #prefix>
-          <el-icon class="search-icon"><Search /></el-icon>
-        </template>
-      </el-input>
-    </div>
+    <a-card class="search-card">
+      <a-form layout="inline" class="search-form">
+        <a-form-item>
+          <a-input
+            v-model="searchPod"
+            placeholder="搜索 Pod 名称..."
+            allow-clear
+            @clear="handleSearch"
+            @input="handleSearch"
+            style="width: 260px"
+          >
+            <template #prefix>
+              <icon-search />
+            </template>
+          </a-input>
+        </a-form-item>
+      </a-form>
+    </a-card>
 
     <!-- 终端会话列表 -->
-    <div class="table-wrapper">
-      <el-table
+    <a-card class="table-card">
+      <a-table
         :data="paginatedSessions"
-        v-loading="loading"
-        class="modern-table"
+        :loading="loading"
+        :bordered="false"
         size="default"
-      >
-        <el-table-column label="ID" prop="id" width="80" align="center">
-          <template #default="{ row }">
-            <span class="id-text">#{{ row.id }}</span>
+       :columns="tableColumns">
+          <template #id="{ record }">
+            <span class="id-text">#{{ record.id }}</span>
           </template>
-        </el-table-column>
-
-        <el-table-column label="集群" prop="clusterName" min-width="150">
-          <template #default="{ row }">
+          <template #clusterName="{ record }">
             <div class="cluster-cell">
-              <el-icon class="cluster-icon"><Platform /></el-icon>
-              <span>{{ row.clusterName }}</span>
+              <icon-apps />
+              <span>{{ record.clusterName }}</span>
             </div>
           </template>
-        </el-table-column>
-
-        <el-table-column label="命名空间" prop="namespace" width="150" />
-
-        <el-table-column label="Pod" prop="podName" min-width="180">
-          <template #default="{ row }">
+          <template #podName="{ record }">
             <div class="pod-cell">
-              <el-icon class="pod-icon"><Box /></el-icon>
-              <span class="pod-name">{{ row.podName }}</span>
+              <icon-storage />
+              <span class="pod-name">{{ record.podName }}</span>
             </div>
           </template>
-        </el-table-column>
-
-        <el-table-column label="Container" prop="containerName" width="150">
-          <template #default="{ row }">
-            <el-tag size="small" type="info">{{ row.containerName }}</el-tag>
+          <template #containerName="{ record }">
+            <a-tag size="small" color="gray">{{ record.containerName }}</a-tag>
           </template>
-        </el-table-column>
-
-        <el-table-column label="用户" prop="username" width="120">
-          <template #default="{ row }">
+          <template #username="{ record }">
             <div class="user-cell">
-              <el-icon class="user-icon"><User /></el-icon>
-              <span>{{ row.username }}</span>
+              <icon-user />
+              <span>{{ record.username }}</span>
             </div>
           </template>
-        </el-table-column>
-
-        <el-table-column label="时长" prop="duration" width="100" align="center">
-          <template #default="{ row }">
-            <span class="duration-text">{{ formatDuration(row.duration) }}</span>
+          <template #duration="{ record }">
+            <span class="duration-text">{{ formatDuration(record.duration) }}</span>
           </template>
-        </el-table-column>
-
-        <el-table-column label="创建时间" prop="createdAt" width="180">
-          <template #default="{ row }">
-            {{ formatTime(row.createdAt) }}
+          <template #createdAt="{ record }">
+            {{ formatTime(record.createdAt) }}
           </template>
-        </el-table-column>
-
-        <el-table-column label="操作" width="120" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <div class="action-buttons">
-              <el-tooltip content="播放" placement="top">
-                <el-button link class="action-btn" @click="handlePlay(row)">
-                  <el-icon :size="18"><VideoPlay /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <a-tooltip content="播放" placement="top">
+                <a-button type="text" class="action-btn" @click="handlePlay(record)">
+                  <icon-play-arrow />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="删除" placement="top">
+                <a-button type="text" class="action-btn danger" @click="handleDelete(record)">
+                  <icon-delete />
+                </a-button>
+              </a-tooltip>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
+        <a-pagination
+          v-model:current="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredSessions.length"
-          layout="total, sizes, prev, pager, next"
+          show-total
+          show-page-size
         />
       </div>
-    </div>
+    </a-card>
 
     <!-- 播放弹窗 -->
-    <el-dialog
-      v-model="playDialogVisible"
+    <a-modal
+      v-model:visible="playDialogVisible"
       :title="`终端回放 - ${selectedSession?.podName}`"
       width="90%"
       class="play-dialog"
@@ -179,23 +162,26 @@
           />
         </div>
       </div>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: 'ID', dataIndex: 'id', slotName: 'id', width: 80, align: 'center' },
+  { title: '集群', dataIndex: 'clusterName', slotName: 'clusterName', width: 150 },
+  { title: '命名空间', dataIndex: 'namespace', width: 150 },
+  { title: 'Pod', dataIndex: 'podName', slotName: 'podName', width: 180 },
+  { title: 'Container', dataIndex: 'containerName', slotName: 'containerName', width: 150 },
+  { title: '用户', dataIndex: 'username', slotName: 'username', width: 120 },
+  { title: '时长', dataIndex: 'duration', slotName: 'duration', width: 100, align: 'center' },
+  { title: '创建时间', dataIndex: 'createdAt', slotName: 'createdAt', width: 180 },
+  { title: '操作', slotName: 'actions', width: 120, fixed: 'right', align: 'center' }
+]
+
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Search,
-  Refresh,
-  Platform,
-  Box,
-  User,
-  VideoPlay,
-  Delete,
-  Monitor
-} from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import request from '@/utils/request'
 import axios from 'axios'
 import AsciinemaPlayer from '@/components/AsciinemaPlayer.vue'
@@ -305,9 +291,9 @@ const loadSessions = async () => {
     sessionList.value = []
     // 如果是404或空列表，显示友好的提示
     if (error.response?.status === 404 || error.response?.data?.data?.length === 0) {
-      ElMessage.info('暂无终端会话记录')
+      Message.info('暂无终端会话记录')
     } else {
-      ElMessage.error('获取终端会话列表失败')
+      Message.error('获取终端会话列表失败')
     }
   } finally {
     loading.value = false
@@ -350,7 +336,7 @@ const handlePlay = async (row: TerminalSession) => {
 
     playDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error('获取录制文件失败')
+    Message.error('获取录制文件失败')
   }
 }
 
@@ -366,7 +352,7 @@ const handleClosePlay = () => {
 // 删除会话
 const handleDelete = async (row: TerminalSession) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除终端会话记录吗？此操作不可恢复！`,
       '删除确认',
       {
@@ -378,11 +364,11 @@ const handleDelete = async (row: TerminalSession) => {
 
     await request.delete(`/api/v1/plugins/kubernetes/terminal/sessions/${row.id}`)
 
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     await loadSessions()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`删除失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`删除失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -398,50 +384,49 @@ onMounted(() => {
   background-color: transparent;
 }
 
-/* 页面头部 */
+/* 页面头部卡片 */
+.page-header-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  align-items: center;
 }
 
 .page-title-group {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 14px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  width: 44px;
+  height: 44px;
+  background: var(--ops-primary, #165dff);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   line-height: 1.4;
 }
 
@@ -451,72 +436,21 @@ onMounted(() => {
   align-items: center;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-/* 搜索栏 */
-.search-bar {
+/* 搜索卡片 */
+.search-card {
   margin-bottom: 16px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  gap: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.search-input {
-  width: 320px;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-/* 表格容器 */
-.table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
-
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row td) {
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
+/* 表格卡片 */
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .id-text {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 .cluster-cell, .pod-cell, .user-cell {
@@ -525,20 +459,15 @@ onMounted(() => {
   gap: 8px;
 }
 
-.cluster-icon, .pod-icon, .user-icon {
-  color: #d4af37;
-  font-size: 16px;
-}
-
 .pod-name {
   font-weight: 600;
-  color: #d4af37;
+  color: var(--ops-primary, #165dff);
 }
 
 .duration-text {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
 }
 
 /* 操作按钮 */
@@ -549,50 +478,30 @@ onMounted(() => {
 }
 
 .action-btn {
-  color: #d4af37;
+  color: var(--ops-primary, #165dff);
   padding: 4px;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 .action-btn.danger {
-  color: #f56c6c;
+  color: var(--ops-danger, #f53f3f);
 }
 
 .action-btn.danger:hover {
-  color: #f78989;
+  color: #f76560;
 }
 
 /* 分页 */
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  padding: 16px 0 0;
 }
 
 /* 播放弹窗 */
-.play-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 8px 8px 0 0;
-  padding: 20px 24px;
-}
-
-.play-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.play-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background-color: #1a1a1a;
-}
-
 .play-container {
   display: flex;
   flex-direction: column;
@@ -603,10 +512,10 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 20px;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 8px;
-  border: 1px solid #d4af37;
+  padding: 16px;
+  background: var(--ops-content-bg, #f7f8fa);
+  border-radius: var(--ops-border-radius-md, 8px);
+  border: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
 .info-item {
@@ -616,22 +525,21 @@ onMounted(() => {
 }
 
 .info-label {
-  color: #d4af37;
-  font-weight: 600;
-  font-size: 15px;
+  color: var(--ops-text-tertiary, #86909c);
+  font-weight: 500;
+  font-size: 13px;
   min-width: 60px;
 }
 
 .info-value {
-  color: #000000;
-  font-size: 15px;
+  color: var(--ops-text-primary, #1d2129);
+  font-size: 13px;
   font-weight: 500;
 }
 
 .player-wrapper {
   background: #000;
-  border-radius: 8px;
-  border: 1px solid #d4af37;
+  border-radius: var(--ops-border-radius-md, 8px);
   overflow: hidden;
   min-height: 400px;
   aspect-ratio: 16/9;

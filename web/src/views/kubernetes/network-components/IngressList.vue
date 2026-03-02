@@ -2,96 +2,78 @@
   <div class="ingress-list">
     <div class="search-bar">
       <div class="search-bar-left">
-        <el-input v-model="searchName" placeholder="搜索 Ingress 名称..." clearable class="search-input" @input="handleSearch">
+        <a-input v-model="searchName" placeholder="搜索 Ingress 名称..." allow-clear class="search-input" @input="handleSearch">
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
 
-        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-          <el-option label="全部" value="" />
-          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-        </el-select>
+        <a-select v-model="filterNamespace" placeholder="命名空间" allow-clear @change="handleSearch" class="filter-select">
+          <a-option label="全部" value="" />
+          <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </a-select>
       </div>
 
       <div class="search-bar-right">
-        <el-button v-permission="'k8s-ingresses:create'" class="black-button" @click="handleCreate">创建 Ingress</el-button>
-        <el-button v-permission="'k8s-ingresses:create'" class="black-button" @click="handleCreateYAML">
-          <el-icon><Document /></el-icon> YAML创建
-        </el-button>
+        <a-button v-permission="'k8s-ingresses:create'" type="primary" @click="handleCreate">创建 Ingress</a-button>
+        <a-button v-permission="'k8s-ingresses:create'" type="primary" @click="handleCreateYAML">
+          <icon-file /> YAML创建
+        </a-button>
       </div>
     </div>
 
     <div class="table-wrapper">
-      <el-table :data="filteredIngresses" v-loading="loading" class="modern-table" size="default">
-        <el-table-column label="名称" prop="name" min-width="180" fixed>
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Link /></el-icon>
-              名称
-            </span>
-          </template>
-          <template #default="{ row }">
+      <a-table :data="filteredIngresses" :loading="loading" class="modern-table" size="default" :columns="tableColumns">
+          <template #name="{ record }">
             <div class="name-cell">
-              <el-icon class="name-icon"><Link /></el-icon>
-              <div class="name-text">{{ row.name }}</div>
+              <icon-link />
+              <div class="name-text">{{ record.name }}</div>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="命名空间" prop="namespace" width="140" />
-        <el-table-column label="主机名" min-width="200">
-          <template #default="{ row }">
-            <div v-for="host in row.hosts" :key="host" class="host-item">
-              <el-icon class="host-icon"><Monitor /></el-icon>
+          <template #col_1777="{ record }">
+            <div v-for="host in record.hosts" :key="host" class="host-item">
+              <icon-desktop />
               <span class="host-text">{{ host }}</span>
             </div>
-            <div v-if="!row.hosts.length" class="empty-text">-</div>
+            <div v-if="!record.hosts.length" class="empty-text">-</div>
           </template>
-        </el-table-column>
-        <el-table-column label="路径" min-width="250">
-          <template #default="{ row }">
-            <div v-for="(path, index) in row.paths" :key="`${path.path}-${index}`" class="path-item">
+          <template #path="{ record }">
+            <div v-for="(path, index) in record.paths" :key="`${path.path}-${index}`" class="path-item">
               <div class="path-path">{{ path.path || '/' }}</div>
               <div class="path-service">
-                <el-icon class="service-icon"><Connection /></el-icon>
+                <icon-link />
                 <span>{{ path.service }}</span>
                 <span class="path-port">:{{ path.port }}</span>
               </div>
             </div>
-            <div v-if="!row.paths.length" class="empty-text">-</div>
+            <div v-if="!record.paths.length" class="empty-text">-</div>
           </template>
-        </el-table-column>
-        <el-table-column label="Ingress Class" prop="ingressClass" width="150">
-          <template #default="{ row }">
-            {{ row.ingressClass || '-' }}
+          <template #ingressClass="{ record }">
+            {{ record.ingressClass || '-' }}
           </template>
-        </el-table-column>
-        <el-table-column label="存活时间" prop="age" width="120" />
-        <el-table-column label="操作" width="160" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <div class="action-buttons">
-              <el-tooltip content="编辑 YAML" placement="top">
-                <el-button v-permission="'k8s-ingresses:update'" link class="action-btn" @click="handleEditYAML(row)">
-                  <el-icon :size="18"><Document /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="编辑" placement="top">
-                <el-button v-permission="'k8s-ingresses:update'" link class="action-btn" @click="handleEdit(row)">
-                  <el-icon :size="18"><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'k8s-ingresses:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <a-tooltip content="编辑 YAML" placement="top">
+                <a-button v-permission="'k8s-ingresses:update'" type="text" class="action-btn" @click="handleEditYAML(record)">
+                  <icon-file />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="编辑" placement="top">
+                <a-button v-permission="'k8s-ingresses:update'" type="text" class="action-btn" @click="handleEdit(record)">
+                  <icon-edit />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="删除" placement="top">
+                <a-button v-permission="'k8s-ingresses:delete'" type="text" class="action-btn danger" @click="handleDelete(record)">
+                  <icon-delete />
+                </a-button>
+              </a-tooltip>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
     </div>
 
-    <el-dialog v-model="yamlDialogVisible" :title="`Ingress YAML - ${selectedIngress?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="yamlDialogVisible" :title="`Ingress YAML - ${selectedIngress?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -107,14 +89,14 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveYAML" :loading="saving">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="saving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- YAML 创建弹窗 -->
-    <el-dialog v-model="createYamlDialogVisible" title="YAML 创建 Ingress" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="createYamlDialogVisible" title="YAML 创建 Ingress" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in createYamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -130,11 +112,11 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="createYamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</el-button>
+          <a-button @click="createYamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 编辑对话框 -->
     <IngressEditDialog
@@ -146,9 +128,19 @@
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 180 },
+  { title: '命名空间', dataIndex: 'namespace', width: 140 },
+  { title: '主机名', slotName: 'col_1777', width: 200 },
+  { title: '路径', slotName: 'path', width: 250 },
+  { title: 'Ingress Class', dataIndex: 'ingressClass', slotName: 'ingressClass', width: 150 },
+  { title: '存活时间', dataIndex: 'age', width: 120 },
+  { title: '操作', slotName: 'actions', width: 160, fixed: 'right', align: 'center' }
+]
+
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Link, Document, Edit, Delete, Monitor, Connection } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { load, dump } from 'js-yaml'
 import { getIngresses, getIngressYAML, updateIngressYAML, createIngressYAML, createIngress, deleteIngress, getNamespaces, type IngressInfo } from '@/api/kubernetes'
 import IngressEditDialog from './IngressEditDialog.vue'
@@ -208,10 +200,10 @@ const loadIngresses = async (showSuccess = false) => {
     const data = await getIngresses(props.clusterId, props.namespace || undefined)
     ingressList.value = data || []
     if (showSuccess) {
-      ElMessage.success('刷新成功')
+      Message.success('刷新成功')
     }
   } catch (error) {
-    ElMessage.error('获取 Ingress 列表失败')
+    Message.error('获取 Ingress 列表失败')
   } finally {
     loading.value = false
   }
@@ -282,7 +274,7 @@ const handleEditYAML = async (ingress: IngressInfo) => {
     yamlContent.value = yaml
     yamlDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('获取 YAML 失败')
+    Message.error('获取 YAML 失败')
   }
 }
 
@@ -322,7 +314,7 @@ const handleSaveYAML = async () => {
         jsonData.kind = 'Ingress'
       }
     } catch (e) {
-      ElMessage.error('YAML 格式错误，请检查缩进和语法')
+      Message.error('YAML 格式错误，请检查缩进和语法')
       saving.value = false
       return
     }
@@ -333,12 +325,12 @@ const handleSaveYAML = async () => {
       selectedIngress.value.name,
       jsonData
     )
-    ElMessage.success('保存成功')
+    Message.success('保存成功')
     yamlDialogVisible.value = false
     emit('refresh')
     await loadIngresses()
   } catch (error) {
-    ElMessage.error('保存失败')
+    Message.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -359,14 +351,14 @@ const handleYamlScroll = (e: Event) => {
 const handleDelete = async (ingress: IngressInfo) => {
   if (!props.clusterId) return
   try {
-    await ElMessageBox.confirm(`确定要删除 Ingress ${ingress.name} 吗？`, '删除确认', { type: 'error' })
+    await confirmModal(`确定要删除 Ingress ${ingress.name} 吗？`, '删除确认', { type: 'error' })
     await deleteIngress(props.clusterId, ingress.namespace, ingress.name)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     emit('refresh')
     await loadIngresses()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      Message.error('删除失败')
     }
   }
 }
@@ -393,7 +385,7 @@ const handleSaveCreateYAML = async () => {
     const name = jsonData.metadata.name
 
     if (!name) {
-      ElMessage.error('YAML 中缺少 metadata.name 字段')
+      Message.error('YAML 中缺少 metadata.name 字段')
       return
     }
 
@@ -428,12 +420,12 @@ const handleSaveCreateYAML = async () => {
     }
 
     await createIngress(props.clusterId, namespace, createData)
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createYamlDialogVisible.value = false
     emit('refresh')
     await loadIngresses()
   } catch (error) {
-    ElMessage.error('创建失败: ' + (error as any).message)
+    Message.error('创建失败: ' + (error as any).message)
   } finally {
     creating.value = false
   }
@@ -482,19 +474,6 @@ defineExpose({
   width: 100%;
 }
 
-/* 黑色按钮样式 */
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
 
 .search-bar {
   display: flex;
@@ -527,7 +506,7 @@ defineExpose({
 }
 
 .search-icon {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .table-wrapper {
@@ -545,15 +524,15 @@ defineExpose({
 .name-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 18px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
 }
 
 .name-text {
@@ -573,7 +552,7 @@ defineExpose({
 }
 
 .header-icon-blue {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .host-item {
@@ -588,7 +567,7 @@ defineExpose({
 }
 
 .host-icon {
-  color: #d4af37;
+  color: #165dff;
   font-size: 16px;
   flex-shrink: 0;
 }
@@ -603,8 +582,8 @@ defineExpose({
 .path-item {
   padding: 10px 12px;
   margin-bottom: 8px;
-  background-color: #fef9e7;
-  border: 1px solid #d4af37;
+  background-color: #e8f3ff;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
 }
 
@@ -629,7 +608,7 @@ defineExpose({
 }
 
 .service-icon {
-  color: #d4af37;
+  color: #165dff;
   font-size: 14px;
 }
 
@@ -652,12 +631,12 @@ defineExpose({
 }
 
 .action-btn {
-  color: #d4af37;
+  color: #165dff;
   transition: all 0.3s;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 .action-btn.danger {
@@ -671,10 +650,10 @@ defineExpose({
 /* YAML 编辑弹窗 */
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #1e1e1e;
 }
 
 .yaml-line-numbers {
@@ -698,8 +677,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
   border: none;
   outline: none;
   padding: 16px;
@@ -718,7 +697,7 @@ defineExpose({
   outline: none;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 0;
   background-color: #1a1a1a;
 }

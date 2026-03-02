@@ -4,29 +4,29 @@
       <!-- 探针类型 -->
       <div class="config-item">
         <label class="config-label">检测类型</label>
-        <el-select v-model="localProbe.type" placeholder="选择检测类型" @change="handleTypeChange">
-          <el-option label="HTTP GET" value="httpGet" />
-          <el-option label="TCP Socket" value="tcpSocket" />
-          <el-option label="Exec 执行命令" value="exec" />
-        </el-select>
+        <a-select v-model="localProbe.type" placeholder="选择检测类型" @change="handleTypeChange">
+          <a-option label="HTTP GET" value="httpGet" />
+          <a-option label="TCP Socket" value="tcpSocket" />
+          <a-option label="Exec 执行命令" value="exec" />
+        </a-select>
       </div>
 
       <!-- HTTP GET 配置 -->
       <template v-if="localProbe.type === 'httpGet'">
         <div class="config-item">
           <label class="config-label">路径</label>
-          <el-input v-model="localProbe.path" placeholder="例如: /health" />
+          <a-input v-model="localProbe.path" placeholder="例如: /health" />
         </div>
         <div class="config-item">
           <label class="config-label">端口</label>
-          <el-input-number v-model="localProbe.port" :min="1" :max="65535" controls-position="right" />
+          <a-input-number v-model="localProbe.port" :min="1" :max="65535" controls-position="right" />
         </div>
         <div class="config-item">
           <label class="config-label">协议</label>
-          <el-select v-model="localProbe.scheme">
-            <el-option label="HTTP" value="HTTP" />
-            <el-option label="HTTPS" value="HTTPS" />
-          </el-select>
+          <a-select v-model="localProbe.scheme">
+            <a-option label="HTTP" value="HTTP" />
+            <a-option label="HTTPS" value="HTTPS" />
+          </a-select>
         </div>
       </template>
 
@@ -34,7 +34,7 @@
       <template v-else-if="localProbe.type === 'tcpSocket'">
         <div class="config-item">
           <label class="config-label">端口</label>
-          <el-input-number v-model="localProbe.port" :min="1" :max="65535" controls-position="right" />
+          <a-input-number v-model="localProbe.port" :min="1" :max="65535" controls-position="right" />
         </div>
       </template>
 
@@ -42,7 +42,7 @@
       <template v-else-if="localProbe.type === 'exec'">
         <div class="config-item full-width">
           <label class="config-label">执行命令</label>
-          <el-input
+          <a-input
             v-model="commandStr"
             type="textarea"
             :rows="3"
@@ -58,34 +58,34 @@
     <div class="advanced-settings">
       <div class="advanced-title" @click="toggleAdvanced">
         <span>高级设置</span>
-        <el-icon class="arrow-icon" :class="{ expanded: advancedExpanded }">
+        <span class="arrow-icon" :class="{ expanded: advancedExpanded }">
           <ArrowDown />
-        </el-icon>
+        </span>
       </div>
       <div v-show="advancedExpanded" class="advanced-grid">
         <div class="config-item">
           <label class="config-label">初始延迟(秒)</label>
-          <el-input-number v-model="localProbe.initialDelaySeconds" :min="0" :max="300" controls-position="right" />
+          <a-input-number v-model="localProbe.initialDelaySeconds" :min="0" :max="300" controls-position="right" />
           <div class="config-tip">容器启动后等待多久开始检测</div>
         </div>
         <div class="config-item">
           <label class="config-label">超时时间(秒)</label>
-          <el-input-number v-model="localProbe.timeoutSeconds" :min="1" :max="60" controls-position="right" />
+          <a-input-number v-model="localProbe.timeoutSeconds" :min="1" :max="60" controls-position="right" />
           <div class="config-tip">检测超时时间</div>
         </div>
         <div class="config-item">
           <label class="config-label">检测周期(秒)</label>
-          <el-input-number v-model="localProbe.periodSeconds" :min="1" :max="300" controls-position="right" />
+          <a-input-number v-model="localProbe.periodSeconds" :min="1" :max="300" controls-position="right" />
           <div class="config-tip">每隔多少秒进行一次检测</div>
         </div>
         <div class="config-item">
           <label class="config-label">成功阈值</label>
-          <el-input-number v-model="localProbe.successThreshold" :min="1" :max="10" controls-position="right" />
+          <a-input-number v-model="localProbe.successThreshold" :min="1" :max="10" controls-position="right" />
           <div class="config-tip">连续成功多少次才算成功</div>
         </div>
         <div class="config-item">
           <label class="config-label">失败阈值</label>
-          <el-input-number v-model="localProbe.failureThreshold" :min="1" :max="30" controls-position="right" />
+          <a-input-number v-model="localProbe.failureThreshold" :min="1" :max="30" controls-position="right" />
           <div class="config-tip">连续失败多少次才算失败</div>
         </div>
       </div>
@@ -95,7 +95,6 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed } from 'vue'
-import { ArrowDown } from '@element-plus/icons-vue'
 
 interface Probe {
   enabled: boolean
@@ -246,9 +245,9 @@ watch(() => props.modelValue, (newVal) => {
   gap: 16px;
 }
 
-.el-input-number,
-.el-select,
-.el-input {
+.arco-input-number,
+.arco-select,
+.arco-input {
   width: 100%;
 }
 </style>

@@ -1,147 +1,164 @@
 <template>
   <div class="nodes-container">
     <!-- 统计卡片 -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-blue">
-          <el-icon><Monitor /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">节点总数</div>
-          <div class="stat-value">{{ nodeList.length }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-green">
-          <el-icon><CircleCheck /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">运行正常</div>
-          <div class="stat-value">{{ readyNodeCount }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon stat-orange">
-          <el-icon><Odometer /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">Pod总数</div>
-          <div class="stat-value">{{ totalPodCount }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon stat-icon-purple">
-          <el-icon><Cpu /></el-icon>
-        </div>
-        <div class="stat-content">
-          <div class="stat-label">总CPU核数</div>
-          <div class="stat-value">{{ totalCPUCores }}</div>
-        </div>
-      </div>
-    </div>
+    <a-row :gutter="20" class="stats-row">
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: var(--ops-primary, #165dff)">
+              <icon-desktop :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ nodeList.length }}</div>
+              <div class="stat-label">节点总数</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: var(--ops-success, #00b42a)">
+              <icon-check-circle :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ readyNodeCount }}</div>
+              <div class="stat-label">运行正常</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: var(--ops-warning, #ff7d00)">
+              <icon-dashboard :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ totalPodCount }}</div>
+              <div class="stat-label">Pod总数</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <div class="stat-content">
+            <div class="stat-icon" style="background-color: #722ed1">
+              <icon-thunderbolt :size="28" style="color: #fff" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ totalCPUCores }}</div>
+              <div class="stat-label">总CPU核数</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
 
     <!-- 页面标题和操作按钮 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Monitor /></el-icon>
+    <a-card class="page-header-card">
+      <div class="page-header">
+        <div class="page-title-group">
+          <div class="page-title-icon">
+            <icon-desktop />
+          </div>
+          <div>
+            <h2 class="page-title">节点管理</h2>
+            <p class="page-subtitle">管理 Kubernetes 集群节点，监控节点状态和资源使用</p>
+          </div>
         </div>
-        <div>
-          <h2 class="page-title">节点管理</h2>
-          <p class="page-subtitle">管理 Kubernetes 集群节点，监控节点状态和资源使用</p>
+        <div class="header-actions">
+          <a-select
+            v-model="selectedClusterId"
+            placeholder="选择集群"
+            style="width: 260px"
+            @change="handleClusterChange"
+          >
+            <template #prefix>
+              <icon-apps />
+            </template>
+            <a-option
+              v-for="cluster in clusterList"
+              :key="cluster.id"
+              :label="cluster.alias || cluster.name"
+              :value="cluster.id"
+            />
+          </a-select>
+          <a-button type="primary" @click="loadNodes">
+            <template #icon><icon-refresh /></template>
+            刷新
+          </a-button>
         </div>
       </div>
-      <div class="header-actions">
-        <el-select
-          v-model="selectedClusterId"
-          placeholder="选择集群"
-          class="cluster-select"
-          @change="handleClusterChange"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Platform /></el-icon>
-          </template>
-          <el-option
-            v-for="cluster in clusterList"
-            :key="cluster.id"
-            :label="cluster.alias || cluster.name"
-            :value="cluster.id"
-          />
-        </el-select>
-        <el-button class="black-button" @click="loadNodes">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
-          刷新
-        </el-button>
-      </div>
-    </div>
+    </a-card>
 
     <!-- 搜索和筛选 -->
-    <div class="search-bar">
-      <div class="search-inputs">
-        <el-input
-          v-model="searchName"
-          placeholder="搜索节点名称..."
-          clearable
-          @clear="handleSearch"
-          @keyup.enter="handleSearch"
-          @input="handleSearch"
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
-
-        <el-select
-          v-model="searchStatus"
-          placeholder="节点状态"
-          clearable
-          @change="handleSearch"
-          class="filter-select"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><CircleCheck /></el-icon>
-          </template>
-          <el-option label="正常" value="Ready" />
-          <el-option label="异常" value="NotReady" />
-        </el-select>
-
-        <el-select
-          v-model="searchRole"
-          placeholder="节点角色"
-          clearable
-          @change="handleSearch"
-          class="filter-select"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><User /></el-icon>
-          </template>
-          <el-option label="Master" value="master" />
-          <el-option label="Control Plane" value="control-plane" />
-          <el-option label="Worker" value="worker" />
-        </el-select>
-
-        <el-button
-          type="warning"
-          :icon="cloudttyInstalled ? Monitor : Download"
-          :loading="cloudttyLoading"
-          @click="handleCloudTTY"
-          class="cloudtty-action-btn"
-        >
-          {{ cloudttyInstalled ? '打开 CloudTTY' : '部署 CloudTTY' }}
-        </el-button>
-      </div>
-    </div>
+    <a-card class="search-card">
+      <a-form layout="inline" class="search-form">
+        <a-form-item>
+          <a-input
+            v-model="searchName"
+            placeholder="搜索节点名称..."
+            allow-clear
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+            @input="handleSearch"
+            style="width: 260px"
+          >
+            <template #prefix>
+              <icon-search />
+            </template>
+          </a-input>
+        </a-form-item>
+        <a-form-item>
+          <a-select
+            v-model="searchStatus"
+            placeholder="节点状态"
+            allow-clear
+            @change="handleSearch"
+            style="width: 140px"
+          >
+            <a-option label="正常" value="Ready" />
+            <a-option label="异常" value="NotReady" />
+          </a-select>
+        </a-form-item>
+        <a-form-item>
+          <a-select
+            v-model="searchRole"
+            placeholder="节点角色"
+            allow-clear
+            @change="handleSearch"
+            style="width: 140px"
+          >
+            <a-option label="Master" value="master" />
+            <a-option label="Control Plane" value="control-plane" />
+            <a-option label="Worker" value="worker" />
+          </a-select>
+        </a-form-item>
+        <a-form-item>
+          <a-button
+            type="outline"
+            status="warning"
+            :loading="cloudttyLoading"
+            @click="handleCloudTTY"
+          >
+            <template #icon><icon-desktop /></template>
+            {{ cloudttyInstalled ? '打开 CloudTTY' : '部署 CloudTTY' }}
+          </a-button>
+        </a-form-item>
+      </a-form>
+    </a-card>
 
     <!-- CloudTTY 部署对话框 -->
-    <el-dialog
-      v-model="cloudttyDialogVisible"
+    <a-modal
+      v-model:visible="cloudttyDialogVisible"
       title="部署 CloudTTY"
       width="70%"
       :close-on-click-modal="false"
     >
       <div class="cloudtty-dialog-content">
-        <el-alert
+        <a-alert
           title="CloudTTY 是一个 Kubernetes Web Terminal 解决方案"
           type="info"
           :closable="false"
@@ -157,21 +174,21 @@
               <li>会话审计和录制</li>
             </ul>
           </template>
-        </el-alert>
+        </a-alert>
 
         <div v-if="cloudttyDeploying" class="deploy-status">
-          <el-progress :percentage="deployProgress" :status="deployStatus" />
+          <a-progress :percentage="deployProgress" :status="deployStatus" />
           <p style="margin-top: 10px; text-align: center">{{ deployMessage }}</p>
         </div>
 
         <div v-else class="deploy-methods">
           <h4>部署步骤：</h4>
-          <el-steps direction="vertical" :active="1" class="deploy-steps">
-            <el-step title="复制下方命令" />
-            <el-step title="在控制台执行命令" />
-            <el-step title="等待部署完成（约2-3分钟）" />
-            <el-step title="点击已完成部署按钮刷新状态" />
-          </el-steps>
+          <a-steps direction="vertical" :active="1" class="deploy-steps">
+            <a-step title="复制下方命令" />
+            <a-step title="在控制台执行命令" />
+            <a-step title="等待部署完成（约2-3分钟）" />
+            <a-step title="点击已完成部署按钮刷新状态" />
+          </a-steps>
 
           <h4 style="margin-top: 20px">部署命令：</h4>
           <div class="code-block-wrapper">
@@ -184,32 +201,32 @@
               class="code-textarea"
             ></textarea>
           </div>
-          <el-button
+          <a-button
             type="primary"
             @click="copyCommands"
             style="margin-top: 10px"
           >
             复制命令
-          </el-button>
+          </a-button>
         </div>
       </div>
 
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="cloudttyDialogVisible = false">关闭</el-button>
-          <el-button
+          <a-button @click="cloudttyDialogVisible = false">关闭</a-button>
+          <a-button
             type="success"
             @click="handleDeployComplete"
           >
             我已完成部署
-          </el-button>
+          </a-button>
         </span>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- CloudTTY 终端对话框 -->
-    <el-dialog
-      v-model="cloudttyTerminalVisible"
+    <a-modal
+      v-model:visible="cloudttyTerminalVisible"
       :title="`Shell - ${selectedNode?.name || ''}`"
       width="70%"
       :close-on-click-modal="false"
@@ -225,241 +242,195 @@
           allow="clipboard-read; clipboard-write"
         ></iframe>
       </div>
-    </el-dialog>
+    </a-modal>
 
     <!-- 批量操作栏 -->
     <div v-if="selectedNodes.length > 0" class="batch-actions-bar">
       <div class="batch-actions-left">
-        <el-checkbox
+        <a-checkbox
           v-model="selectAllCurrentPage"
           :indeterminate="isIndeterminate"
           @change="handleSelectAllCurrentPage"
         >
           <span class="selected-count">已选择 {{ selectedNodes.length }} 个节点</span>
-        </el-checkbox>
+        </a-checkbox>
       </div>
-      <div class="batch-actions-right">
-        <el-button type="primary" :icon="PriceTag" @click="showBatchLabelsDialog" plain>
+      <a-space>
+        <a-button type="primary" @click="showBatchLabelsDialog">
           批量打标签
-        </el-button>
-        <el-button type="warning" :icon="WarnTriangleFilled" @click="showBatchTaintsDialog" plain>
+        </a-button>
+        <a-button status="warning" @click="showBatchTaintsDialog">
           批量设置污点
-        </el-button>
-        <el-button type="info" :icon="CircleClose" @click="handleBatchDrain" plain>
+        </a-button>
+        <a-button @click="handleBatchDrain">
           批量排空
-        </el-button>
-        <el-button type="warning" :icon="Warning" @click="handleBatchCordon" plain>
+        </a-button>
+        <a-button status="warning" @click="handleBatchCordon">
           批量不可调度
-        </el-button>
-        <el-button type="success" :icon="CircleCheck" @click="handleBatchUncordon" plain>
+        </a-button>
+        <a-button status="success" @click="handleBatchUncordon">
           批量可调度
-        </el-button>
-        <el-button type="danger" :icon="Delete" @click="handleBatchDelete" plain>
+        </a-button>
+        <a-button status="danger" @click="handleBatchDelete">
           批量删除
-        </el-button>
-        <el-button @click="clearSelection">取消选择</el-button>
-      </div>
+        </a-button>
+        <a-button @click="clearSelection">取消选择</a-button>
+      </a-space>
     </div>
 
     <!-- 节点列表 -->
-    <div class="table-wrapper">
-      <el-table
+    <a-card class="table-card">
+      <a-table
         ref="nodeTableRef"
         :data="paginatedNodeList"
-        v-loading="loading"
-        class="modern-table"
+        :loading="loading"
+        :bordered="false"
+        :pagination="false"
         size="default"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
-        :row-style="{ height: '56px' }"
-        :cell-style="{ padding: '8px 0' }"
         @selection-change="handleSelectionChange"
-      >
-      <el-table-column type="selection" width="55" fixed="left" />
-      <el-table-column label="节点名称" min-width="180" fixed="left">
-        <template #header>
-          <span class="header-with-icon">
-            <el-icon class="header-icon header-icon-blue"><Monitor /></el-icon>
-            节点名称
-          </span>
-        </template>
-        <template #default="{ row }">
+       :columns="tableColumns4" :row-selection="{ type: 'checkbox', showCheckedAll: true }">
+        <template #nodeName="{ record }">
           <div class="node-name-cell">
             <div class="node-icon-wrapper">
-              <el-icon class="node-icon" :size="16"><Platform /></el-icon>
+              <icon-apps />
             </div>
             <div class="node-name-content">
-              <div class="node-name link-text" @click="goToNodeDetail(row)">{{ row.name }}</div>
-              <div class="node-ip">{{ row.internalIP }}</div>
+              <div class="node-name link-text" @click="goToNodeDetail(record)">{{ record.name }}</div>
+              <div class="node-ip">{{ record.internalIP }}</div>
             </div>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="状态" min-width="90" align="center">
-        <template #default="{ row }">
-          <el-tag
-            :type="row.status === 'Ready' ? 'success' : 'danger'"
+          <template #status="{ record }">
+          <a-tag
+            :type="record.status === 'Ready' ? 'success' : 'danger'"
             effect="dark"
             size="small"
             class="status-tag"
           >
-            {{ row.status === 'Ready' ? '正常' : '异常' }}
-          </el-tag>
+            {{ record.status === 'Ready' ? '正常' : '异常' }}
+          </a-tag>
         </template>
-      </el-table-column>
-
-      <el-table-column label="角色" min-width="100" align="center">
-        <template #default="{ row }">
-          <div :class="['role-badge', 'role-' + (row.roles || 'worker')]">
-            <el-icon :size="13"><User /></el-icon>
-            <span>{{ getRoleText(row.roles) }}</span>
+          <template #role="{ record }">
+          <div :class="['role-badge', 'role-' + (record.roles || 'worker')]">
+            <icon-user />
+            <span>{{ getRoleText(record.roles) }}</span>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="Kubelet版本" min-width="110">
-        <template #default="{ row }">
+          <template #kubeletVersion="{ record }">
           <div class="version-cell">
-            <el-icon class="version-icon" :size="13"><InfoFilled /></el-icon>
-            <span class="version-text">{{ row.version || '-' }}</span>
+            <icon-info-circle />
+            <span class="version-text">{{ record.version || '-' }}</span>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="标签" min-width="85" align="center">
-        <template #default="{ row }">
-          <div class="label-cell" @click="showLabels(row)">
+          <template #labels="{ record }">
+          <div class="label-cell" @click="showLabels(record)">
             <div class="label-badge-wrapper">
-              <span class="label-count">{{ Object.keys(row.labels || {}).length }}</span>
-              <el-icon class="label-icon" :size="14"><PriceTag /></el-icon>
+              <span class="label-count">{{ Object.keys(record.labels || {}).length }}</span>
+              <icon-tag />
             </div>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="运行时间" min-width="110">
-        <template #default="{ row }">
+          <template #uptime="{ record }">
           <div class="age-cell">
-            <el-icon class="age-icon" :size="13"><Clock /></el-icon>
-            <span>{{ row.age || '-' }}</span>
+            <icon-clock-circle />
+            <span>{{ record.age || '-' }}</span>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="CPU" min-width="130">
-        <template #default="{ row }">
+          <template #cpu="{ record }">
           <div class="resource-cell">
             <div class="resource-icon resource-icon-cpu">
-              <el-icon :size="14"><Cpu /></el-icon>
+              <icon-thunderbolt />
             </div>
-            <span class="resource-value">{{ formatCPUWithUsage(row) }}</span>
+            <span class="resource-value">{{ formatCPUWithUsage(record) }}</span>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="内存" min-width="130">
-        <template #default="{ row }">
+          <template #memory="{ record }">
           <div class="resource-cell">
             <div class="resource-icon resource-icon-memory">
-              <el-icon :size="14"><Coin /></el-icon>
+              <icon-common />
             </div>
-            <span class="resource-value">{{ formatMemoryWithUsage(row) }}</span>
+            <span class="resource-value">{{ formatMemoryWithUsage(record) }}</span>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="Pod数量" min-width="95" align="center">
-        <template #default="{ row }">
+          <template #podCount="{ record }">
           <div class="pod-count-cell">
-            <span class="pod-count">{{ row.podCount ?? 0 }}/{{ row.podCapacity ?? 0 }}</span>
+            <span class="pod-count">{{ record.podCount ?? 0 }}/{{ record.podCapacity ?? 0 }}</span>
             <span class="pod-label">Pods</span>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="调度" min-width="90" align="center">
-        <template #default="{ row }">
-          <el-tag
-            :type="row.schedulable ? 'success' : 'warning'"
+          <template #schedulable="{ record }">
+          <a-tag
+            :type="record.schedulable ? 'success' : 'warning'"
             effect="dark"
             size="small"
           >
-            {{ row.schedulable ? '可调度' : '不可' }}
-          </el-tag>
+            {{ record.schedulable ? '可调度' : '不可' }}
+          </a-tag>
         </template>
-      </el-table-column>
-
-      <el-table-column label="污点" min-width="90" align="center">
-        <template #default="{ row }">
-          <div class="taint-cell" @click="showTaints(row)">
+          <template #taints="{ record }">
+          <div class="taint-cell" @click="showTaints(record)">
             <div class="taint-badge-wrapper">
-              <el-icon class="taint-icon" :size="14"><WarnTriangleFilled /></el-icon>
-              <span class="taint-count">{{ row.taintCount ?? 0 }}</span>
+              <icon-exclamation-circle-fill />
+              <span class="taint-count">{{ record.taintCount ?? 0 }}</span>
             </div>
           </div>
         </template>
-      </el-table-column>
-
-      <el-table-column label="操作" width="75" fixed="right" align="center">
-        <template #default="{ row }">
-          <el-dropdown trigger="click" @command="(command: string) => handleActionCommand(command, row)">
-            <el-button link class="action-btn">
-              <el-icon :size="18"><Edit /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu class="action-dropdown-menu">
-                <el-dropdown-item command="shell">
-                  <el-icon><Monitor /></el-icon>
+          <template #actions="{ record }">
+          <a-dropdown trigger="click" @select="(command: string) => handleActionCommand(command, record)">
+            <a-button type="text" class="action-btn">
+              <icon-more />
+            </a-button>
+            <template #content>
+                <a-doption value="shell">
+                  <icon-desktop />
                   <span>Shell</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="monitor">
-                  <el-icon><DataAnalysis /></el-icon>
+                </a-doption>
+                <a-doption value="monitor">
+                  <icon-line-chart />
                   <span>监控</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="yaml">
-                  <el-icon><Document /></el-icon>
+                </a-doption>
+                <a-doption value="yaml">
+                  <icon-file />
                   <span>YAML</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="drain" divided>
-                  <el-icon><CircleClose /></el-icon>
+                </a-doption>
+                <a-doption value="drain">
+                  <icon-close-circle />
                   <span>节点排空</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="cordon">
-                  <el-icon><Warning /></el-icon>
+                </a-doption>
+                <a-doption value="cordon">
+                  <icon-exclamation-circle />
                   <span>设为不可调度</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="uncordon">
-                  <el-icon><CircleCheck /></el-icon>
+                </a-doption>
+                <a-doption value="uncordon">
+                  <icon-check-circle />
                   <span>设为可调度</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="delete" divided class="danger-item">
-                  <el-icon><Delete /></el-icon>
+                </a-doption>
+                <a-doption value="delete" class="danger-item">
+                  <icon-delete />
                   <span>删除</span>
-                </el-dropdown-item>
-              </el-dropdown-menu>
+                </a-doption>
             </template>
-          </el-dropdown>
+          </a-dropdown>
         </template>
-      </el-table-column>
-    </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
+        <a-pagination
+          v-model:current="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredNodeList.length"
-          layout="total, sizes, prev, pager, next, jumper"
+          show-total show-page-size show-jumper
           @current-change="handlePageChange"
           @size-change="handleSizeChange"
         />
       </div>
-    </div>
+    </a-card>
 
     <!-- 标签弹窗 -->
-    <el-dialog
-      v-model="labelDialogVisible"
+    <a-modal
+      v-model:visible="labelDialogVisible"
       :title="labelEditMode ? '编辑节点标签' : '节点标签'"
       width="850px"
       class="label-dialog"
@@ -470,7 +441,7 @@
         <div v-if="labelEditMode" class="label-edit-container">
           <div class="label-edit-header">
             <div class="label-edit-info">
-              <el-icon class="info-icon"><InfoFilled /></el-icon>
+              <icon-info-circle />
               <span>编辑 {{ selectedNode?.name }} 的标签</span>
             </div>
             <div class="label-edit-count">
@@ -485,7 +456,7 @@
                 <div class="label-input-group">
                   <div class="label-input-wrapper">
                     <span class="label-input-label">Key</span>
-                    <el-input
+                    <a-input
                       v-model="label.key"
                       placeholder="如: app"
                       size="default"
@@ -495,7 +466,7 @@
                   <span class="label-separator">=</span>
                   <div class="label-input-wrapper">
                     <span class="label-input-label">Value</span>
-                    <el-input
+                    <a-input
                       v-model="label.value"
                       placeholder="可为空"
                       size="default"
@@ -504,9 +475,9 @@
                   </div>
                 </div>
               </div>
-              <el-button
+              <a-button
                 type="danger"
-                :icon="Delete"
+               
                 size="default"
                 @click="removeEditLabel(index)"
                 class="remove-btn"
@@ -514,63 +485,59 @@
               />
             </div>
             <div v-if="editLabelList.length === 0" class="empty-labels">
-              <el-icon class="empty-icon"><PriceTag /></el-icon>
+              <icon-tag />
               <p>暂无标签</p>
               <span>点击下方按钮添加新标签</span>
             </div>
           </div>
 
-          <el-button
+          <a-button
             type="primary"
-            :icon="Plus"
+           
             @click="addEditLabel"
             class="add-label-btn"
             plain
           >
             添加标签
-          </el-button>
+          </a-button>
         </div>
 
         <!-- 查看模式 -->
-        <el-table v-else :data="labelList" class="label-table" max-height="500">
-          <el-table-column prop="key" label="Key" min-width="200">
-            <template #default="{ row }">
-              <div class="label-key-wrapper" @click="copyToClipboard(row.key, 'Key')">
-                <span class="label-key-text">{{ row.key }}</span>
-                <el-icon class="copy-icon"><CopyDocument /></el-icon>
+        <a-table v-else :data="labelList" class="label-table" max-height="500" :columns="tableColumns3">
+          <template #key="{ record }">
+              <div class="label-key-wrapper" @click="copyToClipboard(record.key, 'Key')">
+                <span class="label-key-text">{{ record.key }}</span>
+                <icon-copy />
               </div>
             </template>
-          </el-table-column>
-          <el-table-column prop="value" label="Value" min-width="200">
-            <template #default="{ row }">
-              <span class="label-value">{{ row.value || '-' }}</span>
+          <template #value="{ record }">
+              <span class="label-value">{{ record.value || '-' }}</span>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
       </div>
 
       <template #footer>
         <div class="dialog-footer">
           <template v-if="labelEditMode">
-            <el-button @click="cancelLabelEdit" size="large">取消</el-button>
-            <el-button type="primary" @click="saveLabels" :loading="labelSaving" size="large" class="save-btn">
-              <el-icon v-if="!labelSaving"><Check /></el-icon>
+            <a-button @click="cancelLabelEdit" size="large">取消</a-button>
+            <a-button type="primary" @click="saveLabels" :loading="labelSaving" size="large" class="save-btn">
+              <icon-check />
               {{ labelSaving ? '保存中...' : '保存更改' }}
-            </el-button>
+            </a-button>
           </template>
           <template v-else>
-            <el-button @click="labelDialogVisible = false" size="large">关闭</el-button>
-            <el-button type="primary" @click="startLabelEdit" :icon="Edit" size="large" class="edit-btn">
+            <a-button @click="labelDialogVisible = false" size="large">关闭</a-button>
+            <a-button type="primary" @click="startLabelEdit" size="large" class="edit-btn">
               编辑标签
-            </el-button>
+            </a-button>
           </template>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 污点弹窗 -->
-    <el-dialog
-      v-model="taintDialogVisible"
+    <a-modal
+      v-model:visible="taintDialogVisible"
       :title="taintEditMode ? '编辑节点污点' : '节点污点'"
       width="900px"
       class="taint-dialog"
@@ -581,7 +548,7 @@
         <div v-if="taintEditMode" class="taint-edit-container">
           <div class="taint-edit-header">
             <div class="taint-edit-info">
-              <el-icon class="info-icon"><WarnTriangleFilled /></el-icon>
+              <icon-exclamation-circle-fill />
               <span>编辑 {{ selectedNode?.name }} 的污点</span>
             </div>
             <div class="taint-edit-count">
@@ -596,7 +563,7 @@
                 <div class="taint-input-group">
                   <div class="taint-input-wrapper">
                     <span class="taint-input-label">Key</span>
-                    <el-input
+                    <a-input
                       v-model="taint.key"
                       placeholder="如: key1"
                       size="default"
@@ -606,7 +573,7 @@
                   <span class="taint-separator">=</span>
                   <div class="taint-input-wrapper">
                     <span class="taint-input-label">Value</span>
-                    <el-input
+                    <a-input
                       v-model="taint.value"
                       placeholder="可选"
                       size="default"
@@ -616,37 +583,37 @@
                   <span class="taint-separator">:</span>
                   <div class="taint-effect-wrapper">
                     <span class="taint-input-label">Effect</span>
-                    <el-select
+                    <a-select
                       v-model="taint.effect"
                       placeholder="选择"
                       size="default"
                       class="taint-effect-select"
                     >
-                      <el-option label="NoSchedule" value="NoSchedule">
+                      <a-option label="NoSchedule" value="NoSchedule">
                         <div class="effect-option">
-                          <el-tag type="warning" size="small" effect="plain">NoSchedule</el-tag>
+                          <a-tag color="orangered" size="small">NoSchedule</a-tag>
                           <span class="effect-desc">Pod 不会被调度</span>
                         </div>
-                      </el-option>
-                      <el-option label="PreferNoSchedule" value="PreferNoSchedule">
+                      </a-option>
+                      <a-option label="PreferNoSchedule" value="PreferNoSchedule">
                         <div class="effect-option">
-                          <el-tag type="info" size="small" effect="plain">PreferNoSchedule</el-tag>
+                          <a-tag color="gray" size="small">PreferNoSchedule</a-tag>
                           <span class="effect-desc">尽量不调度</span>
                         </div>
-                      </el-option>
-                      <el-option label="NoExecute" value="NoExecute">
+                      </a-option>
+                      <a-option label="NoExecute" value="NoExecute">
                         <div class="effect-option">
-                          <el-tag type="danger" size="small" effect="plain">NoExecute</el-tag>
+                          <a-tag color="red" size="small">NoExecute</a-tag>
                           <span class="effect-desc">驱逐已有 Pod</span>
                         </div>
-                      </el-option>
-                    </el-select>
+                      </a-option>
+                    </a-select>
                   </div>
                 </div>
               </div>
-              <el-button
+              <a-button
                 type="danger"
-                :icon="Delete"
+               
                 size="default"
                 @click="removeEditTaint(index)"
                 class="remove-btn"
@@ -654,77 +621,71 @@
               />
             </div>
             <div v-if="editTaintList.length === 0" class="empty-taints">
-              <el-icon class="empty-icon"><WarnTriangleFilled /></el-icon>
+              <icon-exclamation-circle-fill />
               <p>暂无污点</p>
               <span>点击下方按钮添加新污点</span>
             </div>
           </div>
 
-          <el-button
+          <a-button
             type="primary"
-            :icon="Plus"
+           
             @click="addEditTaint"
             class="add-taint-btn"
             plain
           >
             添加污点
-          </el-button>
+          </a-button>
         </div>
 
         <!-- 查看模式 -->
-        <el-table v-else :data="taintList" class="taint-table" max-height="500">
-          <el-table-column prop="key" label="Key" min-width="200">
-            <template #default="{ row }">
-              <div class="taint-key-wrapper" @click="copyToClipboard(row.key, 'Key')">
-                <span class="taint-key-text">{{ row.key }}</span>
-                <el-icon class="copy-icon"><CopyDocument /></el-icon>
+        <a-table v-else :data="taintList" class="taint-table" max-height="500" :columns="tableColumns2">
+          <template #key="{ record }">
+              <div class="taint-key-wrapper" @click="copyToClipboard(record.key, 'Key')">
+                <span class="taint-key-text">{{ record.key }}</span>
+                <icon-copy />
               </div>
             </template>
-          </el-table-column>
-          <el-table-column prop="value" label="Value" min-width="200">
-            <template #default="{ row }">
-              <span class="taint-value">{{ row.value || '-' }}</span>
+          <template #value="{ record }">
+              <span class="taint-value">{{ record.value || '-' }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="effect" label="Effect" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag :type="getEffectTagType(row.effect)" class="effect-tag">
-                {{ row.effect }}
-              </el-tag>
+          <template #effect="{ record }">
+              <a-tag :type="getEffectTagType(record.effect)" class="effect-tag">
+                {{ record.effect }}
+              </a-tag>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
       </div>
 
       <template #footer>
         <div class="dialog-footer">
           <template v-if="taintEditMode">
-            <el-button @click="cancelTaintEdit" size="large">取消</el-button>
-            <el-button type="primary" @click="saveTaints" :loading="taintSaving" size="large" class="save-btn">
-              <el-icon v-if="!taintSaving"><Check /></el-icon>
+            <a-button @click="cancelTaintEdit" size="large">取消</a-button>
+            <a-button type="primary" @click="saveTaints" :loading="taintSaving" size="large" class="save-btn">
+              <icon-check />
               {{ taintSaving ? '保存中...' : '保存更改' }}
-            </el-button>
+            </a-button>
           </template>
           <template v-else>
-            <el-button @click="taintDialogVisible = false" size="large">关闭</el-button>
-            <el-button type="primary" @click="startTaintEdit" :icon="Edit" size="large" class="edit-btn">
+            <a-button @click="taintDialogVisible = false" size="large">关闭</a-button>
+            <a-button type="primary" @click="startTaintEdit" size="large" class="edit-btn">
               编辑污点
-            </el-button>
+            </a-button>
           </template>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 批量标签弹窗 -->
-    <el-dialog
-      v-model="batchLabelDialogVisible"
+    <a-modal
+      v-model:visible="batchLabelDialogVisible"
       title="批量设置节点标签"
       width="700px"
       class="batch-label-dialog"
       :close-on-click-modal="false"
     >
       <div class="batch-label-content">
-        <el-alert
+        <a-alert
           title="将对选中的 {{ selectedNodes.length }} 个节点执行标签操作"
           type="info"
           :closable="false"
@@ -732,72 +693,72 @@
           style="margin-bottom: 20px"
         />
 
-        <el-form :model="batchLabelForm" label-width="100px">
-          <el-form-item label="操作类型">
-            <el-radio-group v-model="batchLabelForm.operation">
-              <el-radio value="add">添加标签</el-radio>
-              <el-radio value="remove">删除标签</el-radio>
-              <el-radio value="replace">替换标签</el-radio>
-            </el-radio-group>
+        <a-form :model="batchLabelForm" label-width="100px">
+          <a-form-item label="操作类型">
+            <a-radio-group v-model="batchLabelForm.operation">
+              <a-radio value="add">添加标签</a-radio>
+              <a-radio value="remove">删除标签</a-radio>
+              <a-radio value="replace">替换标签</a-radio>
+            </a-radio-group>
             <div class="form-tip">
               添加：仅添加新标签，不覆盖已有标签 | 删除：删除指定标签 | 替换：覆盖指定标签的值
             </div>
-          </el-form-item>
+          </a-form-item>
 
-          <el-form-item label="标签列表">
+          <a-form-item label="标签列表">
             <div class="batch-label-list">
               <div v-for="(label, index) in batchLabelForm.labels" :key="index" class="batch-label-row">
-                <el-input
+                <a-input
                   v-model="label.key"
                   placeholder="标签键（如: app）"
                   style="width: 200px; margin-right: 10px"
                 />
                 <span class="label-separator">=</span>
-                <el-input
+                <a-input
                   v-model="label.value"
                   placeholder="标签值（如: nginx）"
                   style="width: 200px; margin-right: 10px"
                 />
-                <el-button
+                <a-button
                   type="danger"
-                  :icon="Delete"
+                 
                   circle
                   size="small"
                   @click="removeBatchLabel(index)"
                 />
               </div>
-              <el-button
+              <a-button
                 type="primary"
-                :icon="Plus"
+               
                 @click="addBatchLabel"
                 plain
                 style="width: 100%; margin-top: 10px"
               >
                 添加标签
-              </el-button>
+              </a-button>
             </div>
-          </el-form-item>
-        </el-form>
+          </a-form-item>
+        </a-form>
       </div>
 
       <template #footer>
-        <el-button @click="batchLabelDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleBatchLabels" :loading="batchLabelSaving">
+        <a-button @click="batchLabelDialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="handleBatchLabels" :loading="batchLabelSaving">
           确定执行
-        </el-button>
+        </a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 批量污点弹窗 -->
-    <el-dialog
-      v-model="batchTaintDialogVisible"
+    <a-modal
+      v-model:visible="batchTaintDialogVisible"
       title="批量设置节点污点"
       width="800px"
       class="batch-taint-dialog"
       :close-on-click-modal="false"
     >
       <div class="batch-taint-content">
-        <el-alert
+        <a-alert
           title="将对选中的 {{ selectedNodes.length }} 个节点执行污点操作"
           type="warning"
           :closable="false"
@@ -805,101 +766,97 @@
           style="margin-bottom: 20px"
         />
 
-        <el-form :model="batchTaintForm" label-width="100px">
-          <el-form-item label="操作类型">
-            <el-radio-group v-model="batchTaintForm.operation">
-              <el-radio value="add">添加污点</el-radio>
-              <el-radio value="remove">删除污点</el-radio>
-            </el-radio-group>
-          </el-form-item>
+        <a-form :model="batchTaintForm" label-width="100px">
+          <a-form-item label="操作类型">
+            <a-radio-group v-model="batchTaintForm.operation">
+              <a-radio value="add">添加污点</a-radio>
+              <a-radio value="remove">删除污点</a-radio>
+            </a-radio-group>
+          </a-form-item>
 
-          <el-form-item label="污点列表">
+          <a-form-item label="污点列表">
             <div class="batch-taint-list">
               <div v-for="(taint, index) in batchTaintForm.taints" :key="index" class="batch-taint-row">
-                <el-input
+                <a-input
                   v-model="taint.key"
                   placeholder="键（如: key1）"
                   style="width: 150px; margin-right: 8px"
                 />
                 <span class="taint-separator">=</span>
-                <el-input
+                <a-input
                   v-model="taint.value"
                   placeholder="值（可选）"
                   style="width: 150px; margin-right: 8px"
                 />
                 <span class="taint-separator">:</span>
-                <el-select
+                <a-select
                   v-model="taint.effect"
                   placeholder="Effect"
                   style="width: 150px; margin-right: 8px"
                 >
-                  <el-option label="NoSchedule" value="NoSchedule" />
-                  <el-option label="PreferNoSchedule" value="PreferNoSchedule" />
-                  <el-option label="NoExecute" value="NoExecute" />
-                </el-select>
-                <el-button
+                  <a-option label="NoSchedule" value="NoSchedule" />
+                  <a-option label="PreferNoSchedule" value="PreferNoSchedule" />
+                  <a-option label="NoExecute" value="NoExecute" />
+                </a-select>
+                <a-button
                   type="danger"
-                  :icon="Delete"
+                 
                   circle
                   size="small"
                   @click="removeBatchTaint(index)"
                 />
               </div>
-              <el-button
+              <a-button
                 type="primary"
-                :icon="Plus"
+               
                 @click="addBatchTaint"
                 plain
                 style="width: 100%; margin-top: 10px"
               >
                 添加污点
-              </el-button>
+              </a-button>
             </div>
-          </el-form-item>
-        </el-form>
+          </a-form-item>
+        </a-form>
       </div>
 
       <template #footer>
-        <el-button @click="batchTaintDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleBatchTaints" :loading="batchTaintSaving">
+        <a-button @click="batchTaintDialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="handleBatchTaints" :loading="batchTaintSaving">
           确定执行
-        </el-button>
+        </a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 批量操作结果弹窗 -->
-    <el-dialog
-      v-model="batchResultDialogVisible"
+    <a-modal
+      v-model:visible="batchResultDialogVisible"
       title="批量操作结果"
       width="700px"
       class="batch-result-dialog"
     >
       <div class="batch-result-content">
         <div class="result-summary">
-          <el-tag :type="getBatchResultSummary().successCount === getBatchResultSummary().totalCount ? 'success' : 'warning'" size="large">
+          <a-tag :type="getBatchResultSummary().successCount === getBatchResultSummary().totalCount ? 'success' : 'warning'" size="large">
             成功: {{ getBatchResultSummary().successCount }} / {{ getBatchResultSummary().totalCount }}
-          </el-tag>
+          </a-tag>
         </div>
-        <el-table :data="batchResults" max-height="400" class="result-table">
-          <el-table-column prop="nodeName" label="节点名称" width="200" />
-          <el-table-column label="状态" width="100" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.success ? 'success' : 'danger'" size="small">
-                {{ row.success ? '成功' : '失败' }}
-              </el-tag>
+        <a-table :data="batchResults" max-height="400" class="result-table" :columns="tableColumns">
+          <template #status="{ record }">
+              <a-tag :type="record.success ? 'success' : 'danger'" size="small">
+                {{ record.success ? '成功' : '失败' }}
+              </a-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="message" label="消息" min-width="200" />
-        </el-table>
+        </a-table>
       </div>
       <template #footer>
-        <el-button type="primary" @click="batchResultDialogVisible = false">关闭</el-button>
+        <a-button type="primary" @click="batchResultDialogVisible = false">关闭</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- YAML 编辑弹窗 -->
-    <el-dialog
-      v-model="yamlDialogVisible"
+    <a-modal
+      v-model:visible="yamlDialogVisible"
       :title="`节点 YAML - ${selectedNode?.name || ''}`"
       width="900px"
       class="yaml-dialog"
@@ -922,17 +879,17 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" class="black-button" @click="handleSaveYAML" :loading="yamlSaving">
+          <a-button @click="yamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="yamlSaving">
             保存
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- Shell 终端弹窗 -->
-    <el-dialog
-      v-model="shellDialogVisible"
+    <a-modal
+      v-model:visible="shellDialogVisible"
       :title="`Shell - ${selectedNode?.name || ''}`"
       width="70%"
       class="shell-dialog"
@@ -945,45 +902,52 @@
       <template #footer>
         <span></span>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns4 = [
+  { title: '节点名称', slotName: 'nodeName', width: 180, fixed: 'left' },
+  { title: '状态', slotName: 'status', width: 90, align: 'center' },
+  { title: '角色', slotName: 'role', width: 100, align: 'center' },
+  { title: 'Kubelet版本', slotName: 'kubeletVersion', width: 110 },
+  { title: '标签', slotName: 'labels', width: 85, align: 'center' },
+  { title: '运行时间', slotName: 'uptime', width: 110 },
+  { title: 'CPU', slotName: 'cpu', width: 130 },
+  { title: '内存', slotName: 'memory', width: 130 },
+  { title: 'Pod数量', slotName: 'podCount', width: 95, align: 'center' },
+  { title: '调度', slotName: 'schedulable', width: 90, align: 'center' },
+  { title: '污点', slotName: 'taints', width: 90, align: 'center' },
+  { title: '操作', slotName: 'actions', width: 75, fixed: 'right', align: 'center' }
+]
+
+const tableColumns3 = [
+  { title: 'Key', dataIndex: 'key', slotName: 'key', width: 200 },
+  { title: 'Value', dataIndex: 'value', slotName: 'value', width: 200 }
+]
+
+const tableColumns2 = [
+  { title: 'Key', dataIndex: 'key', slotName: 'key', width: 200 },
+  { title: 'Value', dataIndex: 'value', slotName: 'value', width: 200 },
+  { title: 'Effect', dataIndex: 'effect', slotName: 'effect', width: 120, align: 'center' }
+]
+
+const tableColumns = [
+  { title: '节点名称', dataIndex: 'nodeName', width: 200 },
+  { title: '状态', slotName: 'status', width: 100, align: 'center' },
+  { title: '消息', dataIndex: 'message', width: 200 }
+]
+
 import { ref, onMounted, computed, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
 import axios from 'axios'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import {
-  Search,
-  PriceTag,
-  Monitor,
-  Platform,
-  CircleCheck,
-  User,
-  InfoFilled,
-  Clock,
-  Cpu,
-  Coin,
-  View,
-  Odometer,
-  Refresh,
-  CopyDocument,
-  WarnTriangleFilled,
-  Edit,
-  DataAnalysis,
-  Document,
-  CircleClose,
-  Setting,
-  Delete,
-  Warning,
-  Plus,
-  Check
-} from '@element-plus/icons-vue'
 import { getClusterList, type Cluster, getNodes, type NodeInfo } from '@/api/kubernetes'
 
 const loading = ref(false)
@@ -1357,7 +1321,7 @@ const startLabelEdit = async () => {
 
     labelEditMode.value = true
   } catch (error) {
-    ElMessage.error('获取节点信息失败')
+    Message.error('获取节点信息失败')
   }
 }
 
@@ -1384,7 +1348,7 @@ const saveLabels = async () => {
   // 验证标签 - 只验证 key，value 可以为空
   const validLabels = editLabelList.value.filter(label => label.key.trim() !== '')
   if (validLabels.some(label => !label.key)) {
-    ElMessage.warning('标签键不能为空')
+    Message.warning('标签键不能为空')
     return
   }
 
@@ -1392,7 +1356,7 @@ const saveLabels = async () => {
   const keys = validLabels.map(l => l.key)
   const uniqueKeys = new Set(keys)
   if (keys.length !== uniqueKeys.size) {
-    ElMessage.warning('存在重复的标签键，请检查')
+    Message.warning('存在重复的标签键，请检查')
     return
   }
 
@@ -1454,7 +1418,7 @@ ${labelsStr}
       }
     )
 
-    ElMessage.success('标签保存成功')
+    Message.success('标签保存成功')
     labelEditMode.value = false
     // 刷新节点列表
     await loadNodes()
@@ -1468,7 +1432,7 @@ ${labelsStr}
       }))
     }
   } catch (error: any) {
-    ElMessage.error(`保存失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`保存失败: ${error.response?.data?.message || error.message}`)
   } finally {
     labelSaving.value = false
   }
@@ -1529,7 +1493,7 @@ const startTaintEdit = async () => {
 
     taintEditMode.value = true
   } catch (error) {
-    ElMessage.error('获取节点信息失败')
+    Message.error('获取节点信息失败')
   }
 }
 
@@ -1556,7 +1520,7 @@ const saveTaints = async () => {
   // 验证污点
   const validTaints = editTaintList.value.filter(taint => taint.key.trim() !== '')
   if (validTaints.some(taint => !taint.key || !taint.effect)) {
-    ElMessage.warning('请填写完整的污点键和Effect')
+    Message.warning('请填写完整的污点键和Effect')
     return
   }
 
@@ -1564,7 +1528,7 @@ const saveTaints = async () => {
   const keys = validTaints.map(t => t.key)
   const uniqueKeys = new Set(keys)
   if (keys.length !== uniqueKeys.size) {
-    ElMessage.warning('存在重复的污点键，请检查')
+    Message.warning('存在重复的污点键，请检查')
     return
   }
 
@@ -1686,7 +1650,7 @@ const saveTaints = async () => {
       }
     )
 
-    ElMessage.success('污点保存成功')
+    Message.success('污点保存成功')
     taintEditMode.value = false
     // 刷新节点列表
     await loadNodes()
@@ -1704,7 +1668,7 @@ const saveTaints = async () => {
       taintList.value = validTaints
     }
   } catch (error: any) {
-    ElMessage.error(`保存失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`保存失败: ${error.response?.data?.message || error.message}`)
   } finally {
     taintSaving.value = false
   }
@@ -1714,7 +1678,7 @@ const saveTaints = async () => {
 const copyToClipboard = async (text: string, type: string) => {
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success(`${type} 已复制到剪贴板`)
+    Message.success(`${type} 已复制到剪贴板`)
   } catch (error) {
     // 降级方案：使用传统方法
     const textarea = document.createElement('textarea')
@@ -1725,9 +1689,9 @@ const copyToClipboard = async (text: string, type: string) => {
     textarea.select()
     try {
       document.execCommand('copy')
-      ElMessage.success(`${type} 已复制到剪贴板`)
+      Message.success(`${type} 已复制到剪贴板`)
     } catch (err) {
-      ElMessage.error('复制失败')
+      Message.error('复制失败')
     }
     document.body.removeChild(textarea)
   }
@@ -1793,7 +1757,7 @@ const loadClusters = async () => {
       await loadNodes()
     }
   } catch (error) {
-    ElMessage.error('获取集群列表失败')
+    Message.error('获取集群列表失败')
   }
 }
 
@@ -1819,7 +1783,7 @@ const loadNodes = async () => {
     restorePaginationState()
   } catch (error) {
     nodeList.value = []
-    ElMessage.error('获取节点列表失败')
+    Message.error('获取节点列表失败')
   } finally {
     loading.value = false
   }
@@ -1834,7 +1798,7 @@ const handleSearch = () => {
 
 // 查看详情
 const handleViewDetails = (row: NodeInfo) => {
-  ElMessage.info('详情功能开发中...')
+  Message.info('详情功能开发中...')
 }
 
 // 处理下拉菜单命令
@@ -1846,7 +1810,7 @@ const handleActionCommand = (command: string, row: NodeInfo) => {
       handleShell()
       break
     case 'monitor':
-      ElMessage.info('监控功能开发中...')
+      Message.info('监控功能开发中...')
       break
     case 'yaml':
       handleShowYAML()
@@ -1864,7 +1828,7 @@ const handleActionCommand = (command: string, row: NodeInfo) => {
       handleDeleteNode()
       break
     case 'schedule':
-      ElMessage.info('调度设置功能开发中...')
+      Message.info('调度设置功能开发中...')
       break
   }
 }
@@ -1874,14 +1838,13 @@ const handleDrainNode = async () => {
   if (!selectedNode.value) return
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要排空节点 ${selectedNode.value.name} 吗？这将会驱逐该节点上的所有 Pod。`,
       '节点排空确认',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -1897,11 +1860,11 @@ const handleDrainNode = async () => {
       }
     )
 
-    ElMessage.success('节点排空成功')
+    Message.success('节点排空成功')
     await loadNodes()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`节点排空失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`节点排空失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -1911,14 +1874,13 @@ const handleCordonNode = async () => {
   if (!selectedNode.value) return
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要将节点 ${selectedNode.value.name} 设为不可调度吗？该节点将不再接受新的Pod调度。`,
       '设为不可调度确认',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -1933,11 +1895,11 @@ const handleCordonNode = async () => {
       }
     )
 
-    ElMessage.success('节点已设为不可调度')
+    Message.success('节点已设为不可调度')
     await loadNodes()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`设为不可调度失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`设为不可调度失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -1947,14 +1909,13 @@ const handleUncordonNode = async () => {
   if (!selectedNode.value) return
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要将节点 ${selectedNode.value.name} 设为可调度吗？该节点将重新接受新的Pod调度。`,
       '设为可调度确认',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'info',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -1969,11 +1930,11 @@ const handleUncordonNode = async () => {
       }
     )
 
-    ElMessage.success('节点已设为可调度')
+    Message.success('节点已设为可调度')
     await loadNodes()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`设为可调度失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`设为可调度失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -1983,14 +1944,13 @@ const handleDeleteNode = async () => {
   if (!selectedNode.value) return
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除节点 ${selectedNode.value.name} 吗？此操作不可恢复！`,
       '删除节点确认',
       {
         confirmButtonText: '确定删除',
         cancelButtonText: '取消',
         type: 'error',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -2002,11 +1962,11 @@ const handleDeleteNode = async () => {
       }
     )
 
-    ElMessage.success('节点删除成功')
+    Message.success('节点删除成功')
     await loadNodes()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`删除节点失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`删除节点失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -2030,7 +1990,7 @@ const handleShowYAML = async () => {
     yamlContent.value = response.data.data?.yaml || ''
     yamlDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
   }
 }
 
@@ -2051,11 +2011,11 @@ const handleSaveYAML = async () => {
         headers: { Authorization: `Bearer ${token}` }
       }
     )
-    ElMessage.success('保存成功')
+    Message.success('保存成功')
     yamlDialogVisible.value = false
     await loadNodes()
   } catch (error) {
-    ElMessage.error('保存 YAML 失败')
+    Message.error('保存 YAML 失败')
   } finally {
     yamlSaving.value = false
   }
@@ -2094,13 +2054,13 @@ const handleShell = async () => {
     )
 
     if (serviceResponse.data.code !== 0) {
-      ElMessage.error('CloudTTY服务未找到，请先部署CloudTTY')
+      Message.error('CloudTTY服务未找到，请先部署CloudTTY')
       return
     }
 
     const service = serviceResponse.data.data
     if (!service) {
-      ElMessage.error('CloudTTY服务信息不完整，请检查CloudTTY是否正确部署')
+      Message.error('CloudTTY服务信息不完整，请检查CloudTTY是否正确部署')
       return
     }
     const nodeIp = service.nodeIP || selectedNode.value.internalIP
@@ -2129,7 +2089,7 @@ const handleShell = async () => {
       }
     })
   } catch (error: any) {
-    ElMessage.error('无法连接到CloudTTY服务: ' + (error.response?.data?.message || error.message))
+    Message.error('无法连接到CloudTTY服务: ' + (error.response?.data?.message || error.message))
   }
 }
 
@@ -2166,10 +2126,10 @@ const handleShellOpened = async () => {
   // 创建终端实例
   terminal = new Terminal({
     theme: {
-      background: '#000000',
-      foreground: '#d4af37',
-      cursor: '#d4af37',
-      selection: '#ffffff40'
+      background: '#1e1e1e',
+      foreground: '#d4d4d4',
+      cursor: '#aeafad',
+      selection: '#264f78'
     },
     fontFamily: 'Monaco, Menlo, Courier New, monospace',
     fontSize: 14,
@@ -2268,13 +2228,13 @@ const startDeploy = async () => {
   // 自动部署改为提示用户使用手动部署
   deployMethod.value = 'manual'
   await copyCommands()
-  ElMessage.success('命令已复制，请在控制台执行')
+  Message.success('命令已复制，请在控制台执行')
 }
 
 // 复制命令
 const copyCommands = () => {
   navigator.clipboard.writeText(cloudttyCommands.value)
-  ElMessage.success('命令已复制到剪贴板')
+  Message.success('命令已复制到剪贴板')
 }
 
 // 处理部署完成
@@ -2284,16 +2244,16 @@ const handleDeployComplete = async () => {
   cloudttyLoading.value = false
 
   if (cloudttyInstalled.value) {
-    ElMessage.success('CloudTTY 部署成功！')
+    Message.success('CloudTTY 部署成功！')
     cloudttyDialogVisible.value = false
   } else {
-    ElMessage.warning('未检测到 CloudTTY，请确认部署已完成')
+    Message.warning('未检测到 CloudTTY，请确认部署已完成')
   }
 }
 
 // 打开 CloudTTY (已废弃，使用对话框替代)
 const openCloudTTY = () => {
-  ElMessage.info('请手动部署 CloudTTY 或使用自动部署功能')
+  Message.info('请手动部署 CloudTTY 或使用自动部署功能')
 }
 
 // 批量操作相关函数
@@ -2389,7 +2349,7 @@ const removeBatchLabel = (index: number) => {
   if (batchLabelForm.value.labels.length > 1) {
     batchLabelForm.value.labels.splice(index, 1)
   } else {
-    ElMessage.warning('至少保留一个标签')
+    Message.warning('至少保留一个标签')
   }
 }
 
@@ -2397,7 +2357,7 @@ const removeBatchLabel = (index: number) => {
 const handleBatchLabels = async () => {
   const validLabels = batchLabelForm.value.labels.filter(l => l.key.trim() !== '')
   if (validLabels.length === 0) {
-    ElMessage.warning('请至少填写一个有效的标签')
+    Message.warning('请至少填写一个有效的标签')
     return
   }
 
@@ -2405,7 +2365,7 @@ const handleBatchLabels = async () => {
   const keys = validLabels.map(l => l.key)
   const uniqueKeys = new Set(keys)
   if (keys.length !== uniqueKeys.size) {
-    ElMessage.warning('存在重复的标签键，请检查')
+    Message.warning('存在重复的标签键，请检查')
     return
   }
 
@@ -2435,7 +2395,7 @@ const handleBatchLabels = async () => {
     await loadNodes()
     clearSelection()
   } catch (error: any) {
-    ElMessage.error(`批量设置标签失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`批量设置标签失败: ${error.response?.data?.message || error.message}`)
   } finally {
     batchLabelSaving.value = false
   }
@@ -2460,7 +2420,7 @@ const removeBatchTaint = (index: number) => {
   if (batchTaintForm.value.taints.length > 1) {
     batchTaintForm.value.taints.splice(index, 1)
   } else {
-    ElMessage.warning('至少保留一个污点')
+    Message.warning('至少保留一个污点')
   }
 }
 
@@ -2468,7 +2428,7 @@ const removeBatchTaint = (index: number) => {
 const handleBatchTaints = async () => {
   const validTaints = batchTaintForm.value.taints.filter(t => t.key.trim() !== '')
   if (validTaints.length === 0) {
-    ElMessage.warning('请至少填写一个有效的污点')
+    Message.warning('请至少填写一个有效的污点')
     return
   }
 
@@ -2493,7 +2453,7 @@ const handleBatchTaints = async () => {
     await loadNodes()
     clearSelection()
   } catch (error: any) {
-    ElMessage.error(`批量设置污点失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`批量设置污点失败: ${error.response?.data?.message || error.message}`)
   } finally {
     batchTaintSaving.value = false
   }
@@ -2502,14 +2462,13 @@ const handleBatchTaints = async () => {
 // 批量排空
 const handleBatchDrain = async () => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要排空选中的 ${selectedNodes.value.length} 个节点吗？这将会驱逐这些节点上的所有 Pod。`,
       '批量排空确认',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -2530,7 +2489,7 @@ const handleBatchDrain = async () => {
     clearSelection()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`批量排空失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`批量排空失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -2538,14 +2497,13 @@ const handleBatchDrain = async () => {
 // 批量设为不可调度
 const handleBatchCordon = async () => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要将选中的 ${selectedNodes.value.length} 个节点设为不可调度吗？这些节点将不再接受新的Pod调度。`,
       '批量设为不可调度确认',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -2566,7 +2524,7 @@ const handleBatchCordon = async () => {
     clearSelection()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`批量设为不可调度失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`批量设为不可调度失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -2574,14 +2532,13 @@ const handleBatchCordon = async () => {
 // 批量设为可调度
 const handleBatchUncordon = async () => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要将选中的 ${selectedNodes.value.length} 个节点设为可调度吗？这些节点将重新接受新的Pod调度。`,
       '批量设为可调度确认',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'info',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -2602,7 +2559,7 @@ const handleBatchUncordon = async () => {
     clearSelection()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`批量设为可调度失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`批量设为可调度失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -2610,14 +2567,13 @@ const handleBatchUncordon = async () => {
 // 批量删除节点
 const handleBatchDelete = async () => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除选中的 ${selectedNodes.value.length} 个节点吗？此操作不可恢复！`,
       '批量删除节点确认',
       {
         confirmButtonText: '确定删除',
         cancelButtonText: '取消',
         type: 'error',
-        confirmButtonClass: 'black-button'
       }
     )
 
@@ -2638,7 +2594,7 @@ const handleBatchDelete = async () => {
     clearSelection()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`批量删除节点失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`批量删除节点失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -2659,496 +2615,180 @@ onMounted(() => {
 <style scoped>
 .nodes-container {
   padding: 0;
-  background-color: transparent;
 }
 
 /* 统计卡片 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 12px;
+.stats-row {
+  margin-bottom: 16px;
 }
 
 .stat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  transition: all 0.3s ease;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+.stat-content {
+  display: flex;
+  align-items: center;
 }
 
 .stat-icon {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  margin-right: 16px;
   flex-shrink: 0;
 }
 
-.stat-icon .el-icon {
-  font-size: 32px;
-  color: inherit;
-}
-
-.stat-icon-blue {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-icon-green {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-orange {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-icon-purple {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
-}
-
-.stat-content {
+.stat-info {
   flex: 1;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 8px;
 }
 
 .stat-value {
   font-size: 28px;
-  font-weight: 700;
-  color: #d4af37;
+  font-weight: 600;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1;
+  margin-bottom: 6px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 /* 页面头部 */
+.page-header-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  align-items: center;
 }
 
 .page-title-group {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 14px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  width: 44px;
+  height: 44px;
+  background: var(--ops-primary, #165dff);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
-  line-height: 1.4;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
-.cluster-select {
-  width: 280px;
+/* 搜索卡片 */
+.search-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-/* 搜索栏 */
-.search-bar {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  gap: 16px;
-}
-
-.search-inputs {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-}
-
-.search-input {
-  width: 280px;
-}
-
-.filter-select {
-  width: 150px;
-}
-
-.cloudtty-action-btn {
-  background: #1a1a1a;
-  color: #ffffff;
-  border: none;
-  font-weight: 600;
-  padding: 12px 24px;
-  border-radius: 8px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  letter-spacing: 0.5px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  margin-left: 12px;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-    background: #333333;
-  }
-
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  }
-
-  :deep(.el-icon) {
-    font-size: 16px;
-  }
-}
-
-.cloudtty-dialog-content {
-  .deploy-status {
-    padding: 20px 0;
-  }
-
-  .deploy-methods {
-    h4 {
-      margin: 20px 0 10px 0;
-      color: #303133;
-    }
-
-    .el-radio {
-      display: block;
-      margin-bottom: 15px;
-      padding: 15px;
-      border: 1px solid #dcdfe6;
-      border-radius: 8px;
-      transition: all 0.3s;
-
-      &:hover {
-        border-color: #D4AF37;
-        background-color: rgba(212, 175, 55, 0.05);
-      }
-    }
-
-    .code-block-wrapper {
-      display: flex;
-      border: 1px solid #d4af37;
-      border-radius: 6px;
-      overflow: hidden;
-      background-color: #000000;
-      margin-top: 10px;
-    }
-
-    .code-line-numbers {
-      background-color: #0d0d0d;
-      color: #666;
-      padding: 16px 8px;
-      text-align: right;
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      user-select: none;
-      overflow: hidden;
-      min-width: 40px;
-      border-right: 1px solid #333;
-    }
-
-    .code-line-number {
-      height: 19.2px;
-      line-height: 1.6;
-    }
-
-    .code-textarea {
-      flex: 1;
-      background-color: #000000;
-      color: #d4af37;
-      border: none;
-      outline: none;
-      padding: 16px;
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      resize: none;
-      min-height: 400px;
-    }
-
-    .code-textarea::placeholder {
-      color: #555;
-    }
-
-    .code-textarea:focus {
-      outline: none;
-    }
-  }
-}
-
-.cloudtty-terminal-wrapper {
-  width: 100%;
-  height: calc(100vh - 200px);
-  background-color: #000000;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.cloudtty-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-
-.cloudtty-terminal-dialog {
-  width: 70% !important;
-  max-width: 90vw;
-
-  .el-dialog__body {
-    padding: 0;
-  }
-}
-
-/* Shell对话框 */
-.shell-dialog {
-  width: 70% !important;
-  max-width: 90vw;
-}
-
-/* CloudTTY部署对话框 */
-.cloudtty-dialog-content {
-  padding: 0;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-/* 表格容器 */
-.table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow-x: hidden;
-  width: 100%;
-}
-
-/* 搜索框样式优化 */
-.search-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.search-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
-}
-
-.search-bar :deep(.el-select .el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-.cluster-select :deep(.el-input__wrapper) {
-  border-radius: 8px;
-}
-
-/* 表头图标 */
-.header-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-icon {
-  font-size: 16px;
-}
-
-.header-icon-blue {
-  color: #d4af37;
-}
-
-/* 现代表格 */
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-  overflow-x: hidden !important;
-}
-
-.modern-table :deep(.el-table__header-wrapper) {
-  overflow-x: hidden !important;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row td) {
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
-.modern-table :deep(.el-tag) {
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-weight: 500;
+.search-form :deep(.arco-form-item) {
+  margin-bottom: 0;
 }
 
 /* 节点名称单元格 */
 .node-name-cell {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .node-icon-wrapper {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  background: var(--ops-primary-bg, #e8f0ff);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d4af37;
+  color: var(--ops-primary, #165dff);
+  font-size: 18px;
   flex-shrink: 0;
 }
 
-.node-icon {
-  color: #d4af37;
-}
-
 .node-name-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  min-width: 0;
 }
 
 .node-name {
   font-weight: 500;
-  color: #303133;
-}
-
-.link-text {
-  color: #303133;
+  color: var(--ops-primary, #165dff);
   cursor: pointer;
-  transition: all 0.3s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s;
 }
 
-.link-text:hover {
-  color: #409eff;
-  text-decoration: underline;
+.node-name:hover {
+  color: var(--ops-primary-light, #306fff);
 }
 
 .node-ip {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 2px;
 }
 
-/* 角色标签 */
-.role-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 14px;
-  border-radius: 16px;
-  font-size: 13px;
+/* 状态标签 */
+.status-tag {
+  border-radius: 10px;
   font-weight: 500;
 }
 
-.role-master {
-  background: transparent;
-  color: #d4af37;
-  border: 1px solid #d4af37;
+/* 角色徽章 */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.role-control-plane {
-  background: transparent;
-  color: #d4af37;
-  border: 1px solid #d4af37;
+.role-master, .role-control-plane {
+  background: var(--ops-primary-bg, #e8f0ff);
+  color: var(--ops-primary, #165dff);
 }
 
 .role-worker {
-  background: transparent;
-  color: #606266;
-  border: 1px solid #dcdfe6;
+  background: #f7f8fa;
+  color: var(--ops-text-secondary, #4e5969);
 }
 
 /* 版本单元格 */
@@ -3156,25 +2796,42 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--ops-text-secondary, #4e5969);
   font-size: 13px;
-  color: #606266;
 }
 
-.version-icon {
-  color: #d4af37;
+/* 标签单元格 */
+.label-cell {
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
 }
 
-/* 时间单元格 */
+.label-badge-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--ops-primary-bg, #e8f0ff);
+  color: var(--ops-primary, #165dff);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.label-badge-wrapper:hover {
+  background: var(--ops-primary-lighter, #6694ff);
+  color: #fff;
+}
+
+/* 运行时间 */
 .age-cell {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--ops-text-secondary, #4e5969);
   font-size: 13px;
-  color: #606266;
-}
-
-.age-icon {
-  color: #d4af37;
 }
 
 /* 资源单元格 */
@@ -3191,24 +2848,24 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .resource-icon-cpu {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
+  background: #fff7e8;
+  color: var(--ops-warning, #ff7d00);
 }
 
 .resource-icon-memory {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: #d4af37;
-  border: 1px solid #d4af37;
+  background: #e8ffea;
+  color: var(--ops-success, #00b42a);
 }
 
 .resource-value {
   font-size: 13px;
+  color: var(--ops-text-primary, #1d2129);
   font-weight: 500;
-  color: #303133;
 }
 
 /* Pod 数量 */
@@ -3216,916 +2873,352 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
 }
 
 .pod-count {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
-  color: #d4af37;
+  color: var(--ops-text-primary, #1d2129);
 }
 
 .pod-label {
   font-size: 11px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 /* 污点单元格 */
 .taint-cell {
+  cursor: pointer;
   display: flex;
   justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  padding: 5px 0;
 }
 
 .taint-badge-wrapper {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #fff7e8;
+  color: var(--ops-warning, #ff7d00);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
-.taint-icon {
-  color: #d4af37;
-  font-size: 20px;
-  transition: all 0.3s;
-}
-
-.taint-count {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background-color: #d4af37;
-  color: #000;
-  font-size: 10px;
-  font-weight: 600;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  text-align: center;
-  border: 1px solid #d4af37;
-  z-index: 1;
-}
-
-.taint-cell:hover .taint-icon {
-  color: #bfa13f;
-  transform: scale(1.1);
-}
-
-.taint-cell:hover .taint-count {
-  background-color: #bfa13f;
-  border-color: #bfa13f;
-}
-
-/* 标签单元格 */
-.label-cell {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  padding: 5px 0;
-}
-
-.label-badge-wrapper {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.label-icon {
-  color: #d4af37;
-  font-size: 20px;
-  transition: all 0.3s;
-}
-
-.label-count {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background-color: #d4af37;
-  color: #000;
-  font-size: 10px;
-  font-weight: 600;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  text-align: center;
-  border: 1px solid #d4af37;
-  z-index: 1;
-}
-
-.label-cell:hover .label-icon {
-  color: #bfa13f;
-  transform: scale(1.1);
-}
-
-.label-cell:hover .label-count {
-  background-color: #bfa13f;
-  border-color: #bfa13f;
+.taint-badge-wrapper:hover {
+  background: var(--ops-warning, #ff7d00);
+  color: #fff;
 }
 
 /* 操作按钮 */
 .action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #d4af37;
+  color: var(--ops-text-secondary, #4e5969);
+  transition: color 0.2s;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: var(--ops-primary, #165dff);
 }
 
-/* 下拉菜单样式 */
-.action-dropdown-menu {
-  min-width: 140px;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item .el-icon) {
-  color: #d4af37;
-  font-size: 16px;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item) {
-  color: #f56c6c;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item .el-icon) {
-  color: #f56c6c;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item:hover) {
-  background-color: #f5f5f5;
-  color: #d4af37;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item:hover .el-icon) {
-  color: #d4af37;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item:hover) {
-  background-color: #fef0f0;
-  color: #f56c6c;
-}
-
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item:hover .el-icon) {
-  color: #f56c6c;
-}
-
-/* 分页 */
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 状态标签 */
-.status-tag {
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-weight: 500;
-}
-
-/* 标签弹窗 */
-.label-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 12px 12px 0 0;
-  padding: 20px 28px;
-  border-bottom: 2px solid #d4af37;
-}
-
-.label-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.label-dialog :deep(.el-dialog__body) {
-  padding: 24px 28px;
-}
-
-.label-dialog :deep(.el-dialog__footer) {
-  padding: 16px 28px;
-  background: #fafbfc;
-  border-top: 1px solid #e0e0e0;
-}
-
-/* 标签编辑模式 */
-.label-edit-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.label-edit-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  border-radius: 8px;
-  border: 1px solid #d4af37;
-}
-
-.label-edit-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  color: #d4af37;
-  font-weight: 500;
-}
-
-.label-edit-info .info-icon {
-  font-size: 18px;
-}
-
-.label-edit-count {
-  font-size: 14px;
-  color: #d4af37;
-  padding: 6px 14px;
-  background: rgba(212, 175, 55, 0.15);
-  border-radius: 20px;
-  font-weight: 500;
-}
-
-.label-edit-list {
-  max-height: 420px;
-  overflow-y: auto;
-  padding: 12px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-}
-
-.label-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 16px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  transition: all 0.3s;
-}
-
-.label-edit-row:hover {
-  border-color: #d4af37;
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
-  transform: translateY(-2px);
-}
-
-.label-row-number {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.label-row-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.label-input-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.label-input-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.label-input-label {
-  font-size: 12px;
-  color: #909399;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.label-edit-input {
-  width: 100%;
-}
-
-.label-edit-input :deep(.el-input__wrapper) {
-  background: #fafbfc;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-.label-edit-input :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  background: #fff;
-}
-
-.label-edit-input :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
-}
-
-.label-edit-input :deep(.el-input__inner) {
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 13px;
-}
-
-.label-separator {
-  color: #909399;
-  font-weight: 600;
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.remove-btn {
-  flex-shrink: 0;
-}
-
-.remove-btn:hover {
-  transform: scale(1.1);
-}
-
-.empty-labels {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.empty-labels .empty-icon {
-  font-size: 48px;
-  color: #d4af37;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.empty-labels p {
-  font-size: 16px;
-  color: #606266;
-  margin: 0 0 8px 0;
-}
-
-.empty-labels span {
-  font-size: 14px;
-  color: #909399;
-}
-
-.add-label-btn {
-  width: 100%;
-  height: 44px;
-  font-size: 15px;
-  border: 2px dashed #d4af37;
-  border-radius: 8px;
-  transition: all 0.3s;
-}
-
-.add-label-btn:hover {
-  border-style: solid;
-  border-color: #bfa13f;
-  background: rgba(212, 175, 55, 0.05);
-  transform: translateY(-2px);
-}
-
-.dialog-footer .edit-btn {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  border-color: #d4af37;
-  color: #d4af37;
-}
-
-.dialog-footer .edit-btn:hover {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border-color: #bfa13f;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
-}
-
-.dialog-footer .save-btn {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  border-color: #d4af37;
-  color: #d4af37;
-  min-width: 120px;
-}
-
-.dialog-footer .save-btn:hover {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border-color: #bfa13f;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
-}
-
-.label-table {
-  width: 100%;
-}
-
-.label-table :deep(.el-table__cell) {
-  padding: 8px 0;
-}
-
-.label-key-wrapper {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-  padding: 5px 12px !important;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important;
-  color: #d4af37 !important;
-  border: 1px solid #d4af37 !important;
-  border-radius: 6px !important;
-  font-family: 'Monaco', 'Menlo', monospace !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  transition: all 0.3s !important;
-  user-select: none;
-}
-
-.label-key-wrapper:hover {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%) !important;
-  border-color: #bfa13f !important;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3) !important;
-  transform: translateY(-1px);
-}
-
-.label-key-wrapper:active {
-  transform: translateY(0);
-}
-
-.label-key-text {
-  flex: 1;
-  word-break: break-all;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
-.copy-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-  opacity: 0.7;
-  transition: opacity 0.3s;
-}
-
-.label-key-wrapper:hover .copy-icon {
-  opacity: 1;
-}
-
-.label-value {
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 13px;
-  color: #606266;
-  word-break: break-all;
-  white-space: pre-wrap;
-}
-
+/* 对话框通用 */
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
 }
 
-/* 污点弹窗 */
-.taint-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 8px 8px 0 0;
-  padding: 20px 24px;
+/* 标签/污点编辑 */
+.label-edit-container, .taint-edit-container {
+  padding: 0;
 }
 
-.taint-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.taint-dialog-content {
-  padding: 8px 0;
-}
-
-/* 污点编辑模式 */
-.taint-edit-container {
+.label-edit-header, .taint-edit-header {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f7f8fa;
+  border-radius: var(--ops-border-radius-sm, 4px);
+  margin-bottom: 16px;
 }
 
-.taint-edit-header {
+.label-edit-info, .taint-edit-info {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  border-radius: 8px;
-  border: 1px solid #d4af37;
+  gap: 8px;
+  color: var(--ops-text-secondary, #4e5969);
+  font-size: 14px;
 }
 
-.taint-edit-info {
+.label-edit-count, .taint-edit-count {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
+}
+
+.label-edit-list, .taint-edit-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.label-edit-row, .taint-edit-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 15px;
-  color: #d4af37;
-  font-weight: 500;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
-.taint-edit-info .info-icon {
-  font-size: 18px;
-}
-
-.taint-edit-count {
-  font-size: 14px;
-  color: #d4af37;
-  padding: 6px 14px;
-  background: rgba(212, 175, 55, 0.15);
-  border-radius: 20px;
-  font-weight: 500;
-}
-
-.taint-edit-list {
-  max-height: 420px;
-  overflow-y: auto;
-  padding: 12px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-}
-
-.taint-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 16px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  transition: all 0.3s;
-}
-
-.taint-edit-row:hover {
-  border-color: #d4af37;
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
-  transform: translateY(-2px);
-}
-
-.taint-row-number {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+.label-row-number, .taint-row-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ops-primary-bg, #e8f0ff);
+  color: var(--ops-primary, #165dff);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.taint-row-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.taint-input-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.taint-input-wrapper {
-  flex: 1;
-  min-width: 120px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.taint-input-label {
   font-size: 12px;
-  color: #909399;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.taint-edit-input {
-  width: 100%;
-}
-
-.taint-edit-input :deep(.el-input__wrapper) {
-  background: #fafbfc;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-.taint-edit-input :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  background: #fff;
-}
-
-.taint-edit-input :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  background: #fff;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
-}
-
-.taint-separator {
-  color: #909399;
-  font-weight: 600;
-  font-size: 14px;
   flex-shrink: 0;
 }
 
-.taint-effect-wrapper {
-  min-width: 160px;
+.label-row-content, .taint-row-content {
+  flex: 1;
+}
+
+.label-input-group, .taint-input-group {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
 }
 
-.taint-effect-select {
+.label-input-wrapper, .taint-input-wrapper, .taint-effect-wrapper {
+  flex: 1;
+}
+
+.label-input-label, .taint-input-label {
+  display: block;
+  font-size: 11px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-bottom: 4px;
+}
+
+.label-separator, .taint-separator {
+  color: var(--ops-text-tertiary, #86909c);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.remove-btn {
+  flex-shrink: 0;
+}
+
+.empty-labels, .empty-taints {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--ops-text-tertiary, #86909c);
+}
+
+.empty-labels p, .empty-taints p {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.empty-labels span, .empty-taints span {
+  font-size: 12px;
+}
+
+.add-label-btn, .add-taint-btn {
   width: 100%;
+  margin-top: 12px;
 }
 
-.taint-effect-select :deep(.el-input__wrapper) {
-  background: #fafbfc;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
+/* 标签查看表格 */
+.label-key-wrapper, .taint-key-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--ops-text-primary, #1d2129);
+  transition: color 0.2s;
 }
 
-.taint-effect-select :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  background: #fff;
+.label-key-wrapper:hover, .taint-key-wrapper:hover {
+  color: var(--ops-primary, #165dff);
 }
 
+.label-value, .taint-value {
+  color: var(--ops-text-secondary, #4e5969);
+}
+
+.effect-tag {
+  font-weight: 500;
+}
+
+/* Effect 选项 */
 .effect-option {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
 }
 
 .effect-desc {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
-.empty-taints {
-  padding: 40px 20px;
+/* 批量操作表单 */
+.form-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ops-text-tertiary, #86909c);
+}
+
+.batch-label-row, .batch-taint-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+/* 批量结果 */
+.result-summary {
   text-align: center;
+  margin-bottom: 16px;
+}
+
+/* 代码块 */
+.code-block-wrapper {
+  display: flex;
+  width: 100%;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: var(--ops-border-radius-sm, 4px);
+  overflow: hidden;
+  background-color: #282c34;
+}
+
+.code-line-numbers {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.empty-taints .empty-icon {
-  font-size: 48px;
-  color: #d4af37;
-  opacity: 0.5;
-}
-
-.empty-taints p {
-  font-size: 16px;
-  color: #606266;
-  margin: 0 0 4px 0;
-}
-
-.empty-taints span {
-  font-size: 14px;
-  color: #909399;
-}
-
-.add-taint-btn {
-  width: 100%;
-  height: 44px;
-  font-size: 15px;
-  border: 2px dashed #d4af37;
-  border-radius: 8px;
-  transition: all 0.3s;
-}
-
-.add-taint-btn:hover {
-  border-style: solid;
-  border-color: #bfa13f;
-  background: rgba(212, 175, 55, 0.05);
-  transform: translateY(-2px);
-}
-
-/* 表格样式 */
-.taint-table {
-  width: 100%;
-}
-
-.taint-table :deep(.el-table__cell) {
-  padding: 8px 0;
-}
-
-.taint-key-wrapper {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-  padding: 5px 12px !important;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important;
-  color: #d4af37 !important;
-  border: 1px solid #d4af37 !important;
-  border-radius: 6px !important;
-  font-family: 'Monaco', 'Menlo', monospace !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  transition: all 0.3s !important;
+  padding: 12px 8px;
+  background-color: #21252b;
+  border-right: 1px solid #3e4451;
   user-select: none;
+  min-width: 40px;
+  text-align: right;
 }
 
-.taint-key-wrapper:hover {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%) !important;
-  border-color: #bfa13f !important;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3) !important;
-  transform: translateY(-1px);
-}
-
-.taint-key-wrapper:active {
-  transform: translateY(0);
-}
-
-.taint-key-text {
-  flex: 1;
-  word-break: break-all;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
-.copy-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-  opacity: 0.6;
-  transition: opacity 0.3s;
-}
-
-.taint-key-wrapper:hover .copy-icon {
-  opacity: 1;
-}
-
-.taint-value {
-  font-family: 'Monaco', 'Menlo', monospace;
+.code-line-number {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 13px;
-  color: #606266;
-  word-break: break-all;
-  white-space: pre-wrap;
+  line-height: 1.6;
+  color: #5c6370;
+  min-height: 20.8px;
 }
 
-.effect-tag {
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 12px;
-  font-weight: 500;
+.code-textarea {
+  flex: 1;
+  min-height: 200px;
+  padding: 12px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #abb2bf;
+  background-color: #282c34;
+  border: none;
+  outline: none;
+  resize: vertical;
 }
 
-/* 响应式设计 */
-@media (max-width: 1400px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.code-textarea::placeholder {
+  color: #5c6370;
 }
 
-@media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .header-actions {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .cluster-select {
-    width: 100%;
-  }
-}
-
-/* YAML 编辑弹窗 */
-.yaml-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 8px 8px 0 0;
-  padding: 20px 24px;
-}
-
-.yaml-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.yaml-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background-color: #1a1a1a;
-}
-
-.yaml-dialog-content {
-  padding: 0;
-}
-
+/* YAML 编辑器 */
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
-  border-radius: 6px;
+  width: 100%;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: var(--ops-border-radius-sm, 4px);
   overflow: hidden;
-  background-color: #000000;
+  background-color: #282c34;
+  max-height: 60vh;
 }
 
 .yaml-line-numbers {
-  background-color: #0d0d0d;
-  color: #666;
-  padding: 16px 8px;
-  text-align: right;
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 8px;
+  background-color: #21252b;
+  border-right: 1px solid #3e4451;
   user-select: none;
-  overflow: hidden;
   min-width: 40px;
-  border-right: 1px solid #333;
+  text-align: right;
+  overflow: hidden;
 }
 
 .line-number {
-  height: 20.8px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
   line-height: 1.6;
+  color: #5c6370;
+  min-height: 20.8px;
 }
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
-  border: none;
-  outline: none;
-  padding: 16px;
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  min-height: 400px;
+  padding: 12px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.6;
-  resize: vertical;
-  min-height: 400px;
+  color: #abb2bf;
+  background-color: #282c34;
+  border: none;
+  outline: none;
+  resize: none;
 }
 
 .yaml-textarea::placeholder {
-  color: #555;
+  color: #5c6370;
 }
 
-.yaml-textarea:focus {
-  outline: none;
-}
-
-/* Shell 终端对话框 */
-.shell-dialog-content {
-  padding: 0;
-}
-
+/* Shell 终端 */
 .terminal-container {
+  height: 500px;
+  background: #1e1e1e;
+  border-radius: var(--ops-border-radius-sm, 4px);
+  overflow: hidden;
+}
+
+/* CloudTTY */
+.cloudtty-iframe {
   width: 100%;
   height: 500px;
-  background-color: #000000;
-  border-radius: 4px;
-  overflow: hidden;
+  border: none;
+  border-radius: var(--ops-border-radius-sm, 4px);
+}
+
+.deploy-steps {
+  margin: 16px 0;
+}
+
+/* 部署状态 */
+.deploy-status {
+  padding: 20px;
+}
+
+.deploy-methods h4 {
+  color: var(--ops-text-primary, #1d2129);
+  margin-bottom: 12px;
+}
+
+/* 分页 */
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
 /* 批量操作栏 */
@@ -4133,24 +3226,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 12px 16px;
   margin-bottom: 16px;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e0e0e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  background: var(--ops-primary-bg, #e8f0ff);
+  border: 1px solid var(--ops-primary-lighter, #6694ff);
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .batch-actions-left {
@@ -4158,289 +3238,33 @@ onMounted(() => {
   align-items: center;
 }
 
-.batch-actions-left :deep(.el-checkbox__label) {
-  font-size: 15px;
-  color: #1a1a1a;
-  font-weight: 600;
-}
-
-/* 批量操作栏内的复选框样式 */
-.batch-actions-left :deep(.el-checkbox__inner) {
-  border: 2px solid #d4af37;
-  background: #ffffff;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-}
-
-.batch-actions-left :deep(.el-checkbox__inner:hover) {
-  border-color: #c9a227;
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
-  border-color: #ffffff;
-  border-width: 2px;
-}
-
-.batch-actions-left :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
-  background-color: #ffffff;
-}
-
 .selected-count {
-  font-size: 15px;
-  color: #1a1a1a;
-  font-weight: 700;
-  padding: 8px 16px;
-  background: #ffffff;
-  border: 2px solid #d4af37;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
-}
-
-.selected-count::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  background: #d4af37;
-  border-radius: 50%;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.05);
-    box-shadow: 0 0 0 6px rgba(212, 175, 55, 0);
-  }
-}
-
-.batch-actions-right {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.batch-actions-right .el-button {
-  border-radius: 8px;
-  font-weight: 600;
   font-size: 14px;
-  padding: 10px 18px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid currentColor;
-  background: #1a1a1a;
-  color: #ffffff;
-  border-color: #1a1a1a;
+  color: var(--ops-text-primary, #1d2129);
+  font-weight: 500;
 }
 
-.batch-actions-right .el-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-  background: #333333;
-  border-color: #333333;
-  color: #ffffff;
+/* 表格卡片 */
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-/* 移除特定按钮类型的颜色样式，统一使用黑底白字 */
-.batch-actions-right .el-button--primary,
-.batch-actions-right .el-button--warning,
-.batch-actions-right .el-button--info,
-.batch-actions-right .el-button--danger,
-.batch-actions-right .el-button--success {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: #ffffff;
+/* 下拉菜单危险项 */
+.danger-item {
+  color: var(--ops-danger, #f53f3f) !important;
 }
 
-.batch-actions-right .el-button--primary:hover,
-.batch-actions-right .el-button--warning:hover,
-.batch-actions-right .el-button--info:hover,
-.batch-actions-right .el-button--danger:hover,
-.batch-actions-right .el-button--success:hover {
-  background: #333333;
-  border-color: #333333;
-  color: #ffffff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+/* 对话框样式 */
+:deep(.cloudtty-terminal-dialog .arco-modal-body) {
+  padding: 0;
 }
 
-/* 选择列样式优化 */
-.modern-table :deep(.el-table__header .el-table-column--selection .cell) {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+:deep(.shell-dialog .arco-modal-body) {
+  padding: 0;
 }
 
-.modern-table :deep(.el-table__body .el-table-column--selection .cell) {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* 自定义复选框样式 */
-.modern-table :deep(.el-checkbox__inner) {
-  border-radius: 4px;
-  border: 2px solid #d4af37;
-  background: transparent;
-  width: 18px;
-  height: 18px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.modern-table :deep(.el-checkbox__inner:hover) {
-  border-color: #f0c78e;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
-}
-
-.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  background: linear-gradient(135deg, #d4af37 0%, #c9a227 100%);
-  border-color: #d4af37;
-}
-
-.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
-  background: linear-gradient(135deg, #d4af37 0%, #c9a227 100%);
-  border-color: #d4af37;
-}
-
-.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
-  border-color: #000000;
-  border-width: 2px;
-}
-
-.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
-  background-color: #000000;
-}
-
-/* 选中行的样式 */
-.modern-table :deep(.el-table__body tr.current-row) {
-  background: rgba(212, 175, 55, 0.05) !important;
-}
-
-.modern-table :deep(.el-table__body tr:hover td) {
-  background: rgba(212, 175, 55, 0.03) !important;
-}
-
-/* 批量标签对话框 */
-.batch-label-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 8px 8px 0 0;
-  padding: 20px 24px;
-  border-bottom: 1px solid #d4af37;
-}
-
-.batch-label-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.batch-label-content {
-  padding: 10px 0;
-}
-
-.form-tip {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 8px;
-  line-height: 1.4;
-}
-
-.batch-label-list {
-  width: 100%;
-}
-
-.batch-label-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.label-separator {
-  color: #909399;
-  font-weight: 600;
-  margin: 0 8px;
-}
-
-/* 批量污点对话框 */
-.batch-taint-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 8px 8px 0 0;
-  padding: 20px 24px;
-  border-bottom: 1px solid #d4af37;
-}
-
-.batch-taint-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.batch-taint-content {
-  padding: 10px 0;
-}
-
-.batch-taint-list {
-  width: 100%;
-}
-
-.batch-taint-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.taint-separator {
-  color: #909399;
-  font-weight: 600;
-  margin: 0 4px;
-}
-
-/* 批量操作结果对话框 */
-.batch-result-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 8px 8px 0 0;
-  padding: 20px 24px;
-  border-bottom: 1px solid #d4af37;
-}
-
-.batch-result-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.batch-result-content {
-  padding: 10px 0;
-}
-
-.result-summary {
-  display: flex;
-  justify-content: center;
-  padding: 20px 0;
-}
-
-.result-table {
-  margin-top: 20px;
+@media (max-width: 1200px) {
+  .stat-value { font-size: 24px; }
+  .stat-icon { width: 48px; height: 48px; }
 }
 </style>

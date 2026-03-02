@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <a-modal
     v-model="dialogVisible"
     :title="`文件浏览 - Pod: ${podName} | 容器: ${containerName}`"
     width="900px"
@@ -7,40 +7,40 @@
     @close="handleClose"
   >
     <div v-if="loading" class="loading-container">
-      <el-icon class="is-loading"><Loading /></el-icon>
+      <icon-loading />
       <span>加载中...</span>
     </div>
 
     <div v-else class="file-browser">
       <!-- 路径导航 -->
       <div class="breadcrumb-container">
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item @click="navigateToRoot">
-            <el-icon><House /></el-icon>
+        <a-breadcrumb separator="/">
+          <a-breadcrumb-item @click="navigateToRoot">
+            <icon-home />
             根目录
-          </el-breadcrumb-item>
-          <el-breadcrumb-item
+          </a-breadcrumb-item>
+          <a-breadcrumb-item
             v-for="(segment, index) in pathSegments"
             :key="index"
             @click="navigateToSegment(index)"
           >
             {{ segment }}
-          </el-breadcrumb-item>
-        </el-breadcrumb>
+          </a-breadcrumb-item>
+        </a-breadcrumb>
         <div class="current-path">{{ currentPathDisplay }}</div>
       </div>
 
       <!-- 工具栏 -->
       <div class="toolbar">
-        <el-button size="small" @click="refreshFiles" :loading="loading">
-          <el-icon><Refresh /></el-icon>
+        <a-button size="small" @click="refreshFiles" :loading="loading">
+          <icon-refresh />
           刷新
-        </el-button>
-        <el-button size="small" @click="navigateUp" :disabled="currentPath === '/'">
-          <el-icon><Back /></el-icon>
+        </a-button>
+        <a-button size="small" @click="navigateUp" :disabled="currentPath === '/'">
+          <icon-left />
           返回上级
-        </el-button>
-        <el-upload
+        </a-button>
+        <a-upload
           :action="uploadUrl"
           :headers="uploadHeaders"
           :data="uploadData"
@@ -49,78 +49,74 @@
           :on-error="handleUploadError"
           :before-upload="beforeUpload"
         >
-          <el-button size="small" type="primary" :loading="uploading">
-            <el-icon><Upload /></el-icon>
+          <a-button size="small" type="primary" :loading="uploading">
+            <icon-upload />
             上传文件
-          </el-button>
-        </el-upload>
+          </a-button>
+        </a-upload>
       </div>
 
       <!-- 文件列表 -->
       <div class="file-list-container">
-        <el-table :data="files" size="small" class="file-table" v-loading="loading">
-          <el-table-column width="50">
-            <template #default="{ row }">
-              <el-icon class="file-icon" :class="getFileIconClass(row)">
-                <Folder v-if="row.isDir" />
+        <a-table :data="files" size="small" class="file-table" :loading="loading" :columns="tableColumns">
+          <template #col_0="{ record }">
+              <span class="file-icon" :class="getFileIconClass(record)">
+                <Folder v-if="record.isDir" />
                 <Document v-else />
-              </el-icon>
-            </template>
-          </el-table-column>
-          <el-table-column label="名称" min-width="200">
-            <template #default="{ row }">
-              <span
-                class="file-name"
-                :class="{ 'directory': row.isDir }"
-                @click="handleFileClick(row)"
-              >
-                {{ row.name }}
               </span>
             </template>
-          </el-table-column>
-          <el-table-column label="大小" width="120" align="right">
-            <template #default="{ row }">
-              {{ row.isDir ? '-' : formatSize(row.size) }}
+          <template #name="{ record }">
+              <span
+                class="file-name"
+                :class="{ 'directory': record.isDir }"
+                @click="handleFileClick(record)"
+              >
+                {{ record.name }}
+              </span>
             </template>
-          </el-table-column>
-          <el-table-column label="权限" width="100" align="center">
-            <template #default="{ row }">
-              <code class="permission-code">{{ row.mode || '-' }}</code>
+          <template #col_2075="{ record }">
+              {{ record.isDir ? '-' : formatSize(record.size) }}
             </template>
-          </el-table-column>
-          <el-table-column label="修改时间" width="160">
-            <template #default="{ row }">
-              {{ formatDate(row.modTime) }}
+          <template #col_5775="{ record }">
+              <code class="permission-code">{{ record.mode || '-' }}</code>
             </template>
-          </el-table-column>
-          <el-table-column label="操作" width="100" align="center">
-            <template #default="{ row }">
-              <el-button
-                v-if="!row.isDir"
+          <template #col_3912="{ record }">
+              {{ formatDate(record.modTime) }}
+            </template>
+          <template #actions="{ record }">
+              <a-button
+                v-if="!record.isDir"
                 type="primary"
                 link
                 size="small"
-                @click="downloadFile(row)"
-                :loading="downloadingFiles[row.name]"
+                @click="downloadFile(record)"
+                :loading="downloadingFiles[record.name]"
               >
-                <el-icon><Download /></el-icon>
+                <icon-download />
                 下载
-              </el-button>
+              </a-button>
               <span v-else class="not-applicable">-</span>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
 
-        <el-empty v-if="!loading && files.length === 0" description="目录为空" />
+        <a-empty v-if="!loading && files.length === 0" description="目录为空" />
       </div>
     </div>
-  </el-dialog>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
+const tableColumns = [
+  { slotName: 'col_0', width: 50 },
+  { title: '名称', slotName: 'name', width: 200 },
+  { title: '大小', slotName: 'col_2075', width: 120, align: 'right' },
+  { title: '权限', slotName: 'col_5775', width: 100, align: 'center' },
+  { title: '修改时间', slotName: 'col_3912', width: 160 },
+  { title: '操作', slotName: 'actions', width: 100, align: 'center' }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Loading, House, Refresh, Back, Folder, Document, Download, Upload } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import axios from 'axios'
 
 interface FileInfo {
@@ -262,7 +258,7 @@ const loadFiles = async () => {
       errorMsg = error.message
     }
 
-    ElMessage.error('文件列表加载失败: ' + errorMsg)
+    Message.error('文件列表加载失败: ' + errorMsg)
     files.value = []
   } finally {
     loading.value = false
@@ -302,7 +298,7 @@ const handleFileClick = (file: FileInfo) => {
     loadFiles()
   } else {
     // 点击文件，可以预览或下载
-    ElMessage.info(`文件: ${file.name}`)
+    Message.info(`文件: ${file.name}`)
   }
 }
 
@@ -339,10 +335,10 @@ const downloadFile = async (file: FileInfo) => {
     link.remove()
     window.URL.revokeObjectURL(url)
 
-    ElMessage.success(`文件 ${file.name} 下载成功`)
+    Message.success(`文件 ${file.name} 下载成功`)
   } catch (error: any) {
     const errorMsg = error.response?.data?.msg || error.response?.data?.message || '下载文件失败'
-    ElMessage.error(errorMsg)
+    Message.error(errorMsg)
   } finally {
     // 清除下载状态
     downloadingFiles.value[file.name] = false
@@ -360,11 +356,11 @@ const handleUploadSuccess = (response: any) => {
   uploading.value = false
 
   if (response.code === 0) {
-    ElMessage.success(response.msg || '文件上传成功')
+    Message.success(response.msg || '文件上传成功')
     // 刷新文件列表
     loadFiles()
   } else {
-    ElMessage.error(response.msg || '文件上传失败')
+    Message.error(response.msg || '文件上传失败')
   }
 }
 
@@ -372,7 +368,7 @@ const handleUploadSuccess = (response: any) => {
 const handleUploadError = (error: any) => {
   uploading.value = false
   const errorMsg = error.response?.data?.msg || error.response?.data?.message || '文件上传失败'
-  ElMessage.error(errorMsg)
+  Message.error(errorMsg)
 }
 
 const handleClose = () => {
@@ -385,7 +381,7 @@ const handleClose = () => {
 watch(() => props.visible, (newVal) => {
   if (newVal) {
     if (!props.clusterId) {
-      ElMessage.error('集群ID未设置')
+      Message.error('集群ID未设置')
       return
     }
     currentPath.value = '/'
@@ -396,36 +392,36 @@ watch(() => props.visible, (newVal) => {
 
 <style scoped>
 /* 对话框样式 - 简洁黑白风格 */
-:deep(.el-dialog) {
+:deep(.arco-dialog) {
   background: #fff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
-:deep(.el-dialog__header) {
+:deep(.arco-dialog__header) {
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
   padding: 16px 20px;
   border-radius: 8px 8px 0 0;
 }
 
-:deep(.el-dialog__title) {
+:deep(.arco-dialog__title) {
   color: #000;
   font-size: 16px;
   font-weight: 600;
 }
 
-:deep(.el-dialog__headerbtn .el-dialog__close) {
+:deep(.arco-dialog__headerbtn .arco-modal__close) {
   color: #909399;
   font-size: 18px;
 }
 
-:deep(.el-dialog__headerbtn .el-dialog__close:hover) {
+:deep(.arco-dialog__headerbtn .arco-modal__close:hover) {
   color: #000;
 }
 
-:deep(.el-dialog__body) {
+:deep(.arco-dialog__body) {
   background: #fff;
   padding: 20px;
   color: #000;
@@ -464,26 +460,26 @@ watch(() => props.visible, (newVal) => {
   border-radius: 6px;
 }
 
-.breadcrumb-container :deep(.el-breadcrumb) {
+.breadcrumb-container :deep(.arco-breadcrumb) {
   margin-bottom: 8px;
 }
 
-.breadcrumb-container :deep(.el-breadcrumb__item) {
+.breadcrumb-container :deep(.arco-breadcrumb__item) {
   cursor: pointer;
   color: #606266;
   transition: color 0.2s;
 }
 
-.breadcrumb-container :deep(.el-breadcrumb__item:hover) {
+.breadcrumb-container :deep(.arco-breadcrumb__item:hover) {
   color: #000;
 }
 
-.breadcrumb-container :deep(.el-breadcrumb__item__inner) {
+.breadcrumb-container :deep(.arco-breadcrumb__item__inner) {
   cursor: pointer;
   font-weight: 500;
 }
 
-.breadcrumb-container :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+.breadcrumb-container :deep(.arco-breadcrumb__item:last-child .el-breadcrumb__inner) {
   color: #000;
   font-weight: 600;
 }
@@ -507,37 +503,37 @@ watch(() => props.visible, (newVal) => {
   align-items: center;
 }
 
-.toolbar :deep(.el-button) {
+.toolbar :deep(.arco-button) {
   background: #fff;
   border: 1px solid #dcdfe6;
   color: #606266;
   transition: all 0.2s;
 }
 
-.toolbar :deep(.el-button:hover) {
+.toolbar :deep(.arco-button:hover) {
   border-color: #000;
   color: #000;
 }
 
-.toolbar :deep(.el-button:disabled) {
+.toolbar :deep(.arco-button:disabled) {
   background: #f5f5f5;
   border-color: #e0e0e0;
   color: #c0c4cc;
 }
 
-.toolbar :deep(.el-button--primary) {
+.toolbar :deep(.arco-button--primary) {
   background: #000;
   border-color: #000;
   color: #fff;
 }
 
-.toolbar :deep(.el-button--primary:hover) {
+.toolbar :deep(.arco-button--primary:hover) {
   background: #333;
   border-color: #333;
 }
 
 /* 上传组件 */
-.toolbar :deep(.el-upload) {
+.toolbar :deep(.arco-upload) {
   display: inline-block;
 }
 
@@ -553,11 +549,11 @@ watch(() => props.visible, (newVal) => {
   width: 100%;
 }
 
-.file-table :deep(.el-table__header-wrapper) {
+.file-table :deep(.arco-table__header-wrapper) {
   background: #f5f5f5;
 }
 
-.file-table :deep(.el-table__header th) {
+.file-table :deep(.arco-table__header th) {
   background: transparent;
   color: #000;
   font-weight: 600;
@@ -565,22 +561,22 @@ watch(() => props.visible, (newVal) => {
   padding: 12px 12px;
 }
 
-.file-table :deep(.el-table__body tr) {
+.file-table :deep(.arco-table__body tr) {
   background: #fff;
   transition: background-color 0.2s;
 }
 
-.file-table :deep(.el-table__body tr:hover) {
+.file-table :deep(.arco-table__body tr:hover) {
   background: #f5f5f5;
 }
 
-.file-table :deep(.el-table__body td) {
+.file-table :deep(.arco-table__body td) {
   border-bottom: 1px solid #f0f0f0;
   padding: 12px 12px;
   color: #000;
 }
 
-.file-table :deep(.el-table__empty-block) {
+.file-table :deep(.arco-table__empty-block) {
   background: transparent;
   color: #909399;
 }
@@ -627,11 +623,11 @@ watch(() => props.visible, (newVal) => {
 }
 
 /* 下载按钮 */
-.file-table :deep(.el-button--primary.is-link) {
+.file-table :deep(.arco-button--primary.is-link) {
   color: #000;
 }
 
-.file-table :deep(.el-button--primary.is-link:hover) {
+.file-table :deep(.arco-button--primary.is-link:hover) {
   color: #409eff;
 }
 
@@ -641,16 +637,16 @@ watch(() => props.visible, (newVal) => {
 }
 
 /* Empty 组件样式 */
-.file-list-container :deep(.el-empty) {
+.file-list-container :deep(.arco-empty) {
   padding: 40px 20px;
 }
 
-.file-list-container :deep(.el-empty__description p) {
+.file-list-container :deep(.arco-empty__description p) {
   color: #909399;
 }
 
 /* Dialog 关闭按钮 */
-:deep(.el-dialog__footer) {
+:deep(.arco-dialog__footer) {
   border-top: 1px solid #e0e0e0;
   background: #f5f5f5;
 }

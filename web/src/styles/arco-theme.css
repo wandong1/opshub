@@ -1,0 +1,100 @@
+/**
+ * OpsHub Arco Design 主题定制
+ * 所有自定义颜色通过 CSS 变量定义，便于后续主题切换
+ */
+
+:root {
+  /* ===== 品牌色 ===== */
+  --ops-primary: #165dff;
+  --ops-primary-light: #306fff;
+  --ops-primary-lighter: #6694ff;
+  --ops-primary-bg: #e8f0ff;
+
+  /* ===== 布局 ===== */
+  --ops-sidebar-bg: #232324;
+  --ops-sidebar-width: 220px;
+  --ops-sidebar-collapsed-width: 48px;
+  --ops-header-height: 60px;
+  --ops-header-bg: #ffffff;
+  --ops-content-bg: #f7f8fa;
+
+  /* ===== 边框 & 圆角 ===== */
+  --ops-border-color: #e5e6eb;
+  --ops-border-radius-sm: 4px;
+  --ops-border-radius-md: 8px;
+
+  /* ===== 文字 ===== */
+  --ops-text-primary: #1d2129;
+  --ops-text-secondary: #4e5969;
+  --ops-text-tertiary: #86909c;
+  --ops-text-disabled: #c9cdd4;
+
+  /* ===== 功能色 ===== */
+  --ops-success: #00b42a;
+  --ops-warning: #ff7d00;
+  --ops-danger: #f53f3f;
+  --ops-info: #86909c;
+}
+
+/* ===== Arco 全局覆盖 ===== */
+
+/* 侧边栏菜单深色主题 */
+.ops-sider {
+  background: var(--ops-sidebar-bg);
+}
+
+.ops-sider.arco-layout-sider {
+  border-right: none;
+  box-shadow: none;
+  background: var(--ops-sidebar-bg);
+}
+
+.ops-sider .arco-layout-sider-children {
+  background: var(--ops-sidebar-bg);
+}
+
+.ops-sider .arco-layout-sider-trigger {
+  background: var(--ops-sidebar-bg);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ops-sider .arco-layout-sider-trigger:hover {
+  color: #fff;
+}
+
+.ops-sider .arco-menu {
+  background: transparent;
+}
+
+.ops-sider .arco-menu-dark .arco-menu-item:hover,
+.ops-sider .arco-menu-dark .arco-menu-inline-header:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.ops-sider .arco-menu-dark .arco-menu-item.arco-menu-selected {
+  background-color: var(--ops-primary);
+  color: #fff;
+}
+
+/* 顶栏 */
+.ops-header {
+  background: var(--ops-header-bg);
+  border-bottom: 1px solid var(--ops-border-color);
+}
+
+/* 内容区 */
+.ops-content {
+  background: var(--ops-content-bg);
+}
+
+/* 卡片统一风格 */
+.arco-card {
+  border-radius: var(--ops-border-radius-md);
+  border: 1px solid var(--ops-border-color);
+}
+
+/* 表格统一风格 */
+.arco-table-border .arco-table-container {
+  border-radius: var(--ops-border-radius-sm);
+}

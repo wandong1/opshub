@@ -1,333 +1,305 @@
 <template>
-  <div class="users-container">
-    <!-- 页面标题和操作按钮 -->
-    <div class="page-header">
-      <h2 class="page-title">用户管理</h2>
-      <el-button v-permission="'users:create'" class="black-button" @click="handleAdd">新增用户</el-button>
+  <div class="page-container">
+    <!-- 页面头部 -->
+    <div class="page-header-card">
+      <div class="page-header-inner">
+        <div class="page-icon">
+          <icon-user />
+        </div>
+        <div>
+          <div class="page-title">用户管理</div>
+          <div class="page-desc">管理系统用户，支持按部门筛选、角色分配与岗位关联</div>
+        </div>
+      </div>
     </div>
 
     <div class="content-wrapper">
       <!-- 左侧部门树 -->
-      <div class="dept-tree-panel">
-        <div class="panel-header">
-          <span>部门组织</span>
-        </div>
-        <el-tree
+      <a-card class="dept-tree-card" :bordered="false">
+        <template #title>
+          <span class="card-title">
+            <icon-common style="margin-right: 6px;" />
+            部门组织
+          </span>
+        </template>
+        <a-tree
           ref="treeRef"
-          :data="departmentTree"
-          :props="treeProps"
-          :highlight-current="true"
-          node-key="id"
-          default-expand-all
-          @node-click="handleNodeClick"
-          class="dept-tree"
+          :data="departmentTreeData"
+          :field-names="{ key: 'id', title: 'deptName', children: 'children' }"
+          :default-expand-all="true"
+          :selected-keys="selectedTreeKeys"
+          @select="handleNodeClick"
         >
-          <template #default="{ node, data }">
-            <span class="custom-tree-node">
-              <span class="node-label">{{ node.label }}</span>
-              <span class="node-count">({{ data.userCount || 0 }})</span>
+          <template #title="nodeData">
+            <span class="tree-node">
+              <span class="node-label">{{ nodeData.deptName }}</span>
+              <span class="node-count">({{ nodeData.userCount || 0 }})</span>
             </span>
           </template>
-        </el-tree>
-      </div>
+        </a-tree>
+      </a-card>
 
       <!-- 右侧用户列表 -->
       <div class="user-list-panel">
-        <!-- 当前选中的部门显示 -->
-        <div v-if="selectedDepartment" class="selected-dept-bar">
-          <span class="dept-path-text">
-            <span class="label">当前部门：</span>
-            <span class="path">{{ selectedDepartmentPath }}</span>
-          </span>
-          <el-button link type="primary" @click="clearDepartmentSelection" v-if="selectedDepartment">
-            查看全部用户
-          </el-button>
-        </div>
+        <!-- 当前选中部门 -->
+        <a-alert v-if="selectedDepartment" class="dept-alert" type="info" :show-icon="false" closable @close="clearDepartmentSelection">
+          <template #default>
+            <div class="dept-alert-content">
+              <span>
+                <span class="label">当前部门：</span>
+                <span class="path">{{ selectedDepartmentPath }}</span>
+              </span>
+              <a-link @click="clearDepartmentSelection">查看全部用户</a-link>
+            </div>
+          </template>
+        </a-alert>
 
-        <!-- 搜索表单 -->
-        <el-form :inline="true" :model="searchForm" class="search-form">
-          <el-form-item label="关键词">
-            <el-input v-model="searchForm.keyword" placeholder="用户名/邮箱" clearable />
-          </el-form-item>
-          <el-form-item>
-            <el-button class="black-button" @click="loadUsers">查询</el-button>
-            <el-button @click="resetSearch">重置</el-button>
-          </el-form-item>
-        </el-form>
+        <!-- 搜索区域 -->
+        <a-card class="search-card" :bordered="false">
+          <a-row :gutter="16" align="center">
+            <a-col :flex="'auto'">
+              <a-space :size="16" wrap>
+                <a-space>
+                  <span class="search-label">关键词:</span>
+                  <a-input v-model="searchForm.keyword" placeholder="用户名/邮箱" allow-clear style="width: 200px" @press-enter="handleSearch" />
+                </a-space>
+                <a-button type="primary" @click="handleSearch">
+                  <template #icon><icon-search /></template>
+                  搜索
+                </a-button>
+                <a-button @click="resetSearch">
+                  <template #icon><icon-refresh /></template>
+                  重置
+                </a-button>
+              </a-space>
+            </a-col>
+            <a-col :flex="'none'">
+              <a-button v-permission="'users:create'" type="primary" @click="handleAdd">
+                <template #icon><icon-plus /></template>
+                新增用户
+              </a-button>
+            </a-col>
+          </a-row>
+        </a-card>
 
-        <!-- 表格 -->
-        <el-table :data="userList" border stripe v-loading="loading" style="width: 100%">
-          <el-table-column label="头像" width="80">
-            <template #default="{ row }">
-              <el-avatar v-if="row.avatar" :src="row.avatar" :size="50" />
-              <el-avatar v-else :size="50">{{ row.realName?.substring(0, 1) || row.username.substring(0, 1) }}</el-avatar>
+        <!-- 用户表格 -->
+        <a-card class="table-card" :bordered="false">
+          <a-table
+            :data="userList"
+            :loading="loading"
+            row-key="id"
+            :pagination="tablePagination"
+            @page-change="handlePageChange"
+            @page-size-change="handlePageSizeChange"
+          >
+            <template #columns>
+              <a-table-column title="用户" :width="220">
+                <template #cell="{ record }">
+                  <div class="user-cell">
+                    <a-avatar v-if="record.avatar" :size="36" :image-url="record.avatar" />
+                    <a-avatar v-else :size="36" :style="{ backgroundColor: 'var(--ops-primary)' }">
+                      {{ (record.realName || record.username || '').charAt(0) }}
+                    </a-avatar>
+                    <div class="user-cell-info">
+                      <div class="user-cell-name">{{ record.realName || record.username }}</div>
+                      <div class="user-cell-sub">@{{ record.username }}</div>
+                    </div>
+                  </div>
+                </template>
+              </a-table-column>
+              <a-table-column title="邮箱" data-index="email" :min-width="180" ellipsis tooltip />
+              <a-table-column title="手机号" data-index="phone" :min-width="130" />
+              <a-table-column title="部门" :min-width="150">
+                <template #cell="{ record }">
+                  {{ record.department?.name || record.department?.deptName || '-' }}
+                </template>
+              </a-table-column>
+              <a-table-column title="状态" :width="100" align="center">
+                <template #cell="{ record }">
+                  <a-tag v-if="record.isLocked" color="orangered" size="small">锁定中</a-tag>
+                  <a-tag v-else :color="record.status === 1 ? 'green' : 'red'" size="small">
+                    {{ record.status === 1 ? '启用' : '禁用' }}
+                  </a-tag>
+                </template>
+              </a-table-column>
+              <a-table-column title="操作" :width="180" align="center" fixed="right">
+                <template #cell="{ record }">
+                  <a-space>
+                    <a-tooltip v-if="record.isLocked" content="解锁">
+                      <a-link v-permission="'users:unlock'" status="warning" @click="handleUnlock(record)">
+                        <icon-unlock />
+                      </a-link>
+                    </a-tooltip>
+                    <a-link v-permission="'users:update'" @click="handleEdit(record)">编辑</a-link>
+                    <a-link v-permission="'users:reset-pwd'" @click="handleResetPassword(record)">重置密码</a-link>
+                    <a-popconfirm content="确定要删除该用户吗？" @ok="handleDelete(record)">
+                      <a-link v-permission="'users:delete'" status="danger">删除</a-link>
+                    </a-popconfirm>
+                  </a-space>
+                </template>
+              </a-table-column>
             </template>
-          </el-table-column>
-          <el-table-column prop="username" label="用户名" min-width="120" />
-          <el-table-column prop="realName" label="真实姓名" min-width="120" />
-          <el-table-column prop="email" label="邮箱" min-width="180" />
-          <el-table-column prop="phone" label="手机号" min-width="130" />
-          <el-table-column label="部门" min-width="150">
-            <template #default="{ row }">
-              {{ row.department?.name || row.department?.deptName || '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100">
-            <template #default="{ row }">
-              <el-tag v-if="row.isLocked" type="warning">
-                锁定中
-              </el-tag>
-              <el-tag v-else :type="row.status === 1 ? 'success' : 'danger'">
-                {{ row.status === 1 ? '启用' : '禁用' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
-            <template #default="{ row }">
-              <el-tooltip v-if="row.isLocked" content="解锁" placement="top">
-                <el-button v-permission="'users:unlock'" type="warning" size="small" :icon="Unlock" circle @click="handleUnlock(row)" />
-              </el-tooltip>
-              <el-tooltip content="编辑" placement="top">
-                <el-button v-permission="'users:update'" type="primary" size="small" :icon="Edit" circle @click="handleEdit(row)" />
-              </el-tooltip>
-              <el-tooltip content="重置密码" placement="top">
-                <el-button v-permission="'users:reset-pwd'" type="info" size="small" :icon="Key" circle @click="handleResetPassword(row)" />
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'users:delete'" type="danger" size="small" :icon="Delete" circle @click="handleDelete(row)" />
-              </el-tooltip>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <!-- 分页 -->
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="loadUsers"
-          @current-change="loadUsers"
-          style="margin-top: 20px; justify-content: center"
-        />
+          </a-table>
+        </a-card>
       </div>
     </div>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="dialogTitle"
-      width="55%"
-      class="user-dialog responsive-dialog"
-      @close="handleDialogClose"
+      :width="720"
+      :unmount-on-close="true"
+      @ok="handleSubmit"
+      @cancel="handleDialogClose"
+      :ok-loading="submitLoading"
     >
-      <el-form :model="userForm" :rules="rules" ref="formRef" label-width="80px" class="user-form">
+      <a-form :model="userForm" layout="vertical" ref="formRef">
         <!-- 基本信息 -->
-        <div class="form-section-title">
-          <el-icon><User /></el-icon>
-          <span>基本信息</span>
+        <div class="form-section">
+          <div class="form-section-title">
+            <icon-user style="color: var(--ops-primary);" />
+            <span>基本信息</span>
+          </div>
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="用户名" field="username" :rules="[{ required: true, message: '请输入用户名' }]">
+                <a-input v-model="userForm.username" :disabled="isEdit" placeholder="请输入用户名" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="真实姓名" field="realName">
+                <a-input v-model="userForm.realName" placeholder="请输入真实姓名" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="邮箱" field="email" :rules="[{ required: true, message: '请输入邮箱' }]">
+                <a-input v-model="userForm.email" placeholder="请输入邮箱" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="手机号" field="phone">
+                <a-input v-model="userForm.phone" placeholder="请输入手机号" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-row :gutter="16">
+            <a-col :span="12" v-if="!isEdit">
+              <a-form-item label="密码" field="password" :rules="[{ required: true, message: '请输入密码' }, { minLength: 6, message: '密码长度不能少于6位' }]">
+                <a-input-password v-model="userForm.password" placeholder="请输入密码（至少6位）" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="状态" field="status">
+                <a-radio-group v-model="userForm.status" type="button">
+                  <a-radio :value="1">启用</a-radio>
+                  <a-radio :value="0">禁用</a-radio>
+                </a-radio-group>
+              </a-form-item>
+            </a-col>
+          </a-row>
         </div>
-
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="用户名" prop="username">
-              <el-input v-model="userForm.username" :disabled="isEdit" placeholder="请输入用户名">
-                <template #prefix>
-                  <el-icon><User /></el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="真实姓名" prop="realName">
-              <el-input v-model="userForm.realName" placeholder="请输入真实姓名">
-                <template #prefix>
-                  <el-icon><Postcard /></el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="邮箱" prop="email">
-              <el-input v-model="userForm.email" placeholder="请输入邮箱">
-                <template #prefix>
-                  <el-icon><Message /></el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="手机号" prop="phone">
-              <el-input v-model="userForm.phone" placeholder="请输入手机号">
-                <template #prefix>
-                  <el-icon><Phone /></el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="16" v-if="!isEdit">
-          <el-col :span="12">
-            <el-form-item label="密码" prop="password">
-              <el-input v-model="userForm.password" type="password" show-password placeholder="请输入密码（至少6位）">
-                <template #prefix>
-                  <el-icon><Lock /></el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="状态" prop="status">
-              <el-radio-group v-model="userForm.status">
-                <el-radio :label="1">启用</el-radio>
-                <el-radio :label="0">禁用</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="16" v-if="isEdit">
-          <el-col :span="12">
-            <el-form-item label="状态" prop="status">
-              <el-radio-group v-model="userForm.status">
-                <el-radio :label="1">启用</el-radio>
-                <el-radio :label="0">禁用</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
 
         <!-- 组织信息 -->
-        <div class="form-section-title">
-          <el-icon><OfficeBuilding /></el-icon>
-          <span>组织信息</span>
-        </div>
-
-        <el-form-item label="部门" prop="departmentId">
-          <el-tree-select
-            v-model="userForm.departmentId"
-            :data="departmentTreeData"
-            :props="{ label: 'label', value: 'id', children: 'children' }"
-            placeholder="请选择部门"
-            clearable
-            check-strictly
-            :render-after-expand="false"
-          >
-            <template #default="{ data }">
-              <span>{{ data.label }}</span>
-              <span class="tree-node-count">({{ data.userCount || 0 }})</span>
-            </template>
-          </el-tree-select>
-        </el-form-item>
-
-        <el-form-item label="岗位" prop="positionIds">
-          <el-select
-            v-model="userForm.positionIds"
-            multiple
-            placeholder="请选择岗位"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="pos in positionOptions"
-              :key="'pos-' + (pos.ID || pos.id)"
-              :label="pos.postName"
-              :value="pos.ID || pos.id"
+        <div class="form-section">
+          <div class="form-section-title">
+            <icon-home style="color: var(--ops-primary);" />
+            <span>组织信息</span>
+          </div>
+          <a-form-item label="部门" field="departmentId">
+            <a-tree-select
+              v-model="userForm.departmentId"
+              :data="deptSelectTreeData"
+              :field-names="{ key: 'id', title: 'label', children: 'children' }"
+              placeholder="请选择部门"
+              allow-clear
+              style="width: 100%"
             />
-          </el-select>
-        </el-form-item>
+          </a-form-item>
+          <a-form-item label="岗位" field="positionIds">
+            <a-select
+              v-model="userForm.positionIds"
+              :options="positionSelectOptions"
+              multiple
+              placeholder="请选择岗位"
+              allow-clear
+              style="width: 100%"
+            />
+          </a-form-item>
+        </div>
 
         <!-- 权限信息 -->
-        <div class="form-section-title">
-          <el-icon><Key /></el-icon>
-          <span>权限信息</span>
+        <div class="form-section">
+          <div class="form-section-title">
+            <icon-safe style="color: var(--ops-primary);" />
+            <span>权限信息</span>
+          </div>
+          <a-form-item label="角色" field="roleIds">
+            <a-select
+              v-model="userForm.roleIds"
+              :options="roleSelectOptions"
+              multiple
+              placeholder="请选择角色"
+              allow-clear
+              style="width: 100%"
+            />
+          </a-form-item>
         </div>
-
-        <el-form-item label="角色" prop="roleIds">
-          <el-select
-            v-model="userForm.roleIds"
-            multiple
-            placeholder="请选择角色"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="role in roleOptions"
-              :key="'role-' + role.ID"
-              :label="role.name"
-              :value="role.ID"
-            >
-              <span>{{ role.name }}</span>
-              <span class="role-code">{{ role.code }}</span>
-            </el-option>
-          </el-select>
-        </el-form-item>
 
         <!-- 其他信息 -->
-        <div class="form-section-title">
-          <el-icon><Document /></el-icon>
-          <span>其他信息</span>
+        <div class="form-section">
+          <div class="form-section-title">
+            <icon-file style="color: var(--ops-primary);" />
+            <span>其他信息</span>
+          </div>
+          <a-form-item label="个人简介" field="bio">
+            <a-textarea v-model="userForm.bio" placeholder="请输入个人简介" :auto-size="{ minRows: 3, maxRows: 6 }" />
+          </a-form-item>
         </div>
-
-        <el-form-item label="个人简介" prop="bio">
-          <el-input
-            v-model="userForm.bio"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入个人简介"
-          />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSubmit" :loading="submitLoading">
-            <el-icon><Check /></el-icon>
-            确定
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+      </a-form>
+    </a-modal>
 
     <!-- 重置密码对话框 -->
-    <el-dialog
-      v-model="resetPasswordVisible"
+    <a-modal
+      v-model:visible="resetPasswordVisible"
       title="重置密码"
-      width="40%"
-      class="responsive-dialog"
-      @close="handleResetPasswordClose"
+      :width="480"
+      :unmount-on-close="true"
+      @ok="handleResetPasswordSubmit"
+      @cancel="resetPasswordVisible = false"
+      :ok-loading="resetPasswordLoading"
     >
-      <el-form :model="resetPasswordForm" :rules="resetPasswordRules" ref="resetPasswordFormRef" label-width="100px">
-        <el-form-item label="用户名">
-          <el-input v-model="resetPasswordForm.username" disabled />
-        </el-form-item>
-        <el-form-item label="新密码" prop="password">
-          <el-input v-model="resetPasswordForm.password" type="password" show-password placeholder="请输入新密码（至少6位）" />
-        </el-form-item>
-        <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input v-model="resetPasswordForm.confirmPassword" type="password" show-password placeholder="请再次输入新密码" />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="resetPasswordVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleResetPasswordSubmit" :loading="resetPasswordLoading">确定</el-button>
-      </template>
-    </el-dialog>
+      <a-form :model="resetPasswordForm" layout="vertical" ref="resetPasswordFormRef">
+        <a-form-item label="用户名">
+          <a-input v-model="resetPasswordForm.username" disabled />
+        </a-form-item>
+        <a-form-item label="新密码" field="password" :rules="[{ required: true, message: '请输入新密码' }, { minLength: 6, message: '密码长度不能少于6位' }]">
+          <a-input-password v-model="resetPasswordForm.password" placeholder="请输入新密码（至少6位）" />
+        </a-form-item>
+        <a-form-item label="确认密码" field="confirmPassword" :rules="[{ required: true, message: '请再次输入新密码' }, { validator: validateConfirmPassword }]">
+          <a-input-password v-model="resetPasswordForm.confirmPassword" placeholder="请再次输入新密码" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox, FormInstance } from 'element-plus'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import {
-  User, Postcard, Message, Phone, Lock,
-  OfficeBuilding, Key, Document, Check, Edit, Delete, Unlock
-} from '@element-plus/icons-vue'
+  IconUser,
+  IconCommon,
+  IconSearch,
+  IconRefresh,
+  IconPlus,
+  IconUnlock,
+  IconHome,
+  IconSafe,
+  IconFile,
+} from '@arco-design/web-vue/es/icon'
 import { getUserList, createUser, updateUser, deleteUser, resetUserPassword, assignUserRoles, assignUserPositions, unlockUser } from '@/api/user'
 import { getDepartmentTree } from '@/api/department'
 import { getAllRoles } from '@/api/role'
@@ -338,39 +310,50 @@ const submitLoading = ref(false)
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
-const formRef = ref<FormInstance>()
+const formRef = ref()
 const treeRef = ref()
 
-// 部门树相关
-const departmentTree = ref([])
-const treeProps = {
-  children: 'children',
-  label: 'deptName'
-}
-const selectedDepartment = ref(null)
+// 部门树
+const departmentTree = ref<any[]>([])
+const selectedDepartment = ref<any>(null)
 const selectedDepartmentPath = ref('')
+const selectedTreeKeys = ref<(string | number)[]>([])
 
 // 角色和岗位选项
-const roleOptions = ref([])
-const positionOptions = ref([])
+const roleOptions = ref<any[]>([])
+const positionOptions = ref<any[]>([])
 
-// 处理部门树数据，转换为el-tree-select需要的格式
-const departmentTreeData = computed(() => {
-  const convertTree = (nodes: any[]): any[] => {
-    return nodes.map(node => ({
+// 转换为 a-tree-select 格式
+const departmentTreeData = computed(() => departmentTree.value)
+
+const deptSelectTreeData = computed(() => {
+  const convert = (nodes: any[]): any[] =>
+    nodes.map(node => ({
       id: node.id,
       label: node.deptName || node.name,
-      userCount: node.userCount || 0,
-      children: node.children ? convertTree(node.children) : []
+      children: node.children ? convert(node.children) : []
     }))
-  }
-  return convertTree(departmentTree.value)
+  return convert(departmentTree.value)
 })
 
-// 重置密码相关
+const roleSelectOptions = computed(() =>
+  roleOptions.value.map(r => ({
+    value: r.ID || r.id,
+    label: r.name
+  }))
+)
+
+const positionSelectOptions = computed(() =>
+  positionOptions.value.map(p => ({
+    value: p.ID || p.id,
+    label: p.postName
+  }))
+)
+
+// 重置密码
 const resetPasswordVisible = ref(false)
 const resetPasswordLoading = ref(false)
-const resetPasswordFormRef = ref<FormInstance>()
+const resetPasswordFormRef = ref()
 const resetPasswordForm = reactive({
   userId: 0,
   username: '',
@@ -378,6 +361,15 @@ const resetPasswordForm = reactive({
   confirmPassword: ''
 })
 
+const validateConfirmPassword = (value: any, callback: (error?: string) => void) => {
+  if (value !== resetPasswordForm.password) {
+    callback('两次输入的密码不一致')
+  } else {
+    callback()
+  }
+}
+
+// 搜索
 const searchForm = reactive({
   keyword: '',
   departmentId: null as number | null
@@ -389,7 +381,16 @@ const pagination = reactive({
   total: 0
 })
 
-const userList = ref([])
+const tablePagination = computed(() => ({
+  current: pagination.page,
+  pageSize: pagination.pageSize,
+  total: pagination.total,
+  showTotal: true,
+  showPageSize: true,
+  pageSizeOptions: [10, 20, 50, 100],
+}))
+
+const userList = ref<any[]>([])
 
 const userForm = reactive({
   id: 0,
@@ -405,50 +406,39 @@ const userForm = reactive({
   bio: ''
 })
 
-const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
-  ],
-  email: [{ required: true, message: '请输入邮箱', trigger: 'blur' }]
-}
-
-const resetPasswordRules = {
-  password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
-  ],
-  confirmPassword: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
-    {
-      validator: (rule: any, value: any, callback: any) => {
-        if (value !== resetPasswordForm.password) {
-          callback(new Error('两次输入的密码不一致'))
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur'
-    }
-  ]
-}
-
+// 加载用户列表
 const loadUsers = async () => {
   loading.value = true
   try {
-    const res = await getUserList({
+    const res: any = await getUserList({
       page: pagination.page,
       pageSize: pagination.pageSize,
-      keyword: searchForm.keyword,
-      departmentId: searchForm.departmentId
+      keyword: searchForm.keyword || undefined,
+      departmentId: searchForm.departmentId || undefined
     })
     userList.value = res.list || []
     pagination.total = res.total || 0
-  } catch (error) {
+  } catch {
+    userList.value = []
   } finally {
     loading.value = false
   }
+}
+
+const handleSearch = () => {
+  pagination.page = 1
+  loadUsers()
+}
+
+const handlePageChange = (page: number) => {
+  pagination.page = page
+  loadUsers()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.page = 1
+  loadUsers()
 }
 
 // 加载部门树
@@ -456,41 +446,29 @@ const loadDepartmentTree = async () => {
   try {
     const res = await getDepartmentTree()
     departmentTree.value = res || []
-  } catch (error) {
-  }
+  } catch { /* ignore */ }
 }
 
 // 加载角色选项
 const loadRoleOptions = async () => {
   try {
-    roleOptions.value = []  // 先清空
     const res = await getAllRoles()
     roleOptions.value = res || []
-  } catch (error) {
-  }
+  } catch { /* ignore */ }
 }
 
 // 加载岗位选项
 const loadPositionOptions = async () => {
   try {
-    positionOptions.value = []  // 先清空
-    const res = await getPositionList({ page: 1, pageSize: 1000 })
-    const list = res.list || []
-    if (list.length > 0) {
-    }
-    positionOptions.value = list
-  } catch (error) {
-  }
-}
-
-// 岗位选择变化
-const handlePositionChange = (value: any) => {
+    const res: any = await getPositionList({ page: 1, pageSize: 1000 })
+    positionOptions.value = res.list || []
+  } catch { /* ignore */ }
 }
 
 // 构建部门路径
 const buildDepartmentPath = (node: any, path: string[] = []): string => {
   path.unshift(node.deptName || node.name)
-  if (node.parent && departmentTree.value) {
+  if (node.parentId && departmentTree.value) {
     const findParent = (nodes: any[], id: number): any => {
       for (const n of nodes) {
         if (n.id === id) return n
@@ -502,18 +480,22 @@ const buildDepartmentPath = (node: any, path: string[] = []): string => {
       return null
     }
     const parent = findParent(departmentTree.value, node.parentId)
-    if (parent) {
-      return buildDepartmentPath(parent, path)
-    }
+    if (parent) return buildDepartmentPath(parent, path)
   }
   return path.join(' / ')
 }
 
-// 处理部门节点点击
-const handleNodeClick = (data: any) => {
-  selectedDepartment.value = data
-  selectedDepartmentPath.value = buildDepartmentPath(data)
-  searchForm.departmentId = data.id
+// 部门节点点击
+const handleNodeClick = (keys: (string | number)[], data: any) => {
+  if (keys.length === 0) {
+    clearDepartmentSelection()
+    return
+  }
+  const node = data.node
+  selectedTreeKeys.value = keys
+  selectedDepartment.value = node
+  selectedDepartmentPath.value = buildDepartmentPath(node)
+  searchForm.departmentId = node.id
   pagination.page = 1
   loadUsers()
 }
@@ -522,8 +504,8 @@ const handleNodeClick = (data: any) => {
 const clearDepartmentSelection = () => {
   selectedDepartment.value = null
   selectedDepartmentPath.value = ''
+  selectedTreeKeys.value = []
   searchForm.departmentId = null
-  treeRef.value?.setCurrentKey(null)
   pagination.page = 1
   loadUsers()
 }
@@ -534,7 +516,17 @@ const resetSearch = () => {
   loadUsers()
 }
 
+// 重置表单
+const resetForm = () => {
+  Object.assign(userForm, {
+    id: 0, username: '', password: '', realName: '', email: '',
+    phone: '', status: 1, departmentId: null, positionIds: [], roleIds: [], bio: ''
+  })
+  formRef.value?.clearValidate()
+}
+
 const handleAdd = () => {
+  resetForm()
   isEdit.value = false
   dialogTitle.value = '新增用户'
   dialogVisible.value = true
@@ -544,17 +536,6 @@ const handleEdit = (row: any) => {
   isEdit.value = true
   dialogTitle.value = '编辑用户'
 
-  // 调试：打印原始数据
-  if (row.roles && Array.isArray(row.roles)) {
-    row.roles.forEach((r: any, index: number) => {
-    })
-  }
-  if (row.positions && Array.isArray(row.positions)) {
-    row.positions.forEach((p: any, index: number) => {
-    })
-  }
-
-  // 正确处理ID字段，兼容大小写
   userForm.id = Number(row.ID || row.id)
   userForm.username = row.username
   userForm.realName = row.realName || ''
@@ -563,7 +544,6 @@ const handleEdit = (row: any) => {
   userForm.status = row.status ?? 1
   userForm.departmentId = row.departmentId ? Number(row.departmentId) : null
 
-  // 处理岗位ID
   if (row.positionIds && Array.isArray(row.positionIds)) {
     userForm.positionIds = row.positionIds.map((id: any) => Number(id))
   } else if (row.positions && Array.isArray(row.positions) && row.positions.length > 0) {
@@ -572,7 +552,6 @@ const handleEdit = (row: any) => {
     userForm.positionIds = []
   }
 
-  // 处理角色ID
   if (row.roleIds && Array.isArray(row.roleIds)) {
     userForm.roleIds = row.roleIds
   } else if (row.roles && Array.isArray(row.roles) && row.roles.length > 0) {
@@ -581,23 +560,34 @@ const handleEdit = (row: any) => {
     userForm.roleIds = []
   }
 
-
   userForm.bio = row.bio || ''
   dialogVisible.value = true
 }
 
 const handleDelete = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确定要删除该用户吗？', '提示', {
-      type: 'warning'
-    })
     await deleteUser(row.ID || row.id)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     loadUsers()
-  } catch (error) {
-    if (error !== 'cancel') {
-    }
+  } catch {
+    Message.error('删除失败')
   }
+}
+
+const handleUnlock = (row: any) => {
+  Modal.confirm({
+    title: '确认解锁',
+    content: `确定要解锁用户 "${row.username}" 吗？`,
+    onOk: async () => {
+      try {
+        await unlockUser(row.ID || row.id)
+        Message.success('用户已解锁')
+        loadUsers()
+      } catch {
+        Message.error('解锁失败')
+      }
+    }
+  })
 }
 
 const handleResetPassword = (row: any) => {
@@ -608,124 +598,55 @@ const handleResetPassword = (row: any) => {
   resetPasswordVisible.value = true
 }
 
-const handleUnlock = async (row: any) => {
+const handleResetPasswordSubmit = async () => {
+  const errors = await resetPasswordFormRef.value?.validate()
+  if (errors) return
+
+  resetPasswordLoading.value = true
   try {
-    await ElMessageBox.confirm(`确定要解锁用户 "${row.username}" 吗？`, '提示', {
-      type: 'warning'
-    })
-    await unlockUser(row.ID || row.id)
-    ElMessage.success('用户已解锁')
-    loadUsers()
-  } catch (error) {
-    if (error !== 'cancel') {
-    }
+    await resetUserPassword(resetPasswordForm.userId, resetPasswordForm.password)
+    Message.success('密码重置成功')
+    resetPasswordVisible.value = false
+  } catch {
+    Message.error('密码重置失败')
+  } finally {
+    resetPasswordLoading.value = false
   }
 }
 
-const handleResetPasswordSubmit = async () => {
-  if (!resetPasswordFormRef.value) return
-
-  await resetPasswordFormRef.value.validate(async (valid) => {
-    if (valid) {
-      resetPasswordLoading.value = true
-      try {
-        await resetUserPassword(resetPasswordForm.userId, resetPasswordForm.password)
-        ElMessage.success('密码重置成功')
-        resetPasswordVisible.value = false
-      } catch (error) {
-      } finally {
-        resetPasswordLoading.value = false
-      }
-    }
-  })
-}
-
-const handleResetPasswordClose = () => {
-  resetPasswordFormRef.value?.resetFields()
-  Object.assign(resetPasswordForm, {
-    userId: 0,
-    username: '',
-    password: '',
-    confirmPassword: ''
-  })
-}
-
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  const errors = await formRef.value?.validate()
+  if (errors) return
 
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      submitLoading.value = true
-      try {
-        // 保存角色ID和岗位ID，过滤掉null值
-        const roleIds = (userForm.roleIds || []).filter((id: any) => id != null)
-        const positionIds = (userForm.positionIds || []).filter((id: any) => id != null)
+  submitLoading.value = true
+  try {
+    const roleIds = (userForm.roleIds || []).filter((id: any) => id != null)
+    const positionIds = (userForm.positionIds || []).filter((id: any) => id != null)
 
-        if (isEdit.value) {
-          // 清理userForm中的null值，避免发送到后端
-          const userData = {
-            ...userForm,
-            positionIds: positionIds,
-            roleIds: roleIds
-          }
-
-          // 更新用户基本信息
-          await updateUser(userForm.id, userData)
-
-          // 分配角色（传空数组表示清空角色）
-          await assignUserRoles(userForm.id, roleIds)
-
-          // 分配岗位（传空数组表示清空岗位）
-          await assignUserPositions(userForm.id, positionIds)
-
-          ElMessage.success('更新成功')
-        } else {
-          // 创建新用户
-          await createUser(userForm)
-
-          // 分配角色
-          if (roleIds.length > 0) {
-            // 获取刚创建的用户ID，这里需要从响应中获取
-            // 暂时先跳过，需要后端返回创建的用户ID
-          }
-
-          ElMessage.success('创建成功')
-        }
-
-        dialogVisible.value = false
-        loadUsers()
-      } catch (error) {
-        ElMessage.error('操作失败')
-      } finally {
-        submitLoading.value = false
-      }
+    if (isEdit.value) {
+      const userData = { ...userForm, positionIds, roleIds }
+      await updateUser(userForm.id, userData)
+      await assignUserRoles(userForm.id, roleIds)
+      await assignUserPositions(userForm.id, positionIds)
+      Message.success('更新成功')
+    } else {
+      await createUser(userForm)
+      Message.success('创建成功')
     }
-  })
+
+    dialogVisible.value = false
+    loadUsers()
+  } catch {
+    Message.error('操作失败')
+  } finally {
+    submitLoading.value = false
+  }
 }
 
 const handleDialogClose = () => {
-  formRef.value?.resetFields()
-  Object.assign(userForm, {
-    id: 0,
-    username: '',
-    password: '',
-    realName: '',
-    email: '',
-    phone: '',
-    status: 1,
-    departmentId: null,
-    positionIds: [],
-    roleIds: [],
-    bio: ''
-  })
+  resetForm()
+  dialogVisible.value = false
 }
-
-// 监控岗位选项和选择的变化
-watch(positionOptions, (newVal) => {
-}, { deep: true })
-
-watch(() => userForm.positionIds, (newVal) => {
-})
 
 onMounted(() => {
   loadDepartmentTree()
@@ -735,69 +656,76 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.users-container {
-  padding: 20px;
-  background-color: #fff;
-  min-height: 100%;
+<style scoped lang="scss">
+.page-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.page-header {
+.page-header-card {
+  background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px);
+  padding: 20px 24px;
+}
+
+.page-header-inner {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e6e6e6;
+  gap: 16px;
+}
+
+.page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ops-primary, #165dff) 0%, #4080ff 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  flex-shrink: 0;
 }
 
 .page-title {
-  margin: 0;
   font-size: 18px;
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: var(--ops-text-primary, #1d2129);
+  line-height: 1.4;
+}
+
+.page-desc {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 2px;
 }
 
 .content-wrapper {
   display: flex;
-  gap: 20px;
-  min-height: calc(100vh - 200px);
+  gap: 16px;
+  min-height: 0;
+  flex: 1;
 }
 
-/* 左侧部门树面板 */
-.dept-tree-panel {
+/* 左侧部门树 */
+.dept-tree-card {
   width: 280px;
   min-width: 280px;
-  background: #fafafa;
-  border: 1px solid #e6e6e6;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
+  border-radius: var(--ops-border-radius-md, 8px);
+  flex-shrink: 0;
+
+  .card-title {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+  }
 }
 
-.panel-header {
-  padding: 12px 16px;
-  font-weight: 500;
-  color: #303133;
-  border-bottom: 1px solid #e6e6e6;
-  background-color: #fff;
-  border-radius: 4px 4px 0 0;
-}
-
-.dept-tree {
-  flex: 1;
-  padding: 12px;
-  overflow-y: auto;
-  background-color: #fafafa;
-  font-size: 15px;
-}
-
-.custom-tree-node {
+.tree-node {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding-right: 8px;
+  gap: 4px;
 }
 
 .node-label {
@@ -805,144 +733,96 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
 }
 
 .node-count {
-  color: #909399;
-  font-size: 14px;
+  color: var(--ops-text-tertiary, #86909c);
+  font-size: 12px;
 }
 
-/* 右侧用户列表面板 */
+/* 右侧用户列表 */
 .user-list-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 16px;
+  min-width: 0;
 }
 
-.selected-dept-bar {
+.dept-alert {
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
+.dept-alert-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  margin-bottom: 16px;
-  background-color: #f0f9ff;
-  border: 1px solid #b3d8ff;
-  border-radius: 4px;
+  width: 100%;
+
+  .label {
+    color: var(--ops-text-secondary, #4e5969);
+    font-weight: 500;
+  }
+
+  .path {
+    color: var(--ops-primary, #165dff);
+  }
 }
 
-.dept-path-text {
+.search-card {
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
+.search-label {
+  font-size: 14px;
+  color: var(--ops-text-secondary, #4e5969);
+  white-space: nowrap;
+}
+
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
+  flex: 1;
+}
+
+/* 用户单元格 */
+.user-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.dept-path-text .label {
-  color: #606266;
+.user-cell-info {
+  min-width: 0;
+}
+
+.user-cell-name {
+  font-size: 14px;
   font-weight: 500;
+  color: var(--ops-text-primary, #1d2129);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.dept-path-text .path {
-  color: #409eff;
+.user-cell-sub {
+  font-size: 12px;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
-.search-form {
-  margin-bottom: 16px;
-}
-
-/* 黑色按钮样式 */
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.black-button:focus {
-  background-color: #000000 !important;
-  border-color: #000000 !important;
-}
-
-/* 用户对话框样式 */
-.user-dialog :deep(.el-dialog__body) {
-  padding: 20px 30px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.user-form {
-  width: 100%;
+/* 表单分区 */
+.form-section {
+  margin-bottom: 8px;
 }
 
 .form-section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
-}
-
-.form-section-title .el-icon {
-  font-size: 18px;
-  color: #409eff;
-}
-
-.form-section-title + .el-form {
-  margin-top: 16px;
-}
-
-/* 树形选择器节点样式 */
-.tree-node-count {
-  margin-left: 8px;
-  color: #909399;
-  font-size: 12px;
-}
-
-/* 角色选择器选项样式 */
-.role-code {
-  margin-left: 12px;
-  color: #909399;
-  font-size: 12px;
-}
-
-/* 对话框底部 */
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.dialog-footer .el-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* 输入框图标样式 */
-.user-form :deep(.el-input__prefix) {
-  color: #a8abb2;
-}
-
-/* 响应式对话框 */
-:deep(.responsive-dialog) {
-  max-width: 1200px;
-  min-width: 400px;
-}
-
-@media (max-width: 768px) {
-  :deep(.responsive-dialog .el-dialog) {
-    width: 95% !important;
-    max-width: none;
-    min-width: auto;
-  }
+  color: var(--ops-text-primary, #1d2129);
 }
 </style>

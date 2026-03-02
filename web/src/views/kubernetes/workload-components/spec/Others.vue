@@ -14,12 +14,12 @@
           </div>
           <div class="form-item-row">
             <label class="form-label">优雅终止期限(秒)</label>
-            <el-input-number v-model="formData.terminationGracePeriodSeconds" :min="0" :max="3600" size="small" style="width: 200px;" />
+            <a-input-number v-model="formData.terminationGracePeriodSeconds" :min="0" :max="3600" size="small" style="width: 200px;" />
             <span class="form-hint">Pod 删除时等待优雅终止的时间（秒），默认 30 秒</span>
           </div>
           <div class="form-item-row" v-if="formData.type !== 'Job' && formData.type !== 'CronJob'">
             <label class="form-label">活动期限(秒)</label>
-            <el-input-number v-model="formData.activeDeadlineSeconds" :min="0" :max="86400" size="small" style="width: 200px;" controls-position="right" />
+            <a-input-number v-model="formData.activeDeadlineSeconds" :min="0" :max="86400" size="small" style="width: 200px;" controls-position="right" />
             <span class="form-hint">可选，Pod 可运行的最长时间（秒），超时将被终止</span>
           </div>
         </div>
@@ -31,12 +31,12 @@
           </div>
           <div class="form-item-row">
             <label class="form-label">服务账户名</label>
-            <el-input v-model="formData.serviceAccountName" placeholder="默认: default" style="width: 300px;" />
+            <a-input v-model="formData.serviceAccountName" placeholder="默认: default" style="width: 300px;" />
             <span class="form-hint">指定运行 Pod 的服务账户</span>
           </div>
           <div class="form-item-row">
             <label class="form-label">自动挂载令牌</label>
-            <el-switch
+            <a-switch
               v-model="formData.automountServiceAccountToken"
               active-text="开启"
               inactive-text="关闭"
@@ -52,7 +52,7 @@
           </div>
           <div class="form-item-row">
             <label class="form-label">优先级类名称</label>
-            <el-input v-model="formData.priorityClassName" placeholder="可选，如: high-priority" style="width: 300px;" />
+            <a-input v-model="formData.priorityClassName" placeholder="可选，如: high-priority" style="width: 300px;" />
             <span class="form-hint">指定 Pod 的优先级类，影响调度优先级</span>
           </div>
         </div>
@@ -64,11 +64,11 @@
           </div>
           <div class="form-item-row">
             <label class="form-label">重启策略</label>
-            <el-select v-model="formData.restartPolicy" placeholder="选择重启策略" style="width: 200px;" :disabled="formData.type === 'Deployment'">
-              <el-option label="Always" value="Always" />
-              <el-option label="OnFailure" value="OnFailure" />
-              <el-option label="Never" value="Never" />
-            </el-select>
+            <a-select v-model="formData.restartPolicy" placeholder="选择重启策略" style="width: 200px;" :disabled="formData.type === 'Deployment'">
+              <a-option label="Always" value="Always" />
+              <a-option label="OnFailure" value="OnFailure" />
+              <a-option label="Never" value="Never" />
+            </a-select>
             <span class="form-hint" v-if="formData.type === 'Deployment'">Deployment 固定为 Always</span>
             <span class="form-hint" v-else>容器退出时的重启策略</span>
           </div>

@@ -1,95 +1,98 @@
 <template>
   <div class="app-diagnosis-container">
     <!-- 页面标题 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Cpu /></el-icon>
-        </div>
-        <div>
-          <h2 class="page-title">应用诊断</h2>
-          <p class="page-subtitle">基于 Arthas 的 Java 应用诊断工具</p>
+    <a-card class="page-header-card">
+      <div class="page-header">
+        <div class="page-title-group">
+          <div class="page-title-icon">
+            <icon-thunderbolt />
+          </div>
+          <div>
+            <h2 class="page-title">应用诊断</h2>
+            <p class="page-subtitle">基于 Arthas 的 Java 应用诊断工具</p>
+          </div>
         </div>
       </div>
-    </div>
+    </a-card>
 
     <!-- 选择器栏 -->
-    <div class="selector-bar">
+    <a-card class="search-card">
+      <div class="selector-bar">
       <div class="selector-inputs">
         <div class="selector-item">
           <span class="selector-label">集群</span>
-          <el-select
+          <a-select
             v-model="selectedCluster"
             placeholder="请选择集群"
             @change="handleClusterChange"
             class="selector-select"
           >
-            <el-option
+            <a-option
               v-for="cluster in clusters"
               :key="cluster.id"
               :label="cluster.name"
               :value="cluster.id"
             />
-          </el-select>
+          </a-select>
         </div>
 
         <div class="selector-item">
           <span class="selector-label">命名空间</span>
-          <el-select
+          <a-select
             v-model="selectedNamespace"
             placeholder="请选择命名空间"
             @change="handleNamespaceChange"
             :disabled="!selectedCluster"
             class="selector-select"
           >
-            <el-option
+            <a-option
               v-for="ns in namespaces"
               :key="ns.name"
               :label="ns.name"
               :value="ns.name"
             />
-          </el-select>
+          </a-select>
         </div>
 
         <div class="selector-item">
           <span class="selector-label">Pod</span>
-          <el-select
+          <a-select
             v-model="selectedPod"
             placeholder="请选择Pod"
             @change="handlePodChange"
             :disabled="!selectedNamespace"
             class="selector-select"
           >
-            <el-option
+            <a-option
               v-for="pod in pods"
               :key="pod.name"
               :label="pod.name"
               :value="pod.name"
             />
-          </el-select>
+          </a-select>
         </div>
 
         <div class="selector-item">
           <span class="selector-label">容器</span>
-          <el-select
+          <a-select
             v-model="selectedContainer"
             placeholder="请选择容器"
             @change="handleContainerChange"
             :disabled="!selectedPod"
             class="selector-select"
           >
-            <el-option
+            <a-option
               v-for="container in containers"
               :key="container"
               :label="container"
               :value="container"
             />
-          </el-select>
+          </a-select>
         </div>
 
         <div class="selector-item">
           <span class="selector-label">进程</span>
-          <el-select
+          <a-select
             v-model="selectedProcess"
             placeholder="请选择进程"
             :disabled="!selectedContainer"
@@ -97,18 +100,18 @@
             class="selector-select process-select"
             @change="handleProcessChange"
           >
-            <el-option
+            <a-option
               v-for="proc in processes"
               :key="proc.pid"
               :label="`${proc.pid} - ${proc.mainClass}`"
               :value="proc.pid"
             />
-          </el-select>
+          </a-select>
         </div>
       </div>
 
       <div class="selector-actions">
-        <el-button
+        <a-button
           type="primary"
           :icon="attached ? Link : Download"
           @click="handleAttach"
@@ -117,14 +120,15 @@
           class="attach-btn"
         >
           {{ attached ? '已连接' : '连接' }}
-        </el-button>
+        </a-button>
       </div>
-    </div>
+      </div>
+    </a-card>
 
     <!-- Tab 内容区 -->
-    <div class="content-wrapper">
-      <el-tabs v-model="activeTab" class="diagnosis-tabs" @tab-change="handleTabChange">
-        <el-tab-pane label="控制面板" name="dashboard">
+    <a-card class="table-card">
+      <a-tabs v-model:active-key="activeTab" class="diagnosis-tabs" @tab-change="handleTabChange">
+        <a-tab-pane title="控制面板" key="dashboard">
           <DashboardPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -133,9 +137,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="线程清单" name="threads">
+        <a-tab-pane title="线程清单" key="threads">
           <ThreadListPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -144,9 +148,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="JVM信息" name="jvm">
+        <a-tab-pane title="JVM信息" key="jvm">
           <JvmInfoPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -155,9 +159,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="系统信息" name="sysinfo">
+        <a-tab-pane title="系统信息" key="sysinfo">
           <SystemInfoPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -166,9 +170,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="线程堆栈" name="stack">
+        <a-tab-pane title="线程堆栈" key="stack">
           <ThreadStackPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -177,9 +181,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="火焰图" name="flame">
+        <a-tab-pane title="火焰图" key="flame">
           <FlameGraphPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -188,9 +192,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="方法追踪" name="trace">
+        <a-tab-pane title="方法追踪" key="trace">
           <MethodTracePanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -199,9 +203,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="方法监测" name="watch">
+        <a-tab-pane title="方法监测" key="watch">
           <MethodWatchPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -210,9 +214,9 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="方法监控" name="monitor">
+        <a-tab-pane title="方法监控" key="monitor">
           <MethodMonitorPanel
             :cluster-id="selectedCluster"
             :namespace="selectedNamespace"
@@ -221,17 +225,16 @@
             :process-id="selectedProcess"
             :attached="attached"
           />
-        </el-tab-pane>
-      </el-tabs>
-    </div>
+        </a-tab-pane>
+      </a-tabs>
+    </a-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Download, Link, Cpu } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getClusterList, getNamespaces, getPods, getPodDetail } from '@/api/kubernetes'
 import { listJavaProcesses, checkArthasInstalled, installArthas, type JavaProcess } from '@/api/arthas'
 
@@ -383,14 +386,14 @@ const loadProcesses = async () => {
     })
     processes.value = Array.isArray(res) ? res : (res?.data || [])
     if (processes.value.length === 0) {
-      ElMessage.warning('未检测到Java进程，请确保容器中有运行的Java应用')
+      Message.warning('未检测到Java进程，请确保容器中有运行的Java应用')
     }
   } catch (error: any) {
     processes.value = []
     if (error.message && !error.message.includes('exit code')) {
-      ElMessage.error('获取Java进程失败: ' + (error.message || '未知错误'))
+      Message.error('获取Java进程失败: ' + (error.message || '未知错误'))
     } else {
-      ElMessage.warning('该容器未检测到Java环境')
+      Message.warning('该容器未检测到Java环境')
     }
   } finally {
     loadingProcesses.value = false
@@ -463,12 +466,12 @@ const handleTabChange = (tab: string) => {
 // 安装/连接 Arthas
 const handleAttach = async () => {
   if (!selectedProcess.value) {
-    ElMessage.warning('请先选择要诊断的进程')
+    Message.warning('请先选择要诊断的进程')
     return
   }
 
   if (!selectedCluster.value || !selectedNamespace.value || !selectedPod.value || !selectedContainer.value) {
-    ElMessage.warning('请先选择集群、命名空间、Pod和容器')
+    Message.warning('请先选择集群、命名空间、Pod和容器')
     return
   }
 
@@ -485,12 +488,12 @@ const handleAttach = async () => {
     const checkData = checkRes?.hasJava !== undefined ? checkRes : checkRes?.data
 
     if (!checkData?.hasJava) {
-      ElMessage.error('容器中未检测到Java环境，无法使用Arthas诊断')
+      Message.error('容器中未检测到Java环境，无法使用Arthas诊断')
       return
     }
 
     if (!checkData?.hasArthas) {
-      ElMessage.info('正在安装Arthas...')
+      Message.info('正在安装Arthas...')
       await installArthas({
         clusterId: selectedCluster.value,
         namespace: selectedNamespace.value,
@@ -501,9 +504,9 @@ const handleAttach = async () => {
 
     attached.value = true
     saveState()
-    ElMessage.success('连接成功')
+    Message.success('连接成功')
   } catch (error: any) {
-    ElMessage.error('连接失败: ' + (error.message || '未知错误'))
+    Message.error('连接失败: ' + (error.message || '未知错误'))
   } finally {
     attaching.value = false
   }
@@ -521,60 +524,60 @@ onMounted(async () => {
   background-color: transparent;
 }
 
-/* 页面头部 */
+/* 页面头部卡片 */
+.page-header-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  align-items: center;
 }
 
 .page-title-group {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 14px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  width: 44px;
+  height: 44px;
+  background: var(--ops-primary, #165dff);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   line-height: 1.4;
+}
+
+/* 搜索卡片 */
+.search-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 /* 选择器栏 */
 .selector-bar {
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -595,10 +598,9 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
 }
-
 .selector-label {
   font-size: 13px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   white-space: nowrap;
   font-weight: 500;
 }
@@ -616,48 +618,9 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.attach-btn {
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-color: #d4af37;
-  color: #d4af37;
-}
-
-.attach-btn:hover {
-  background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
-  border-color: #e5c158;
-  color: #e5c158;
-}
-
-.attach-btn:disabled {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #c0c4cc;
-}
-
-/* 选择器样式 */
-.selector-bar :deep(.el-select .el-input__wrapper) {
-  border-radius: 6px;
-  border: 1px solid #dcdfe6;
-  box-shadow: none;
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.selector-bar :deep(.el-select .el-input__wrapper:hover) {
-  border-color: #d4af37;
-}
-
-.selector-bar :deep(.el-select .el-input.is-focus .el-input__wrapper) {
-  border-color: #d4af37;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.15);
-}
-
-/* 内容区域 */
-.content-wrapper {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
+/* 表格卡片 */
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 /* Tab 样式 */
@@ -665,42 +628,32 @@ onMounted(async () => {
   padding: 0;
 }
 
-:deep(.diagnosis-tabs .el-tabs__header) {
+:deep(.diagnosis-tabs .arco-tabs__header) {
   margin: 0;
-  padding: 0 20px;
-  background: #fafbfc;
-  border-bottom: 1px solid #e4e7eb;
+  padding: 0;
+  background: var(--ops-content-bg, #f7f8fa);
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
-:deep(.diagnosis-tabs .el-tabs__nav-wrap::after) {
+:deep(.diagnosis-tabs .arco-tabs__nav-wrap::after) {
   display: none;
 }
 
-:deep(.diagnosis-tabs .el-tabs__item) {
+:deep(.diagnosis-tabs .arco-tabs__item) {
   padding: 0 20px;
   height: 48px;
   line-height: 48px;
   font-size: 13px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   font-weight: 500;
   transition: all 0.2s ease;
 }
 
-:deep(.diagnosis-tabs .el-tabs__item:hover) {
-  color: #d4af37;
+:deep(.diagnosis-tabs .arco-tabs__item:hover) {
+  color: var(--ops-primary, #165dff);
 }
 
-:deep(.diagnosis-tabs .el-tabs__item.is-active) {
-  color: #d4af37;
-  font-weight: 600;
-}
-
-:deep(.diagnosis-tabs .el-tabs__active-bar) {
-  background-color: #d4af37;
-  height: 3px;
-}
-
-:deep(.diagnosis-tabs .el-tabs__content) {
+:deep(.diagnosis-tabs .arco-tabs__content) {
   padding: 20px;
 }
 
@@ -748,7 +701,7 @@ onMounted(async () => {
     width: 100%;
   }
 
-  :deep(.diagnosis-tabs .el-tabs__item) {
+  :deep(.diagnosis-tabs .arco-tabs__item) {
     padding: 0 12px;
     font-size: 12px;
   }

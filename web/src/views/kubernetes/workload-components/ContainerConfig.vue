@@ -4,31 +4,31 @@
     <div class="container-section">
       <div class="section-header">
         <span class="section-title">标准容器 (Containers)</span>
-        <el-button type="primary" :icon="Plus" size="small" @click="addContainer('containers')">添加容器</el-button>
+        <a-button type="primary" size="small" @click="addContainer('containers')">添加容器</a-button>
       </div>
       <div class="container-list">
-        <el-collapse v-model="activeContainers" accordion>
-          <el-collapse-item v-for="(container, index) in containers" :key="'container-'+index" :name="index">
+        <a-collapse v-model="activeContainers" accordion>
+          <a-collapse-item v-for="(container, index) in containers" :key="'container-'+index" :name="index">
             <template #title>
               <div class="container-title">
-                <el-icon><Box /></el-icon>
+                <icon-storage />
                 <span>{{ container.name || '未命名容器' }}</span>
-                <el-tag size="small" type="success">{{ container.image || '无镜像' }}</el-tag>
-                <el-button type="danger" link :icon="Delete" size="small" @click.stop="removeContainer('containers', index)" class="remove-btn">删除</el-button>
+                <a-tag size="small" color="green">{{ container.image || '无镜像' }}</a-tag>
+                <a-button status="danger" type="text" size="small" @click.stop="removeContainer('containers', index)" class="remove-btn">删除</a-button>
               </div>
             </template>
             <div class="container-detail">
-              <el-tabs :model-value="getContainerActiveTab('containers', index)" @tab-change="(tab) => setContainerActiveTab('containers', index, tab as string)">
-                <el-tab-pane label="基础配置" name="basic">
+              <a-tabs :model-value="getContainerActiveTab('containers', index)" @tab-change="(tab) => setContainerActiveTab('containers', index, tab as string)">
+                <a-tab-pane title="基础配置" key="basic">
                   <ContainerBasicInfo :container="container" @update="updateContainer('containers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="运行命令" name="command">
+                </a-tab-pane>
+                <a-tab-pane title="运行命令" key="command">
                   <ContainerCommand :container="container" @update="updateContainer('containers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="环境变量" name="env">
+                </a-tab-pane>
+                <a-tab-pane title="环境变量" key="env">
                   <EnvConfig :envs="container.env || []" @update="updateContainerEnv('containers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="健康检测" name="health">
+                </a-tab-pane>
+                <a-tab-pane title="健康检测" key="health">
                   <HealthCheck
                     :livenessProbe="container.livenessProbe"
                     :readinessProbe="container.readinessProbe"
@@ -37,21 +37,21 @@
                     @updateReadiness="updateContainerProbe('containers', index, 'readinessProbe', $event)"
                     @updateStartup="updateContainerProbe('containers', index, 'startupProbe', $event)"
                   />
-                </el-tab-pane>
-                <el-tab-pane label="资源配置" name="resources">
+                </a-tab-pane>
+                <a-tab-pane title="资源配置" key="resources">
                   <ResourceConfig :resources="container.resources || {}" @update="updateContainerResources('containers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="端口配置" name="ports">
+                </a-tab-pane>
+                <a-tab-pane title="端口配置" key="ports">
                   <PortConfig :ports="container.ports || []" @update="updateContainerPorts('containers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="存储挂载" name="volumes">
+                </a-tab-pane>
+                <a-tab-pane title="存储挂载" key="volumes">
                   <VolumeMounts :volumeMounts="container.volumeMounts || []" :volumes="volumes" @update="updateContainerVolumeMounts('containers', index, $event)" />
-                </el-tab-pane>
-              </el-tabs>
+                </a-tab-pane>
+              </a-tabs>
             </div>
-          </el-collapse-item>
-        </el-collapse>
-        <el-empty v-if="containers.length === 0" description="暂无标准容器" :image-size="60" />
+          </a-collapse-item>
+        </a-collapse>
+        <a-empty v-if="containers.length === 0" description="暂无标准容器" :image-size="60" />
       </div>
     </div>
 
@@ -59,31 +59,31 @@
     <div class="container-section">
       <div class="section-header">
         <span class="section-title">初始化容器 (Init Containers)</span>
-        <el-button type="primary" :icon="Plus" size="small" @click="addContainer('initContainers')">添加初始化容器</el-button>
+        <a-button type="primary" size="small" @click="addContainer('initContainers')">添加初始化容器</a-button>
       </div>
       <div class="container-list">
-        <el-collapse v-model="activeInitContainers" accordion>
-          <el-collapse-item v-for="(container, index) in initContainers" :key="'init-container-'+index" :name="index">
+        <a-collapse v-model="activeInitContainers" accordion>
+          <a-collapse-item v-for="(container, index) in initContainers" :key="'init-container-'+index" :name="index">
             <template #title>
               <div class="container-title">
-                <el-icon><Box /></el-icon>
+                <icon-storage />
                 <span>{{ container.name || '未命名容器' }}</span>
-                <el-tag size="small" type="warning">{{ container.image || '无镜像' }}</el-tag>
-                <el-button type="danger" link :icon="Delete" size="small" @click.stop="removeContainer('initContainers', index)" class="remove-btn">删除</el-button>
+                <a-tag size="small" color="orangered">{{ container.image || '无镜像' }}</a-tag>
+                <a-button status="danger" type="text" size="small" @click.stop="removeContainer('initContainers', index)" class="remove-btn">删除</a-button>
               </div>
             </template>
             <div class="container-detail">
-              <el-tabs :model-value="getContainerActiveTab('initContainers', index)" @tab-change="(tab) => setContainerActiveTab('initContainers', index, tab as string)">
-                <el-tab-pane label="基础配置" name="basic">
+              <a-tabs :model-value="getContainerActiveTab('initContainers', index)" @tab-change="(tab) => setContainerActiveTab('initContainers', index, tab as string)">
+                <a-tab-pane title="基础配置" key="basic">
                   <ContainerBasicInfo :container="container" @update="updateContainer('initContainers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="运行命令" name="command">
+                </a-tab-pane>
+                <a-tab-pane title="运行命令" key="command">
                   <ContainerCommand :container="container" @update="updateContainer('initContainers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="环境变量" name="env">
+                </a-tab-pane>
+                <a-tab-pane title="环境变量" key="env">
                   <EnvConfig :envs="container.env || []" @update="updateContainerEnv('initContainers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="健康检测" name="health">
+                </a-tab-pane>
+                <a-tab-pane title="健康检测" key="health">
                   <HealthCheck
                     :livenessProbe="container.livenessProbe"
                     :readinessProbe="container.readinessProbe"
@@ -92,21 +92,21 @@
                     @updateReadiness="updateContainerProbe('initContainers', index, 'readinessProbe', $event)"
                     @updateStartup="updateContainerProbe('initContainers', index, 'startupProbe', $event)"
                   />
-                </el-tab-pane>
-                <el-tab-pane label="资源配置" name="resources">
+                </a-tab-pane>
+                <a-tab-pane title="资源配置" key="resources">
                   <ResourceConfig :resources="container.resources || {}" @update="updateContainerResources('initContainers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="端口配置" name="ports">
+                </a-tab-pane>
+                <a-tab-pane title="端口配置" key="ports">
                   <PortConfig :ports="container.ports || []" @update="updateContainerPorts('initContainers', index, $event)" />
-                </el-tab-pane>
-                <el-tab-pane label="存储挂载" name="volumes">
+                </a-tab-pane>
+                <a-tab-pane title="存储挂载" key="volumes">
                   <VolumeMounts :volumeMounts="container.volumeMounts || []" :volumes="volumes" @update="updateContainerVolumeMounts('initContainers', index, $event)" />
-                </el-tab-pane>
-              </el-tabs>
+                </a-tab-pane>
+              </a-tabs>
             </div>
-          </el-collapse-item>
-        </el-collapse>
-        <el-empty v-if="initContainers.length === 0" description="暂无初始化容器" :image-size="60" />
+          </a-collapse-item>
+        </a-collapse>
+        <a-empty v-if="initContainers.length === 0" description="暂无初始化容器" :image-size="60" />
       </div>
     </div>
   </div>
@@ -114,7 +114,6 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Plus, Delete, Box } from '@element-plus/icons-vue'
 import ContainerBasicInfo from './ContainerBasicInfo.vue'
 import ContainerCommand from './ContainerCommand.vue'
 import EnvConfig from './EnvConfig.vue'
@@ -309,7 +308,7 @@ const updateContainerProbe = (type: 'containers' | 'initContainers', index: numb
   letter-spacing: 0.3px;
 }
 
-.section-header .el-button {
+.section-header .arco-btn {
   font-weight: 500;
   border-radius: 8px;
   background: #ffffff;
@@ -317,7 +316,7 @@ const updateContainerProbe = (type: 'containers' | 'initContainers', index: numb
   color: #d4af37;
 }
 
-.section-header .el-button:hover {
+.section-header .arco-btn:hover {
   background: #fafafa;
   border-color: #c9a227;
   box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
@@ -335,7 +334,7 @@ const updateContainerProbe = (type: 'containers' | 'initContainers', index: numb
   width: 100%;
 }
 
-.container-title .el-icon {
+.container-title .arco-icon {
   color: #d4af37;
   font-size: 18px;
 }
@@ -355,18 +354,18 @@ const updateContainerProbe = (type: 'containers' | 'initContainers', index: numb
   background: #fafafa;
 }
 
-.container-detail :deep(.el-tabs__header) {
+.container-detail :deep(.arco-tabs__header) {
   background: #ffffff;
   border-radius: 8px;
   margin-bottom: 16px;
   border: 1px solid #e8e8e8;
 }
 
-.container-detail :deep(.el-tabs__nav) {
+.container-detail :deep(.arco-tabs__nav) {
   border: none;
 }
 
-.container-detail :deep(.el-tabs__item) {
+.container-detail :deep(.arco-tabs__item) {
   color: #666;
   font-weight: 500;
   border: none;
@@ -376,25 +375,25 @@ const updateContainerProbe = (type: 'containers' | 'initContainers', index: numb
   transition: all 0.3s ease;
 }
 
-.container-detail :deep(.el-tabs__item:hover) {
+.container-detail :deep(.arco-tabs__item:hover) {
   color: #d4af37;
 }
 
-.container-detail :deep(.el-tabs__item.is-active) {
+.container-detail :deep(.arco-tabs__item.is-active) {
   color: #d4af37;
   background: transparent;
 }
 
-.container-detail :deep(.el-tabs__active-bar) {
+.container-detail :deep(.arco-tabs__active-bar) {
   height: 2px;
   background: #d4af37;
 }
 
-.container-detail :deep(.el-collapse) {
+.container-detail :deep(.arco-collapse) {
   border: none;
 }
 
-.container-detail :deep(.el-collapse-item__header) {
+.container-detail :deep(.arco-collapse-item__header) {
   background: #ffffff;
   border-radius: 8px;
   margin-bottom: 12px;
@@ -405,17 +404,17 @@ const updateContainerProbe = (type: 'containers' | 'initContainers', index: numb
   transition: all 0.3s ease;
 }
 
-.container-detail :deep(.el-collapse-item__header:hover) {
+.container-detail :deep(.arco-collapse-item__header:hover) {
   border-color: #d4af37;
   background: #fafafa;
 }
 
-.container-detail :deep(.el-collapse-item__wrap) {
+.container-detail :deep(.arco-collapse-item__wrap) {
   background: transparent;
   border: none;
 }
 
-.container-detail :deep(.el-collapse-item__content) {
+.container-detail :deep(.arco-collapse-item__content) {
   padding-bottom: 0;
 }
 </style>

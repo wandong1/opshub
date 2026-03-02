@@ -2,9 +2,9 @@
   <div class="cluster-roles">
     <!-- 搜索和筛选 -->
     <div class="search-bar">
-      <el-form :inline="true">
-        <el-form-item>
-          <el-input
+      <a-form :inline="true">
+        <a-form-item>
+          <a-input
             v-model="searchKeyword"
             placeholder="搜索角色名称"
             clearable
@@ -13,75 +13,71 @@
             style="width: 240px"
           >
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <icon-search />
             </template>
-          </el-input>
-        </el-form-item>
+          </a-input>
+        </a-form-item>
 
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">
-            <el-icon style="margin-right: 4px;"><Search /></el-icon>
+        <a-form-item>
+          <a-button type="primary" @click="handleSearch">
+            <icon-search />
             搜索
-          </el-button>
-        </el-form-item>
-      </el-form>
+          </a-button>
+        </a-form-item>
+      </a-form>
     </div>
 
     <!-- 角色列表 -->
-    <el-table
+    <a-table
       :data="filteredRoles"
       border
       stripe
-      v-loading="loading"
+      :loading="loading"
       style="width: 100%"
       @row-click="handleRowClick"
-    >
-      <el-table-column prop="name" label="角色名称" min-width="250">
-        <template #default="{ row }">
+     :columns="tableColumns">
+          <template #name="{ record }">
           <span class="role-name-link">
-            <el-icon color="#409EFF" :size="18"><Key /></el-icon>
-            {{ row.name }}
+            <icon-safe />
+            {{ record.name }}
           </span>
         </template>
-      </el-table-column>
-
-      <el-table-column prop="labels" label="标签" min-width="200">
-        <template #default="{ row }">
-          <el-tag
-            v-for="(value, key) in row.labels"
+          <template #labels="{ record }">
+          <a-tag
+            v-for="(value, key) in record.labels"
             :key="key"
             size="small"
             style="margin-right: 4px; margin-bottom: 4px;"
           >
             {{ key }}: {{ value }}
-          </el-tag>
+          </a-tag>
         </template>
-      </el-table-column>
-
-      <el-table-column prop="age" label="创建时间" width="180">
-        <template #default="{ row }">
-          {{ row.age }}
+          <template #age="{ record }">
+          {{ record.age }}
         </template>
-      </el-table-column>
-
-      <el-table-column label="操作" width="150" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click.stop="handleViewDetail(row)">
-            <el-icon size="18"><View /></el-icon>
-          </el-button>
-          <el-button link type="danger" @click.stop="handleDelete(row)" v-if="row.isCustom">
-            <el-icon size="18"><Delete /></el-icon>
-          </el-button>
+          <template #actions="{ record }">
+          <a-button type="text" status="normal" @click.stop="handleViewDetail(record)">
+            <icon-eye />
+          </a-button>
+          <a-button type="text" status="danger" @click.stop="handleDelete(record)" v-if="record.isCustom">
+            <icon-delete />
+          </a-button>
         </template>
-      </el-table-column>
-    </el-table>
+        </a-table>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '角色名称', dataIndex: 'name', slotName: 'name', width: 250 },
+  { title: '标签', dataIndex: 'labels', slotName: 'labels', width: 200 },
+  { title: '创建时间', dataIndex: 'age', slotName: 'age', width: 180 },
+  { title: '操作', slotName: 'actions', width: 150, fixed: 'right' }
+]
+
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Key, View, Delete } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getClusterRoles, deleteRole } from '@/api/kubernetes'
 
 interface ClusterRole {
@@ -128,7 +124,7 @@ const loadClusterRoles = async () => {
     const roles = await getClusterRoles(props.clusterId)
     roleList.value = roles || []
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '加载集群角色失败')
+    Message.error(error.response?.data?.message || '加载集群角色失败')
   } finally {
     loading.value = false
   }
@@ -148,7 +144,7 @@ const handleViewDetail = (row: ClusterRole) => {
 
 const handleDelete = async (row: ClusterRole) => {
   try {
-    await ElMessageBox.confirm(`确定要删除角色 "${row.name}" 吗？`, '提示', {
+    await confirmModal(`确定要删除角色 "${row.name}" 吗？`, '提示', {
       type: 'warning',
       confirmButtonText: '确定',
       cancelButtonText: '取消'
@@ -156,11 +152,11 @@ const handleDelete = async (row: ClusterRole) => {
 
     // 集群角色的 namespace 为空字符串
     await deleteRole(props.clusterId, '', row.name)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     await loadClusterRoles()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '删除失败')
+      Message.error(error.response?.data?.message || '删除失败')
     }
   }
 }
@@ -189,7 +185,7 @@ defineExpose({
     align-items: center;
     gap: 8px;
     cursor: pointer;
-    color: #409EFF;
+    color: #165dff;
     font-weight: 500;
 
     &:hover {
@@ -197,10 +193,10 @@ defineExpose({
     }
   }
 
-  :deep(.el-table) {
+  :deep(.arco-table) {
     cursor: pointer;
 
-    .el-table__row:hover {
+    .arco-table__row:hover {
       background-color: #f5f7fa;
     }
   }

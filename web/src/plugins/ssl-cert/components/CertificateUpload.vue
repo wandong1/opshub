@@ -1,20 +1,21 @@
 <template>
   <div class="certificate-upload-container">
     <!-- 标签页 -->
-    <el-tabs v-model="activeTab" class="certificate-tabs">
+    <a-tabs v-model:active-key="activeTab" class="certificate-tabs">
       <!-- 文件上传标签页 -->
-      <el-tab-pane label="📁 文件上传" name="upload">
+      <a-tab-pane key="upload">
+        <template #title>📁 文件上传</template>
         <div class="upload-content">
-          <el-form :model="uploadForm" :rules="uploadRules" ref="uploadFormRef" label-width="100px">
-            <el-form-item label="证书名称" prop="name">
-              <el-input v-model="uploadForm.name" placeholder="请输入证书名称" />
-            </el-form-item>
+          <a-form :model="uploadForm" :rules="uploadRules" ref="uploadFormRef" auto-label-width>
+            <a-form-item label="证书名称" field="name">
+              <a-input v-model="uploadForm.name" placeholder="请输入证书名称" />
+            </a-form-item>
 
-            <el-form-item label="域名" prop="domain">
-              <el-input v-model="uploadForm.domain" placeholder="请输入域名，如：example.com" />
-            </el-form-item>
+            <a-form-item label="域名" field="domain">
+              <a-input v-model="uploadForm.domain" placeholder="请输入域名，如：example.com" />
+            </a-form-item>
 
-            <el-form-item label="证书文件" prop="certFile">
+            <a-form-item label="证书文件" field="certFile">
               <div class="file-upload-area">
                 <input
                   type="file"
@@ -23,8 +24,8 @@
                   accept=".pem,.crt,.cer,.x509"
                   style="display: none"
                 />
-                <div class="upload-box" @click="$refs.certFileInput?.click()">
-                  <el-icon class="upload-icon"><DocumentCopy /></el-icon>
+                <div class="upload-box" @click="() => certFileInput?.click()">
+                  <icon-file class="upload-icon" />
                   <div class="upload-text">
                     <div class="upload-title">点击选择证书文件或拖拽上传</div>
                     <div class="upload-desc">支持 .pem .crt .cer .x509 格式</div>
@@ -34,9 +35,9 @@
                   <span class="file-name">✓ {{ uploadForm.certFile.name }}</span>
                 </div>
               </div>
-            </el-form-item>
+            </a-form-item>
 
-            <el-form-item label="私钥文件" prop="keyFile">
+            <a-form-item label="私钥文件" field="keyFile">
               <div class="file-upload-area">
                 <input
                   type="file"
@@ -45,8 +46,8 @@
                   accept=".key,.pem"
                   style="display: none"
                 />
-                <div class="upload-box" @click="$refs.keyFileInput?.click()">
-                  <el-icon class="upload-icon"><Key /></el-icon>
+                <div class="upload-box" @click="() => keyFileInput?.click()">
+                  <icon-lock class="upload-icon" />
                   <div class="upload-text">
                     <div class="upload-title">点击选择私钥文件或拖拽上传</div>
                     <div class="upload-desc">支持 .key .pem 格式（可选）</div>
@@ -56,65 +57,63 @@
                   <span class="file-name">✓ {{ uploadForm.keyFile.name }}</span>
                 </div>
               </div>
-            </el-form-item>
+            </a-form-item>
 
             <div class="form-actions">
-              <el-button @click="handleUploadCancel">取消</el-button>
-              <el-button type="primary" @click="handleUploadSubmit" :loading="uploading">
+              <a-button @click="handleUploadCancel">取消</a-button>
+              <a-button type="primary" @click="handleUploadSubmit" :loading="uploading">
                 验证并上传
-              </el-button>
+              </a-button>
             </div>
-          </el-form>
+          </a-form>
         </div>
-      </el-tab-pane>
+      </a-tab-pane>
 
       <!-- 手动粘贴标签页 -->
-      <el-tab-pane label="📝 手动粘贴" name="paste">
+      <a-tab-pane key="paste">
+        <template #title>📝 手动粘贴</template>
         <div class="paste-content">
-          <el-form :model="pasteForm" :rules="pasteRules" ref="pasteFormRef" label-width="100px">
-            <el-form-item label="证书名称" prop="name">
-              <el-input v-model="pasteForm.name" placeholder="请输入证书名称" />
-            </el-form-item>
+          <a-form :model="pasteForm" :rules="pasteRules" ref="pasteFormRef" auto-label-width>
+            <a-form-item label="证书名称" field="name">
+              <a-input v-model="pasteForm.name" placeholder="请输入证书名称" />
+            </a-form-item>
 
-            <el-form-item label="域名" prop="domain">
-              <el-input v-model="pasteForm.domain" placeholder="请输入域名，如：example.com" />
-            </el-form-item>
+            <a-form-item label="域名" field="domain">
+              <a-input v-model="pasteForm.domain" placeholder="请输入域名，如：example.com" />
+            </a-form-item>
 
-            <el-form-item label="证书内容" prop="certificate">
-              <el-input
+            <a-form-item label="证书内容" field="certificate">
+              <a-textarea
                 v-model="pasteForm.certificate"
-                type="textarea"
-                :rows="8"
+                :auto-size="{ minRows: 8 }"
                 placeholder="请粘贴证书内容（PEM格式）&#10;-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
               />
-            </el-form-item>
+            </a-form-item>
 
-            <el-form-item label="私钥内容" prop="privateKey">
-              <el-input
+            <a-form-item label="私钥内容" field="privateKey">
+              <a-textarea
                 v-model="pasteForm.privateKey"
-                type="textarea"
-                :rows="8"
+                :auto-size="{ minRows: 8 }"
                 placeholder="请粘贴私钥内容（PEM格式，可选）&#10;-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
               />
-            </el-form-item>
-
+            </a-form-item>
             <div class="form-actions">
-              <el-button @click="handlePasteCancel">取消</el-button>
-              <el-button type="primary" @click="handlePasteSubmit" :loading="pasting">
+              <a-button @click="handlePasteCancel">取消</a-button>
+              <a-button type="primary" @click="handlePasteSubmit" :loading="pasting">
                 验证并提交
-              </el-button>
+              </a-button>
             </div>
-          </el-form>
+          </a-form>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </a-tab-pane>
+    </a-tabs>
 
     <!-- 证书信息预览对话框 -->
-    <el-dialog
-      v-model="previewDialogVisible"
+    <a-modal
+      v-model:visible="previewDialogVisible"
       title="证书信息预览"
-      width="620px"
-      class="beauty-dialog"
+      :width="620"
+      unmount-on-close
     >
       <div v-if="certInfo" class="cert-preview">
         <div class="cert-status-bar" :class="`status-bar-${certStatus}`">
@@ -144,7 +143,6 @@
               </div>
             </div>
           </div>
-
           <div class="cert-info-section">
             <div class="section-title">有效期</div>
             <div class="section-grid">
@@ -179,21 +177,20 @@
       </div>
 
       <template #footer>
-        <el-button @click="previewDialogVisible = false">取消</el-button>
-        <el-button class="black-button" @click="handleConfirmUpload" :loading="confirming">
+        <a-button @click="previewDialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="handleConfirmUpload" :loading="confirming">
           确认上传
-        </el-button>
+        </a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { DocumentCopy, Key } from '@element-plus/icons-vue'
-
+import { Message } from '@arco-design/web-vue'
+import type { FormInstance } from '@arco-design/web-vue'
+import { IconFile, IconLock } from '@arco-design/web-vue/es/icon'
 interface CertInfo {
   name: string
   domain: string
@@ -221,10 +218,10 @@ const uploadForm = reactive({
   keyFile: null as File | null
 })
 
-const uploadRules: FormRules = {
-  name: [{ required: true, message: '请输入证书名称', trigger: 'blur' }],
-  domain: [{ required: true, message: '请输入域名', trigger: 'blur' }],
-  certFile: [{ required: true, message: '请选择证书文件', trigger: 'change' }]
+const uploadRules = {
+  name: [{ required: true, message: '请输入证书名称' }],
+  domain: [{ required: true, message: '请输入域名' }],
+  certFile: [{ required: true, message: '请选择证书文件' }]
 }
 
 const uploadFormRef = ref<FormInstance>()
@@ -239,14 +236,13 @@ const pasteForm = reactive({
   privateKey: ''
 })
 
-const pasteRules: FormRules = {
-  name: [{ required: true, message: '请输入证书名称', trigger: 'blur' }],
-  domain: [{ required: true, message: '请输入域名', trigger: 'blur' }],
-  certificate: [{ required: true, message: '请粘贴证书内容', trigger: 'blur' }]
+const pasteRules = {
+  name: [{ required: true, message: '请输入证书名称' }],
+  domain: [{ required: true, message: '请输入域名' }],
+  certificate: [{ required: true, message: '请粘贴证书内容' }]
 }
 
 const pasteFormRef = ref<FormInstance>()
-
 // 预览相关
 const previewDialogVisible = ref(false)
 const certInfo = ref<CertInfo | null>(null)
@@ -294,7 +290,6 @@ const readFile = (file: File): Promise<string> => {
     reader.readAsText(file)
   })
 }
-
 // 解析证书信息
 const parseCertInfo = async (certPem: string, keyPem: string = ''): Promise<CertInfo> => {
   try {
@@ -327,78 +322,74 @@ const parseCertInfo = async (certPem: string, keyPem: string = ''): Promise<Cert
 const handleUploadSubmit = async () => {
   if (!uploadFormRef.value) return
 
-  await uploadFormRef.value.validate(async (valid) => {
-    if (!valid) return
+  const errors = await uploadFormRef.value.validate()
+  if (errors) return
 
-    uploading.value = true
-    try {
-      // 直接读取文件内容并提交
-      const certContent = await readFile(uploadForm.certFile!)
-      let keyContent = ''
+  uploading.value = true
+  try {
+    // 直接读取文件内容并提交
+    const certContent = await readFile(uploadForm.certFile!)
+    let keyContent = ''
 
-      if (uploadForm.keyFile) {
-        keyContent = await readFile(uploadForm.keyFile)
-      }
-
-      // 验证证书格式
-      if (!certContent.includes('BEGIN CERTIFICATE')) {
-        ElMessage.error('无效的证书格式')
-        uploading.value = false
-        return
-      }
-
-      if (keyContent && !isValidPrivateKey(keyContent)) {
-        ElMessage.error('无效的私钥格式')
-        uploading.value = false
-        return
-      }
-
-      // 解析证书信息
-      certInfo.value = await parseCertInfo(certContent, keyContent)
-      certStatus.value = certInfo.value.daysRemaining > 30 ? 'valid' : 'warning'
-      previewDialogVisible.value = true
-    } catch (error: any) {
-      ElMessage.error(error.message || '验证失败')
-    } finally {
-      uploading.value = false
+    if (uploadForm.keyFile) {
+      keyContent = await readFile(uploadForm.keyFile)
     }
-  })
+
+    // 验证证书格式
+    if (!certContent.includes('BEGIN CERTIFICATE')) {
+      Message.error('无效的证书格式')
+      uploading.value = false
+      return
+    }
+    if (keyContent && !isValidPrivateKey(keyContent)) {
+      Message.error('无效的私钥格式')
+      uploading.value = false
+      return
+    }
+
+    // 解析证书信息
+    certInfo.value = await parseCertInfo(certContent, keyContent)
+    certStatus.value = certInfo.value.daysRemaining > 30 ? 'valid' : 'warning'
+    previewDialogVisible.value = true
+  } catch (error: any) {
+    Message.error(error.message || '验证失败')
+  } finally {
+    uploading.value = false
+  }
 }
 
 // 处理粘贴提交
 const handlePasteSubmit = async () => {
   if (!pasteFormRef.value) return
 
-  await pasteFormRef.value.validate(async (valid) => {
-    if (!valid) return
+  const errors = await pasteFormRef.value.validate()
+  if (errors) return
 
-    pasting.value = true
-    try {
-      // 验证证书格式
-      if (!pasteForm.certificate.includes('BEGIN CERTIFICATE')) {
-        ElMessage.error('无效的证书格式')
-        pasting.value = false
-        return
-      }
-
-      if (pasteForm.privateKey && !isValidPrivateKey(pasteForm.privateKey)) {
-        ElMessage.error('无效的私钥格式')
-        pasting.value = false
-        return
-      }
-
-      // 解析证书信息
-      certInfo.value = await parseCertInfo(pasteForm.certificate, pasteForm.privateKey)
-      certStatus.value = certInfo.value.daysRemaining > 30 ? 'valid' : 'warning'
-      previewDialogVisible.value = true
-    } catch (error: any) {
-      ElMessage.error(error.message || '验证失败')
-    } finally {
+  pasting.value = true
+  try {
+    // 验证证书格式
+    if (!pasteForm.certificate.includes('BEGIN CERTIFICATE')) {
+      Message.error('无效的证书格式')
       pasting.value = false
+      return
     }
-  })
-}
 
+    if (pasteForm.privateKey && !isValidPrivateKey(pasteForm.privateKey)) {
+      Message.error('无效的私钥格式')
+      pasting.value = false
+      return
+    }
+
+    // 解析证书信息
+    certInfo.value = await parseCertInfo(pasteForm.certificate, pasteForm.privateKey)
+    certStatus.value = certInfo.value.daysRemaining > 30 ? 'valid' : 'warning'
+    previewDialogVisible.value = true
+  } catch (error: any) {
+    Message.error(error.message || '验证失败')
+  } finally {
+    pasting.value = false
+  }
+}
 // 确认上传
 const handleConfirmUpload = async () => {
   if (!certInfo.value) return
@@ -418,7 +409,7 @@ const handleConfirmUpload = async () => {
     previewDialogVisible.value = false
     resetForms()
   } catch (error: any) {
-    ElMessage.error(error.message || '上传失败')
+    Message.error(error.message || '上传失败')
   } finally {
     confirming.value = false
   }
@@ -443,8 +434,8 @@ const resetForms = () => {
   handleUploadCancel()
   handlePasteCancel()
   activeTab.value = 'upload'
-}</script>
-
+}
+</script>
 <style scoped>
 .certificate-upload-container {
   padding: 0;
@@ -453,18 +444,6 @@ const resetForms = () => {
 /* 标签页 */
 .certificate-tabs {
   margin: 0;
-}
-
-:deep(.certificate-tabs .el-tabs__header) {
-  margin: 0 0 16px 0;
-}
-
-:deep(.certificate-tabs .el-tabs__content) {
-  padding: 0;
-}
-
-:deep(.el-tab-pane) {
-  padding: 0;
 }
 
 /* 上传内容 */
@@ -480,23 +459,23 @@ const resetForms = () => {
 }
 
 .upload-box {
-  border: 2px dashed #dcdfe6;
+  border: 2px dashed var(--ops-border-color, #e5e6eb);
   border-radius: 10px;
   padding: 32px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  background-color: #fafbfc;
+  background-color: var(--ops-content-bg, #f7f8fa);
 }
 
 .upload-box:hover {
-  border-color: #d4af37;
-  background-color: #fff9f0;
+  border-color: var(--ops-primary, #165dff);
+  background-color: #f0f5ff;
 }
 
 .upload-icon {
   font-size: 32px;
-  color: #d4af37;
+  color: var(--ops-primary, #165dff);
   margin-bottom: 12px;
 }
 
@@ -505,16 +484,15 @@ const resetForms = () => {
   flex-direction: column;
   gap: 4px;
 }
-
 .upload-title {
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
 }
 
 .upload-desc {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 .file-info {
@@ -522,14 +500,14 @@ const resetForms = () => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background-color: #f0f9ff;
+  background-color: #e8f3ff;
   border-radius: 6px;
-  border-left: 3px solid #409eff;
+  border-left: 3px solid var(--ops-primary, #165dff);
 }
 
 .file-name {
   font-size: 13px;
-  color: #409eff;
+  color: var(--ops-primary, #165dff);
   font-weight: 500;
 }
 
@@ -540,21 +518,7 @@ const resetForms = () => {
   gap: 12px;
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
+  border-top: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
 /* 证书预览 */
@@ -573,17 +537,16 @@ const resetForms = () => {
   font-weight: 600;
   font-size: 15px;
 }
-
 .status-bar-valid {
-  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e9 100%);
-  color: #67c23a;
-  border: 1px solid #c2e7b0;
+  background: linear-gradient(135deg, #e8ffea 0%, #d9f7be 100%);
+  color: #00b42a;
+  border: 1px solid #a9e2ab;
 }
 
 .status-bar-warning {
-  background: linear-gradient(135deg, #fdf6ec 0%, #fff3e0 100%);
-  color: #e6a23c;
-  border: 1px solid #f5dab1;
+  background: linear-gradient(135deg, #fff7e8 0%, #ffe4ba 100%);
+  color: #ff7d00;
+  border: 1px solid #ffcf8b;
 }
 
 .status-icon {
@@ -598,12 +561,12 @@ const resetForms = () => {
 }
 
 .status-bar-valid .status-icon {
-  background: #67c23a;
+  background: #00b42a;
   color: #fff;
 }
 
 .status-bar-warning .status-icon {
-  background: #e6a23c;
+  background: #ff7d00;
   color: #fff;
 }
 
@@ -614,7 +577,7 @@ const resetForms = () => {
 }
 
 .cert-info-section {
-  border: 1px solid #e8ecf0;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -623,13 +586,12 @@ const resetForms = () => {
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e8ecf0;
+  background: var(--ops-content-bg, #f7f8fa);
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
 }
-
 .section-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -641,8 +603,8 @@ const resetForms = () => {
   flex-direction: column;
   gap: 4px;
   padding: 12px 16px;
-  border-bottom: 1px solid #f5f5f5;
-  border-right: 1px solid #f5f5f5;
+  border-bottom: 1px solid #f2f3f5;
+  border-right: 1px solid #f2f3f5;
 }
 
 .cert-info-item:nth-child(2n) {
@@ -661,13 +623,13 @@ const resetForms = () => {
 
 .cert-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   font-weight: 500;
 }
 
 .cert-value {
   font-size: 13px;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   word-break: break-all;
   font-weight: 500;
 }
@@ -675,22 +637,21 @@ const resetForms = () => {
 .cert-mono {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 12px;
-  color: #606266;
-  background-color: #f8fafc;
+  color: var(--ops-text-secondary, #4e5969);
+  background-color: var(--ops-content-bg, #f7f8fa);
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid #e8ecf0;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   max-height: 80px;
   overflow-y: auto;
 }
-
 .fingerprint {
   word-break: break-all;
   letter-spacing: 1px;
 }
 
 .private-key-status {
-  color: #67c23a;
+  color: #00b42a;
   font-weight: 600;
 }
 
@@ -701,64 +662,14 @@ const resetForms = () => {
 }
 
 .days-normal {
-  color: #67c23a;
+  color: #00b42a;
 }
 
 .days-warning {
-  color: #e6a23c;
+  color: #ff7d00;
 }
 
 .days-expired {
-  color: #f56c6c;
-}
-
-/* 弹窗美化 */
-:deep(.beauty-dialog) {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-:deep(.beauty-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  margin-right: 0;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafbfc;
-}
-
-:deep(.beauty-dialog .el-dialog__title) {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-:deep(.beauty-dialog .el-dialog__headerbtn) {
-  top: 20px;
-  right: 20px;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-:deep(.beauty-dialog .el-dialog__headerbtn:hover) {
-  background: #f0f0f0;
-}
-
-:deep(.beauty-dialog .el-dialog__body) {
-  padding: 24px;
-  max-height: 65vh;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-:deep(.beauty-dialog .el-dialog__body::-webkit-scrollbar) {
-  display: none;
-}
-
-:deep(.beauty-dialog .el-dialog__footer) {
-  padding: 16px 24px 20px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafbfc;
+  color: #f53f3f;
 }
 </style>

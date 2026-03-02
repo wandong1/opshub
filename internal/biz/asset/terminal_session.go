@@ -39,7 +39,8 @@ type TerminalSession struct {
 	RecordingPath string         `gorm:"type:varchar(500);comment:录制文件路径" json:"recordingPath"`
 	Duration      int            `gorm:"type:int;comment:会话时长(秒)" json:"duration"`
 	FileSize      int64          `gorm:"type:bigint;comment:文件大小(字节)" json:"fileSize"`
-	Status        string         `gorm:"type:varchar(20);default:'recording';comment:会话状态 recording/completed/failed" json:"status"`
+	Status         string         `gorm:"type:varchar(20);default:'recording';comment:会话状态 recording/completed/failed" json:"status"`
+	ConnectionType string         `gorm:"type:varchar(20);default:'ssh';comment:连接类型 ssh/agent" json:"connectionType"`
 }
 
 // TableName 表名
@@ -59,9 +60,11 @@ type TerminalSessionInfo struct {
 	DurationText  string    `json:"durationText"`  // 格式化的时长，如 "1m 30s"
 	FileSize      int64     `json:"fileSize"`
 	FileSizeText  string    `json:"fileSizeText"`  // 格式化的文件大小，如 "1.5 MB"
-	Status        string    `json:"status"`
-	StatusText    string    `json:"statusText"`
-	CreatedAt     time.Time `json:"createdAt"`
+	Status             string    `json:"status"`
+	StatusText         string    `json:"statusText"`
+	ConnectionType     string    `json:"connectionType"`
+	ConnectionTypeText string    `json:"connectionTypeText"`
+	CreatedAt          time.Time `json:"createdAt"`
 	CreatedAtText string    `json:"createdAtText"` // 格式化的创建时间
 }
 

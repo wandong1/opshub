@@ -7,17 +7,17 @@
     <div class="panel-content">
       <div class="form-row">
         <label>调度规则</label>
-        <el-input v-model="formData.schedule" size="small" placeholder="例如: */5 * * * * (每5分钟执行一次)" />
+        <a-input v-model="formData.schedule" size="small" placeholder="例如: */5 * * * * (每5分钟执行一次)" />
         <div class="form-tip">Cron 表达式格式: 分 时 日 月 周</div>
       </div>
 
       <div class="form-row">
         <label>并发策略</label>
-        <el-select v-model="formData.concurrencyPolicy" size="small" style="width: 100%">
-          <el-option label="Allow (允许并发运行)" value="Allow" />
-          <el-option label="Forbid (禁止并发运行)" value="Forbid" />
-          <el-option label="Replace (替换旧任务)" value="Replace" />
-        </el-select>
+        <a-select v-model="formData.concurrencyPolicy" size="small" style="width: 100%">
+          <a-option label="Allow (允许并发运行)" value="Allow" />
+          <a-option label="Forbid (禁止并发运行)" value="Forbid" />
+          <a-option label="Replace (替换旧任务)" value="Replace" />
+        </a-select>
         <div class="form-tip">
           Allow: 允许同时运行多个任务 | Forbid: 跳过新任务如果上次任务还在运行 | Replace: 替换正在运行的任务
         </div>
@@ -25,7 +25,7 @@
 
       <div class="form-row">
         <label>时区</label>
-        <el-input v-model="formData.timeZone" size="small" placeholder="例如: Asia/Shanghai" />
+        <a-input v-model="formData.timeZone" size="small" placeholder="例如: Asia/Shanghai" />
         <div class="form-tip">留空使用集群默认时区</div>
       </div>
 
@@ -35,11 +35,11 @@
         </div>
         <div class="form-row">
           <label>成功任务保留数</label>
-          <el-input-number v-model="formData.successfulJobsHistoryLimit" :min="0" :max="100" size="small" style="width: 100%" />
+          <a-input-number v-model="formData.successfulJobsHistoryLimit" :min="0" :max="100" size="small" style="width: 100%" />
         </div>
         <div class="form-row">
           <label>失败任务保留数</label>
-          <el-input-number v-model="formData.failedJobsHistoryLimit" :min="0" :max="100" size="small" style="width: 100%" />
+          <a-input-number v-model="formData.failedJobsHistoryLimit" :min="0" :max="100" size="small" style="width: 100%" />
         </div>
         <div class="form-tip">控制保留多少个已完成和失败的 Job 记录</div>
       </div>
@@ -50,7 +50,7 @@
         </div>
         <div class="form-row">
           <label>启动截止时间 (秒)</label>
-          <el-input-number v-model="formData.startingDeadlineSeconds" :min="0" size="small" style="width: 100%" />
+          <a-input-number v-model="formData.startingDeadlineSeconds" :min="0" size="small" style="width: 100%" />
           <div class="form-tip">如果任务错过调度时间超过此秒数，将不再执行。设置为0表示不限制</div>
         </div>
       </div>
@@ -60,7 +60,7 @@
           <label>暂停调度</label>
         </div>
         <div class="form-row">
-          <el-switch v-model="formData.suspend" active-text="暂停" inactive-text="启用" />
+          <a-switch v-model="formData.suspend" active-text="暂停" inactive-text="启用" />
           <div class="form-tip">暂停后不会创建新的 Job，但正在运行的 Job 不会受影响</div>
         </div>
       </div>
@@ -199,7 +199,7 @@ const applySchedule = (schedule: string) => {
   letter-spacing: 0.3px;
 }
 
-.form-row .el-input :deep(.el-input__wrapper) {
+.form-row .arco-input :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -207,27 +207,27 @@ const applySchedule = (schedule: string) => {
   transition: all 0.3s ease;
 }
 
-.form-row .el-input :deep(.el-input__wrapper:hover) {
+.form-row .arco-input :deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.form-row .el-input :deep(.el-input__wrapper.is-focus) {
+.form-row .arco-input :deep(.arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
 }
 
-.form-row .el-input-number {
+.form-row .arco-input-number {
   width: 100%;
 }
 
-.form-row .el-input-number :deep(.el-input__wrapper) {
+.form-row .arco-input-number :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
 }
 
-.form-row .el-select {
+.form-row .arco-select {
   width: 100%;
 }
 
@@ -305,7 +305,7 @@ const applySchedule = (schedule: string) => {
   font-family: 'Courier New', monospace;
 }
 
-.form-row .el-switch {
+.form-row .arco-switch {
   margin-top: 8px;
 }
 </style>

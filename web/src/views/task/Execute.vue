@@ -1,103 +1,106 @@
 <template>
-  <div class="execute-container">
+  <div class="page-container">
     <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><VideoPlay /></el-icon>
+    <div class="page-header-card">
+      <div class="page-header-inner">
+        <div class="page-icon">
+          <icon-play-circle-fill />
         </div>
         <div>
-          <h2 class="page-title">执行任务</h2>
-          <p class="page-subtitle">执行脚本任务，实时查看执行结果和日志</p>
+          <div class="page-title">执行任务</div>
+          <div class="page-desc">执行脚本任务，实时查看执行结果和日志</div>
         </div>
       </div>
     </div>
 
     <!-- 主要内容区 -->
-    <div class="main-card">
+    <a-card class="main-card" :bordered="false">
       <!-- 目标主机 -->
       <div class="form-section">
-        <div class="section-label">
-          <span class="required">*</span>
-          <span>目标主机</span>
-        </div>
-        <div class="section-content">
-          <el-button @click="showHostDialog = true" class="add-btn">
-            <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+        <div class="section-label"><span class="required">*</span> 目标主机</div>
+        <div class="section-body">
+          <a-button @click="showHostDialog = true">
+            <template #icon><icon-plus /></template>
             添加目标主机
-          </el-button>
-          <div v-if="selectedHosts.length > 0" class="selected-items">
-            <el-tag
+          </a-button>
+          <div v-if="selectedHosts.length > 0" class="tag-list">
+            <a-tag
               v-for="host in selectedHosts"
               :key="host.id"
               closable
               @close="removeHost(host.id)"
-              style="margin: 8px 8px 0 0;"
+              :color="host.agentStatus === 'online' ? 'green' : 'arcoblue'"
             >
               {{ host.name }} ({{ host.ip }})
-            </el-tag>
+              <span v-if="host.agentStatus === 'online'" style="margin-left: 4px; font-size: 11px;">Agent</span>
+            </a-tag>
           </div>
         </div>
       </div>
 
       <!-- 执行命令 -->
       <div class="form-section">
-        <div class="section-label">
-          <span class="required">*</span>
-          <span>执行命令</span>
-        </div>
-        <div class="section-content">
+        <div class="section-label"><span class="required">*</span> 执行命令</div>
+        <div class="section-body">
           <div class="command-toolbar">
-            <el-radio-group v-model="scriptType" class="script-type-group">
-              <el-radio-button label="Shell">Shell</el-radio-button>
-              <el-radio-button label="Python">Python</el-radio-button>
-            </el-radio-group>
+            <a-radio-group v-model="scriptType" type="button">
+              <a-radio value="Shell">Shell</a-radio>
+              <a-radio value="Python">Python</a-radio>
+            </a-radio-group>
             <div class="toolbar-right">
-              <el-link type="primary" :icon="QuestionFilled" underline="hover">使用全局变量?</el-link>
-              <el-button size="small" @click="showTemplateDialog = true">
-                <el-icon style="margin-right: 4px;"><Plus /></el-icon>
+              <a-link @click="showTemplateDialog = true">
+                <template #icon><icon-plus /></template>
                 从执行模板中选择
-              </el-button>
+              </a-link>
             </div>
           </div>
-          <div class="code-editor-wrapper">
-            <el-input
-              v-model="scriptContent"
-              type="textarea"
-              :rows="15"
-              placeholder="请输入脚本内容..."
-              class="code-editor"
-            />
+          <a-textarea
+            v-model="scriptContent"
+            placeholder="请输入脚本内容..."
+            :auto-size="{ minRows: 12, maxRows: 24 }"
+            class="code-textarea"
+          />
+        </div>
+      </div>
+
+      <!-- 执行方式 -->
+      <div class="form-section">
+        <div class="section-label">执行方式</div>
+        <div class="section-body">
+          <a-radio-group v-model="executionMode" type="button">
+            <a-radio value="auto">自动选择（Agent在线优先）</a-radio>
+            <a-radio value="ssh">SSH 直连</a-radio>
+            <a-radio value="agent">Agent 执行</a-radio>
+          </a-radio-group>
+          <div v-if="selectedHosts.length > 0 && executionMode === 'auto'" class="execution-hint">
+            <span style="color: #00b42a;">Agent在线: {{ selectedHosts.filter(h => h.agentStatus === 'online').length }}台</span>
+            <span style="margin-left: 12px; color: #86909c;">SSH回退: {{ selectedHosts.filter(h => h.agentStatus !== 'online').length }}台</span>
           </div>
         </div>
       </div>
 
-      <!-- 开始执行按钮 -->
-      <div class="execute-button-section">
-        <el-button
+      <!-- 执行按钮 -->
+      <div class="execute-btn-wrap">
+        <a-button
           v-permission="'tasks:execute'"
           type="primary"
           size="large"
           :loading="executing"
           @click="handleExecute"
-          class="execute-button"
         >
-          <el-icon style="margin-right: 6px;"><VideoPlay /></el-icon>
+          <template #icon><icon-play-arrow-fill /></template>
           {{ executing ? '执行中...' : '开始执行' }}
-        </el-button>
+        </a-button>
       </div>
-    </div>
+    </a-card>
 
     <!-- 执行记录 -->
-    <div class="log-card" v-if="true">
-      <div class="log-header">
-        <span class="log-title">执行记录</span>
-        <el-icon><InfoFilled /></el-icon>
-      </div>
-      <div class="log-content">
-        <div v-if="executionLogs.length === 0" class="empty-log">
-          暂无执行记录
-        </div>
+    <a-card class="log-card" :bordered="false">
+      <template #title>
+        <span class="card-title">执行记录</span>
+      </template>
+      <div class="log-terminal">
+        <div v-if="executionLogs.length === 0" class="log-empty">暂无执行记录</div>
         <div v-else class="log-list">
           <div
             v-for="log in executionLogs"
@@ -105,492 +108,370 @@
             class="log-item"
             :class="log.status"
           >
-            <div class="log-header-line">
+            <div class="log-meta">
               <span class="log-time">{{ log.time }}</span>
-              <span class="log-status-badge" :class="log.status">
+              <a-tag :color="log.status === 'success' ? 'green' : log.status === 'error' ? 'red' : 'arcoblue'" size="small">
                 {{ log.status === 'success' ? '成功' : log.status === 'error' ? '失败' : '信息' }}
-              </span>
-              <span class="log-host">{{ log.host || '' }}</span>
+              </a-tag>
+              <span v-if="log.host" class="log-host">{{ log.host }}</span>
             </div>
-            <div class="log-output">
-              <pre>{{ log.message }}</pre>
-            </div>
+            <pre class="log-output">{{ log.message }}</pre>
           </div>
         </div>
       </div>
-    </div>
+    </a-card>
 
     <!-- 选择主机对话框 -->
-    <el-dialog
-      v-model="showHostDialog"
+    <a-modal
+      v-model:visible="showHostDialog"
       title="主机列表"
-      width="1000px"
-      destroy-on-close
+      :width="960"
+      :unmount-on-close="true"
+      @ok="confirmHostSelection"
+      @cancel="showHostDialog = false"
     >
-      <div class="host-dialog-content">
-        <div class="host-groups">
-          <div class="group-title">分组列表</div>
-          <el-tree
+      <div class="host-dialog-body">
+        <div class="host-groups-panel">
+          <div class="panel-title">分组列表</div>
+          <a-tree
             :data="hostGroups"
-            :props="{ label: 'name', children: 'children' }"
-            node-key="id"
+            :field-names="{ key: 'id', title: 'name', children: 'children' }"
             default-expand-all
-            @node-click="handleGroupClick"
-          >
-            <template #default="{ node, data }">
-              <span class="tree-node">
-                <el-icon><Folder /></el-icon>
-                <span>{{ node.label }}</span>
-                <span class="group-count">{{ data.hostCount || 0 }}</span>
-              </span>
-            </template>
-          </el-tree>
+            @select="handleGroupClick"
+          />
         </div>
-        <div class="host-list">
-          <el-input
+        <div class="host-list-panel">
+          <a-input
             v-model="hostSearchKeyword"
             placeholder="输入名称/IP搜索"
-            clearable
-            style="margin-bottom: 16px;"
+            allow-clear
+            style="margin-bottom: 12px"
           >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-          <el-table
+            <template #prefix><icon-search /></template>
+          </a-input>
+          <a-table
             :data="filteredHosts"
+            :row-selection="{ type: 'checkbox', showCheckedAll: true }"
+            v-model:selectedKeys="tempSelectedHostIds"
+            row-key="id"
+            :loading="hostsLoading"
+            :scroll="{ y: 360 }"
+            :pagination="false"
             @selection-change="handleHostSelectionChange"
-            height="400px"
-            v-loading="hostsLoading"
           >
-            <el-table-column type="selection" width="55" />
-            <el-table-column label="主机名称" prop="name" />
-            <el-table-column label="IP地址" prop="ip">
-              <template #default="{ row }">
-                <el-tag size="small">{{ row.ip }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="备注信息" prop="description" />
-          </el-table>
+            <template #columns>
+              <a-table-column title="主机名称" data-index="name" />
+              <a-table-column title="IP地址" data-index="ip">
+                <template #cell="{ record }">
+                  <a-tag size="small">{{ record.ip }}</a-tag>
+                </template>
+              </a-table-column>
+              <a-table-column title="备注信息" data-index="description" />
+            </template>
+          </a-table>
         </div>
       </div>
-      <template #footer>
-        <el-button @click="showHostDialog = false">取消</el-button>
-        <el-button type="primary" @click="confirmHostSelection">确定</el-button>
-      </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 选择执行模板对话框 -->
-    <el-dialog
-      v-model="showTemplateDialog"
+    <a-modal
+      v-model:visible="showTemplateDialog"
       title="选择执行模板"
-      width="1200px"
-      destroy-on-close
+      :width="1100"
+      :unmount-on-close="true"
+      @ok="confirmTemplateSelection"
+      @cancel="showTemplateDialog = false"
     >
-      <div class="template-filter">
-        <el-select
-          v-model="templateFilter.type"
-          placeholder="请选择"
-          clearable
-          style="width: 200px; margin-right: 12px;"
-        >
-          <el-option label="系统信息" value="system" />
-          <el-option label="部署" value="deploy" />
-          <el-option label="监控" value="monitor" />
-          <el-option label="备份" value="backup" />
-        </el-select>
-        <el-input
-          v-model="templateFilter.name"
-          placeholder="请输入"
-          clearable
-          style="width: 300px; margin-right: 12px;"
-        />
-        <el-button type="primary" @click="refreshTemplates">
-          <el-icon><Refresh /></el-icon>
+      <div class="template-filter-bar">
+        <a-select v-model="templateFilter.type" placeholder="请选择" allow-clear style="width: 180px">
+          <a-option value="system">系统信息</a-option>
+          <a-option value="deploy">部署</a-option>
+          <a-option value="monitor">监控</a-option>
+          <a-option value="backup">备份</a-option>
+        </a-select>
+        <a-input v-model="templateFilter.name" placeholder="请输入" allow-clear style="width: 260px" />
+        <a-button @click="refreshTemplates">
+          <template #icon><icon-refresh /></template>
           刷新
-        </el-button>
+        </a-button>
       </div>
-      <el-table
+      <a-table
         :data="filteredTemplates"
+        :loading="templatesLoading"
+        row-key="id"
+        :pagination="false"
+        :row-class="() => 'clickable-row'"
         @row-click="selectTemplate"
-        highlight-current-row
-        v-loading="templatesLoading"
-        style="cursor: pointer;"
       >
-        <el-table-column label="名称" prop="name" width="180" />
-        <el-table-column label="类型" prop="category" width="120">
-          <template #default="{ row }">
-            <el-tag size="small">{{ row.category }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="内容" prop="content" show-overflow-tooltip />
-        <el-table-column label="备注" prop="description" show-overflow-tooltip />
-      </el-table>
-      <template #footer>
-        <el-button @click="showTemplateDialog = false">取消</el-button>
-        <el-button type="primary" @click="confirmTemplateSelection">确定</el-button>
-      </template>
-    </el-dialog>
+        <template #columns>
+          <a-table-column title="名称" data-index="name" :width="180" />
+          <a-table-column title="类型" data-index="category" :width="120">
+            <template #cell="{ record }">
+              <a-tag size="small">{{ record.category }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="内容" data-index="content" ellipsis tooltip />
+          <a-table-column title="备注" data-index="description" ellipsis tooltip />
+        </template>
+      </a-table>
+    </a-modal>
 
     <!-- 参数填写对话框 -->
-    <el-dialog
-      v-model="showParamDialog"
+    <a-modal
+      v-model:visible="showParamDialog"
       title="填写模板参数"
-      width="600px"
-      destroy-on-close
+      :width="560"
+      :unmount-on-close="true"
+      @ok="applyTemplateWithParams"
+      @cancel="showParamDialog = false"
     >
-      <div class="param-dialog-content">
-        <el-alert
-          type="info"
-          :closable="false"
-          style="margin-bottom: 20px;"
+      <a-alert type="info" style="margin-bottom: 16px">
+        模板: <strong>{{ currentTemplate?.name }}</strong>
+      </a-alert>
+      <a-form :model="paramValues" layout="vertical">
+        <a-form-item
+          v-for="(param, index) in templateParams"
+          :key="index"
+          :label="param.name"
+          :required="param.required"
         >
-          <template #title>
-            模板: <strong>{{ currentTemplate?.name }}</strong>
-          </template>
-        </el-alert>
-        <el-form label-width="120px">
-          <el-form-item
-            v-for="(param, index) in templateParams"
-            :key="index"
-            :label="param.name"
-            :required="param.required"
+          <a-input
+            v-if="param.type === 'text'"
+            v-model="paramValues[param.varName]"
+            :placeholder="param.helpText || `请输入${param.name}`"
+          />
+          <a-input-password
+            v-else-if="param.type === 'password'"
+            v-model="paramValues[param.varName]"
+            :placeholder="param.helpText || `请输入${param.name}`"
+          />
+          <a-select
+            v-else-if="param.type === 'select'"
+            v-model="paramValues[param.varName]"
+            :placeholder="param.helpText || `请选择${param.name}`"
           >
-            <el-input
-              v-if="param.type === 'text'"
-              v-model="paramValues[param.varName]"
-              :placeholder="param.helpText || `请输入${param.name}`"
-            />
-            <el-input
-              v-else-if="param.type === 'password'"
-              v-model="paramValues[param.varName]"
-              type="password"
-              show-password
-              :placeholder="param.helpText || `请输入${param.name}`"
-            />
-            <el-select
-              v-else-if="param.type === 'select'"
-              v-model="paramValues[param.varName]"
-              :placeholder="param.helpText || `请选择${param.name}`"
-              style="width: 100%;"
-            >
-              <el-option
-                v-for="opt in (param.options || [])"
-                :key="opt"
-                :label="opt"
-                :value="opt"
-              />
-            </el-select>
-            <el-input
-              v-else
-              v-model="paramValues[param.varName]"
-              :placeholder="param.helpText || `请输入${param.name}`"
-            />
-            <div v-if="param.helpText" class="param-help">{{ param.helpText }}</div>
-          </el-form-item>
-        </el-form>
-      </div>
-      <template #footer>
-        <el-button @click="showParamDialog = false">取消</el-button>
-        <el-button type="primary" @click="applyTemplateWithParams">应用模板</el-button>
-      </template>
-    </el-dialog>
+            <a-option v-for="opt in (param.options || [])" :key="opt" :value="opt">{{ opt }}</a-option>
+          </a-select>
+          <a-input
+            v-else
+            v-model="paramValues[param.varName]"
+            :placeholder="param.helpText || `请输入${param.name}`"
+          />
+          <div v-if="param.helpText" class="param-help">{{ param.helpText }}</div>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import {
-  Plus,
-  VideoPlay,
-  QuestionFilled,
-  InfoFilled,
-  Folder,
-  Search,
-  Refresh
-} from '@element-plus/icons-vue'
+  IconPlayCircleFill, IconPlus, IconPlayArrowFill,
+  IconSearch, IconRefresh
+} from '@arco-design/web-vue/es/icon'
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
+import { getAgentStatuses } from '@/api/agent'
 import { executeTask, getAllJobTemplates } from '@/api/task'
 
-// 脚本类型
 const scriptType = ref('Shell')
 const scriptContent = ref('')
-
-// 选中的主机
 const selectedHosts = ref<any[]>([])
-
-// 执行状态
+const executionMode = ref('auto')
 const executing = ref(false)
-
-// 执行日志
 const executionLogs = ref<any[]>([])
 
 // 主机对话框
 const showHostDialog = ref(false)
 const hostSearchKeyword = ref('')
-const tempSelectedHosts = ref<any[]>([])
+const tempSelectedHostIds = ref<number[]>([])
 const hostGroups = ref<any[]>([])
 const allHosts = ref<any[]>([])
 const hostsLoading = ref(false)
 const selectedGroupId = ref<number | null>(null)
 
-// 过滤后的主机列表
 const filteredHosts = computed(() => {
   let hosts = allHosts.value
-
-  // 根据选中的分组过滤
   if (selectedGroupId.value !== null) {
     hosts = hosts.filter((host) => host.groupId === selectedGroupId.value)
   }
-
-  // 根据搜索关键词过滤
   if (hostSearchKeyword.value) {
     const keyword = hostSearchKeyword.value.toLowerCase()
     hosts = hosts.filter(
-      (host) =>
-        host.name.toLowerCase().includes(keyword) ||
-        host.ip.includes(keyword)
+      (host) => host.name.toLowerCase().includes(keyword) || host.ip.includes(keyword)
     )
   }
-
   return hosts
-})
-
-// 过滤后的模板列表
-const filteredTemplates = computed(() => {
-  let result = allTemplates.value
-
-  // 根据类型过滤
-  if (templateFilter.value.type) {
-    result = result.filter((template) => template.category === templateFilter.value.type)
-  }
-
-  // 根据名称过滤
-  if (templateFilter.value.name) {
-    const keyword = templateFilter.value.name.toLowerCase()
-    result = result.filter((template) =>
-      template.name.toLowerCase().includes(keyword)
-    )
-  }
-
-  return result
 })
 
 // 模板对话框
 const showTemplateDialog = ref(false)
-const templateFilter = ref({
-  type: '',
-  name: '',
-})
-
-// 模板列表
-const templates = ref<any[]>([])
+const templateFilter = ref({ type: '', name: '' })
 const allTemplates = ref<any[]>([])
 const templatesLoading = ref(false)
-
 const selectedTemplate = ref<any>(null)
+
+const filteredTemplates = computed(() => {
+  let result = allTemplates.value
+  if (templateFilter.value.type) {
+    result = result.filter((t) => t.category === templateFilter.value.type)
+  }
+  if (templateFilter.value.name) {
+    const kw = templateFilter.value.name.toLowerCase()
+    result = result.filter((t) => t.name.toLowerCase().includes(kw))
+  }
+  return result
+})
 
 // 参数对话框
 const showParamDialog = ref(false)
 const currentTemplate = ref<any>(null)
 const templateParams = ref<any[]>([])
-const paramValues = ref<Record<string, string>>({})
+const paramValues = reactive<Record<string, string>>({})
 
-// 加载主机分组
 const loadHostGroups = async () => {
   try {
     const data = await getGroupTree()
     hostGroups.value = data || []
-  } catch (error) {
-  }
+  } catch {}
 }
 
-// 加载主机列表
+const agentStatusMap = ref<Record<number, any>>({})
+
 const loadHostList = async () => {
   hostsLoading.value = true
   try {
-    const params = {
-      page: 1,
-      pageSize: 1000,
-    }
-    const response = await getHostList(params)
-    if (Array.isArray(response)) {
-      allHosts.value = response
-    } else if (response.list && Array.isArray(response.list)) {
-      allHosts.value = response.list
-    } else if (response.data && Array.isArray(response.data)) {
-      allHosts.value = response.data
-    } else {
-      allHosts.value = []
-    }
-  } catch (error) {
-    allHosts.value = []
-  } finally {
-    hostsLoading.value = false
-  }
+    const response = await getHostList({ page: 1, pageSize: 1000 })
+    if (Array.isArray(response)) allHosts.value = response
+    else if (response.list) allHosts.value = response.list
+    else if (response.data) allHosts.value = response.data
+    else allHosts.value = []
+    // 获取Agent实时状态并合并
+    try {
+      const statuses = await getAgentStatuses()
+      if (Array.isArray(statuses)) {
+        const map: Record<number, any> = {}
+        for (const s of statuses) {
+          map[s.hostId] = s
+        }
+        agentStatusMap.value = map
+        for (const host of allHosts.value) {
+          const agentInfo = map[host.id]
+          if (agentInfo) {
+            host.agentStatus = agentInfo.status
+            host.connectionMode = 'agent'
+          }
+        }
+      }
+    } catch (e) {}
+  } catch { allHosts.value = [] }
+  finally { hostsLoading.value = false }
 }
 
-// 加载模板列表
 const loadTemplates = async () => {
   templatesLoading.value = true
   try {
     const response = await getAllJobTemplates()
-    if (Array.isArray(response)) {
-      allTemplates.value = response
-    } else if (response.list && Array.isArray(response.list)) {
-      allTemplates.value = response.list
-    } else if (response.data && Array.isArray(response.data)) {
-      allTemplates.value = response.data
-    } else {
-      allTemplates.value = []
-    }
-  } catch (error) {
-    allTemplates.value = []
-    ElMessage.error('加载模板列表失败')
-  } finally {
-    templatesLoading.value = false
-  }
+    if (Array.isArray(response)) allTemplates.value = response
+    else if (response.list) allTemplates.value = response.list
+    else if (response.data) allTemplates.value = response.data
+    else allTemplates.value = []
+  } catch { allTemplates.value = [] }
+  finally { templatesLoading.value = false }
 }
 
-// 分组点击
-const handleGroupClick = (data: any) => {
-  selectedGroupId.value = data.id
+const handleGroupClick = (keys: string[]) => {
+  selectedGroupId.value = keys.length > 0 ? Number(keys[0]) : null
 }
 
-// 主机选择变化
-const handleHostSelectionChange = (selection: any[]) => {
-  tempSelectedHosts.value = selection
+const handleHostSelectionChange = (rowKeys: (string | number)[]) => {
+  tempSelectedHostIds.value = rowKeys.map(Number)
 }
 
-// 确认主机选择
 const confirmHostSelection = () => {
-  selectedHosts.value = [...tempSelectedHosts.value]
+  selectedHosts.value = allHosts.value.filter(h => tempSelectedHostIds.value.includes(h.id))
   showHostDialog.value = false
-  ElMessage.success(`已选择 ${selectedHosts.value.length} 台主机`)
+  Message.success(`已选择 ${selectedHosts.value.length} 台主机`)
 }
 
-// 移除主机
 const removeHost = (id: number) => {
-  const index = selectedHosts.value.findIndex((h) => h.id === id)
-  if (index !== -1) {
-    selectedHosts.value.splice(index, 1)
-  }
+  selectedHosts.value = selectedHosts.value.filter(h => h.id !== id)
 }
 
-// 选择模板
-const selectTemplate = (row: any) => {
-  selectedTemplate.value = row
+const selectTemplate = (record: any) => {
+  selectedTemplate.value = record
   showTemplateDialog.value = false
-
-  // 调试：打印模板数据
-
-  // 解析模板参数
   let params: any[] = []
-  if (row.variables && row.variables !== '[]') {
-    try {
-      params = JSON.parse(row.variables)
-    } catch (e) {
-      params = []
+  if (record.variables) {
+    if (typeof record.variables === 'string' && record.variables !== '[]') {
+      try { params = JSON.parse(record.variables) } catch { params = [] }
+    } else if (Array.isArray(record.variables)) {
+      params = record.variables
     }
   }
-
-  // 如果模板有参数，弹出参数填写对话框
-  if (params && params.length > 0) {
-    currentTemplate.value = row
+  if (params.length > 0) {
+    currentTemplate.value = record
     templateParams.value = params
-    // 初始化参数值（使用默认值）
     const values: Record<string, string> = {}
-    params.forEach((param: any) => {
-      values[param.varName] = param.defaultValue || ''
-    })
-    paramValues.value = values
+    params.forEach((p: any) => { values[p.varName] = p.defaultValue || '' })
+    Object.keys(paramValues).forEach(k => delete paramValues[k])
+    Object.assign(paramValues, values)
     showParamDialog.value = true
   } else {
-    // 没有参数，直接应用模板
-    scriptContent.value = row.content
-    ElMessage.success('已应用模板: ' + row.name)
+    scriptContent.value = record.content
+    Message.success('已应用模板: ' + record.name)
   }
 }
 
-// 应用带参数的模板
 const applyTemplateWithParams = () => {
-  // 检查必填参数
   for (const param of templateParams.value) {
-    if (param.required && !paramValues.value[param.varName]) {
-      ElMessage.warning(`请填写参数: ${param.name}`)
+    if (param.required && !paramValues[param.varName]) {
+      Message.warning(`请填写参数: ${param.name}`)
       return
     }
   }
-
-  // 替换模板中的变量占位符
   let content = currentTemplate.value.content
-  for (const [varName, value] of Object.entries(paramValues.value)) {
-    // 替换 {{变量名}} 格式的占位符
-    const regex = new RegExp(`\\{\\{${varName}\\}\\}`, 'g')
-    content = content.replace(regex, value)
+  for (const [varName, value] of Object.entries(paramValues)) {
+    content = content.replace(new RegExp(`\\{\\{\\s*${varName}\\s*\\}\\}`, 'g'), value)
   }
-
   scriptContent.value = content
   showParamDialog.value = false
-  ElMessage.success('已应用模板: ' + currentTemplate.value.name)
+  Message.success('已应用模板: ' + currentTemplate.value.name)
 }
 
-// 刷新模板列表
 const refreshTemplates = async () => {
   await loadTemplates()
-  ElMessage.success('刷新成功')
+  Message.success('刷新成功')
 }
 
-// 确认模板选择
 const confirmTemplateSelection = () => {
   if (selectedTemplate.value) {
     scriptContent.value = selectedTemplate.value.content
     showTemplateDialog.value = false
-    ElMessage.success('已应用模板')
+    Message.success('已应用模板')
   }
 }
 
-// 添加日志
-const addLog = (message: string, status: string = 'info', host: string = '') => {
+const addLog = (message: string, status = 'info', host = '') => {
   const now = new Date()
-  const time = `${now.getHours().toString().padStart(2, '0')}:${now
-    .getMinutes()
-    .toString()
-    .padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
-  executionLogs.value.unshift({
-    id: Date.now(),
-    time,
-    message,
-    status,
-    host,
-  })
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+  executionLogs.value.unshift({ id: Date.now(), time, message, status, host })
 }
 
-// 执行任务
 const handleExecute = async () => {
-  if (selectedHosts.value.length === 0) {
-    ElMessage.warning('请先选择目标主机')
-    return
-  }
-  if (!scriptContent.value.trim()) {
-    ElMessage.warning('请输入执行命令')
-    return
-  }
-
+  if (selectedHosts.value.length === 0) { Message.warning('请先选择目标主机'); return }
+  if (!scriptContent.value.trim()) { Message.warning('请输入执行命令'); return }
   executing.value = true
-  const hostIds = selectedHosts.value.map((h) => h.id)
   addLog(`开始执行任务，目标主机: ${selectedHosts.value.length} 台`, 'info')
-
   try {
     const response = await executeTask({
-      hostIds,
+      hostIds: selectedHosts.value.map(h => h.id),
       scriptType: scriptType.value,
       content: scriptContent.value,
+      executionMode: executionMode.value,
     })
-
-    // 处理执行结果
     response.results.forEach((result) => {
       const hostInfo = `${result.hostName} (${result.hostIp})`
       if (result.status === 'success') {
@@ -599,17 +480,12 @@ const handleExecute = async () => {
         addLog(`错误: ${result.error}\n${result.output || ''}`, 'error', hostInfo)
       }
     })
-
-    // 检查是否全部成功
-    const allSuccess = response.results.every((r) => r.status === 'success')
-    if (allSuccess) {
-      ElMessage.success('任务执行成功')
-    } else {
-      ElMessage.warning('部分任务执行失败，请查看执行记录')
-    }
+    const allSuccess = response.results.every(r => r.status === 'success')
+    if (allSuccess) Message.success('任务执行成功')
+    else Message.warning('部分任务执行失败，请查看执行记录')
   } catch (error: any) {
     addLog('任务执行失败: ' + (error.message || error), 'error')
-    ElMessage.error('任务执行失败: ' + (error.message || error))
+    Message.error('任务执行失败: ' + (error.message || error))
   } finally {
     executing.value = false
   }
@@ -620,104 +496,86 @@ onMounted(() => {
   loadHostList()
 })
 
-// 监听模板对话框打开，自动加载模板列表
-watch(showTemplateDialog, (newValue) => {
-  if (newValue) {
-    loadTemplates()
-  }
-})
+watch(showTemplateDialog, (v) => { if (v) loadTemplates() })
 </script>
 
 <style scoped lang="scss">
-.execute-container {
-  padding: 0;
-  background-color: transparent;
+.page-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.page-header {
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
   gap: 16px;
 }
 
-.page-title-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border: 1px solid #d4af37;
+.page-header-card {
+  background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px);
+  padding: 20px 24px;
+}
+
+.page-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ops-primary, #165dff) 0%, #4080ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
 }
 
 .page-title {
-  margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
-  line-height: 28px;
+  color: var(--ops-text-primary, #1d2129);
+  line-height: 1.4;
 }
 
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 14px;
-  color: #909399;
-  line-height: 20px;
+.page-desc {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 2px;
 }
 
 .main-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 24px;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .form-section {
   margin-bottom: 24px;
-
-  &:last-of-type {
-    margin-bottom: 0;
-  }
 }
 
 .section-label {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
+  margin-bottom: 12px;
 
   .required {
-    color: #f56c6c;
+    color: var(--ops-danger, #f53f3f);
     margin-right: 4px;
   }
 }
 
-.section-content {
-  .add-btn {
-    margin-bottom: 12px;
+.section-body {
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
   }
 }
 
-.selected-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.execution-hint {
+  margin-top: 8px;
+  font-size: 12px;
 }
 
 .command-toolbar {
@@ -726,12 +584,6 @@ watch(showTemplateDialog, (newValue) => {
   align-items: center;
   margin-bottom: 12px;
 
-  .script-type-group {
-    :deep(.el-radio-button__inner) {
-      padding: 8px 20px;
-    }
-  }
-
   .toolbar-right {
     display: flex;
     align-items: center;
@@ -739,214 +591,134 @@ watch(showTemplateDialog, (newValue) => {
   }
 }
 
-.code-editor-wrapper {
-  :deep(.el-textarea__inner) {
-    font-family: 'Courier New', monospace;
-    font-size: 14px;
+.code-textarea {
+  :deep(textarea) {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
   }
 }
 
-.execute-button-section {
-  margin-top: 24px;
+.execute-btn-wrap {
   display: flex;
   justify-content: center;
-}
-
-.execute-button {
-  background: #000;
-  color: #fff;
-  border: none;
-  padding: 12px 40px;
-  font-size: 16px;
-
-  &:hover {
-    background: #333;
-  }
-
-  &:active {
-    background: #1a1a1a;
-  }
+  padding-top: 8px;
 }
 
 .log-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
+  border-radius: var(--ops-border-radius-md, 8px);
 
-.log-header {
-  padding: 16px 20px;
-  background: #fafafa;
-  border-bottom: 1px solid #e4e7ed;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: 8px 8px 0 0;
-
-  .log-title {
-    font-size: 16px;
+  .card-title {
     font-weight: 600;
-    color: #303133;
   }
 }
 
-.log-content {
-  max-height: 500px;
-  padding: 16px 20px;
-  overflow-y: auto;
+.log-terminal {
   background: #1e1e1e;
-  border-radius: 0 0 8px 8px;
+  border-radius: 6px;
+  min-height: 120px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 16px;
+}
 
-  .empty-log {
-    text-align: center;
-    color: #909399;
-    padding: 40px 0;
-  }
+.log-empty {
+  text-align: center;
+  color: #666;
+  padding: 40px 0;
 }
 
 .log-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .log-item {
-  background: #2d2d2d;
+  background: #2a2a2a;
   border-radius: 6px;
   overflow: hidden;
-  border-left: 3px solid #909399;
+  border-left: 3px solid #555;
 
-  &.success {
-    border-left-color: #67c23a;
-  }
-
-  &.error {
-    border-left-color: #f56c6c;
-  }
-
-  &.info {
-    border-left-color: #409eff;
-  }
-
-  .log-header-line {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    background: #252525;
-    border-bottom: 1px solid #3a3a3a;
-  }
-
-  .log-time {
-    color: #888;
-    font-family: 'Courier New', Consolas, monospace;
-    font-size: 12px;
-  }
-
-  .log-status-badge {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
-
-    &.success {
-      background: rgba(103, 194, 58, 0.2);
-      color: #67c23a;
-    }
-
-    &.error {
-      background: rgba(245, 108, 108, 0.2);
-      color: #f56c6c;
-    }
-
-    &.info {
-      background: rgba(64, 158, 255, 0.2);
-      color: #409eff;
-    }
-  }
-
-  .log-host {
-    color: #e6a23c;
-    font-family: 'Courier New', Consolas, monospace;
-    font-size: 13px;
-  }
-
-  .log-output {
-    padding: 12px 14px;
-
-    pre {
-      margin: 0;
-      padding: 0;
-      font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
-      font-size: 13px;
-      line-height: 1.6;
-      color: #d4d4d4;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      background: transparent;
-    }
-  }
+  &.success { border-left-color: var(--ops-success, #00b42a); }
+  &.error { border-left-color: var(--ops-danger, #f53f3f); }
+  &.info { border-left-color: var(--ops-primary, #165dff); }
 }
 
-.host-dialog-content {
+.log-meta {
   display: flex;
-  gap: 20px;
-  height: 500px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #252525;
+  border-bottom: 1px solid #333;
 }
 
-.host-groups {
-  width: 250px;
-  border-right: 1px solid #e4e7ed;
-  padding-right: 20px;
+.log-time {
+  color: #888;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+}
 
-  .group-title {
+.log-host {
+  color: var(--ops-warning, #ff7d00);
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.log-output {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 主机对话框 */
+.host-dialog-body {
+  display: flex;
+  gap: 16px;
+  height: 460px;
+}
+
+.host-groups-panel {
+  width: 220px;
+  border-right: 1px solid var(--ops-border-color, #e5e6eb);
+  padding-right: 16px;
+  overflow-y: auto;
+
+  .panel-title {
     font-weight: 600;
     margin-bottom: 12px;
-    color: #303133;
-  }
-
-  .tree-node {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex: 1;
-
-    .group-count {
-      margin-left: auto;
-      color: #909399;
-      font-size: 12px;
-    }
+    color: var(--ops-text-primary, #1d2129);
   }
 }
 
-.host-list {
+.host-list-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.template-filter {
+/* 模板筛选 */
+.template-filter-bar {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
   gap: 12px;
+  margin-bottom: 16px;
 }
 
-// 模板表格行可点击样式
-:deep(.el-table__row) {
+.clickable-row {
   cursor: pointer;
-
-  &:hover {
-    background-color: #f5f7fa !important;
-  }
 }
 
-// 参数对话框样式
-.param-dialog-content {
-  .param-help {
-    font-size: 12px;
-    color: #909399;
-    margin-top: 4px;
-  }
+.param-help {
+  font-size: 12px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 4px;
 }
 </style>

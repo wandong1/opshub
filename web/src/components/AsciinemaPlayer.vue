@@ -105,7 +105,7 @@ const createPlayer = async () => {
 
     emit('ready')
   } catch (error) {
-    // Error handling without console output
+    console.error('AsciinemaPlayer load error:', error)
   }
 }
 
@@ -169,16 +169,16 @@ defineExpose({
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-progress-container) {
-  background-color: rgba(212, 175, 55, 0.2) !important;
+  background-color: rgba(22, 93, 255, 0.2) !important;
   height: 6px !important;
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-progress-bar) {
-  background-color: #d4af37 !important;
+  background-color: #165dff !important;
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-controls) {
-  color: #d4af37 !important;
+  color: #165dff !important;
   display: flex !important;
   opacity: 1 !important;
 }
@@ -189,10 +189,10 @@ defineExpose({
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-icon-button) {
   display: inline-flex !important;
-  color: #d4af37 !important;
+  color: #165dff !important;
 }
 
 .asciinema-player-wrapper :deep(.asciinema-player .ap-icon-button:hover) {
-  color: #bfa13f !important;
+  color: #4080ff !important;
 }
 </style>

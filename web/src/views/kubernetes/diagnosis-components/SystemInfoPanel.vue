@@ -1,24 +1,24 @@
 <template>
   <div class="system-info-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
-    <div v-else class="panel-content" v-loading="loading">
+    <div v-else class="panel-content" :loading="loading">
       <!-- 工具栏 -->
       <div class="toolbar">
-        <el-button type="primary" size="small" @click="loadSystemInfo" :loading="loading">
-          <el-icon><Refresh /></el-icon> 刷新
-        </el-button>
-        <el-radio-group v-model="activeTab" size="small">
-          <el-radio-button value="sysenv">系统环境变量</el-radio-button>
-          <el-radio-button value="sysprop">系统属性</el-radio-button>
-        </el-radio-group>
-        <el-input
+        <a-button type="primary" size="small" @click="loadSystemInfo" :loading="loading">
+          <icon-refresh /> 刷新
+        </a-button>
+        <a-radio-group v-model="activeTab" size="small">
+          <a-radio value="sysenv">系统环境变量</a-radio>
+          <a-radio value="sysprop">系统属性</a-radio>
+        </a-radio-group>
+        <a-input
           v-model="searchText"
           placeholder="搜索..."
           style="width: 280px"
@@ -26,9 +26,9 @@
           size="small"
         >
           <template #prefix>
-            <el-icon><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
         <span class="item-count" v-if="currentData.length > 0">
           共 {{ filteredData.length }} / {{ currentData.length }} 项
         </span>
@@ -36,42 +36,42 @@
 
       <!-- 数据表格 -->
       <div class="table-section" v-if="filteredData.length > 0">
-        <el-table
+        <a-table
           :data="displayData"
           stripe
           size="small"
           :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
           style="width: 100%"
-        >
-          <el-table-column prop="key" label="键" min-width="350">
-            <template #default="{ row }">
-              <span class="key-name">{{ row.key }}</span>
+         :columns="tableColumns">
+          <template #key="{ record }">
+              <span class="key-name">{{ record.key }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="value" label="值" min-width="400" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="key-value">{{ row.value }}</span>
+          <template #value="{ record }">
+              <span class="key-value">{{ record.value }}</span>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
 
         <!-- 查看更多 -->
         <div v-if="!showAll && filteredData.length > pageSize" class="load-more">
-          <el-link type="primary" @click="showAll = true">
+          <a-link type="primary" @click="showAll = true">
             查看更多 (共 {{ filteredData.length }} 条)
-          </el-link>
+          </a-link>
         </div>
       </div>
 
-      <el-empty v-else-if="!loading" description="暂无数据" />
+      <a-empty v-else-if="!loading" description="暂无数据" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns = [
+  { title: '键', dataIndex: 'key', slotName: 'key', width: 350 },
+  { title: '值', dataIndex: 'value', slotName: 'value', width: 400, ellipsis: true, tooltip: true }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Refresh, Search } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getSysEnv, getSysProp } from '@/api/arthas'
 
 const props = defineProps<{
@@ -146,7 +146,7 @@ const loadSysEnv = async () => {
       sysEnvData.value = []
     }
   } catch (error: any) {
-    ElMessage.error('获取系统环境变量失败: ' + (error.message || '未知错误'))
+    Message.error('获取系统环境变量失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -174,7 +174,7 @@ const loadSysProp = async () => {
       sysPropData.value = []
     }
   } catch (error: any) {
-    ElMessage.error('获取系统属性失败: ' + (error.message || '未知错误'))
+    Message.error('获取系统属性失败: ' + (error.message || '未知错误'))
   }
 }
 

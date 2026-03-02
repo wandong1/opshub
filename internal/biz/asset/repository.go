@@ -43,6 +43,7 @@ type HostRepo interface {
 	GetByIP(ctx context.Context, ip string) (*Host, error)
 	GetByCloudInstanceID(ctx context.Context, instanceID string) (*Host, error)
 	CountByCredentialID(ctx context.Context, credentialID uint) (int64, error)
+	GetAll(ctx context.Context) ([]*Host, error)
 }
 
 type CredentialRepo interface {
@@ -62,4 +63,13 @@ type CloudAccountRepo interface {
 	GetByID(ctx context.Context, id uint) (*CloudAccount, error)
 	List(ctx context.Context, page, pageSize int) ([]*CloudAccount, int64, error)
 	GetAll(ctx context.Context) ([]*CloudAccount, error)
+}
+
+type ServiceLabelRepo interface {
+	Create(ctx context.Context, label *ServiceLabel) error
+	Update(ctx context.Context, label *ServiceLabel) error
+	Delete(ctx context.Context, id uint) error
+	GetByID(ctx context.Context, id uint) (*ServiceLabel, error)
+	List(ctx context.Context, page, pageSize int, keyword string) ([]*ServiceLabel, int64, error)
+	GetAllEnabled(ctx context.Context) ([]*ServiceLabel, error)
 }

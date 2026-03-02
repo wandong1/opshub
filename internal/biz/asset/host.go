@@ -42,7 +42,7 @@ type Host struct {
 	Credential       *Credential   `gorm:"-" json:"credential,omitempty"`
 	Tags             string        `gorm:"type:varchar(500);comment:主机标签(逗号分隔)" json:"tags"`
 	Description      string        `gorm:"type:varchar(500);comment:备注" json:"description"`
-	Status           int           `gorm:"type:tinyint;default:1;comment:状态 1:在线 0:离线 -1:未知" json:"status"`
+	Status           int           `gorm:"type:tinyint;default:-1;comment:状态 1:在线 0:离线 -1:未知" json:"status"`
 	LastSeen         *time.Time    `gorm:"column:last_seen;comment:最后连接时间" json:"lastSeen,omitempty"`
 	OS               string        `gorm:"type:varchar(100);comment:操作系统" json:"os"`
 	Kernel           string        `gorm:"type:varchar(100);comment:内核版本" json:"kernel"`
@@ -59,6 +59,10 @@ type Host struct {
 	DiskUsage        float64       `gorm:"type:float;comment:磁盘使用率" json:"diskUsage"`
 	Uptime           string        `gorm:"type:varchar(100);comment:运行时间" json:"uptime"`
 	Hostname         string        `gorm:"type:varchar(100);comment:主机名" json:"hostname"`
+	// Agent 相关字段
+	AgentID          string        `gorm:"type:varchar(100);comment:Agent唯一标识" json:"agentId"`
+	AgentStatus      string        `gorm:"type:varchar(20);default:'none';comment:Agent状态 none/installed/online/offline" json:"agentStatus"`
+	ConnectionMode   string        `gorm:"type:varchar(20);default:'ssh';comment:连接模式 ssh/agent" json:"connectionMode"`
 }
 
 // HostRequest 主机请求
@@ -115,6 +119,10 @@ type HostInfoVO struct {
 	DiskUsage        float64 `json:"diskUsage"`
 	Uptime           string  `json:"uptime"`
 	Hostname         string  `json:"hostname"`
+	// Agent 相关
+	AgentID          string  `json:"agentId"`
+	AgentStatus      string  `json:"agentStatus"`
+	ConnectionMode   string  `json:"connectionMode"`
 }
 
 // HostListVO 主机列表VO（用于分组下的主机列表）

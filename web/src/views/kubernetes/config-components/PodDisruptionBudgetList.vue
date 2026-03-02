@@ -3,7 +3,7 @@
     <!-- 搜索和筛选 -->
     <div class="search-bar">
       <div class="search-bar-left">
-        <el-input
+        <a-input
           v-model="searchName"
           placeholder="搜索 PodDisruptionBudget 名称..."
           clearable
@@ -11,114 +11,85 @@
           @input="handleSearch"
         >
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
 
-        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-          <el-option label="全部" value="" />
-          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-        </el-select>
+        <a-select v-model="filterNamespace" placeholder="命名空间" allow-clear @change="handleSearch" class="filter-select">
+          <a-option label="全部" value="" />
+          <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </a-select>
       </div>
 
       <div class="search-bar-right">
-        <el-button v-permission="'k8s-pdb:create'" type="primary" class="black-button create-btn" @click="handleCreate">
-          <el-icon style="margin-right: 4px;"><Plus /></el-icon>
+        <a-button v-permission="'k8s-pdb:create'" type="primary" @click="handleCreate">
+          <icon-plus />
           新增 PodDisruptionBudget
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- PodDisruptionBudget 列表 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="paginatedPDBs"
-        v-loading="loading"
+        :loading="loading"
         class="modern-table"
         size="default"
-      >
-        <el-table-column label="名称" prop="name" min-width="180" fixed>
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Lock /></el-icon>
-              名称
-            </span>
-          </template>
-          <template #default="{ row }">
+       :columns="tableColumns">
+          <template #name="{ record }">
             <div class="name-cell">
               <div class="name-icon-wrapper">
-                <el-icon class="name-icon" :size="18"><Lock /></el-icon>
+                <icon-lock />
               </div>
               <div class="name-content">
-                <div class="name-text">{{ row.name }}</div>
-                <div class="namespace-text">{{ row.namespace }}</div>
+                <div class="name-text">{{ record.name }}</div>
+                <div class="namespace-text">{{ record.namespace }}</div>
               </div>
             </div>
           </template>
-        </el-table-column>
-
-        <el-table-column label="Min Available" prop="minAvailable" width="140" align="center">
-          <template #default="{ row }">
-            <span class="resource-value">{{ row.minAvailable || '-' }}</span>
+          <template #minAvailable="{ record }">
+            <span class="resource-value">{{ record.minAvailable || '-' }}</span>
           </template>
-        </el-table-column>
-
-        <el-table-column label="Max Unavailable" prop="maxUnavailable" width="150" align="center">
-          <template #default="{ row }">
-            <span class="resource-value">{{ row.maxUnavailable || '-' }}</span>
+          <template #maxUnavailable="{ record }">
+            <span class="resource-value">{{ record.maxUnavailable || '-' }}</span>
           </template>
-        </el-table-column>
-
-        <el-table-column label="Allowed Disruptions" prop="allowedDisruptions" width="170" align="center">
-          <template #default="{ row }">
-            <el-tag type="success" size="small">{{ row.allowedDisruptions ?? '-' }}</el-tag>
+          <template #allowedDisruptions="{ record }">
+            <a-tag color="green" size="small">{{ record.allowedDisruptions ?? '-' }}</a-tag>
           </template>
-        </el-table-column>
-
-        <el-table-column label="Current Healthy" prop="currentHealthy" width="150" align="center">
-          <template #default="{ row }">
-            <el-tag :type="getHealthyTagType(row.currentHealthy, row.desiredHealthy)" size="small">
-              {{ row.currentHealthy ?? '-' }}
-            </el-tag>
+          <template #currentHealthy="{ record }">
+            <a-tag :type="getHealthyTagType(record.currentHealthy, record.desiredHealthy)" size="small">
+              {{ record.currentHealthy ?? '-' }}
+            </a-tag>
           </template>
-        </el-table-column>
-
-        <el-table-column label="Desired Healthy" prop="desiredHealthy" width="150" align="center">
-          <template #default="{ row }">
-            <el-tag type="info" size="small">{{ row.desiredHealthy ?? '-' }}</el-tag>
+          <template #desiredHealthy="{ record }">
+            <a-tag color="gray" size="small">{{ record.desiredHealthy ?? '-' }}</a-tag>
           </template>
-        </el-table-column>
-
-        <el-table-column label="创建时间" prop="createdAt" width="180">
-          <template #default="{ row }">
-            {{ row.createdAt || '-' }}
+          <template #createdAt="{ record }">
+            {{ record.createdAt || '-' }}
           </template>
-        </el-table-column>
-
-        <el-table-column label="操作" width="120" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <div class="action-buttons">
-              <el-tooltip content="编辑 YAML" placement="top">
-                <el-button v-permission="'k8s-pdb:update'" link class="action-btn" @click="handleEditYAML(row)">
-                  <el-icon :size="18"><Document /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'k8s-pdb:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <a-tooltip content="编辑 YAML" placement="top">
+                <a-button v-permission="'k8s-pdb:update'" type="text" class="action-btn" @click="handleEditYAML(record)">
+                  <icon-file />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="删除" placement="top">
+                <a-button v-permission="'k8s-pdb:delete'" type="text" class="action-btn danger" @click="handleDelete(record)">
+                  <icon-delete />
+                </a-button>
+              </a-tooltip>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
+        <a-pagination
+          v-model:current="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredPDBs.length"
           layout="total, sizes, prev, pager, next"
         />
@@ -126,7 +97,7 @@
     </div>
 
     <!-- YAML 弹窗 -->
-    <el-dialog v-model="yamlDialogVisible" :title="yamlDialogTitle" width="900px" class="yaml-dialog">
+    <a-modal v-model:visible="yamlDialogVisible" :title="yamlDialogTitle" width="900px" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -142,18 +113,29 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="handleSaveYAML" :loading="saving" class="black-button">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">关闭</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="saving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 180 },
+  { title: 'Min Available', dataIndex: 'minAvailable', slotName: 'minAvailable', width: 140, align: 'center' },
+  { title: 'Max Unavailable', dataIndex: 'maxUnavailable', slotName: 'maxUnavailable', width: 150, align: 'center' },
+  { title: 'Allowed Disruptions', dataIndex: 'allowedDisruptions', slotName: 'allowedDisruptions', width: 170, align: 'center' },
+  { title: 'Current Healthy', dataIndex: 'currentHealthy', slotName: 'currentHealthy', width: 150, align: 'center' },
+  { title: 'Desired Healthy', dataIndex: 'desiredHealthy', slotName: 'desiredHealthy', width: 150, align: 'center' },
+  { title: '创建时间', dataIndex: 'createdAt', slotName: 'createdAt', width: 180 },
+  { title: '操作', slotName: 'actions', width: 120, fixed: 'right', align: 'center' }
+]
+
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Lock, Document, Delete, Plus } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getNamespaces } from '@/api/kubernetes'
 import axios from 'axios'
 
@@ -306,7 +288,7 @@ const handleEditYAML = async (row: PDBInfo) => {
     yamlContent.value = response.data.data?.yaml || ''
     yamlDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
   }
 }
 
@@ -325,7 +307,7 @@ const handleSaveYAML = async () => {
     const nameMatch = yamlContent.value.match(/name:\s*(.+)/)
     const nsMatch = yamlContent.value.match(/namespace:\s*(.+)/)
     if (!nameMatch || !nsMatch) {
-      ElMessage.error('YAML中缺少name或namespace字段')
+      Message.error('YAML中缺少name或namespace字段')
       return
     }
     const namespace = nsMatch[1].trim()
@@ -343,12 +325,12 @@ const handleSaveYAML = async () => {
           headers: { Authorization: `Bearer ${token}` }
         }
       )
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
       yamlDialogVisible.value = false
       await loadPDBs()
       emit('refresh')
     } catch (error: any) {
-      ElMessage.error(`创建失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`创建失败: ${error.response?.data?.message || error.message}`)
     } finally {
       saving.value = false
     }
@@ -370,12 +352,12 @@ const handleSaveYAML = async () => {
         }
       )
 
-      ElMessage.success('保存成功')
+      Message.success('保存成功')
       yamlDialogVisible.value = false
       await loadPDBs()
       emit('refresh')
     } catch (error: any) {
-      ElMessage.error(`保存失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`保存失败: ${error.response?.data?.message || error.message}`)
     } finally {
       saving.value = false
     }
@@ -385,7 +367,7 @@ const handleSaveYAML = async () => {
 // 删除 PodDisruptionBudget
 const handleDelete = async (row: PDBInfo) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除 PodDisruptionBudget ${row.name} 吗？此操作不可恢复！`,
       '删除 PodDisruptionBudget 确认',
       {
@@ -404,12 +386,12 @@ const handleDelete = async (row: PDBInfo) => {
       }
     )
 
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     await loadPDBs()
     emit('refresh')
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`删除失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`删除失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -491,10 +473,6 @@ defineExpose({
   width: 200px;
 }
 
-.search-icon {
-  color: #d4af37;
-}
-
 /* 表格容器 */
 .table-wrapper {
   background: #fff;
@@ -507,20 +485,20 @@ defineExpose({
   width: 100%;
 }
 
-.modern-table :deep(.el-table__body-wrapper) {
+.modern-table :deep(.arco-table__body-wrapper) {
   border-radius: 0 0 12px 12px;
 }
 
-.modern-table :deep(.el-table__row) {
+.modern-table :deep(.arco-table__row) {
   transition: background-color 0.2s ease;
   height: 56px !important;
 }
 
-.modern-table :deep(.el-table__row td) {
+.modern-table :deep(.arco-table__row td) {
   height: 56px !important;
 }
 
-.modern-table :deep(.el-table__row:hover) {
+.modern-table :deep(.arco-table__row:hover) {
   background-color: #f8fafc !important;
 }
 
@@ -540,16 +518,16 @@ defineExpose({
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d4af37;
+  border: none;
   flex-shrink: 0;
 }
 
 .name-icon {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .name-content {
@@ -575,7 +553,7 @@ defineExpose({
 }
 
 .header-icon-blue {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .namespace-text {
@@ -591,12 +569,13 @@ defineExpose({
 }
 
 .action-btn {
-  color: #d4af37;
-  padding: 4px;
+  color: #165dff;
+  padding: 0;
+  font-size: 16px;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 .action-btn.danger {
@@ -617,35 +596,35 @@ defineExpose({
 }
 
 /* YAML 编辑弹窗 */
-.yaml-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__header) {
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
+  color: #165dff;
   border-radius: 8px 8px 0 0;
   padding: 20px 24px;
 }
 
-.yaml-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__title) {
+  color: #165dff;
   font-size: 16px;
   font-weight: 600;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 24px;
-  background-color: #1a1a1a;
+  background-color: #fafafa;
 }
 
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #fafafa;
 }
 
 .yaml-line-numbers {
-  background-color: #0d0d0d;
-  color: #666;
+  background-color: #f2f3f5;
+  color: #86909c;
   padding: 16px 8px;
   text-align: right;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
@@ -654,7 +633,7 @@ defineExpose({
   user-select: none;
   overflow: hidden;
   min-width: 40px;
-  border-right: 1px solid #333;
+  border-right: 1px solid #e5e6eb;
 }
 
 .line-number {
@@ -664,8 +643,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #fafafa;
+  color: #1d2129;
   border: none;
   outline: none;
   padding: 16px;
@@ -690,17 +669,4 @@ defineExpose({
   gap: 12px;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
 </style>

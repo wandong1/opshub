@@ -1,23 +1,23 @@
 <template>
-  <el-drawer
-    :model-value="visible"
+  <a-drawer
+    :visible="visible"
     :title="'Kafka 控制台 - ' + (middleware?.name || '')"
-    direction="rtl"
-    size="100%"
-    :destroy-on-close="true"
+    placement="right"
+    :width="'100%'"
+    unmount-on-close
     class="kafka-console-drawer"
-    @close="handleClose"
+    @cancel="handleClose"
   >
-    <template #header>
+    <template #title>
       <div class="console-header">
         <div class="header-left">
-          <el-icon style="font-size: 18px; color: #909399;"><Connection /></el-icon>
+          <icon-link style="font-size: 18px; color: #86909c;" />
           <span class="header-title">Kafka 控制台 - {{ middleware?.name }}</span>
         </div>
         <div class="header-actions">
-          <el-button size="small" @click="refreshAll">
-            <el-icon><Refresh /></el-icon> 刷新
-          </el-button>
+          <a-button size="small" @click="refreshAll">
+            <template #icon><icon-refresh /></template> 刷新
+          </a-button>
         </div>
       </div>
     </template>
@@ -26,240 +26,261 @@
       <!-- 左侧 Topic 列表 -->
       <div class="sidebar">
         <div class="sidebar-header">
-          <el-icon><List /></el-icon>
+          <icon-list />
           <span>Topics</span>
           <div style="flex:1"></div>
-          <el-tooltip content="新建 Topic" placement="top">
-            <el-icon class="sidebar-action" @click="showCreateTopicDialog"><Plus /></el-icon>
-          </el-tooltip>
-          <el-tooltip content="刷新" placement="top">
-            <el-icon class="sidebar-action" @click="loadTopics"><Refresh /></el-icon>
-          </el-tooltip>
+          <a-tooltip content="新建 Topic" position="top">
+            <icon-plus class="sidebar-action" @click="showCreateTopicDialog" />
+          </a-tooltip>
+          <a-tooltip content="刷新" position="top">
+            <icon-refresh class="sidebar-action" @click="loadTopics" />
+          </a-tooltip>
         </div>
-        <el-input v-model="topicSearch" placeholder="搜索 Topic..." clearable size="small" class="sidebar-search">
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
-        <div class="topic-list" v-loading="topicsLoading">
-          <div
-            v-for="t in filteredTopics"
-            :key="t.name"
-            class="topic-item"
-            :class="{ active: selectedTopic === t.name, internal: t.isInternal }"
-            @click="handleSelectTopic(t.name)"
-          >
-            <span class="topic-name">{{ t.name }}</span>
-            <span class="topic-meta">P:{{ t.partitions }} R:{{ t.replicas }}</span>
-          </div>
+        <a-input v-model="topicSearch" placeholder="搜索 Topic..." allow-clear size="small" class="sidebar-search">
+          <template #prefix><icon-search /></template>
+        </a-input>
+        <a-spin :loading="topicsLoading" style="width: 100%; flex: 1;">
+          <div class="topic-list">
+            <div
+              v-for="t in filteredTopics"
+              :key="t.name"
+              class="topic-item"
+              :class="{ active: selectedTopic === t.name, internal: t.isInternal }"
+              @click="handleSelectTopic(t.name)"
+            >
+              <span class="topic-name">{{ t.name }}</span>
+              <span class="topic-meta">P:{{ t.partitions }} R:{{ t.replicas }}</span>
+            </div>
 <!-- KAFKA_SIDEBAR_END -->
-          <div v-if="!filteredTopics.length && !topicsLoading" class="topic-empty">暂无 Topic</div>
-        </div>
+            <div v-if="!filteredTopics.length && !topicsLoading" class="topic-empty">暂无 Topic</div>
+          </div>
+        </a-spin>
       </div>
-
       <!-- 右侧主区域 -->
       <div class="main-area">
-        <el-tabs v-model="activeTab" type="border-card">
+        <a-tabs v-model:active-key="activeTab" type="card-gutter">
           <!-- Topics Tab -->
-          <el-tab-pane label="Topics" name="topics">
+          <a-tab-pane title="Topics" key="topics">
             <div v-if="!selectedTopic" class="empty-tip">请从左侧选择一个 Topic</div>
             <div v-else class="topic-detail">
-              <el-descriptions :column="4" border size="small" style="margin-bottom: 16px">
-                <el-descriptions-item label="Topic">{{ selectedTopic }}</el-descriptions-item>
-                <el-descriptions-item label="分区数">{{ topicDetail?.partitions?.length || 0 }}</el-descriptions-item>
-                <el-descriptions-item label="副本数">{{ currentTopicInfo?.replicas || 0 }}</el-descriptions-item>
-                <el-descriptions-item label="系统 Topic">{{ currentTopicInfo?.isInternal ? '是' : '否' }}</el-descriptions-item>
-              </el-descriptions>
-              <el-tabs v-model="topicSubTab" type="card">
-                <el-tab-pane label="分区详情" name="partitions">
-                  <el-table :data="topicDetail?.partitions || []" size="small" max-height="400">
-                    <el-table-column prop="id" label="分区 ID" width="80" />
-                    <el-table-column prop="leader" label="Leader" width="80" />
-                    <el-table-column label="Replicas"><template #default="{ row }">{{ row.replicas?.join(', ') }}</template></el-table-column>
-                    <el-table-column label="ISR"><template #default="{ row }">{{ row.isr?.join(', ') }}</template></el-table-column>
-                  </el-table>
-                </el-tab-pane>
-                <el-tab-pane label="关联消费组" name="groups">
-                  <el-table :data="topicDetail?.consumerGroups || []" size="small" max-height="400">
-                    <el-table-column prop="groupId" label="消费组" />
-                    <el-table-column prop="totalLag" label="总 Lag" width="120" />
-                  </el-table>
-                </el-tab-pane>
-                <el-tab-pane label="配置" name="config">
-                  <div style="margin-bottom: 8px; text-align: right"><el-button size="small" @click="loadTopicConfig">刷新</el-button></div>
-                  <el-table :data="topicConfigs" size="small" max-height="400">
-                    <el-table-column prop="name" label="配置项" min-width="200" />
-                    <el-table-column label="值" min-width="200">
-                      <template #default="{ row }">
-                        <el-input v-if="editingConfigKey === row.name" v-model="editingConfigValue" size="small" style="width: 200px" @keyup.enter="saveConfigEdit(row.name)" />
-                        <span v-else>{{ row.value }}</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column prop="readOnly" label="只读" width="60"><template #default="{ row }">{{ row.readOnly ? '是' : '否' }}</template></el-table-column>
-                    <el-table-column label="操作" width="100">
-                      <template #default="{ row }">
-                        <el-button v-if="!row.readOnly && editingConfigKey !== row.name" link size="small" type="primary" @click="startConfigEdit(row)">编辑</el-button>
-                        <template v-if="editingConfigKey === row.name">
-                          <el-button link size="small" type="success" @click="saveConfigEdit(row.name)">保存</el-button>
-                          <el-button link size="small" @click="editingConfigKey = ''">取消</el-button>
+              <a-descriptions :column="4" bordered size="small" style="margin-bottom: 16px">
+                <a-descriptions-item label="Topic">{{ selectedTopic }}</a-descriptions-item>
+                <a-descriptions-item label="分区数">{{ topicDetail?.partitions?.length || 0 }}</a-descriptions-item>
+                <a-descriptions-item label="副本数">{{ currentTopicInfo?.replicas || 0 }}</a-descriptions-item>
+                <a-descriptions-item label="系统 Topic">{{ currentTopicInfo?.isInternal ? '是' : '否' }}</a-descriptions-item>
+              </a-descriptions>
+              <a-tabs v-model:active-key="topicSubTab" type="card-gutter">
+                <a-tab-pane title="分区详情" key="partitions">
+                  <a-table :data="topicDetail?.partitions || []" size="small" :bordered="{ cell: true }" stripe :pagination="false" :scroll="{ y: 400 }">
+                    <template #columns>
+                      <a-table-column title="分区 ID" data-index="id" :width="80" />
+                      <a-table-column title="Leader" data-index="leader" :width="80" />
+                      <a-table-column title="Replicas"><template #cell="{ record }">{{ record.replicas?.join(', ') }}</template></a-table-column>
+                      <a-table-column title="ISR"><template #cell="{ record }">{{ record.isr?.join(', ') }}</template></a-table-column>
+                    </template>
+                  </a-table>
+                </a-tab-pane>
+                <a-tab-pane title="关联消费组" key="groups">
+                  <a-table :data="topicDetail?.consumerGroups || []" size="small" :bordered="{ cell: true }" stripe :pagination="false" :scroll="{ y: 400 }">
+                    <template #columns>
+                      <a-table-column title="消费组" data-index="groupId" />
+                      <a-table-column title="总 Lag" data-index="totalLag" :width="120" />
+                    </template>
+                  </a-table>
+                </a-tab-pane>
+                <a-tab-pane title="配置" key="config">
+                  <div style="margin-bottom: 8px; text-align: right"><a-button size="small" @click="loadTopicConfig">刷新</a-button></div>
+                  <a-table :data="topicConfigs" size="small" :bordered="{ cell: true }" stripe :pagination="false" :scroll="{ y: 400 }">
+                    <template #columns>
+                      <a-table-column title="配置项" data-index="name" :min-width="200" />
+                      <a-table-column title="值" :min-width="200">
+                        <template #cell="{ record }">
+                          <a-input v-if="editingConfigKey === record.name" v-model="editingConfigValue" size="small" style="width: 200px" @keyup.enter="saveConfigEdit(record.name)" />
+                          <span v-else>{{ record.value }}</span>
                         </template>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </el-tab-pane>
-              </el-tabs>
+                      </a-table-column>
+                      <a-table-column title="只读" data-index="readOnly" :width="60"><template #cell="{ record }">{{ record.readOnly ? '是' : '否' }}</template></a-table-column>
+                      <a-table-column title="操作" :width="100">
+                        <template #cell="{ record }">
+                          <a-button v-if="!record.readOnly && editingConfigKey !== record.name" type="text" size="small" @click="startConfigEdit(record)">编辑</a-button>
+                          <template v-if="editingConfigKey === record.name">
+                            <a-button type="text" size="small" status="success" @click="saveConfigEdit(record.name)">保存</a-button>
+                            <a-button type="text" size="small" @click="editingConfigKey = ''">取消</a-button>
+                          </template>
+                        </template>
+                      </a-table-column>
+                    </template>
+                  </a-table>
+                </a-tab-pane>
+              </a-tabs>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 <!-- KAFKA_CONSUMER_GROUP_TAB -->
           <!-- 消费组 Tab -->
-          <el-tab-pane label="消费组" name="consumerGroups">
-            <div style="margin-bottom: 8px; text-align: right"><el-button size="small" @click="loadConsumerGroups">刷新</el-button></div>
-            <el-table :data="consumerGroups" v-loading="groupsLoading" size="small" max-height="250" highlight-current-row @current-change="handleGroupSelect">
-              <el-table-column prop="groupId" label="消费组 ID" />
-              <el-table-column prop="protocolType" label="协议类型" width="120" />
-              <el-table-column label="操作" width="80">
-                <template #default="{ row }">
-                  <el-popconfirm title="确定删除该消费组？" @confirm="handleDeleteGroup(row.groupId)">
-                    <template #reference><el-button link size="small" type="danger">删除</el-button></template>
-                  </el-popconfirm>
-                </template>
-              </el-table-column>
-            </el-table>
+          <a-tab-pane title="消费组" key="consumerGroups">
+            <div style="margin-bottom: 8px; text-align: right"><a-button size="small" @click="loadConsumerGroups">刷新</a-button></div>
+            <a-table :data="consumerGroups" :loading="groupsLoading" size="small" :bordered="{ cell: true }" stripe :pagination="false" :scroll="{ y: 250 }" row-key="groupId" :row-selection="undefined" @row-click="handleGroupRowClick">
+              <template #columns>
+                <a-table-column title="消费组 ID" data-index="groupId" />
+                <a-table-column title="协议类型" data-index="protocolType" :width="120" />
+                <a-table-column title="操作" :width="80">
+                  <template #cell="{ record }">
+                    <a-popconfirm content="确定删除该消费组？" @ok="handleDeleteGroup(record.groupId)">
+                      <a-button type="text" size="small" status="danger">删除</a-button>
+                    </a-popconfirm>
+                  </template>
+                </a-table-column>
+              </template>
+            </a-table>
             <div v-if="selectedGroupDetail" style="margin-top: 16px">
               <h4 style="margin: 0 0 8px">消费组详情 - {{ selectedGroupDetail.groupId }}</h4>
-              <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
-                <el-descriptions-item label="状态">{{ selectedGroupDetail.state }}</el-descriptions-item>
-                <el-descriptions-item label="协议">{{ selectedGroupDetail.protocol }}</el-descriptions-item>
-                <el-descriptions-item label="成员数">{{ selectedGroupDetail.members?.length || 0 }}</el-descriptions-item>
-              </el-descriptions>
-              <el-tabs type="card" model-value="members">
-                <el-tab-pane label="成员" name="members">
-                  <el-table :data="selectedGroupDetail.members || []" size="small" max-height="200">
-                    <el-table-column prop="clientId" label="Client ID" />
-                    <el-table-column prop="clientHost" label="Host" width="150" />
-                    <el-table-column label="分配的分区"><template #default="{ row }">{{ row.assignments?.join(', ') || '-' }}</template></el-table-column>
-                  </el-table>
-                </el-tab-pane>
-                <el-tab-pane label="Lag" name="lag">
-                  <el-table :data="selectedGroupDetail.lag || []" size="small" max-height="200">
-                    <el-table-column prop="topic" label="Topic" />
-                    <el-table-column prop="partition" label="分区" width="60" />
-                    <el-table-column prop="currentOffset" label="当前偏移" width="100" />
-                    <el-table-column prop="logEndOffset" label="日志末尾" width="100" />
-                    <el-table-column prop="lag" label="Lag" width="80">
-                      <template #default="{ row }"><el-tag :type="row.lag > 0 ? 'warning' : 'success'" size="small">{{ row.lag }}</el-tag></template>
-                    </el-table-column>
-                  </el-table>
-                </el-tab-pane>
-              </el-tabs>
+              <a-descriptions :column="3" bordered size="small" style="margin-bottom: 12px">
+                <a-descriptions-item label="状态">{{ selectedGroupDetail.state }}</a-descriptions-item>
+                <a-descriptions-item label="协议">{{ selectedGroupDetail.protocol }}</a-descriptions-item>
+                <a-descriptions-item label="成员数">{{ selectedGroupDetail.members?.length || 0 }}</a-descriptions-item>
+              </a-descriptions>
+              <a-tabs type="card-gutter" :default-active-key="'members'">
+                <a-tab-pane title="成员" key="members">
+                  <a-table :data="selectedGroupDetail.members || []" size="small" :bordered="{ cell: true }" stripe :pagination="false" :scroll="{ y: 200 }">
+                    <template #columns>
+                      <a-table-column title="Client ID" data-index="clientId" />
+                      <a-table-column title="Host" data-index="clientHost" :width="150" />
+                      <a-table-column title="分配的分区"><template #cell="{ record }">{{ record.assignments?.join(', ') || '-' }}</template></a-table-column>
+                    </template>
+                  </a-table>
+                </a-tab-pane>
+                <a-tab-pane title="Lag" key="lag">
+                  <a-table :data="selectedGroupDetail.lag || []" size="small" :bordered="{ cell: true }" stripe :pagination="false" :scroll="{ y: 200 }">
+                    <template #columns>
+                      <a-table-column title="Topic" data-index="topic" />
+                      <a-table-column title="分区" data-index="partition" :width="60" />
+                      <a-table-column title="当前偏移" data-index="currentOffset" :width="100" />
+                      <a-table-column title="日志末尾" data-index="logEndOffset" :width="100" />
+                      <a-table-column title="Lag" data-index="lag" :width="80">
+                        <template #cell="{ record }"><a-tag :color="record.lag > 0 ? 'orangered' : 'green'" size="small">{{ record.lag }}</a-tag></template>
+                      </a-table-column>
+                    </template>
+                  </a-table>
+                </a-tab-pane>
+              </a-tabs>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 <!-- KAFKA_MESSAGE_TAB -->
           <!-- 消息监控 Tab -->
-          <el-tab-pane label="消息监控" name="messages">
+          <a-tab-pane title="消息监控" key="messages">
             <!-- 生产消息 -->
-            <el-collapse v-model="produceCollapse">
-              <el-collapse-item title="发送消息" name="produce">
-                <el-form :model="produceForm" label-width="80px" size="small">
-                  <el-form-item label="Topic">
-                    <el-select v-model="produceForm.topic" filterable placeholder="选择 Topic" style="width: 100%">
-                      <el-option v-for="t in topics" :key="t.name" :label="t.name" :value="t.name" />
-                    </el-select>
-                  </el-form-item>
-                  <el-form-item label="Key"><el-input v-model="produceForm.key" placeholder="可选" /></el-form-item>
-                  <el-form-item label="Value"><el-input v-model="produceForm.value" type="textarea" :rows="3" placeholder="消息内容" /></el-form-item>
-                  <el-form-item label="Headers">
+            <a-collapse v-model:active-key="produceCollapse">
+              <a-collapse-item header="发送消息" key="produce">
+                <a-form :model="produceForm" auto-label-width layout="horizontal" size="small">
+                  <a-form-item label="Topic" field="topic">
+                    <a-select v-model="produceForm.topic" :allow-search="true" placeholder="选择 Topic" style="width: 100%">
+                      <a-option v-for="t in topics" :key="t.name" :label="t.name" :value="t.name" />
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item label="Key" field="key"><a-input v-model="produceForm.key" placeholder="可选" /></a-form-item>
+                  <a-form-item label="Value" field="value"><a-textarea v-model="produceForm.value" :auto-size="{ minRows: 3, maxRows: 3 }" placeholder="消息内容" /></a-form-item>
+                  <a-form-item label="Headers" field="headers">
                     <div v-for="(h, i) in produceForm.headers" :key="i" style="display: flex; gap: 8px; margin-bottom: 4px; width: 100%">
-                      <el-input v-model="h.key" placeholder="Key" style="flex: 1" />
-                      <el-input v-model="h.value" placeholder="Value" style="flex: 1" />
-                      <el-button link type="danger" @click="produceForm.headers.splice(i, 1)"><el-icon><Delete /></el-icon></el-button>
+                      <a-input v-model="h.key" placeholder="Key" style="flex: 1" />
+                      <a-input v-model="h.value" placeholder="Value" style="flex: 1" />
+                      <a-button type="text" status="danger" @click="produceForm.headers.splice(i, 1)"><icon-delete /></a-button>
                     </div>
-                    <el-button size="small" @click="produceForm.headers.push({ key: '', value: '' })">添加 Header</el-button>
-                  </el-form-item>
-                  <el-form-item><el-button type="primary" @click="handleProduce" :loading="produceLoading">发送</el-button></el-form-item>
-                </el-form>
-              </el-collapse-item>
-            </el-collapse>
+                    <a-button size="small" @click="produceForm.headers.push({ key: '', value: '' })">添加 Header</a-button>
+                  </a-form-item>
+                  <a-form-item><a-button type="primary" @click="handleProduce" :loading="produceLoading">发送</a-button></a-form-item>
+                </a-form>
+              </a-collapse-item>
+            </a-collapse>
             <!-- 消费监听 -->
             <div class="consume-section">
               <div class="consume-controls">
-                <el-select v-model="consumeForm.topic" filterable placeholder="选择 Topic" size="small" style="width: 200px">
-                  <el-option v-for="t in topics" :key="t.name" :label="t.name" :value="t.name" />
-                </el-select>
-                <el-select v-model="consumeForm.startOffset" size="small" style="width: 120px">
-                  <el-option label="最新" value="latest" />
-                  <el-option label="最早" value="earliest" />
-                </el-select>
-                <el-input v-model="consumeForm.keyword" placeholder="关键字过滤" clearable size="small" style="width: 180px" />
-                <el-button v-if="!consuming" type="success" size="small" @click="startConsume">开始监听</el-button>
-                <el-button v-else type="danger" size="small" @click="stopConsume">停止监听</el-button>
+                <a-select v-model="consumeForm.topic" :allow-search="true" placeholder="选择 Topic" size="small" style="width: 200px">
+                  <a-option v-for="t in topics" :key="t.name" :label="t.name" :value="t.name" />
+                </a-select>
+                <a-select v-model="consumeForm.startOffset" size="small" style="width: 120px">
+                  <a-option label="最新" value="latest" />
+                  <a-option label="最早" value="earliest" />
+                </a-select>
+                <a-input v-model="consumeForm.keyword" placeholder="关键字过滤" allow-clear size="small" style="width: 180px" />
+                <a-button v-if="!consuming" type="primary" status="success" size="small" @click="startConsume">开始监听</a-button>
+                <a-button v-else type="primary" status="danger" size="small" @click="stopConsume">停止监听</a-button>
                 <span v-if="consuming" class="consume-status">监听中... ({{ consumedMessages.length }} 条)</span>
               </div>
-              <el-table :data="consumedMessages" size="small" max-height="350" style="margin-top: 8px" @row-click="showMessageDetail">
-                <el-table-column prop="partition" label="分区" width="60" />
-                <el-table-column prop="offset" label="偏移量" width="80" />
-                <el-table-column label="时间" width="160"><template #default="{ row }">{{ formatTime(row.timestamp) }}</template></el-table-column>
-                <el-table-column label="Key" width="120" show-overflow-tooltip><template #default="{ row }">{{ row.key || '-' }}</template></el-table-column>
-                <el-table-column label="Value" show-overflow-tooltip><template #default="{ row }">{{ truncate(row.value, 100) }}</template></el-table-column>
-                <el-table-column prop="size" label="大小" width="70"><template #default="{ row }">{{ row.size }}B</template></el-table-column>
-              </el-table>
+              <a-table :data="consumedMessages" size="small" :bordered="{ cell: true }" stripe :pagination="false" :scroll="{ y: 350 }" style="margin-top: 8px" @row-click="showMessageDetail">
+                <template #columns>
+                  <a-table-column title="分区" data-index="partition" :width="60" />
+                  <a-table-column title="偏移量" data-index="offset" :width="80" />
+                  <a-table-column title="时间" :width="160"><template #cell="{ record }">{{ formatTime(record.timestamp) }}</template></a-table-column>
+                  <a-table-column title="Key" :width="120" ellipsis tooltip><template #cell="{ record }">{{ record.key || '-' }}</template></a-table-column>
+                  <a-table-column title="Value" ellipsis tooltip><template #cell="{ record }">{{ truncate(record.value, 100) }}</template></a-table-column>
+                  <a-table-column title="大小" data-index="size" :width="70"><template #cell="{ record }">{{ record.size }}B</template></a-table-column>
+                </template>
+              </a-table>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 <!-- KAFKA_CLUSTER_TAB -->
           <!-- 集群信息 Tab -->
-          <el-tab-pane label="集群信息" name="cluster">
-            <div style="margin-bottom: 8px; text-align: right"><el-button size="small" @click="loadBrokers">刷新</el-button></div>
-            <el-table :data="brokers" v-loading="brokersLoading" size="small">
-              <el-table-column prop="id" label="Broker ID" width="100" />
-              <el-table-column prop="addr" label="地址" />
-              <el-table-column prop="rack" label="Rack" width="100"><template #default="{ row }">{{ row.rack || '-' }}</template></el-table-column>
-              <el-table-column prop="isController" label="Controller" width="100"><template #default="{ row }"><el-tag v-if="row.isController" type="success" size="small">是</el-tag><span v-else>否</span></template></el-table-column>
-            </el-table>
-          </el-tab-pane>
-        </el-tabs>
+          <a-tab-pane title="集群信息" key="cluster">
+            <div style="margin-bottom: 8px; text-align: right"><a-button size="small" @click="loadBrokers">刷新</a-button></div>
+            <a-table :data="brokers" :loading="brokersLoading" size="small" :bordered="{ cell: true }" stripe :pagination="false">
+              <template #columns>
+                <a-table-column title="Broker ID" data-index="id" :width="100" />
+                <a-table-column title="地址" data-index="addr" />
+                <a-table-column title="Rack" data-index="rack" :width="100"><template #cell="{ record }">{{ record.rack || '-' }}</template></a-table-column>
+                <a-table-column title="Controller" data-index="isController" :width="100"><template #cell="{ record }"><a-tag v-if="record.isController" color="green" size="small">是</a-tag><span v-else>否</span></template></a-table-column>
+              </template>
+            </a-table>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </div>
 
     <!-- 创建 Topic 弹窗 -->
-    <el-dialog v-model="createTopicVisible" title="新建 Topic" width="500px" append-to-body>
-      <el-form :model="createTopicForm" label-width="100px" size="small">
-        <el-form-item label="Topic 名称" required><el-input v-model="createTopicForm.name" placeholder="请输入 Topic 名称" /></el-form-item>
-        <el-form-item label="分区数"><el-input-number v-model="createTopicForm.numPartitions" :min="1" :max="1000" /></el-form-item>
-        <el-form-item label="副本因子"><el-input-number v-model="createTopicForm.replicationFactor" :min="1" :max="10" /></el-form-item>
-      </el-form>
+    <a-modal v-model:visible="createTopicVisible" title="新建 Topic" :width="500" unmount-on-close :mask-closable="false">
+      <a-form :model="createTopicForm" auto-label-width layout="horizontal" size="small">
+        <a-form-item label="Topic 名称" field="name" :rules="[{ required: true, message: '请输入 Topic 名称' }]"><a-input v-model="createTopicForm.name" placeholder="请输入 Topic 名称" /></a-form-item>
+        <a-form-item label="分区数" field="numPartitions"><a-input-number v-model="createTopicForm.numPartitions" :min="1" :max="1000" /></a-form-item>
+        <a-form-item label="副本因子" field="replicationFactor"><a-input-number v-model="createTopicForm.replicationFactor" :min="1" :max="10" /></a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="createTopicVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateTopic" :loading="createTopicLoading">创建</el-button>
+        <a-button @click="createTopicVisible = false">取消</a-button>
+        <a-button type="primary" @click="handleCreateTopic" :loading="createTopicLoading">创建</a-button>
       </template>
-    </el-dialog>
-
+    </a-modal>
     <!-- 消息详情弹窗 -->
-    <el-dialog v-model="messageDetailVisible" title="消息详情" width="600px" append-to-body>
-      <el-descriptions :column="2" border size="small" v-if="messageDetailData">
-        <el-descriptions-item label="分区">{{ messageDetailData.partition }}</el-descriptions-item>
-        <el-descriptions-item label="偏移量">{{ messageDetailData.offset }}</el-descriptions-item>
-        <el-descriptions-item label="时间">{{ formatTime(messageDetailData.timestamp) }}</el-descriptions-item>
-        <el-descriptions-item label="大小">{{ messageDetailData.size }}B</el-descriptions-item>
-        <el-descriptions-item label="Key" :span="2">{{ messageDetailData.key || '-' }}</el-descriptions-item>
-      </el-descriptions>
+    <a-modal v-model:visible="messageDetailVisible" title="消息详情" :width="600" unmount-on-close :mask-closable="false">
+      <a-descriptions :column="2" bordered size="small" v-if="messageDetailData">
+        <a-descriptions-item label="分区">{{ messageDetailData.partition }}</a-descriptions-item>
+        <a-descriptions-item label="偏移量">{{ messageDetailData.offset }}</a-descriptions-item>
+        <a-descriptions-item label="时间">{{ formatTime(messageDetailData.timestamp) }}</a-descriptions-item>
+        <a-descriptions-item label="大小">{{ messageDetailData.size }}B</a-descriptions-item>
+        <a-descriptions-item label="Key" :span="2">{{ messageDetailData.key || '-' }}</a-descriptions-item>
+      </a-descriptions>
       <div v-if="messageDetailData" style="margin-top: 12px">
         <h4 style="margin: 0 0 8px">Value</h4>
-        <el-input type="textarea" :model-value="messageDetailData.value" :rows="8" readonly />
+        <a-textarea :model-value="messageDetailData.value" :auto-size="{ minRows: 8, maxRows: 8 }" readonly />
       </div>
       <div v-if="messageDetailData?.headers && Object.keys(messageDetailData.headers).length" style="margin-top: 12px">
         <h4 style="margin: 0 0 8px">Headers</h4>
-        <el-table :data="Object.entries(messageDetailData.headers).map(([k,v]) => ({key:k,value:v}))" size="small">
-          <el-table-column prop="key" label="Key" />
-          <el-table-column prop="value" label="Value" />
-        </el-table>
+        <a-table :data="Object.entries(messageDetailData.headers).map(([k,v]) => ({key:k,value:v}))" size="small" :bordered="{ cell: true }" stripe :pagination="false">
+          <template #columns>
+            <a-table-column title="Key" data-index="key" />
+            <a-table-column title="Value" data-index="value" />
+          </template>
+        </a-table>
       </div>
-    </el-dialog>
-  </el-drawer>
+      <template #footer><a-button @click="messageDetailVisible = false">关闭</a-button></template>
+    </a-modal>
+  </a-drawer>
 </template>
 
 <!-- KAFKA_SCRIPT_START -->
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Refresh, List, Plus, Search, Delete } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
+import {
+  IconLink, IconRefresh, IconList, IconPlus, IconSearch, IconDelete
+} from '@arco-design/web-vue/es/icon'
 import {
   getKafkaBrokers, getKafkaTopics, createKafkaTopic, deleteKafkaTopic,
   getKafkaTopicDetail, getKafkaTopicConfig, updateKafkaTopicConfig,
@@ -333,7 +354,7 @@ const loadTopics = async () => {
     const res = await getKafkaTopics(middlewareId.value)
     topics.value = res || []
   } catch (e: any) {
-    ElMessage.error(e.message || '加载 Topic 失败')
+    Message.error(e.message || '加载 Topic 失败')
   } finally {
     topicsLoading.value = false
   }
@@ -354,7 +375,7 @@ const loadTopicDetail = async () => {
     const res = await getKafkaTopicDetail(middlewareId.value, selectedTopic.value)
     topicDetail.value = res
   } catch (e: any) {
-    ElMessage.error(e.message || '加载详情失败')
+    Message.error(e.message || '加载详情失败')
   }
 }
 
@@ -364,7 +385,7 @@ const loadTopicConfig = async () => {
     const res = await getKafkaTopicConfig(middlewareId.value, selectedTopic.value)
     topicConfigs.value = res || []
   } catch (e: any) {
-    ElMessage.error(e.message || '加载配置失败')
+    Message.error(e.message || '加载配置失败')
   }
 }
 
@@ -379,11 +400,11 @@ const saveConfigEdit = async (name: string) => {
   if (!middlewareId.value || !selectedTopic.value) return
   try {
     await updateKafkaTopicConfig(middlewareId.value, { topic: selectedTopic.value, configs: { [name]: editingConfigValue.value } })
-    ElMessage.success('修改成功')
+    Message.success('修改成功')
     editingConfigKey.value = ''
     loadTopicConfig()
   } catch (e: any) {
-    ElMessage.error(e.message || '修改失败')
+    Message.error(e.message || '修改失败')
   }
 }
 
@@ -399,11 +420,11 @@ const handleCreateTopic = async () => {
   createTopicLoading.value = true
   try {
     await createKafkaTopic(middlewareId.value, createTopicForm)
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createTopicVisible.value = false
     loadTopics()
   } catch (e: any) {
-    ElMessage.error(e.message || '创建失败')
+    Message.error(e.message || '创建失败')
   } finally {
     createTopicLoading.value = false
   }
@@ -416,7 +437,7 @@ const loadConsumerGroups = async () => {
     const res = await getKafkaConsumerGroups(middlewareId.value)
     consumerGroups.value = res || []
   } catch (e: any) {
-    ElMessage.error(e.message || '加载消费组失败')
+    Message.error(e.message || '加载消费组失败')
   } finally {
     groupsLoading.value = false
   }
@@ -428,19 +449,23 @@ const handleGroupSelect = async (row: any) => {
     const res = await getKafkaConsumerGroupDetail(middlewareId.value, row.groupId)
     selectedGroupDetail.value = res
   } catch (e: any) {
-    ElMessage.error(e.message || '加载详情失败')
+    Message.error(e.message || '加载详情失败')
   }
+}
+
+const handleGroupRowClick = (record: any) => {
+  handleGroupSelect(record)
 }
 
 const handleDeleteGroup = async (groupId: string) => {
   if (!middlewareId.value) return
   try {
     await deleteKafkaConsumerGroup(middlewareId.value, groupId)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     selectedGroupDetail.value = null
     loadConsumerGroups()
   } catch (e: any) {
-    ElMessage.error(e.message || '删除失败')
+    Message.error(e.message || '删除失败')
   }
 }
 
@@ -453,7 +478,7 @@ const loadBrokers = async () => {
     const res = await getKafkaBrokers(middlewareId.value)
     brokers.value = res || []
   } catch (e: any) {
-    ElMessage.error(e.message || '加载 Broker 失败')
+    Message.error(e.message || '加载 Broker 失败')
   } finally {
     brokersLoading.value = false
   }
@@ -461,7 +486,7 @@ const loadBrokers = async () => {
 
 const handleProduce = async () => {
   if (!middlewareId.value || !produceForm.topic || !produceForm.value) {
-    ElMessage.warning('请填写 Topic 和消息内容')
+    Message.warning('请填写 Topic 和消息内容')
     return
   }
   produceLoading.value = true
@@ -476,9 +501,9 @@ const handleProduce = async () => {
       value: produceForm.value,
       headers: Object.keys(headers).length ? headers : undefined,
     })
-    ElMessage.success(`发送成功 (分区: ${res?.partition}, 偏移量: ${res?.offset})`)
+    Message.success(`发送成功 (分区: ${res?.partition}, 偏移量: ${res?.offset})`)
   } catch (e: any) {
-    ElMessage.error(e.message || '发送失败')
+    Message.error(e.message || '发送失败')
   } finally {
     produceLoading.value = false
   }
@@ -486,7 +511,7 @@ const handleProduce = async () => {
 
 const startConsume = async () => {
   if (!middlewareId.value || !consumeForm.topic) {
-    ElMessage.warning('请选择 Topic')
+    Message.warning('请选择 Topic')
     return
   }
   try {
@@ -499,7 +524,7 @@ const startConsume = async () => {
     consumedMessages.value = []
     pollTimer = setInterval(pollMessages, 1500)
   } catch (e: any) {
-    ElMessage.error(e.message || '启动消费失败')
+    Message.error(e.message || '启动消费失败')
   }
 }
 
@@ -577,23 +602,23 @@ onBeforeUnmount(() => { stopConsume() })
 .header-title { font-size: 16px; font-weight: 600; }
 .header-actions { display: flex; gap: 8px; }
 .console-body { display: flex; height: calc(100vh - 80px); gap: 0; }
-.sidebar { width: 280px; flex-shrink: 0; border-right: 1px solid #ebeef5; display: flex; flex-direction: column; }
-.sidebar-header { display: flex; align-items: center; gap: 6px; padding: 12px; font-weight: 600; font-size: 14px; border-bottom: 1px solid #ebeef5; }
-.sidebar-action { cursor: pointer; color: #409eff; font-size: 16px; }
-.sidebar-action:hover { color: #66b1ff; }
+.sidebar { width: 280px; flex-shrink: 0; border-right: 1px solid var(--ops-border-color, #e5e6eb); display: flex; flex-direction: column; }
+.sidebar-header { display: flex; align-items: center; gap: 6px; padding: 12px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--ops-border-color, #e5e6eb); }
+.sidebar-action { cursor: pointer; color: var(--ops-primary, #165dff); font-size: 16px; }
+.sidebar-action:hover { color: rgb(var(--primary-5, 60, 126, 255)); }
 .sidebar-search { padding: 8px 12px; }
 .topic-list { flex: 1; overflow: auto; padding: 4px 0; }
 .topic-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; cursor: pointer; font-size: 13px; border-left: 3px solid transparent; }
-.topic-item:hover { background: #f5f7fa; }
-.topic-item.active { background: #ecf5ff; border-left-color: #409eff; }
-.topic-item.internal .topic-name { color: #909399; }
+.topic-item:hover { background: var(--color-fill-1, #f7f8fa); }
+.topic-item.active { background: var(--color-primary-light-1, #e8f3ff); border-left-color: var(--ops-primary, #165dff); }
+.topic-item.internal .topic-name { color: var(--ops-text-tertiary, #86909c); }
 .topic-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topic-meta { font-size: 11px; color: #909399; margin-left: 8px; white-space: nowrap; }
-.topic-empty { padding: 20px; text-align: center; color: #909399; font-size: 13px; }
+.topic-meta { font-size: 11px; color: var(--ops-text-tertiary, #86909c); margin-left: 8px; white-space: nowrap; }
+.topic-empty { padding: 20px; text-align: center; color: var(--ops-text-tertiary, #86909c); font-size: 13px; }
 .main-area { flex: 1; overflow: auto; }
-.empty-tip { padding: 40px; text-align: center; color: #909399; }
+.empty-tip { padding: 40px; text-align: center; color: var(--ops-text-tertiary, #86909c); }
 .topic-detail { padding: 0 4px; }
 .consume-section { margin-top: 16px; }
 .consume-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.consume-status { font-size: 12px; color: #67c23a; }
+.consume-status { font-size: 12px; color: #00b42a; }
 </style>

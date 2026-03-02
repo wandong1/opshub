@@ -2,76 +2,63 @@
   <div class="service-accounts-tab">
     <!-- 表格 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="paginatedList"
-        v-loading="loading"
+        :loading="loading"
         class="modern-table"
         size="default"
         :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
-      >
-        <el-table-column label="名称" min-width="200" fixed="left">
-          <template #default="{ row }">
+       :columns="tableColumns2">
+          <template #name="{ record }">
             <div class="name-cell">
               <div class="name-icon-wrapper">
-                <el-icon class="name-icon"><User /></el-icon>
+                <icon-user />
               </div>
-              <span class="name-text">{{ row.name }}</span>
+              <span class="name-text">{{ record.name }}</span>
             </div>
           </template>
-        </el-table-column>
-
-        <el-table-column label="命名空间" prop="namespace" width="180">
-          <template #default="{ row }">
-            <el-tag size="small" type="info">{{ row.namespace }}</el-tag>
+          <template #namespace="{ record }">
+            <a-tag size="small" color="gray">{{ record.namespace }}</a-tag>
           </template>
-        </el-table-column>
-
-        <el-table-column label="存活时间" prop="age" width="140" />
-
-        <el-table-column label="操作" width="100" fixed="right" align="center">
-          <template #default="{ row }">
-            <el-button v-permission="'k8s-serviceaccounts:update'" link @click="handleEdit(row)" class="action-btn">
-              <el-icon :size="18"><Edit /></el-icon>
-            </el-button>
-            <el-button v-permission="'k8s-serviceaccounts:delete'" link @click="handleDelete(row)" class="action-btn danger">
-              <el-icon :size="18"><Delete /></el-icon>
-            </el-button>
+          <template #actions="{ record }">
+            <a-button v-permission="'k8s-serviceaccounts:update'" type="text" @click="handleEdit(record)" class="action-btn">
+              <icon-edit />
+            </a-button>
+            <a-button v-permission="'k8s-serviceaccounts:delete'" type="text" @click="handleDelete(record)" class="action-btn danger">
+              <icon-delete />
+            </a-button>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
+        <a-pagination
+          v-model:current="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredData.length"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handlePageChange"
-          @size-change="handleSizeChange"
+          show-total show-page-size show-jumper
         />
       </div>
     </div>
 
     <!-- 标签弹窗 -->
-    <el-dialog
-      v-model="labelDialogVisible"
+    <a-modal
+      v-model:visible="labelDialogVisible"
       title="标签"
       width="600px"
     >
-      <el-table :data="labelList" max-height="400">
-        <el-table-column prop="key" label="Key" min-width="150" />
-        <el-table-column prop="value" label="Value" min-width="150" />
-      </el-table>
-    </el-dialog>
+      <a-table :data="labelList" max-height="400" :columns="tableColumns">
+
+        </a-table>
+    </a-modal>
 
     <!-- YAML 编辑弹窗 -->
-    <el-dialog
-      v-model="yamlDialogVisible"
+    <a-modal
+      v-model:visible="yamlDialogVisible"
       :title="yamlDialogTitle"
       width="900px"
-      :close-on-click-modal="false"
+      :mask-closable="false"
       class="yaml-dialog"
     >
       <div class="yaml-editor-wrapper">
@@ -89,18 +76,30 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="handleSaveYaml" :loading="yamlSaving" class="black-button">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">关闭</a-button>
+          <a-button type="primary" @click="handleSaveYaml" :loading="yamlSaving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns2 = [
+  { title: '名称', slotName: 'name', width: 200, fixed: 'left' },
+  { title: '命名空间', dataIndex: 'namespace', slotName: 'namespace', width: 180 },
+  { title: '存活时间', dataIndex: 'age', width: 140 },
+  { title: '操作', slotName: 'actions', width: 100, fixed: 'right', align: 'center' }
+]
+
+const tableColumns = [
+  { title: 'Key', dataIndex: 'key', width: 150 },
+  { title: 'Value', dataIndex: 'value', width: 150 }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, User, PriceTag, Edit, Delete, Plus } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getServiceAccounts, type ServiceAccountInfo } from '@/api/kubernetes'
 import axios from 'axios'
 import * as yaml from 'js-yaml'
@@ -167,24 +166,10 @@ const loadData = async () => {
     const data = await getServiceAccounts(props.clusterId, props.namespace)
     serviceAccounts.value = data || []
   } catch (error) {
-    ElMessage.error('获取 ServiceAccount 列表失败')
+    Message.error('获取 ServiceAccount 列表失败')
   } finally {
     loading.value = false
   }
-}
-
-// 分页
-const handlePageChange = () => {}
-const handleSizeChange = () => {}
-
-// 显示标签
-const showLabels = (row: ServiceAccountInfo) => {
-  const labels = row.labels || {}
-  labelList.value = Object.keys(labels).map(key => ({
-    key,
-    value: labels[key]
-  }))
-  labelDialogVisible.value = true
 }
 
 // 新增
@@ -219,7 +204,7 @@ const handleEdit = async (row: ServiceAccountInfo) => {
     editingItem.value = row
     yamlDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('获取 ServiceAccount YAML 失败')
+    Message.error('获取 ServiceAccount YAML 失败')
   }
 }
 
@@ -260,7 +245,7 @@ const cleanK8sResource = (data: any): any => {
 // 删除
 const handleDelete = async (row: ServiceAccountInfo) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除 ServiceAccount "${row.name}" 吗？此操作不可撤销。`,
       '确认删除',
       {
@@ -279,11 +264,11 @@ const handleDelete = async (row: ServiceAccountInfo) => {
       }
     )
 
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     await loadData()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + (error.response?.data?.message || error.message))
+      Message.error('删除失败: ' + (error.response?.data?.message || error.message))
     }
   }
 }
@@ -302,7 +287,7 @@ const handleSaveYaml = async () => {
         { clusterId: props.clusterId, yaml: yamlContent.value },
         { headers: { Authorization: `Bearer ${token}` } }
       )
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     } else {
       // 新增模式
       await axios.post(
@@ -316,12 +301,12 @@ const handleSaveYaml = async () => {
           }
         }
       )
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     }
     yamlDialogVisible.value = false
     await loadData()
   } catch (error: any) {
-    ElMessage.error('保存失败: ' + (error.response?.data?.message || error.message))
+    Message.error('保存失败: ' + (error.response?.data?.message || error.message))
   } finally {
     yamlSaving.value = false
   }
@@ -341,45 +326,6 @@ const handleYamlScroll = (e: Event) => {
   }
 }
 
-// 简单的 JSON 转 YAML (临时方案)
-const JSONToYAML = (obj: any): string => {
-  const yaml: string[] = []
-  const convert = (o: any, indent = 0) => {
-    const spaces = '  '.repeat(indent)
-    if (Array.isArray(o)) {
-      o.forEach(item => {
-        if (typeof item === 'object' && item !== null) {
-          yaml.push(spaces + '- ')
-          const firstKey = Object.keys(item)[0]
-          if (firstKey) {
-            yaml.push(spaces + firstKey + ':')
-            convert(item[firstKey], indent + 1)
-          }
-        } else {
-          yaml.push(spaces + '- ' + item)
-        }
-      })
-    } else if (typeof o === 'object' && o !== null) {
-      Object.keys(o).forEach(key => {
-        const value = o[key]
-        if (value === null) {
-          yaml.push(spaces + key + ': null')
-        } else if (Array.isArray(value)) {
-          yaml.push(spaces + key + ':')
-          convert(value, indent + 1)
-        } else if (typeof value === 'object') {
-          yaml.push(spaces + key + ':')
-          convert(value, indent + 1)
-        } else {
-          yaml.push(spaces + key + ': ' + value)
-        }
-      })
-    }
-  }
-  convert(obj)
-  return yaml.join('\n')
-}
-
 // 监听 props 变化
 watch(() => [props.clusterId, props.namespace], () => {
   if (props.clusterId) {
@@ -394,7 +340,8 @@ watch(filteredData, (newData) => {
 
 // 暴露方法给父组件
 defineExpose({
-  handleCreate
+  handleCreate,
+  loadData
 })
 </script>
 
@@ -422,27 +369,9 @@ defineExpose({
   width: 300px;
 }
 
-.search-icon {
-  color: #d4af37;
-}
-
 .action-buttons {
   display: flex;
   gap: 12px;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
 }
 
 .table-wrapper {
@@ -456,11 +385,11 @@ defineExpose({
   width: 100%;
 }
 
-.modern-table :deep(.el-table__row) {
+.modern-table :deep(.arco-table__row) {
   transition: background-color 0.2s;
 }
 
-.modern-table :deep(.el-table__row:hover) {
+.modern-table :deep(.arco-table__row:hover) {
   background-color: #f8fafc !important;
 }
 
@@ -474,16 +403,16 @@ defineExpose({
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d4af37;
+  border: none;
   flex-shrink: 0;
 }
 
 .name-icon {
-  color: #d4af37;
+  color: #165dff;
   font-size: 14px;
 }
 
@@ -513,7 +442,7 @@ defineExpose({
 }
 
 .label-icon {
-  color: #d4af37;
+  color: #165dff;
   font-size: 18px;
 }
 
@@ -521,7 +450,7 @@ defineExpose({
   position: absolute;
   top: -6px;
   right: -6px;
-  background-color: #d4af37;
+  background-color: #165dff;
   color: #000;
   font-size: 10px;
   font-weight: 600;
@@ -531,22 +460,27 @@ defineExpose({
   padding: 0 4px;
   border-radius: 8px;
   text-align: center;
-  border: 1px solid #d4af37;
+  border: 1px solid #165dff;
   z-index: 1;
 }
 
 .label-cell:hover .label-icon {
-  color: #bfa13f;
+  color: #4080ff;
   transform: scale(1.1);
 }
 
 .label-cell:hover .label-count {
-  background-color: #bfa13f;
+  background-color: #4080ff;
 }
 
 .action-btn {
-  color: #d4af37;
+  color: #165dff;
   margin: 0 4px;
+  padding: 0;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .action-btn.danger {
@@ -558,35 +492,35 @@ defineExpose({
 }
 
 /* YAML 编辑弹窗 */
-.yaml-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__header) {
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
+  color: #165dff;
   border-radius: 8px 8px 0 0;
   padding: 20px 24px;
 }
 
-.yaml-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__title) {
+  color: #165dff;
   font-size: 16px;
   font-weight: 600;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 24px;
-  background-color: #1a1a1a;
+  background-color: #fafafa;
 }
 
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #fafafa;
 }
 
 .yaml-line-numbers {
-  background-color: #0d0d0d;
-  color: #666;
+  background-color: #f2f3f5;
+  color: #86909c;
   padding: 16px 8px;
   text-align: right;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
@@ -595,7 +529,7 @@ defineExpose({
   user-select: none;
   overflow: hidden;
   min-width: 40px;
-  border-right: 1px solid #333;
+  border-right: 1px solid #e5e6eb;
 }
 
 .line-number {
@@ -605,8 +539,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #fafafa;
+  color: #1d2129;
   border: none;
   outline: none;
   padding: 16px;

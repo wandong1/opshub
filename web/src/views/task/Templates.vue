@@ -1,261 +1,246 @@
 <template>
-  <div class="template-container">
+  <div class="page-container">
     <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Document /></el-icon>
+    <div class="page-header-card">
+      <div class="page-header-inner">
+        <div class="page-icon">
+          <icon-file />
         </div>
         <div>
-          <h2 class="page-title">模板管理</h2>
-          <p class="page-subtitle">创建和管理执行模板，支持模板复用和参数化</p>
+          <div class="page-title">模板管理</div>
+          <div class="page-desc">创建和管理执行模板，支持模板复用和参数化</div>
         </div>
       </div>
     </div>
 
     <!-- 搜索区域 -->
-    <div class="search-card">
-      <div class="search-row">
-        <div class="search-item">
-          <span class="search-label">模板类型:</span>
-          <el-select v-model="searchForm.type" placeholder="请选择" clearable style="width: 200px;">
-            <el-option label="系统信息" value="system" />
-            <el-option label="部署" value="deploy" />
-            <el-option label="监控" value="monitor" />
-            <el-option label="备份" value="backup" />
-          </el-select>
-        </div>
-        <div class="search-item">
-          <span class="search-label">模板名称:</span>
-          <el-input v-model="searchForm.name" placeholder="请输入" clearable style="width: 300px;" />
-        </div>
-      </div>
-    </div>
+    <a-card class="search-card" :bordered="false">
+      <a-row :gutter="16" align="center">
+        <a-col :flex="'auto'">
+          <a-space :size="16" wrap>
+            <a-space>
+              <span class="search-label">模板类型:</span>
+              <a-select v-model="searchForm.type" placeholder="请选择" allow-clear style="width: 180px" @change="handleSearch">
+                <a-option v-for="t in templateTypes" :key="t.value" :value="t.value">{{ t.label }}</a-option>
+              </a-select>
+            </a-space>
+            <a-space>
+              <span class="search-label">模板名称:</span>
+              <a-input v-model="searchForm.name" placeholder="请输入" allow-clear style="width: 240px" @press-enter="handleSearch" />
+            </a-space>
+            <a-button type="primary" @click="handleSearch">
+              <template #icon><icon-search /></template>
+              搜索
+            </a-button>
+            <a-button @click="handleReset">
+              <template #icon><icon-refresh /></template>
+              重置
+            </a-button>
+          </a-space>
+        </a-col>
+      </a-row>
+    </a-card>
 
     <!-- 模板列表 -->
-    <div class="template-list-card">
-      <div class="list-header">
-        <span class="header-title">模板列表</span>
-        <div class="header-actions">
-          <el-button type="primary" @click="handleCreate" class="black-button">
-            <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+    <a-card class="table-card" :bordered="false">
+      <template #title>
+        <span class="card-title">模板列表</span>
+      </template>
+      <template #extra>
+        <a-space>
+          <a-button type="primary" @click="handleCreate">
+            <template #icon><icon-plus /></template>
             新建
-          </el-button>
-          <el-button :icon="Refresh" @click="loadTemplates" />
-          <el-button :icon="Setting" />
-          <el-button :icon="FullScreen" />
-        </div>
-      </div>
-      <el-table :data="templates" v-loading="loading">
-        <el-table-column type="index" label="序号" width="80" align="center" />
-        <el-table-column label="模板名称" prop="name" min-width="200" />
-        <el-table-column label="模板类型" prop="category" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag size="small">{{ getCategoryLabel(row.category) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="模板内容" prop="content" min-width="300" show-overflow-tooltip />
-        <el-table-column label="描述信息" prop="description" min-width="200" show-overflow-tooltip />
-        <el-table-column label="操作" width="150" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" size="small" link @click="handleEdit(row)">编辑</el-button>
-            <!-- 删除功能已被禁用 -->
-            <!-- <el-button type="danger" size="small" link @click="handleDelete(row)">删除</el-button> -->
-          </template>
-        </el-table-column>
-      </el-table>
-      <div class="pagination">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadTemplates"
-          @current-change="loadTemplates"
-        />
-      </div>
-    </div>
+          </a-button>
+          <a-button @click="loadTemplates">
+            <template #icon><icon-refresh /></template>
+          </a-button>
+        </a-space>
+      </template>
+
+      <a-table
+        :data="templates"
+        :loading="loading"
+        row-key="id"
+        :pagination="tablePagination"
+        @page-change="handlePageChange"
+        @page-size-change="handlePageSizeChange"
+      >
+        <template #columns>
+          <a-table-column title="序号" :width="70" align="center">
+            <template #cell="{ rowIndex }">
+              {{ (pagination.page - 1) * pagination.pageSize + rowIndex + 1 }}
+            </template>
+          </a-table-column>
+          <a-table-column title="模板名称" data-index="name" :min-width="200" />
+          <a-table-column title="模板类型" data-index="category" :width="120" align="center">
+            <template #cell="{ record }">
+              <a-tag size="small" color="arcoblue">{{ getCategoryLabel(record.category) }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="模板内容" data-index="content" ellipsis tooltip :min-width="280" />
+          <a-table-column title="描述信息" data-index="description" ellipsis tooltip :min-width="200" />
+          <a-table-column title="操作" :width="120" align="center" fixed="right">
+            <template #cell="{ record }">
+              <a-space>
+                <a-link @click="handleEdit(record)">编辑</a-link>
+                <a-popconfirm content="确定要删除该模板吗？" @ok="handleDelete(record)">
+                  <a-link status="danger">删除</a-link>
+                </a-popconfirm>
+              </a-space>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
+    </a-card>
 
     <!-- 新建/编辑模板对话框 -->
-    <el-dialog
-      v-model="showTemplateDialog"
+    <a-modal
+      v-model:visible="showTemplateDialog"
       :title="isEdit ? '编辑模板' : '新建模板'"
-      width="900px"
-      destroy-on-close
+      :width="860"
+      :unmount-on-close="true"
+      @ok="handleSaveTemplate"
+      @cancel="showTemplateDialog = false"
     >
-      <el-form :model="templateForm" label-width="100px">
-        <el-form-item label="模板类型" required>
-          <el-select v-model="templateForm.type" placeholder="请选择模板类型" style="width: 100%;">
-            <el-option
-              v-for="type in templateTypes"
-              :key="type.value"
-              :label="type.label"
-              :value="type.value"
-            />
-          </el-select>
-          <el-link type="primary" style="margin-left: 8px;" @click="showAddTypeDialog = true">添加类型</el-link>
-        </el-form-item>
+      <a-form :model="templateForm" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="模板类型" required>
+              <a-space style="width: 100%">
+                <a-select v-model="templateForm.type" placeholder="请选择模板类型" style="flex: 1">
+                  <a-option v-for="t in templateTypes" :key="t.value" :value="t.value">{{ t.label }}</a-option>
+                </a-select>
+                <a-link @click="showAddTypeDialog = true">添加类型</a-link>
+              </a-space>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="模板名称" required>
+              <a-input v-model="templateForm.name" placeholder="请输入模板名称" />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <el-form-item label="模板名称" required>
-          <el-input v-model="templateForm.name" placeholder="请输入模板名称" />
-        </el-form-item>
+        <a-form-item label="脚本语言" required>
+          <a-radio-group v-model="templateForm.scriptType" type="button">
+            <a-radio value="Shell">Shell</a-radio>
+            <a-radio value="Python">Python</a-radio>
+          </a-radio-group>
+        </a-form-item>
 
-        <el-form-item label="脚本语言" required>
-          <el-radio-group v-model="templateForm.scriptType">
-            <el-radio-button label="Shell">Shell</el-radio-button>
-            <el-radio-button label="Python">Python</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item label="模板内容" required>
-          <el-input
+        <a-form-item label="模板内容" required>
+          <a-textarea
             v-model="templateForm.content"
-            type="textarea"
-            :rows="10"
             placeholder="请输入脚本内容..."
-            style="font-family: 'Courier New', monospace;"
+            :auto-size="{ minRows: 8, maxRows: 18 }"
+            class="code-textarea"
           />
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item label="参数化">
-          <el-link type="primary" @click="showParamDialog = true">添加参数</el-link>
-          <div v-if="templateForm.parameters.length > 0" class="parameters-list">
-            <el-tag
+        <a-form-item label="参数化">
+          <a-link @click="showParamDialog = true">
+            <template #icon><icon-plus /></template>
+            添加参数
+          </a-link>
+          <div v-if="templateForm.parameters.length > 0" class="tag-list">
+            <a-tag
               v-for="(param, index) in templateForm.parameters"
               :key="index"
               closable
+              color="arcoblue"
               @close="removeParameter(index)"
-              style="margin: 8px 8px 0 0;"
             >
               {{ param.name }} ({{ param.varName }})
-            </el-tag>
+            </a-tag>
           </div>
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item label="备注信息">
-          <el-input
+        <a-form-item label="备注信息">
+          <a-textarea
             v-model="templateForm.remark"
-            type="textarea"
-            :rows="3"
             placeholder="请输入模板备注信息"
+            :auto-size="{ minRows: 2, maxRows: 5 }"
           />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showTemplateDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveTemplate">确定</el-button>
-      </template>
-    </el-dialog>
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 编辑参数对话框 -->
-    <el-dialog
-      v-model="showParamDialog"
+    <a-modal
+      v-model:visible="showParamDialog"
       title="编辑参数"
-      width="600px"
-      destroy-on-close
+      :width="520"
+      :unmount-on-close="true"
+      @ok="handleSaveParameter"
+      @cancel="showParamDialog = false"
     >
-      <el-form :model="paramForm" label-width="100px">
-        <el-form-item label="参数名" required>
-          <el-input v-model="paramForm.name" placeholder="请输入参数名称">
-            <template #suffix>
-              <el-icon><QuestionFilled /></el-icon>
-            </template>
-          </el-input>
-        </el-form-item>
-
-        <el-form-item label="变量名" required>
-          <el-input v-model="paramForm.varName" placeholder="请输入变量名">
-            <template #suffix>
-              <el-icon><QuestionFilled /></el-icon>
-            </template>
-          </el-input>
-        </el-form-item>
-
-        <el-form-item label="参数类型" required>
-          <el-radio-group v-model="paramForm.type">
-            <el-radio-button label="text">文本框</el-radio-button>
-            <el-radio-button label="password">密码框</el-radio-button>
-            <el-radio-button label="select">下拉选择</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item label="必填">
-          <el-switch v-model="paramForm.required" inactive-text="否" />
-        </el-form-item>
-
-        <el-form-item label="默认值">
-          <el-input v-model="paramForm.defaultValue" placeholder="请输入" />
-        </el-form-item>
-
-        <el-form-item label="提示信息">
-          <el-input
-            v-model="paramForm.helpText"
-            type="textarea"
-            :rows="2"
-            placeholder="请输入该参数的帮助提示信息"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showParamDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveParameter">确定</el-button>
-      </template>
-    </el-dialog>
+      <a-form :model="paramForm" layout="vertical">
+        <a-form-item label="参数名" required>
+          <a-input v-model="paramForm.name" placeholder="请输入参数名称" />
+        </a-form-item>
+        <a-form-item label="变量名" required>
+          <a-input v-model="paramForm.varName" placeholder="请输入变量名" />
+        </a-form-item>
+        <a-form-item label="参数类型" required>
+          <a-radio-group v-model="paramForm.type" type="button">
+            <a-radio value="text">文本框</a-radio>
+            <a-radio value="password">密码框</a-radio>
+            <a-radio value="select">下拉选择</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="必填">
+          <a-switch v-model="paramForm.required" />
+        </a-form-item>
+        <a-form-item label="默认值">
+          <a-input v-model="paramForm.defaultValue" placeholder="请输入" />
+        </a-form-item>
+        <a-form-item label="提示信息">
+          <a-textarea v-model="paramForm.helpText" placeholder="请输入该参数的帮助提示信息" :auto-size="{ minRows: 2, maxRows: 4 }" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 添加类型对话框 -->
-    <el-dialog
-      v-model="showAddTypeDialog"
+    <a-modal
+      v-model:visible="showAddTypeDialog"
       title="添加模板类型"
-      width="500px"
-      destroy-on-close
+      :width="440"
+      :unmount-on-close="true"
+      @ok="handleAddType"
+      @cancel="showAddTypeDialog = false"
     >
-      <el-form :model="newTypeForm" label-width="100px">
-        <el-form-item label="类型名称" required>
-          <el-input v-model="newTypeForm.label" placeholder="请输入类型名称" />
-        </el-form-item>
-        <el-form-item label="类型值" required>
-          <el-input v-model="newTypeForm.value" placeholder="请输入类型值（英文）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showAddTypeDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleAddType">确定</el-button>
-      </template>
-    </el-dialog>
+      <a-form :model="newTypeForm" layout="vertical">
+        <a-form-item label="类型名称" required>
+          <a-input v-model="newTypeForm.label" placeholder="请输入类型名称" />
+        </a-form-item>
+        <a-form-item label="类型值" required>
+          <a-input v-model="newTypeForm.value" placeholder="请输入类型值（英文）" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Plus,
-  Refresh,
-  Setting,
-  FullScreen,
-  Document,
-  QuestionFilled
-} from '@element-plus/icons-vue'
-import { getJobTemplateList, createJobTemplate, updateJobTemplate } from '@/api/task'
+import { ref, computed, onMounted } from 'vue'
+import { Message } from '@arco-design/web-vue'
+import { IconFile, IconSearch, IconRefresh, IconPlus } from '@arco-design/web-vue/es/icon'
+import { getJobTemplateList, createJobTemplate, updateJobTemplate, deleteJobTemplate } from '@/api/task'
 
-// 搜索表单
-const searchForm = ref({
-  type: '',
-  name: '',
-})
-
-// 分页
-const pagination = ref({
-  page: 1,
-  pageSize: 10,
-  total: 1,
-})
-
-// 加载状态
+const searchForm = ref({ type: '', name: '' })
+const pagination = ref({ page: 1, pageSize: 10, total: 0 })
 const loading = ref(false)
 
-// 模板类型列表
+const tablePagination = computed(() => ({
+  current: pagination.value.page,
+  pageSize: pagination.value.pageSize,
+  total: pagination.value.total,
+  showTotal: true,
+  showPageSize: true,
+  pageSizeOptions: [10, 20, 50, 100],
+}))
+
 const templateTypes = ref([
   { label: '系统信息', value: 'system' },
   { label: '部署', value: 'deploy' },
@@ -263,30 +248,25 @@ const templateTypes = ref([
   { label: '备份', value: 'backup' },
 ])
 
-// 获取类型标签
 const getCategoryLabel = (category: string) => {
-  const found = templateTypes.value.find(t => t.value === category)
-  return found ? found.label : category
+  return templateTypes.value.find(t => t.value === category)?.label || category
 }
 
-// 模板列表
 const templates = ref<any[]>([])
 
-// 模板对话框
 const showTemplateDialog = ref(false)
 const isEdit = ref(false)
 const templateForm = ref({
   id: 0,
-  type: '',        // 对应后端的 category
+  type: '',
   name: '',
-  code: '',        // 后端唯一标识
+  code: '',
   scriptType: 'Shell',
   content: '',
   parameters: [] as any[],
-  remark: '',      // 对应后端的 description
+  remark: '',
 })
 
-// 参数对话框
 const showParamDialog = ref(false)
 const paramForm = ref({
   name: '',
@@ -297,14 +277,9 @@ const paramForm = ref({
   helpText: '',
 })
 
-// 添加类型对话框
 const showAddTypeDialog = ref(false)
-const newTypeForm = ref({
-  label: '',
-  value: '',
-})
+const newTypeForm = ref({ label: '', value: '' })
 
-// 加载模板列表
 const loadTemplates = async () => {
   loading.value = true
   try {
@@ -315,314 +290,218 @@ const loadTemplates = async () => {
       category: searchForm.value.type || undefined,
     }
     const response = await getJobTemplateList(params)
-    // 处理不同的响应格式
     if (Array.isArray(response)) {
       templates.value = response
       pagination.value.total = response.length
-    } else if (response.list && Array.isArray(response.list)) {
+    } else if (response.list) {
       templates.value = response.list
       pagination.value.total = response.total || response.list.length
-    } else if (response.data && Array.isArray(response.data)) {
+    } else if (response.data) {
       templates.value = response.data
       pagination.value.total = response.total || response.data.length
     } else {
       templates.value = []
       pagination.value.total = 0
     }
-  } catch (error) {
-    ElMessage.error('加载模板列表失败')
+  } catch {
+    Message.error('加载模板列表失败')
     templates.value = []
   } finally {
     loading.value = false
   }
 }
 
-// 新建模板
+const handleSearch = () => {
+  pagination.value.page = 1
+  loadTemplates()
+}
+
+const handleReset = () => {
+  searchForm.value = { type: '', name: '' }
+  pagination.value.page = 1
+  loadTemplates()
+}
+
+const handlePageChange = (page: number) => {
+  pagination.value.page = page
+  loadTemplates()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.value.pageSize = pageSize
+  pagination.value.page = 1
+  loadTemplates()
+}
+
 const handleCreate = () => {
   isEdit.value = false
-  templateForm.value = {
-    id: 0,
-    type: '',
-    name: '',
-    code: '',
-    scriptType: 'Shell',
-    content: '',
-    parameters: [],
-    remark: '',
-  }
+  templateForm.value = { id: 0, type: '', name: '', code: '', scriptType: 'Shell', content: '', parameters: [], remark: '' }
   showTemplateDialog.value = true
 }
 
-// 编辑模板
 const handleEdit = (row: any) => {
   isEdit.value = true
-  // 将后端字段映射到表单字段
   let parameters: any[] = []
   if (row.variables) {
-    try {
-      parameters = JSON.parse(row.variables)
-    } catch {
-      parameters = []
-    }
+    try { parameters = JSON.parse(row.variables) } catch { parameters = [] }
   }
   templateForm.value = {
     id: row.id,
-    type: row.category,        // category -> type
+    type: row.category,
     name: row.name,
     code: row.code,
     scriptType: 'Shell',
     content: row.content,
-    parameters: parameters,
-    remark: row.description || '',  // description -> remark
+    parameters,
+    remark: row.description || '',
   }
   showTemplateDialog.value = true
 }
 
-// 删除模板
 const handleDelete = async (row: any) => {
   try {
-    await ElMessageBox.confirm(`确定要删除模板 "${row.name}" 吗？`, '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-    ElMessage.success('删除成功')
+    await deleteJobTemplate(row.id)
+    Message.success('删除成功')
     loadTemplates()
-  } catch {
-    // 用户取消
+  } catch (error: any) {
+    Message.error(error.message || '删除失败')
   }
 }
 
-// 保存模板
 const handleSaveTemplate = async () => {
-  if (!templateForm.value.type) {
-    ElMessage.warning('请选择模板类型')
-    return
-  }
-  if (!templateForm.value.name) {
-    ElMessage.warning('请输入模板名称')
-    return
-  }
-  if (!templateForm.value.content) {
-    ElMessage.warning('请输入模板内容')
-    return
-  }
+  if (!templateForm.value.type) { Message.warning('请选择模板类型'); return }
+  if (!templateForm.value.name) { Message.warning('请输入模板名称'); return }
+  if (!templateForm.value.content) { Message.warning('请输入模板内容'); return }
 
   try {
-    // 构建API请求数据
     const requestData = {
       name: templateForm.value.name,
-      code: templateForm.value.code || `TPL_${Date.now()}`, // 自动生成唯一code
+      code: templateForm.value.code || `TPL_${Date.now()}`,
       description: templateForm.value.remark || '',
       content: templateForm.value.content,
       category: templateForm.value.type,
       platform: 'linux',
       timeout: 300,
-      variables: templateForm.value.parameters.length > 0
-        ? JSON.stringify(templateForm.value.parameters)
-        : '',
+      variables: templateForm.value.parameters.length > 0 ? JSON.stringify(templateForm.value.parameters) : '',
     }
-
     if (isEdit.value) {
-      // 编辑模式
       await updateJobTemplate(templateForm.value.id, requestData)
-      ElMessage.success('编辑成功')
+      Message.success('编辑成功')
     } else {
-      // 新建模式
       await createJobTemplate(requestData)
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     }
     showTemplateDialog.value = false
-    // 重新加载列表
     await loadTemplates()
   } catch (error: any) {
-    ElMessage.error(error.message || '保存失败')
+    Message.error(error.message || '保存失败')
   }
 }
 
-// 添加类型
 const handleAddType = () => {
-  if (!newTypeForm.value.label) {
-    ElMessage.warning('请输入类型名称')
-    return
+  if (!newTypeForm.value.label) { Message.warning('请输入类型名称'); return }
+  if (!newTypeForm.value.value) { Message.warning('请输入类型值'); return }
+  if (templateTypes.value.some(t => t.value === newTypeForm.value.value)) {
+    Message.warning('该类型值已存在'); return
   }
-  if (!newTypeForm.value.value) {
-    ElMessage.warning('请输入类型值')
-    return
-  }
-
-  // 检查是否已存在
-  const exists = templateTypes.value.some(
-    (t) => t.value === newTypeForm.value.value
-  )
-  if (exists) {
-    ElMessage.warning('该类型值已存在')
-    return
-  }
-
   templateTypes.value.push({ ...newTypeForm.value })
   showAddTypeDialog.value = false
   newTypeForm.value = { label: '', value: '' }
-  ElMessage.success('添加类型成功')
+  Message.success('添加类型成功')
 }
 
-// 移除参数
 const removeParameter = (index: number) => {
   templateForm.value.parameters.splice(index, 1)
 }
 
-// 保存参数
 const handleSaveParameter = () => {
-  if (!paramForm.value.name) {
-    ElMessage.warning('请输入参数名')
-    return
-  }
-  if (!paramForm.value.varName) {
-    ElMessage.warning('请输入变量名')
-    return
-  }
-
+  if (!paramForm.value.name) { Message.warning('请输入参数名'); return }
+  if (!paramForm.value.varName) { Message.warning('请输入变量名'); return }
   templateForm.value.parameters.push({ ...paramForm.value })
   showParamDialog.value = false
-  paramForm.value = {
-    name: '',
-    varName: '',
-    type: 'text',
-    required: false,
-    defaultValue: '',
-    helpText: '',
-  }
-  ElMessage.success('参数添加成功')
+  paramForm.value = { name: '', varName: '', type: 'text', required: false, defaultValue: '', helpText: '' }
+  Message.success('参数添加成功')
 }
 
-onMounted(() => {
-  loadTemplates()
-})
+onMounted(() => { loadTemplates() })
 </script>
 
 <style scoped lang="scss">
-.template-container {
-  padding: 0;
+.page-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  background-color: transparent;
-}
-
-.page-header {
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
   gap: 16px;
 }
 
-.page-title-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border: 1px solid #d4af37;
+.page-header-card {
+  background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px);
+  padding: 20px 24px;
+}
+
+.page-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ops-primary, #165dff) 0%, #4080ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
 }
 
 .page-title {
-  margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
-  line-height: 28px;
+  color: var(--ops-text-primary, #1d2129);
+  line-height: 1.4;
 }
 
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 14px;
-  color: #909399;
-  line-height: 20px;
+.page-desc {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 2px;
 }
 
 .search-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 20px;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.search-row {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+.search-label {
+  font-size: 14px;
+  color: var(--ops-text-secondary, #4e5969);
+  white-space: nowrap;
 }
 
-.search-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  .search-label {
-    font-size: 14px;
-    color: #606266;
-    white-space: nowrap;
-  }
-}
-
-.template-list-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
   flex: 1;
-  display: flex;
-  flex-direction: column;
-}
 
-.list-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #e4e7ed;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  .header-title {
-    font-size: 16px;
+  .card-title {
     font-weight: 600;
-    color: #303133;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 8px;
   }
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-
-  &:hover {
-    background-color: #1a1a1a !important;
-  }
-}
-
-.pagination {
-  padding: 16px 20px;
+.tag-list {
   display: flex;
-  justify-content: flex-end;
-  border-top: 1px solid #e4e7ed;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-.parameters-list {
-  margin-top: 8px;
+.code-textarea {
+  :deep(textarea) {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
 }
 </style>

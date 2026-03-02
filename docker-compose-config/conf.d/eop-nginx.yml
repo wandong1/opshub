@@ -1,0 +1,6 @@
+- targets:
+  - "172.28.255.17:9180"
+  - "172.28.255.18:9180"
+  - "172.28.255.19:9180"
+  labels:
+    __metrics_path__: "/status/format/prometheus"

@@ -1,0 +1,12 @@
+[Unit]
+Description=SREHub Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/srehub-agent/srehub-agent run -c /opt/srehub-agent/agent.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

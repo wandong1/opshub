@@ -2,14 +2,14 @@
   <div class="namespace-roles">
     <!-- 命名空间选择器 -->
     <div class="namespace-selector">
-      <el-select
+      <a-select
         v-model="selectedNamespace"
         placeholder="选择命名空间"
         filterable
         @change="handleNamespaceChange"
         style="width: 300px"
       >
-        <el-option
+        <a-option
           v-for="ns in namespaces"
           :key="ns.name"
           :label="ns.name"
@@ -17,15 +17,15 @@
         >
           <span>{{ ns.name }}</span>
           <span style="color: #8492a6; font-size: 12px;">({{ ns.podCount }} pods)</span>
-        </el-option>
-      </el-select>
+        </a-option>
+      </a-select>
     </div>
 
     <!-- 搜索和筛选 -->
     <div class="search-bar">
-      <el-form :inline="true">
-        <el-form-item>
-          <el-input
+      <a-form :inline="true">
+        <a-form-item>
+          <a-input
             v-model="searchKeyword"
             placeholder="搜索角色名称"
             clearable
@@ -34,81 +34,75 @@
             style="width: 240px"
           >
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <icon-search />
             </template>
-          </el-input>
-        </el-form-item>
+          </a-input>
+        </a-form-item>
 
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">
-            <el-icon style="margin-right: 4px;"><Search /></el-icon>
+        <a-form-item>
+          <a-button type="primary" @click="handleSearch">
+            <icon-search />
             搜索
-          </el-button>
-        </el-form-item>
-      </el-form>
+          </a-button>
+        </a-form-item>
+      </a-form>
     </div>
 
     <!-- 角色列表 -->
-    <el-table
+    <a-table
       :data="filteredRoles"
       border
       stripe
-      v-loading="loading"
+      :loading="loading"
       style="width: 100%"
       @row-click="handleRowClick"
-    >
-      <el-table-column prop="name" label="角色名称" min-width="250">
-        <template #default="{ row }">
+     :columns="tableColumns">
+          <template #name="{ record }">
           <span class="role-name-link">
-            <el-icon color="#409EFF" :size="18"><Key /></el-icon>
-            {{ row.name }}
+            <icon-safe />
+            {{ record.name }}
           </span>
         </template>
-      </el-table-column>
-
-      <el-table-column prop="namespace" label="命名空间" width="180">
-        <template #default="{ row }">
-          <el-tag size="small">{{ row.namespace }}</el-tag>
+          <template #namespace="{ record }">
+          <a-tag size="small">{{ record.namespace }}</a-tag>
         </template>
-      </el-table-column>
-
-      <el-table-column prop="labels" label="标签" min-width="200">
-        <template #default="{ row }">
-          <el-tag
-            v-for="(value, key) in row.labels"
+          <template #labels="{ record }">
+          <a-tag
+            v-for="(value, key) in record.labels"
             :key="key"
             size="small"
             style="margin-right: 4px; margin-bottom: 4px;"
           >
             {{ key }}: {{ value }}
-          </el-tag>
+          </a-tag>
         </template>
-      </el-table-column>
-
-      <el-table-column prop="age" label="创建时间" width="180">
-        <template #default="{ row }">
-          {{ row.age }}
+          <template #age="{ record }">
+          {{ record.age }}
         </template>
-      </el-table-column>
-
-      <el-table-column label="操作" width="150" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click.stop="handleViewDetail(row)">
-            <el-icon size="18"><View /></el-icon>
-          </el-button>
-          <el-button link type="danger" @click.stop="handleDelete(row)">
-            <el-icon size="18"><Delete /></el-icon>
-          </el-button>
+          <template #actions="{ record }">
+          <a-button type="text" status="normal" @click.stop="handleViewDetail(record)">
+            <icon-eye />
+          </a-button>
+          <a-button type="text" status="danger" @click.stop="handleDelete(record)">
+            <icon-delete />
+          </a-button>
         </template>
-      </el-table-column>
-    </el-table>
+        </a-table>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '角色名称', dataIndex: 'name', slotName: 'name', width: 250 },
+  { title: '命名空间', dataIndex: 'namespace', slotName: 'namespace', width: 180 },
+  { title: '标签', dataIndex: 'labels', slotName: 'labels', width: 200 },
+  { title: '创建时间', dataIndex: 'age', slotName: 'age', width: 180 },
+  { title: '操作', slotName: 'actions', width: 150, fixed: 'right' }
+]
+
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Key, View, Delete } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getNamespacesForRoles, getNamespaceRoles, createDefaultNamespaceRoles } from '@/api/kubernetes'
 
 interface Namespace {
@@ -173,7 +167,7 @@ const loadNamespaces = async () => {
       podCount: ns.podCount || 0
     }))
   } catch (error: any) {
-    ElMessage.error('加载命名空间失败')
+    Message.error('加载命名空间失败')
   }
 }
 
@@ -213,7 +207,7 @@ const loadNamespaceRoles = async () => {
 
     roleList.value = roles || []
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.data?.message || '加载命名空间角色失败')
+    Message.error(error.response?.data?.data?.message || '加载命名空间角色失败')
   } finally {
     loading.value = false
   }
@@ -237,7 +231,7 @@ const handleViewDetail = (row: NamespaceRole) => {
 
 const handleDelete = async (row: NamespaceRole) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除命名空间 "${row.namespace}" 中的角色 "${row.name}" 吗？`,
       '提示',
       {
@@ -247,11 +241,11 @@ const handleDelete = async (row: NamespaceRole) => {
       }
     )
 
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     await loadNamespaceRoles()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      Message.error('删除失败')
     }
   }
 }
@@ -284,7 +278,7 @@ defineExpose({
     align-items: center;
     gap: 8px;
     cursor: pointer;
-    color: #409EFF;
+    color: #165dff;
     font-weight: 500;
 
     &:hover {
@@ -292,10 +286,10 @@ defineExpose({
     }
   }
 
-  :deep(.el-table) {
+  :deep(.arco-table) {
     cursor: pointer;
 
-    .el-table__row:hover {
+    .arco-table__row:hover {
       background-color: #f5f7fa;
     }
   }

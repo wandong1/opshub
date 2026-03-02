@@ -1,0 +1,127 @@
+extensions:
+  health_check:
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16 # new
+      http:
+        endpoint: 0.0.0.0:4318
+  prometheus:
+    config:
+      scrape_configs:
+      - job_name: 'otel-collector'
+        scrape_interval: 10s
+        static_configs:
+        - targets: ['0.0.0.0:8888']
+processors:
+  resource/clean: # new
+    attributes:
+      - key: process.command_line
+        action: delete
+      - key: process.command_args
+        action: delete
+      - key: process.executable.path
+        action: delete
+      - key: process.runtime.description
+        action: delete
+      - key: process.runtime.name
+        action: delete
+      - key: process.runtime.version
+        action: delete
+      - key: process.pid
+        action: delete
+  filter:
+    metrics: # new
+      exclude:
+        match_type: strict
+        metric_names:
+          - queueSize
+          - http.client.duration
+          - http.client.response.size
+          - http.server.duration
+          - http.server.response.size
+  attributes/split:
+    include:
+      match_type: strict
+      metric_names: [calls,duration]
+    actions:
+      - key: http.url
+        action: extract
+        pattern: (?P<part1>^http.*/)(?P<part2>[^\?]*)(?P<part3>\?.*)?
+  transform:
+    metric_statements:
+      - context: datapoint
+        statements:
+          - replace_pattern(attributes["part2"],".*[0-9]+.*","PV")
+          - replace_pattern(attributes["span.name"],"Render.*","Render")
+          - set(attributes["http.url"],Concat([attributes["part1"],attributes["part2"]],""))
+  attributes/clean:
+    include:
+      match_type: strict
+      metric_names: [calls,duration]
+    actions:
+      - key: part1
+        action: delete
+      - key: part2
+        action: delete
+      - key: part3
+        action: delete
+  batch:
+exporters:
+  otlp:
+    endpoint: http://jc_skyeye:14317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    send_timestamps: false
+    metric_expiration: 3m
+    enable_open_metrics: false
+    resource_to_telemetry_conversion: # new
+      enabled: true
+  elasticsearch:
+    endpoints: [http://es8_skyeye:9200]
+    user: elastic
+    password: SKYeye#$@87082
+    logs_dynamic_index:
+      enabled: false
+    sending_queue:
+      enabled: true
+      num_consumers: 60
+      queue_size: 100000
+    timeout: 180s
+    mapping:
+      mode: ecs
+  
+connectors:
+  spanmetrics:
+    dimensions_cache_size: 10000
+    dimensions:
+      - name: net.sock.peer.addr
+        default: N/A
+      - name: net.sock.host.addr
+        default: N/A
+      - name: http.status_code
+        default: N/A
+      - name: http.url
+        default: N/A
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp] 
+    metrics:
+      receivers: [otlp]
+      processors: [batch,filter]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [elasticsearch]
+
+  extensions: [health_check]
+

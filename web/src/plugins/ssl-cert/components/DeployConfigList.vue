@@ -3,191 +3,183 @@
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
       <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Upload /></el-icon>
-        </div>
+        <div class="page-title-icon"><icon-upload /></div>
         <div>
           <h2 class="page-title">部署配置</h2>
           <p class="page-subtitle">配置证书自动部署到Nginx服务器或K8s集群</p>
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+        <a-button type="primary" @click="handleAdd">
+          <template #icon><icon-plus /></template>
           新增配置
-        </el-button>
-        <el-button @click="loadData">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-button>
+        <a-button @click="loadData">
+          <template #icon><icon-refresh /></template>
           刷新
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 搜索栏 -->
     <div class="search-bar">
       <div class="search-inputs">
-        <el-select
+        <a-select
           v-model="searchForm.deploy_type"
           placeholder="部署类型"
-          clearable
+          allow-clear
           class="search-input"
           @change="loadData"
         >
-          <el-option label="Nginx SSH" value="nginx_ssh" />
-          <el-option label="K8s Secret" value="k8s_secret" />
-        </el-select>
+          <a-option value="nginx_ssh">Nginx SSH</a-option>
+          <a-option value="k8s_secret">K8s Secret</a-option>
+        </a-select>
       </div>
     </div>
 
     <!-- 表格容器 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="tableData"
-        v-loading="loading"
-        class="modern-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :loading="loading"
+        :bordered="{ cell: true }"
+        stripe
+        :pagination="{
+          current: pagination.page,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showTotal: true,
+          showPageSize: true,
+          pageSizeOptions: [10, 20, 50]
+        }"
+        @page-change="(p: number) => { pagination.page = p; loadData() }"
+        @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadData() }"
       >
-        <el-table-column label="配置名称" prop="name" width="120" show-overflow-tooltip />
+        <template #columns>
+          <a-table-column title="配置名称" data-index="name" :width="120" ellipsis tooltip />
 
-        <el-table-column label="关联证书" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.certificate">{{ row.certificate.name }} ({{ row.certificate.domain }})</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="关联证书" :min-width="200" ellipsis tooltip>
+            <template #cell="{ record }">
+              <span v-if="record.certificate">{{ record.certificate.name }} ({{ record.certificate.domain }})</span>
+              <span v-else>-</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="部署类型" width="130" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.deploy_type === 'nginx_ssh'" type="primary">Nginx SSH</el-tag>
-            <el-tag v-else type="success">K8s Secret</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="部署类型" :width="130" align="center">
+            <template #cell="{ record }">
+              <a-tag v-if="record.deploy_type === 'nginx_ssh'" color="arcoblue">Nginx SSH</a-tag>
+              <a-tag v-else color="green">K8s Secret</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="自动部署" width="100" align="center">
-          <template #default="{ row }">
-            <el-switch v-model="row.auto_deploy" @change="handleAutoDeployChange(row)" />
-          </template>
-        </el-table-column>
+          <a-table-column title="自动部署" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-switch v-model="record.auto_deploy" @change="handleAutoDeployChange(record)" />
+            </template>
+          </a-table-column>
 
-        <el-table-column label="状态" width="80" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.enabled" type="success">启用</el-tag>
-            <el-tag v-else type="info">禁用</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="状态" :width="80" align="center">
+            <template #cell="{ record }">
+              <a-tag v-if="record.enabled" color="green">启用</a-tag>
+              <a-tag v-else color="gray">禁用</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="上次部署" min-width="180">
-          <template #default="{ row }">
-            <div v-if="row.last_deploy_at">
-              <span>{{ formatDateTime(row.last_deploy_at) }}</span>
-              <el-tag v-if="row.last_deploy_ok" type="success" size="small" style="margin-left: 8px;">成功</el-tag>
-              <el-tag v-else type="danger" size="small" style="margin-left: 8px;">失败</el-tag>
-            </div>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="上次部署" :min-width="180">
+            <template #cell="{ record }">
+              <div v-if="record.last_deploy_at">
+                <span>{{ formatDateTime(record.last_deploy_at) }}</span>
+                <a-tag v-if="record.last_deploy_ok" color="green" size="small" style="margin-left: 8px;">成功</a-tag>
+                <a-tag v-else color="red" size="small" style="margin-left: 8px;">失败</a-tag>
+              </div>
+              <span v-else>-</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="操作" width="200" fixed="right" align="center">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="立即部署" placement="top">
-                <el-button link class="action-btn action-deploy" @click="handleDeploy(row)" :loading="row.deploying">
-                  <el-icon><Upload /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="测试配置" placement="top">
-                <el-button link class="action-btn action-test" @click="handleTest(row)" :loading="row.testing">
-                  <el-icon><Connection /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="编辑" placement="top">
-                <el-button link class="action-btn action-edit" @click="handleEdit(row)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button link class="action-btn action-delete" @click="handleDelete(row)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadData"
-          @current-change="loadData"
-        />
-      </div>
+          <a-table-column title="操作" :width="200" fixed="right" align="center">
+            <template #cell="{ record }">
+              <div class="action-buttons">
+                <a-tooltip content="立即部署" position="top">
+                  <a-button type="text" class="action-btn action-deploy" @click="handleDeploy(record)" :loading="record.deploying">
+                    <template #icon><icon-upload /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="测试配置" position="top">
+                  <a-button type="text" class="action-btn action-test" @click="handleTest(record)" :loading="record.testing">
+                    <template #icon><icon-link /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="编辑" position="top">
+                  <a-button type="text" class="action-btn action-edit" @click="handleEdit(record)">
+                    <template #icon><icon-edit /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="删除" position="top">
+                  <a-button type="text" class="action-btn action-delete" @click="handleDelete(record)">
+                    <template #icon><icon-delete /></template>
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
     </div>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="dialogTitle"
-      width="680px"
-      :close-on-click-modal="false"
-      class="beauty-dialog"
-      destroy-on-close
+      :width="680"
+      :mask-closable="false"
+      unmount-on-close
     >
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px" class="beauty-form">
-        <el-form-item label="配置名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入配置名称" />
-        </el-form-item>
+      <a-form :model="form" :rules="rules" ref="formRef" auto-label-width>
+        <a-form-item label="配置名称" field="name">
+          <a-input v-model="form.name" placeholder="请输入配置名称" />
+        </a-form-item>
 
-        <el-form-item label="关联证书" prop="certificate_id">
-          <el-select v-model="form.certificate_id" placeholder="请选择证书" style="width: 100%" filterable>
-            <el-option
+        <a-form-item label="关联证书" field="certificate_id">
+          <a-select v-model="form.certificate_id" placeholder="请选择证书" allow-search>
+            <a-option
               v-for="cert in certificates"
               :key="cert.id"
               :label="`${cert.name} (${cert.domain})`"
               :value="cert.id"
             />
-          </el-select>
-        </el-form-item>
+          </a-select>
+        </a-form-item>
 
-        <el-form-item label="部署类型" prop="deploy_type">
-          <el-select v-model="form.deploy_type" placeholder="请选择部署类型" style="width: 100%" :disabled="!!form.id">
-            <el-option label="Nginx SSH" value="nginx_ssh" />
-            <el-option label="K8s Secret" value="k8s_secret" />
-          </el-select>
-        </el-form-item>
+        <a-form-item label="部署类型" field="deploy_type">
+          <a-select v-model="form.deploy_type" placeholder="请选择部署类型" :disabled="!!form.id">
+            <a-option value="nginx_ssh">Nginx SSH</a-option>
+            <a-option value="k8s_secret">K8s Secret</a-option>
+          </a-select>
+        </a-form-item>
 
         <!-- Nginx SSH配置 -->
         <template v-if="form.deploy_type === 'nginx_ssh'">
-          <el-divider content-position="left">Nginx配置</el-divider>
-          <el-form-item label="资产分组">
-            <el-tree-select
+          <a-divider orientation="left">Nginx配置</a-divider>
+          <a-form-item label="资产分组">
+            <a-tree-select
               v-model="selectedGroupId"
               :data="assetGroups"
-              :props="{ label: 'name', value: 'id', children: 'children' }"
+              :field-names="{ key: 'id', title: 'name', children: 'children' }"
               placeholder="请选择资产分组"
-              style="width: 100%"
-              clearable
-              check-strictly
-              :render-after-expand="false"
+              allow-clear
               @change="onGroupChange"
             />
-          </el-form-item>
-          <el-form-item label="目标主机" prop="target_config.host_id">
-            <el-select
+          </a-form-item>
+          <a-form-item label="目标主机" field="target_config.host_id">
+            <a-select
               v-model="form.target_config.host_id"
               placeholder="请先选择资产分组"
-              style="width: 100%"
-              filterable
+              allow-search
               :loading="hostsLoading"
               :disabled="!selectedGroupId"
-              clearable
+              allow-clear
             >
-              <el-option
+              <a-option
                 v-for="host in hosts"
                 :key="host.id"
                 :label="`${host.name} (${host.ip})`"
@@ -197,53 +189,49 @@
                   <span class="host-name">{{ host.name }}</span>
                   <span class="host-ip">{{ host.ip }}</span>
                 </div>
-              </el-option>
-            </el-select>
-          </el-form-item>
-          <el-form-item label="证书路径" prop="target_config.cert_path">
-            <el-input v-model="form.target_config.cert_path" placeholder="/etc/nginx/ssl/cert.pem" />
-          </el-form-item>
-          <el-form-item label="私钥路径" prop="target_config.key_path">
-            <el-input v-model="form.target_config.key_path" placeholder="/etc/nginx/ssl/key.pem" />
-          </el-form-item>
-          <el-form-item label="备份旧证书">
-            <el-switch v-model="form.target_config.backup_enabled" />
-            <span style="margin-left: 12px; color: #909399; font-size: 13px;">部署前备份原有证书文件</span>
-          </el-form-item>
-          <el-form-item label="备份路径" v-if="form.target_config.backup_enabled">
-            <el-input v-model="form.target_config.backup_path" placeholder="留空则默认备份到证书目录下的backup文件夹" />
-          </el-form-item>
+              </a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="证书路径" field="target_config.cert_path">
+            <a-input v-model="form.target_config.cert_path" placeholder="/etc/nginx/ssl/cert.pem" />
+          </a-form-item>
+          <a-form-item label="私钥路径" field="target_config.key_path">
+            <a-input v-model="form.target_config.key_path" placeholder="/etc/nginx/ssl/key.pem" />
+          </a-form-item>
+          <a-form-item label="备份旧证书">
+            <a-switch v-model="form.target_config.backup_enabled" />
+            <span style="margin-left: 12px; color: var(--ops-text-tertiary); font-size: 13px;">部署前备份原有证书文件</span>
+          </a-form-item>
+          <a-form-item label="备份路径" v-if="form.target_config.backup_enabled">
+            <a-input v-model="form.target_config.backup_path" placeholder="留空则默认备份到证书目录下的backup文件夹" />
+          </a-form-item>
         </template>
 
         <!-- K8s Secret配置 -->
         <template v-if="form.deploy_type === 'k8s_secret'">
-          <el-divider content-position="left">K8s配置</el-divider>
+          <a-divider orientation="left">K8s配置</a-divider>
 
           <!-- 容器插件不可用提示 -->
-          <el-alert
+          <a-alert
             v-if="!k8sPluginAvailable"
             title="容器管理插件未启用"
             type="warning"
             :closable="false"
-            show-icon
             style="margin-bottom: 16px;"
           >
-            <template #default>
-              该部署类型需要启用容器管理插件。请先在插件管理中启用 Kubernetes 插件，并添加集群配置。
-            </template>
-          </el-alert>
+            该部署类型需要启用容器管理插件。请先在插件管理中启用 Kubernetes 插件，并添加集群配置。
+          </a-alert>
 
-          <el-form-item label="K8s集群" prop="target_config.cluster_id">
-            <el-select
+          <a-form-item label="K8s集群" field="target_config.cluster_id">
+            <a-select
               v-model="form.target_config.cluster_id"
               placeholder="请选择K8s集群"
-              style="width: 100%"
-              filterable
+              allow-search
               :loading="k8sClustersLoading"
               :disabled="!k8sPluginAvailable"
               @change="onClusterChange"
             >
-              <el-option
+              <a-option
                 v-for="cluster in k8sClusters"
                 :key="cluster.id"
                 :label="`${cluster.name}${cluster.alias ? ' (' + cluster.alias + ')' : ''}`"
@@ -253,42 +241,38 @@
                   <span class="cluster-name">{{ cluster.name }}</span>
                   <span class="cluster-alias">{{ cluster.alias || cluster.apiEndpoint }}</span>
                 </div>
-              </el-option>
-            </el-select>
+              </a-option>
+            </a-select>
             <div class="form-tip">从容器管理中选择已配置的K8s集群</div>
-          </el-form-item>
-
-          <el-form-item label="命名空间" prop="target_config.namespace">
-            <el-select
+          </a-form-item>
+          <a-form-item label="命名空间" field="target_config.namespace">
+            <a-select
               v-model="form.target_config.namespace"
               placeholder="请先选择集群"
-              style="width: 100%"
-              filterable
+              allow-search
               :loading="k8sNamespacesLoading"
               :disabled="!form.target_config.cluster_id"
               @change="onNamespaceChange"
             >
-              <el-option
+              <a-option
                 v-for="ns in k8sNamespaces"
                 :key="ns.name"
                 :label="ns.name"
                 :value="ns.name"
               />
-            </el-select>
-          </el-form-item>
+            </a-select>
+          </a-form-item>
 
-          <el-form-item label="Secret名称" prop="target_config.secret_name">
-            <el-select
+          <a-form-item label="Secret名称" field="target_config.secret_name">
+            <a-select
               v-model="form.target_config.secret_name"
               placeholder="请先选择命名空间"
-              style="width: 100%"
-              filterable
+              allow-search
               allow-create
-              default-first-option
               :loading="k8sSecretsLoading"
               :disabled="!form.target_config.namespace"
             >
-              <el-option
+              <a-option
                 v-for="secret in k8sSecrets"
                 :key="secret.name"
                 :label="secret.name"
@@ -298,28 +282,26 @@
                   <span class="secret-name">{{ secret.name }}</span>
                   <span class="secret-type">{{ secret.type }}</span>
                 </div>
-              </el-option>
-            </el-select>
+              </a-option>
+            </a-select>
             <div class="form-tip">可选择已有Secret或输入新名称创建，将以 kubernetes.io/tls 类型创建/更新</div>
-          </el-form-item>
+          </a-form-item>
 
-          <el-form-item label="触发滚动更新">
-            <el-switch v-model="form.target_config.trigger_rollout" />
+          <a-form-item label="触发滚动更新">
+            <a-switch v-model="form.target_config.trigger_rollout" />
             <div class="form-tip">部署后触发关联Deployment滚动更新</div>
-          </el-form-item>
+          </a-form-item>
 
-          <el-form-item label="Deployment" v-if="form.target_config.trigger_rollout">
-            <el-select
+          <a-form-item label="Deployment" v-if="form.target_config.trigger_rollout">
+            <a-select
               v-model="form.target_config.deployments"
               multiple
-              filterable
+              allow-search
               allow-create
-              default-first-option
               placeholder="选择或输入Deployment名称"
-              style="width: 100%"
               :loading="k8sDeploymentsLoading"
             >
-              <el-option
+              <a-option
                 v-for="deploy in k8sDeployments"
                 :key="deploy.name"
                 :label="deploy.name"
@@ -329,35 +311,43 @@
                   <span class="deploy-name">{{ deploy.name }}</span>
                   <span class="deploy-ready">{{ deploy.ready }}</span>
                 </div>
-              </el-option>
-            </el-select>
+              </a-option>
+            </a-select>
             <div class="form-tip">可从列表选择或手动输入Deployment名称</div>
-          </el-form-item>
+          </a-form-item>
         </template>
 
-        <el-form-item label="自动部署">
-          <el-switch v-model="form.auto_deploy" />
+        <a-form-item label="自动部署">
+          <a-switch v-model="form.auto_deploy" />
           <div class="form-tip">证书续期后自动部署</div>
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item label="启用">
-          <el-switch v-model="form.enabled" />
-        </el-form-item>
-      </el-form>
+        <a-form-item label="启用">
+          <a-switch v-model="form.enabled" />
+        </a-form-item>
+      </a-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button class="black-button" @click="handleSubmit" :loading="submitting">保存</el-button>
+        <a-button @click="dialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="handleSubmit" :loading="submitting">保存</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Refresh, Edit, Delete, Upload, Connection, Warning } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import type { FormInstance } from '@arco-design/web-vue'
+import {
+  IconPlus,
+  IconRefresh,
+  IconEdit,
+  IconDelete,
+  IconUpload,
+  IconLink,
+  IconExclamationCircle
+} from '@arco-design/web-vue/es/icon'
 import {
   getDeployConfigs,
   createDeployConfig,
@@ -429,16 +419,16 @@ const form = reactive({
 })
 
 // 表单验证规则
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入配置名称', trigger: 'blur' }],
-  certificate_id: [{ required: true, message: '请选择证书', trigger: 'change' }],
-  deploy_type: [{ required: true, message: '请选择部署类型', trigger: 'change' }],
-  'target_config.host_id': [{ required: true, message: '请选择目标主机', trigger: 'change' }],
-  'target_config.cert_path': [{ required: true, message: '请输入证书路径', trigger: 'blur' }],
-  'target_config.key_path': [{ required: true, message: '请输入私钥路径', trigger: 'blur' }],
-  'target_config.cluster_id': [{ required: true, message: '请选择K8s集群', trigger: 'change' }],
-  'target_config.namespace': [{ required: true, message: '请选择命名空间', trigger: 'change' }],
-  'target_config.secret_name': [{ required: true, message: '请选择或输入Secret名称', trigger: 'change' }]
+const rules = {
+  name: [{ required: true, message: '请输入配置名称' }],
+  certificate_id: [{ required: true, message: '请选择证书' }],
+  deploy_type: [{ required: true, message: '请选择部署类型' }],
+  'target_config.host_id': [{ required: true, message: '请选择目标主机' }],
+  'target_config.cert_path': [{ required: true, message: '请输入证书路径' }],
+  'target_config.key_path': [{ required: true, message: '请输入私钥路径' }],
+  'target_config.cluster_id': [{ required: true, message: '请选择K8s集群' }],
+  'target_config.namespace': [{ required: true, message: '请选择命名空间' }],
+  'target_config.secret_name': [{ required: true, message: '请选择或输入Secret名称' }]
 }
 
 // 监听部署类型变化，初始化 target_config 默认值
@@ -717,47 +707,48 @@ const handleEdit = (row: any) => {
 // 提交
 const handleSubmit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      submitting.value = true
-      try {
-        if (form.id) {
-          await updateDeployConfig(form.id, {
-            name: form.name,
-            target_config: form.target_config,
-            auto_deploy: form.auto_deploy,
-            enabled: form.enabled
-          })
-          ElMessage.success('保存成功')
-          dialogVisible.value = false
-          loadData()
-        } else {
-          await createDeployConfig({
-            name: form.name,
-            certificate_id: form.certificate_id!,
-            deploy_type: form.deploy_type,
-            target_config: form.target_config,
-            auto_deploy: form.auto_deploy,
-            enabled: form.enabled
-          })
-          ElMessage.success('创建成功')
-          dialogVisible.value = false
-          loadData()
-        }
-      } catch (error: any) {
-        // 错误已由 request 拦截器处理
-      } finally {
-        submitting.value = false
+  try {
+    await formRef.value.validate()
+    submitting.value = true
+    try {
+      if (form.id) {
+        await updateDeployConfig(form.id, {
+          name: form.name,
+          target_config: form.target_config,
+          auto_deploy: form.auto_deploy,
+          enabled: form.enabled
+        })
+        Message.success('保存成功')
+        dialogVisible.value = false
+        loadData()
+      } else {
+        await createDeployConfig({
+          name: form.name,
+          certificate_id: form.certificate_id!,
+          deploy_type: form.deploy_type,
+          target_config: form.target_config,
+          auto_deploy: form.auto_deploy,
+          enabled: form.enabled
+        })
+        Message.success('创建成功')
+        dialogVisible.value = false
+        loadData()
       }
+    } catch (error: any) {
+      // 错误已由 request 拦截器处理
+    } finally {
+      submitting.value = false
     }
-  })
+  } catch {
+    // 验证失败
+  }
 }
 
 // 自动部署切换
 const handleAutoDeployChange = async (row: any) => {
   try {
     await updateDeployConfig(row.id, { auto_deploy: row.auto_deploy })
-    ElMessage.success('更新成功')
+    Message.success('更新成功')
   } catch (error) {
     row.auto_deploy = !row.auto_deploy
   }
@@ -765,19 +756,23 @@ const handleAutoDeployChange = async (row: any) => {
 
 // 立即部署
 const handleDeploy = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要立即部署证书吗？', '提示', { type: 'warning' })
-    row.deploying = true
-    await executeDeploy(row.id)
-    ElMessage.success('部署成功')
-    loadData()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      // 错误已由 request 拦截器处理
+  Modal.warning({
+    title: '提示',
+    content: '确定要立即部署证书吗？',
+    hideCancel: false,
+    onOk: async () => {
+      row.deploying = true
+      try {
+        await executeDeploy(row.id)
+        Message.success('部署成功')
+        loadData()
+      } catch (error: any) {
+        // 错误已由 request 拦截器处理
+      } finally {
+        row.deploying = false
+      }
     }
-  } finally {
-    row.deploying = false
-  }
+  })
 }
 
 // 测试配置
@@ -785,7 +780,7 @@ const handleTest = async (row: any) => {
   try {
     row.testing = true
     await testDeployConfig(row.id)
-    ElMessage.success('配置测试成功')
+    Message.success('配置测试成功')
   } catch (error: any) {
     // 错误已由 request 拦截器处理
   } finally {
@@ -795,19 +790,23 @@ const handleTest = async (row: any) => {
 
 // 删除
 const handleDelete = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要删除该部署配置吗？', '提示', { type: 'warning' })
-    loading.value = true
-    await deleteDeployConfig(row.id)
-    ElMessage.success('删除成功')
-    loadData()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      // 错误已由 request 拦截器处理
+  Modal.warning({
+    title: '提示',
+    content: '确定要删除该部署配置吗？',
+    hideCancel: false,
+    onOk: async () => {
+      loading.value = true
+      try {
+        await deleteDeployConfig(row.id)
+        Message.success('删除成功')
+        loadData()
+      } catch (error: any) {
+        // 错误已由 request 拦截器处理
+      } finally {
+        loading.value = false
+      }
     }
-  } finally {
-    loading.value = false
-  }
+  })
 }
 
 onMounted(() => {
@@ -818,296 +817,48 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.deploy-config-container {
-  padding: 0;
-  background-color: transparent;
-}
+.deploy-config-container { padding: 0; background-color: transparent; }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 12px; padding: 16px 20px; background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px); box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
+.page-title-group { display: flex; align-items: flex-start; gap: 16px; }
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #d4af37;
-  font-size: 22px;
-  flex-shrink: 0;
-  border: 1px solid #d4af37;
+  width: 36px; height: 36px; background: var(--ops-primary, #165dff);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 18px; flex-shrink: 0;
 }
-
-.page-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 13px;
-  color: #909399;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
+.page-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--ops-text-primary, #1d2129); }
+.page-subtitle { margin: 4px 0 0 0; font-size: 13px; color: var(--ops-text-tertiary, #86909c); }
+.header-actions { display: flex; gap: 12px; }
 
 .search-bar {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px; padding: 12px 16px; background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px); box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
-
-.search-inputs {
-  display: flex;
-  gap: 12px;
-}
-
-.search-input {
-  width: 200px;
-}
+.search-inputs { display: flex; gap: 12px; }
+.search-input { width: 200px; }
 
 .table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
+  background: #fff; border-radius: var(--ops-border-radius-md, 8px);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04); overflow: hidden; padding: 16px;
 }
+.action-buttons { display: flex; gap: 4px; align-items: center; justify-content: center; }
+.action-btn { width: 32px; height: 32px; border-radius: 6px; transition: all 0.2s ease; }
+.action-btn:hover { transform: scale(1.1); }
+.action-deploy:hover { background-color: #e8ffea; color: var(--ops-success, #00b42a); }
+.action-test:hover { background-color: #fff7e8; color: var(--ops-warning, #ff7d00); }
+.action-edit:hover { background-color: var(--ops-primary-bg, #e8f0ff); color: var(--ops-primary, #165dff); }
+.action-delete:hover { background-color: #ffece8; color: var(--ops-danger, #f53f3f); }
 
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
+.form-tip { font-size: 12px; color: var(--ops-text-tertiary, #86909c); margin-top: 6px; line-height: 1.5; }
+.host-option, .cluster-option, .secret-option, .deploy-option {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
 }
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.action-btn:hover {
-  transform: scale(1.1);
-}
-
-.action-deploy:hover {
-  background-color: #e8f5e9;
-  color: #67c23a;
-}
-
-.action-test:hover {
-  background-color: #fff3e0;
-  color: #e6a23c;
-}
-
-.action-edit:hover {
-  background-color: #e8f4ff;
-  color: #409eff;
-}
-
-.action-delete:hover {
-  background-color: #fee;
-  color: #f56c6c;
-}
-
-.pagination-wrapper {
-  padding: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.form-tip {
-  font-size: 12px;
-  color: #999;
-  margin-top: 6px;
-  line-height: 1.5;
-}
-
-.host-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.host-name {
-  color: #303133;
-}
-
-.host-ip {
-  color: #909399;
-  font-size: 12px;
-}
-
-.cluster-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.cluster-name {
-  color: #303133;
-}
-
-.cluster-alias {
-  color: #909399;
-  font-size: 12px;
-}
-
-.secret-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.secret-name {
-  color: #303133;
-}
-
-.secret-type {
-  color: #909399;
-  font-size: 11px;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.deploy-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.deploy-name {
-  color: #303133;
-}
-
-.deploy-ready {
-  color: #67c23a;
-  font-size: 12px;
-}
-
-/* 弹窗美化 */
-:deep(.beauty-dialog) {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-:deep(.beauty-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  margin-right: 0;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafbfc;
-}
-
-:deep(.beauty-dialog .el-dialog__title) {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-:deep(.beauty-dialog .el-dialog__headerbtn) {
-  top: 20px;
-  right: 20px;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-:deep(.beauty-dialog .el-dialog__headerbtn:hover) {
-  background: #f0f0f0;
-}
-
-:deep(.beauty-dialog .el-dialog__body) {
-  padding: 24px;
-  max-height: 65vh;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-:deep(.beauty-dialog .el-dialog__body::-webkit-scrollbar) {
-  display: none;
-}
-
-:deep(.beauty-dialog .el-dialog__footer) {
-  padding: 16px 24px 20px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafbfc;
-}
-
-/* 表单美化 */
-:deep(.beauty-form .el-form-item__label) {
-  font-weight: 500;
-  color: #606266;
-}
-
-:deep(.beauty-form .el-input__wrapper),
-:deep(.beauty-form .el-textarea__inner) {
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-:deep(.beauty-form .el-input__wrapper:hover),
-:deep(.beauty-form .el-textarea__inner:hover) {
-  box-shadow: 0 0 0 1px #c0c4cc inset;
-}
-
-:deep(.beauty-form .el-input__wrapper.is-focus),
-:deep(.beauty-form .el-textarea__inner:focus) {
-  box-shadow: 0 0 0 1px #000 inset;
-}
-
-:deep(.beauty-form .el-select .el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #000 inset !important;
-}
-
-:deep(.beauty-form .el-divider__text) {
-  font-size: 13px;
-  font-weight: 600;
-  color: #909399;
-  background: #fff;
-}
+.host-name, .cluster-name, .secret-name, .deploy-name { color: var(--ops-text-primary, #1d2129); }
+.host-ip, .cluster-alias { color: var(--ops-text-tertiary, #86909c); font-size: 12px; }
+.secret-type { color: var(--ops-text-tertiary, #86909c); font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.deploy-ready { color: var(--ops-success, #00b42a); font-size: 12px; }
 </style>

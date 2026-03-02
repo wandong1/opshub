@@ -33,3 +33,10 @@ log:
   max_age: 30        # days
   compress: true
   console: true
+
+agent:
+  enabled: true
+  cert_dir: "data/agent-certs"
+  binary_dir: "data/agent-binaries"
+  heartbeat_timeout: 90
+  deploy_path: "/opt/srehub-agent"

@@ -41,6 +41,10 @@ export const runProbeOnce = (id: number) => {
   return request.post(`/api/v1/inspection/probes/${id}/run`)
 }
 
+export const testProbe = (data: any) => {
+  return request.post('/api/v1/inspection/probes/test', data)
+}
+
 // ===== 调度任务 =====
 
 export const getTaskList = (params: any) => {
@@ -94,15 +98,15 @@ export const testPushgateway = (id: number) => {
 export const PROBE_CATEGORIES = [
   { value: 'network', label: '基础网络', enabled: true },
   { value: 'layer4', label: '四层协议', enabled: true },
-  { value: 'application', label: '应用服务', enabled: false },
-  { value: 'workflow', label: '业务流程', enabled: false },
+  { value: 'application', label: '应用服务', enabled: true },
+  { value: 'workflow', label: '业务流程', enabled: true },
   { value: 'middleware', label: '中间件', enabled: false },
 ] as const
 
 export const CATEGORY_TYPE_MAP: Record<string, string[]> = {
   network: ['ping'],
   layer4: ['tcp', 'udp'],
-  application: ['http', 'https', 'dns', 'websocket', 'ssl_cert'],
+  application: ['http', 'https', 'websocket'],
   workflow: ['workflow'],
   middleware: ['mysql', 'redis', 'kafka', 'clickhouse', 'mongodb', 'rabbitmq', 'rocketmq', 'postgresql', 'sqlserver', 'milvus'],
 }
@@ -113,4 +117,26 @@ export const CATEGORY_LABEL_MAP: Record<string, string> = {
   application: '应用服务',
   workflow: '业务流程',
   middleware: '中间件',
+}
+
+// ===== 环境变量 =====
+
+export const getVariableList = (params: any) => {
+  return request.get('/api/v1/inspection/variables', { params })
+}
+
+export const getVariable = (id: number) => {
+  return request.get(`/api/v1/inspection/variables/${id}`)
+}
+
+export const createVariable = (data: any) => {
+  return request.post('/api/v1/inspection/variables', data)
+}
+
+export const updateVariable = (id: number, data: any) => {
+  return request.put(`/api/v1/inspection/variables/${id}`, data)
+}
+
+export const deleteVariable = (id: number) => {
+  return request.delete(`/api/v1/inspection/variables/${id}`)
 }

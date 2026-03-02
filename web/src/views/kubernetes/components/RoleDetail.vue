@@ -1,36 +1,36 @@
 <template>
-  <div class="role-detail" v-loading="loading">
+  <div class="role-detail" :loading="loading">
     <!-- 基本信息 -->
     <div class="section">
       <h3 class="section-title">基本信息</h3>
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="角色名称">
-          <el-tag type="primary" size="large">{{ role.name }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="命名空间">
-          <el-tag v-if="role.namespace">{{ role.namespace }}</el-tag>
-          <el-tag v-else type="success">集群级别</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="创建时间">
+      <a-descriptions :column="2" :bordered="true">
+        <a-descriptions-item label="角色名称">
+          <a-tag type="primary" size="large">{{ role.name }}</a-tag>
+        </a-descriptions-item>
+        <a-descriptions-item label="命名空间">
+          <a-tag v-if="role.namespace">{{ role.namespace }}</a-tag>
+          <a-tag v-else color="green">集群级别</a-tag>
+        </a-descriptions-item>
+        <a-descriptions-item label="创建时间">
           {{ role.age }}
-        </el-descriptions-item>
-        <el-descriptions-item label="标签" v-if="Object.keys(role.labels || {}).length > 0">
-          <el-tag
+        </a-descriptions-item>
+        <a-descriptions-item label="标签" v-if="Object.keys(role.labels || {}).length > 0">
+          <a-tag
             v-for="(value, key) in role.labels"
             :key="key"
             size="small"
             style="margin-right: 4px;"
           >
             {{ key }}: {{ value }}
-          </el-tag>
-        </el-descriptions-item>
-      </el-descriptions>
+          </a-tag>
+        </a-descriptions-item>
+      </a-descriptions>
     </div>
 
     <!-- 权限规则 -->
     <div class="section">
       <h3 class="section-title">权限规则</h3>
-      <el-tree
+      <a-tree
         :data="permissionTree"
         :props="treeProps"
         node-key="id"
@@ -39,56 +39,50 @@
       >
         <template #default="{ node, data }">
           <span class="tree-node">
-            <el-icon v-if="data.type === 'apiGroup'" color="#409EFF"><Folder /></el-icon>
-            <el-icon v-else-if="data.type === 'resource'" color="#67C23A"><Document /></el-icon>
-            <el-icon v-else-if="data.type === 'verb'" color="#E6A23C"><Operation /></el-icon>
+            <icon-folder v-if="data.type === 'apiGroup'" />
+            <icon-file v-else-if="data.type === 'resource'" />
+            <icon-settings v-else />
             <span class="node-label">{{ data.label }}</span>
-            <el-tag v-if="data.type === 'verb'" size="small" type="info">{{ data.value }}</el-tag>
+            <a-tag v-if="data.type === 'verb'" size="small" color="gray">{{ data.value }}</a-tag>
           </span>
         </template>
-      </el-tree>
+      </a-tree>
     </div>
 
     <!-- 绑定的平台用户 -->
     <div class="section">
       <h3 class="section-title">
         绑定的平台用户
-        <el-button type="primary" size="small" @click="showBindDialog = true" style="margin-left: 16px;">
-          <el-icon><Plus /></el-icon>
+        <a-button type="primary" size="small" @click="showBindDialog = true" style="margin-left: 16px;">
+          <icon-plus />
           绑定用户
-        </el-button>
+        </a-button>
       </h3>
       <div class="user-bindings">
-        <el-table :data="boundUsers" border stripe>
-          <el-table-column prop="username" label="用户名" />
-          <el-table-column prop="realName" label="姓名" />
-          <el-table-column prop="boundAt" label="绑定时间">
-            <template #default="{ row }">
-              {{ formatDate(row.boundAt) }}
+        <a-table :data="boundUsers" border stripe :columns="tableColumns">
+          <template #boundAt="{ record }">
+              {{ formatDate(record.boundAt) }}
             </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120">
-            <template #default="{ row }">
-              <el-button link type="danger" @click="handleUnbind(row)">
-                <el-icon><Delete /></el-icon>
+          <template #actions="{ record }">
+              <a-button type="text" status="danger" @click="handleUnbind(record)">
+                <icon-delete />
                 解绑
-              </el-button>
+              </a-button>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
       </div>
     </div>
 
     <!-- 绑定用户对话框 -->
-    <el-dialog
-      v-model="showBindDialog"
+    <a-modal
+      v-model:visible="showBindDialog"
       title="绑定用户到角色"
       width="600px"
-      :close-on-click-modal="false"
+      :mask-closable="false"
     >
-      <el-form :model="bindForm" label-width="100px">
-        <el-form-item label="搜索用户">
-          <el-input
+      <a-form :model="bindForm" label-width="100px">
+        <a-form-item label="搜索用户">
+          <a-input
             v-model="userSearchKeyword"
             placeholder="输入用户名/姓名/邮箱搜索"
             clearable
@@ -96,21 +90,21 @@
             @keyup.enter="searchUsers"
           >
             <template #append>
-              <el-button @click="searchUsers">
-                <el-icon><Search /></el-icon>
-              </el-button>
+              <a-button @click="searchUsers">
+                <icon-search />
+              </a-button>
             </template>
-          </el-input>
-        </el-form-item>
+          </a-input>
+        </a-form-item>
 
-        <el-form-item label="选择用户">
-          <el-select
+        <a-form-item label="选择用户">
+          <a-select
             v-model="bindForm.userId"
             placeholder="请选择用户"
             filterable
             style="width: 100%"
           >
-            <el-option
+            <a-option
               v-for="user in availableUsers"
               :key="user.id"
               :label="`${user.username} (${user.realName})`"
@@ -120,23 +114,30 @@
                 <span>{{ user.username }}</span>
                 <span style="color: #8492a6; font-size: 12px;">{{ user.realName }}</span>
               </div>
-            </el-option>
-          </el-select>
-        </el-form-item>
-      </el-form>
+            </a-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
 
       <template #footer>
-        <el-button @click="showBindDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleBind" :loading="bindLoading">确定</el-button>
+        <a-button @click="showBindDialog = false">取消</a-button>
+        <a-button type="primary" @click="handleBind" :loading="bindLoading">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '用户名', dataIndex: 'username' },
+  { title: '姓名', dataIndex: 'realName' },
+  { title: '绑定时间', dataIndex: 'boundAt', slotName: 'boundAt' },
+  { title: '操作', slotName: 'actions', width: 120 }
+]
+
 import { ref, onMounted, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Folder, Document, Operation, Delete, Plus, Search } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getRoleDetail, bindUserToRole, unbindUserFromRole, getAvailableUsers, type BoundUser, type AvailableUser } from '@/api/kubernetes'
 
 interface Role {
@@ -197,7 +198,7 @@ const loadRoleDetail = async () => {
     // 加载绑定的用户列表
     await loadBoundUsers()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '加载角色详情失败')
+    Message.error(error.response?.data?.message || '加载角色详情失败')
   } finally {
     loading.value = false
   }
@@ -213,7 +214,7 @@ const loadBoundUsers = async () => {
     )
     boundUsers.value = users
   } catch (error: any) {
-    ElMessage.error('加载绑定用户失败')
+    Message.error('加载绑定用户失败')
   }
 }
 
@@ -223,7 +224,7 @@ const searchUsers = async () => {
     const result = await getAvailableUsers(userSearchKeyword.value, 1, 50)
     availableUsers.value = result.list
   } catch (error: any) {
-    ElMessage.error('搜索用户失败')
+    Message.error('搜索用户失败')
   }
 }
 
@@ -283,7 +284,7 @@ const buildPermissionTree = (rules: any[]) => {
 
 const handleUnbind = async (user: BoundUser) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要解绑用户 "${user.username}" 的角色权限吗？`,
       '确认解绑',
       {
@@ -299,11 +300,11 @@ const handleUnbind = async (user: BoundUser) => {
       roleName: props.role.name,
       roleNamespace: props.role.namespace || ''
     })
-    ElMessage.success('解绑成功')
+    Message.success('解绑成功')
     await loadBoundUsers()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('解绑失败')
+      Message.error('解绑失败')
     }
   }
 }
@@ -311,7 +312,7 @@ const handleUnbind = async (user: BoundUser) => {
 // 绑定用户
 const handleBind = async () => {
   if (!bindForm.value.userId) {
-    ElMessage.warning('请选择用户')
+    Message.warning('请选择用户')
     return
   }
 
@@ -325,7 +326,7 @@ const handleBind = async () => {
       roleType: roleType.value
     })
 
-    ElMessage.success('绑定成功')
+    Message.success('绑定成功')
     showBindDialog.value = false
     bindForm.value.userId = undefined
     userSearchKeyword.value = ''
@@ -333,7 +334,7 @@ const handleBind = async () => {
 
     await loadBoundUsers()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '绑定失败')
+    Message.error(error.response?.data?.message || '绑定失败')
   } finally {
     bindLoading.value = false
   }
@@ -369,7 +370,7 @@ onMounted(() => {
       color: #333;
       margin-bottom: 16px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #D4AF37;
+      border-bottom: 2px solid #165dff;
     }
   }
 
@@ -383,11 +384,11 @@ onMounted(() => {
     }
   }
 
-  :deep(.el-tree-node__content) {
+  :deep(.arco-tree-node__content) {
     padding: 4px 0;
   }
 
-  :deep(.el-descriptions) {
+  :deep(.arco-descriptions) {
     margin-top: 16px;
   }
 }

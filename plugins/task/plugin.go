@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	agentserver "github.com/ydcloud-dy/opshub/internal/server/agent"
 	"github.com/ydcloud-dy/opshub/internal/plugin"
 	"github.com/ydcloud-dy/opshub/plugins/task/model"
 	"github.com/ydcloud-dy/opshub/plugins/task/server"
@@ -30,8 +31,9 @@ import (
 
 // Plugin 任务中心插件实现
 type Plugin struct {
-	db   *gorm.DB
-	name string
+	db       *gorm.DB
+	name     string
+	agentHub *agentserver.AgentHub
 }
 
 // New 创建插件实例
@@ -89,9 +91,14 @@ func (p *Plugin) Disable(db *gorm.DB) error {
 	return nil
 }
 
+// SetAgentHub 设置AgentHub引用（在注册路由前调用）
+func (p *Plugin) SetAgentHub(hub *agentserver.AgentHub) {
+	p.agentHub = hub
+}
+
 // RegisterRoutes 注册路由
 func (p *Plugin) RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
-	server.RegisterRoutes(router, db)
+	server.RegisterRoutes(router, db, p.agentHub)
 }
 
 // GetMenus 获取插件菜单配置

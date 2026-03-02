@@ -3,47 +3,41 @@
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
       <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Monitor /></el-icon>
-        </div>
+        <div class="page-title-icon"><icon-desktop /></div>
         <div>
           <h2 class="page-title">主机管理</h2>
           <p class="page-subtitle">管理所有服务器和主机资源，支持多种方式导入</p>
         </div>
       </div>
       <div class="header-actions">
-        <el-button @click="handleOpenTerminal" class="terminal-button">
-          <el-icon style="margin-right: 6px;"><Monitor /></el-icon>
-          终端
-        </el-button>
-        <el-dropdown
-          v-if="userHasEditPermission"
-          v-permission="'hosts:import'"
-          @command="handleImportCommand"
+        <a-button type="primary" @click="handleOpenTerminal">
+          <template #icon><icon-desktop /></template>
+          终端</a-button>
+        <a-button @click="showInstallPackageDialog = true">
+          <template #icon><icon-download /></template>
+          生成Agent安装包</a-button>
+        <a-dropdown
+          v-if="userHasEditPermission && permissionStore.hasPermission('hosts:import')"
+          @select="handleImportCommand"
           class="import-dropdown"
         >
-          <el-button class="black-button">
-            <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+          <a-button type="primary">
+            <template #icon><icon-plus /></template>
             新增主机
-            <el-icon style="margin-left: 6px;"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="direct">
-                <el-icon><DocumentAdd /></el-icon>
-                直接导入
-              </el-dropdown-item>
-              <el-dropdown-item command="excel">
-                <el-icon><Upload /></el-icon>
-                Excel导入
-              </el-dropdown-item>
-              <el-dropdown-item command="cloud">
-                <el-icon><Cloudy /></el-icon>
-                云主机导入
-              </el-dropdown-item>
-            </el-dropdown-menu>
+            <icon-down style="margin-left: 6px;" />
+          </a-button>
+          <template #content>
+            <a-doption :value="'direct'">
+              <icon-file /> 直接导入
+            </a-doption>
+            <a-doption :value="'excel'">
+              <icon-upload /> Excel导入
+            </a-doption>
+            <a-doption :value="'cloud'">
+              <icon-cloud /> 云主机导入
+            </a-doption>
           </template>
-        </el-dropdown>
+        </a-dropdown>
       </div>
     </div>
 
@@ -53,78 +47,73 @@
       <div class="left-panel" v-show="activeView === 'hosts'">
         <div class="panel-header">
           <div class="panel-title">
-            <el-icon class="panel-icon"><Collection /></el-icon>
+            <icon-apps class="panel-icon" />
             <span>资产分组</span>
           </div>
           <div class="panel-actions">
-            <el-tooltip content="新增分组" placement="top">
-              <el-button circle size="small" @click="handleAddGroup">
-                <el-icon><Plus /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip :content="isExpandAll ? '折叠全部' : '展开全部'" placement="top">
-              <el-button circle size="small" @click="toggleExpandAll">
-                <el-icon><Sort /></el-icon>
-              </el-button>
-            </el-tooltip>
+            <a-tooltip content="新增分组" position="top">
+              <a-button shape="circle" size="small" @click="handleAddGroup">
+                <icon-plus />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip :content="isExpandAll ? '折叠全部' : '展开全部'" position="top">
+              <a-button shape="circle" size="small" @click="toggleExpandAll">
+                <icon-swap />
+              </a-button>
+            </a-tooltip>
           </div>
         </div>
         <div class="panel-body">
-          <el-input
+          <a-input
             v-model="groupSearchKeyword"
             placeholder="搜索分组..."
-            clearable
+            allow-clear
             size="small"
             class="group-search"
             @input="filterGroupTree"
           >
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <icon-search />
             </template>
-          </el-input>
-          <div class="tree-container" v-loading="groupLoading">
-            <el-tree
-              ref="groupTreeRef"
-              :data="filteredGroupTree"
-              :props="treeProps"
-              :default-expand-all="false"
-              :expand-on-click-node="false"
-              :highlight-current="true"
-              node-key="id"
-              class="group-tree"
-              @node-click="handleGroupClick"
-            >
-              <template #default="{ node, data }">
-                <div class="tree-node">
-                  <span class="node-icon">
-                    <el-icon v-if="!data.parentId || data.parentId === 0" color="#67c23a">
-                      <Collection />
-                    </el-icon>
-                    <el-icon v-else color="#409eff">
-                      <Folder />
-                    </el-icon>
-                  </span>
-                  <span class="node-label">{{ node.label }}</span>
-                  <span class="node-count">({{ data.hostCount || 0 }})</span>
-                  <span class="node-actions" @click.stop>
-                    <el-dropdown trigger="click" @command="(cmd) => handleGroupAction(cmd, data)">
-                      <el-icon class="more-icon"><MoreFilled /></el-icon>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="edit">
-                            <el-icon><Edit /></el-icon> 编辑
-                          </el-dropdown-item>
-                          <el-dropdown-item command="delete" divided>
-                            <el-icon><Delete /></el-icon> 删除
-                          </el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                  </span>
-                </div>
-              </template>
-            </el-tree>
-            <el-empty v-if="filteredGroupTree.length === 0 && !groupLoading" description="暂无分组" :image-size="60" />
+          </a-input>
+          <div class="tree-container">
+            <a-spin :loading="groupLoading" style="width: 100%;">
+              <a-tree
+                ref="groupTreeRef"
+                :data="filteredGroupTree"
+                :field-names="{ key: 'id', title: 'title', children: 'children' }"
+                :default-expand-all="false"
+                :block-node="true"
+                :show-line="false"
+                class="group-tree"
+                @select="handleGroupSelect"
+              >
+                <template #title="nodeData">
+                  <div class="tree-node">
+                    <span class="node-icon">
+                      <icon-apps v-if="!nodeData.parentId || nodeData.parentId === 0" style="color: #67c23a;" />
+                      <icon-folder v-else style="color: #409eff;" />
+                    </span>
+                    <span class="node-label">{{ nodeData.title || nodeData.name }}</span>
+                    <span class="node-count">({{ nodeData.hostCount || 0 }})</span>
+                    <span class="node-actions" @click.stop>
+                      <a-dropdown trigger="click" @select="(cmd: any) => handleGroupAction(cmd, nodeData)">
+                        <icon-more class="more-icon" />
+                        <template #content>
+                          <a-doption :value="'edit'">
+                            <icon-edit /> 编辑
+                          </a-doption>
+                          <a-doption :value="'delete'">
+                            <icon-delete /> 删除
+                          </a-doption>
+                        </template>
+                      </a-dropdown>
+                    </span>
+                  </div>
+                </template>
+              </a-tree>
+            </a-spin>
+            <a-empty v-if="filteredGroupTree.length === 0 && !groupLoading" description="暂无分组" />
           </div>
         </div>
       </div>
@@ -136,260 +125,301 @@
           <!-- 搜索和筛选栏 -->
           <div class="filter-bar">
           <div class="filter-inputs">
-            <el-input
+            <a-input
               v-model="searchForm.keyword"
               placeholder="搜索主机名/IP..."
-              clearable
+              allow-clear
               class="filter-input"
               @input="handleSearch"
             >
               <template #prefix>
-                <el-icon class="search-icon"><Search /></el-icon>
+                <icon-search class="search-icon" />
               </template>
-            </el-input>
+            </a-input>
 
-            <el-select
+            <a-select
               v-model="searchForm.status"
               placeholder="主机状态"
-              clearable
+              allow-clear
               class="filter-input"
               @change="handleSearch"
             >
-              <el-option label="在线" :value="1" />
-              <el-option label="离线" :value="0" />
-              <el-option label="未知" :value="-1" />
-            </el-select>
+              <a-option label="在线" :value="1" />
+              <a-option label="离线" :value="0" />
+              <a-option label="未知" :value="-1" />
+            </a-select>
           </div>
-
           <div class="filter-actions">
-            <el-button
+            <a-button
+              v-if="selectedHosts.length > 0"
+              type="primary"
+              @click="handleBatchDeployAgent"
+            >
+              <template #icon><icon-cloud-download /></template>
+              批量部署Agent ({{ selectedHosts.length }})
+            </a-button>
+            <a-button
               v-if="selectedHosts.length > 0"
               v-permission="'hosts:batch-delete'"
-              type="danger"
-              plain
+              type="primary"
+              status="danger"
               @click="handleBatchDelete"
             >
-              <el-icon style="margin-right: 4px;"><Delete /></el-icon>
+              <template #icon><icon-delete /></template>
               批量删除 ({{ selectedHosts.length }})
-            </el-button>
-            <el-button class="reset-btn" @click="handleReset">
-              <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
+            </a-button>
+            <a-button class="reset-btn" @click="handleReset">
+              <template #icon><icon-refresh /></template>
               重置
-            </el-button>
-            <el-button @click="loadHostList">
-              <el-icon style="margin-right: 4px;"><Refresh /></el-icon>
+            </a-button>
+            <a-button @click="loadHostList">
+              <template #icon><icon-refresh /></template>
               刷新
-            </el-button>
+            </a-button>
           </div>
         </div>
 
         <!-- 当前选择的分组 -->
         <div v-if="selectedGroup" class="selected-group-bar">
-          <el-icon><FolderOpened /></el-icon>
+          <icon-folder-add />
           <span class="group-path">{{ getGroupPath(selectedGroup) }}</span>
-          <el-tag size="small" type="info">{{ hostPagination.total }} 台主机</el-tag>
-          <el-button link size="small" @click="clearGroupSelection">
-            <el-icon><Close /></el-icon>
-          </el-button>
+          <a-tag size="small" color="gray">{{ hostPagination.total }} 台主机</a-tag>
+          <a-button type="text" size="small" @click="clearGroupSelection">
+            <icon-close />
+          </a-button>
         </div>
 
         <!-- 主机列表 -->
         <div class="table-wrapper">
-          <el-table
+          <a-table
             :data="hostList"
-            v-loading="hostLoading"
-            class="modern-table"
-            :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+            :loading="hostLoading"
+            :bordered="{ cell: true }"
+            stripe
+            row-key="id"
+            :row-selection="{ type: 'checkbox', showCheckedAll: true }"
             @selection-change="handleHostSelectionChange"
+            :pagination="{ current: hostPagination.page, pageSize: hostPagination.pageSize, total: hostPagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50, 100] }"
+            @page-change="(page: number) => { hostPagination.page = page; loadHostList() }"
+            @page-size-change="(size: number) => { hostPagination.pageSize = size; hostPagination.page = 1; loadHostList() }"
+            class="modern-table"
           >
-            <el-table-column type="selection" width="55" fixed="left" />
-            <el-table-column label="主机" prop="name" min-width="140" fixed="left">
-              <template #default="{ row }">
-                <div class="hostname-cell" @click="handleShowHostDetail(row)">
-                  <div class="host-avatar" :class="`host-status-${row.status}`">
-                    <el-icon><Monitor /></el-icon>
-                  </div>
-                  <div class="host-info">
-                    <div class="hostname hostname-clickable">{{ row.name }}</div>
-                    <div class="host-meta">
-                      <span class="ip">{{ row.ip }}</span>
-                      <span class="port">:{{ row.port }}</span>
+            <template #columns>
+              <a-table-column title="主机" data-index="name" :width="200" fixed="left">
+                <template #cell="{ record }">
+                  <div class="hostname-cell" @click="handleHostnameClick(record)" @dblclick.stop.prevent="handleTableRowDblClick(record)">
+                    <div class="host-avatar" :class="`host-status-${record.status}`">
+                      <icon-desktop />
+                    </div>
+                    <div class="host-info">
+                      <div class="hostname hostname-clickable">{{ record.name }}</div>
+                      <div class="host-meta">
+                        <span class="ip">{{ record.ip }}</span>
+                        <span class="port">:{{ record.port }}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </template>
-            </el-table-column>
+                </template>
+              </a-table-column>
+              <a-table-column title="状态" :width="70" align="center">
+                <template #cell="{ record }">
+                  <div class="status-cell">
+                    <span class="status-dot" :class="`status-dot-${record.status}`"></span>
+                    <span class="status-text" :class="`status-text-${record.status}`">{{ record.statusText }}</span>
+                  </div>
+                </template>
+              </a-table-column>
 
-            <el-table-column label="状态" width="70" align="center">
-              <template #default="{ row }">
-                <div class="status-cell">
-                  <span class="status-dot" :class="`status-dot-${row.status}`"></span>
-                  <span class="status-text" :class="`status-text-${row.status}`">{{ row.statusText }}</span>
-                </div>
-              </template>
-            </el-table-column>
+              <a-table-column title="类型" :width="90" align="center">
+                <template #cell="{ record }">
+                  <a-tag v-if="record.type === 'cloud'" size="small" color="orangered">
+                    {{ record.cloudProviderText || '云主机' }}
+                  </a-tag>
+                  <a-tag v-else size="small" color="gray">
+                    自建
+                  </a-tag>
+                </template>
+              </a-table-column>
 
-            <el-table-column label="类型" width="90" align="center">
-              <template #default="{ row }">
-                <el-tag v-if="row.type === 'cloud'" :icon="Cloudy" size="small" type="warning">
-                  {{ row.cloudProviderText || '云主机' }}
-                </el-tag>
-                <el-tag v-else :icon="Monitor" size="small" type="info">
-                  自建
-                </el-tag>
-              </template>
-            </el-table-column>
+              <a-table-column title="CPU" :width="120" align="center">
+                <template #cell="{ record }">
+                  <div class="resource-cell">
+                    <div v-if="record.cpuCores" class="resource-info">
+                      <span class="resource-label">{{ record.cpuCores }}核</span>
+                      <a-progress
+                        :percent="record.cpuUsage ? parseFloat((record.cpuUsage / 100).toFixed(3)) : 0"
+                        :color="getUsageColor(record.cpuUsage)"
+                        size="small"
+                      />
+                    </div>
+                    <span v-else class="text-muted">-</span>
+                  </div>
+                </template>
+              </a-table-column>
 
-            <el-table-column label="CPU" min-width="100" align="center">
-              <template #default="{ row }">
-                <div class="resource-cell">
-                  <div v-if="row.cpuCores" class="resource-info">
-                    <span class="resource-label">{{ row.cpuCores }}核</span>
-                    <el-progress
-                      :percentage="row.cpuUsage ? parseFloat(row.cpuUsage.toFixed(1)) : 0"
-                      :color="getUsageColor(row.cpuUsage)"
-                      :stroke-width="5"
-                      :show-text="true"
-                    />
+              <a-table-column title="内存" :width="140" align="center">
+                <template #cell="{ record }">
+                  <div class="resource-cell">
+                    <div v-if="record.memoryTotal" class="resource-info">
+                      <span class="resource-label resource-compact">{{ formatBytesCompact(record.memoryUsed) }} / {{ formatBytesCompact(record.memoryTotal) }}</span>
+                      <a-progress
+                        :percent="record.memoryUsage ? parseFloat((record.memoryUsage / 100).toFixed(3)) : 0"
+                        :color="getUsageColor(record.memoryUsage)"
+                        size="small"
+                      />
+                    </div>
+                    <span v-else class="text-muted">-</span>
+                  </div>
+                </template>
+              </a-table-column>
+              <a-table-column title="磁盘" :width="140" align="center">
+                <template #cell="{ record }">
+                  <div class="resource-cell">
+                    <div v-if="record.diskTotal" class="resource-info">
+                      <span class="resource-label resource-compact">{{ formatBytesCompact(record.diskUsed) }} / {{ formatBytesCompact(record.diskTotal) }}</span>
+                      <a-progress
+                        :percent="record.diskUsage ? parseFloat((record.diskUsage / 100).toFixed(3)) : 0"
+                        :color="getUsageColor(record.diskUsage)"
+                        size="small"
+                      />
+                    </div>
+                    <span v-else class="text-muted">-</span>
+                  </div>
+                </template>
+              </a-table-column>
+
+              <a-table-column title="标签" :width="120">
+                <template #cell="{ record }">
+                  <div v-if="record.tags && record.tags.length > 0" class="tags-cell">
+                    <a-tag
+                      v-for="(tag, index) in record.tags.slice(0, 2)"
+                      :key="index"
+                      size="small"
+                      class="tag-item"
+                    >
+                      {{ tag }}
+                    </a-tag>
+                    <a-tag v-if="record.tags.length > 2" size="small" color="gray" class="tag-more">
+                      +{{ record.tags.length - 2 }}
+                    </a-tag>
                   </div>
                   <span v-else class="text-muted">-</span>
-                </div>
-              </template>
-            </el-table-column>
+                </template>
+              </a-table-column>
 
-            <el-table-column label="内存" min-width="120" align="center">
-              <template #default="{ row }">
-                <div class="resource-cell">
-                  <div v-if="row.memoryTotal" class="resource-info">
-                    <span class="resource-label resource-compact">{{ formatBytesCompact(row.memoryUsed) }} / {{ formatBytesCompact(row.memoryTotal) }}</span>
-                    <el-progress
-                      :percentage="row.memoryUsage ? parseFloat(row.memoryUsage.toFixed(1)) : 0"
-                      :color="getUsageColor(row.memoryUsage)"
-                      :stroke-width="5"
-                      :show-text="true"
-                    />
+              <a-table-column title="系统信息" :width="140">
+                <template #cell="{ record }">
+                  <div v-if="record.os || record.arch" class="config-cell">
+                    <div v-if="record.os" class="config-item">
+                      <icon-computer />
+                      <span class="config-text">{{ record.os }}</span>
+                    </div>
+                    <div v-if="record.arch" class="config-item">
+                      <icon-code-block />
+                      <span class="config-text">{{ record.arch }}</span>
+                    </div>
                   </div>
                   <span v-else class="text-muted">-</span>
-                </div>
-              </template>
-            </el-table-column>
+                </template>
+              </a-table-column>
 
-            <el-table-column label="磁盘" min-width="120" align="center">
-              <template #default="{ row }">
-                <div class="resource-cell">
-                  <div v-if="row.diskTotal" class="resource-info">
-                    <span class="resource-label resource-compact">{{ formatBytesCompact(row.diskUsed) }} / {{ formatBytesCompact(row.diskTotal) }}</span>
-                    <el-progress
-                      :percentage="row.diskUsage ? parseFloat(row.diskUsage.toFixed(1)) : 0"
-                      :color="getUsageColor(row.diskUsage)"
-                      :stroke-width="5"
-                      :show-text="true"
-                    />
+              <a-table-column title="连接方式" :width="100" align="center">
+                <template #cell="{ record }">
+                  <a-tag v-if="record.connectionMode === 'agent' && record.agentStatus === 'online'" color="green" size="small">
+                    <icon-cloud /> Agent
+                  </a-tag>
+                  <a-tag v-else-if="record.connectionMode === 'agent'" color="orange" size="small">
+                    <icon-cloud /> Agent离线
+                  </a-tag>
+                  <a-tag v-else color="gray" size="small">
+                    SSH
+                  </a-tag>
+                </template>
+              </a-table-column>
+
+              <a-table-column title="操作" :width="260" fixed="right" align="center">
+                <template #cell="{ record }">
+                  <div class="action-buttons">
+                    <a-tooltip content="采集信息" position="top">
+                      <a-button
+                        v-if="isAdmin || hasHostPermission(record.id, PERMISSION.COLLECT)"
+                        v-permission="'hosts:collect'"
+                        type="text"
+                        @click="handleCollectHost(record)"
+                      >
+                        <icon-refresh />
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip content="文件管理" position="top">
+                      <a-button
+                        v-if="isAdmin || hasHostPermission(record.id, PERMISSION.FILE)"
+                        v-permission="'hosts:file-manage'"
+                        type="text"
+                        @click="handleFileManager(record)"
+                      >
+                      <template #icon>
+        <icon-folder />
+      </template>
+                      
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip content="部署Agent" position="top">
+                      <a-button
+                        v-if="record.connectionMode !== 'agent' || record.agentStatus === 'none'"
+                        type="text"
+                        @click="handleDeployAgent(record)"
+                        :loading="record._deploying"
+                      >
+                        <icon-cloud-download />
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip content="更新Agent" position="top">
+                      <a-button
+                        v-if="record.connectionMode === 'agent' && record.agentStatus !== 'none'"
+                        type="text"
+                        @click="handleUpdateAgent(record)"
+                        :loading="record._updating"
+                      >
+                        <icon-sync />
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip content="卸载Agent" position="top">
+                      <a-button
+                        v-if="record.connectionMode === 'agent' && record.agentStatus !== 'none'"
+                        type="text"
+                        status="danger"
+                        @click="handleUninstallAgent(record)"
+                        :loading="record._uninstalling"
+                      >
+                        <icon-poweroff />
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip content="编辑" position="top">
+                      <a-button
+                        v-if="isAdmin || hasHostPermission(record.id, PERMISSION.EDIT)"
+                        v-permission="'hosts:update'"
+                        type="text"
+                        @click="handleEditHost(record)"
+                      >
+                        <icon-edit />
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip content="删除" position="top">
+                      <a-button
+                        v-if="isAdmin || hasHostPermission(record.id, PERMISSION.DELETE)"
+                        v-permission="'hosts:delete'"
+                        type="text"
+                        status="danger"
+                        @click="handleDeleteHost(record)"
+                      >
+                        <icon-delete />
+                      </a-button>
+                    </a-tooltip>
                   </div>
-                  <span v-else class="text-muted">-</span>
-                </div>
-              </template>
-            </el-table-column>
-
-            <el-table-column label="标签" min-width="80">
-              <template #default="{ row }">
-                <div v-if="row.tags && row.tags.length > 0" class="tags-cell">
-                  <el-tag
-                    v-for="(tag, index) in row.tags.slice(0, 2)"
-                    :key="index"
-                    size="small"
-                    class="tag-item"
-                  >
-                    {{ tag }}
-                  </el-tag>
-                  <el-tag v-if="row.tags.length > 2" size="small" type="info" class="tag-more">
-                    +{{ row.tags.length - 2 }}
-                  </el-tag>
-                </div>
-                <span v-else class="text-muted">-</span>
-              </template>
-            </el-table-column>
-
-            <el-table-column label="系统信息" min-width="120" show-overflow-tooltip>
-              <template #default="{ row }">
-                <div v-if="row.os || row.arch" class="config-cell">
-                  <div v-if="row.os" class="config-item">
-                    <el-icon><Platform /></el-icon>
-                    <span class="config-text">{{ row.os }}</span>
-                  </div>
-                  <div v-if="row.arch" class="config-item">
-                    <el-icon><Cpu /></el-icon>
-                    <span class="config-text">{{ row.arch }}</span>
-                  </div>
-                </div>
-                <span v-else class="text-muted">-</span>
-              </template>
-            </el-table-column>
-
-            <el-table-column label="操作" width="170" fixed="right" align="center">
-              <template #default="{ row }">
-                <div class="action-buttons">
-                  <el-tooltip content="采集信息" placement="top">
-                    <el-button
-                      v-if="hasHostPermission(row.id, PERMISSION.COLLECT)"
-                      v-permission="'hosts:collect'"
-                      link
-                      class="action-btn action-refresh"
-                      @click="handleCollectHost(row)"
-                    >
-                      <el-icon><Refresh /></el-icon>
-                    </el-button>
-                  </el-tooltip>
-                  <el-tooltip content="文件管理" placement="top">
-                    <el-button
-                      v-if="hasHostPermission(row.id, PERMISSION.FILE)"
-                      v-permission="'hosts:file-manage'"
-                      link
-                      class="action-btn action-files"
-                      @click="handleFileManager(row)"
-                    >
-                      <el-icon><Folder /></el-icon>
-                    </el-button>
-                  </el-tooltip>
-                  <el-tooltip content="编辑" placement="top">
-                    <el-button
-                      v-if="hasHostPermission(row.id, PERMISSION.EDIT)"
-                      v-permission="'hosts:update'"
-                      link
-                      class="action-btn action-edit"
-                      @click="handleEditHost(row)"
-                    >
-                      <el-icon><Edit /></el-icon>
-                    </el-button>
-                  </el-tooltip>
-                  <el-tooltip content="删除" placement="top">
-                    <el-button
-                      v-if="hasHostPermission(row.id, PERMISSION.DELETE)"
-                      v-permission="'hosts:delete'"
-                      link
-                      class="action-btn action-delete"
-                      @click="handleDeleteHost(row)"
-                    >
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
-                  </el-tooltip>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <!-- 分页 -->
-          <div class="pagination-wrapper">
-            <el-pagination
-              v-model:current-page="hostPagination.page"
-              v-model:page-size="hostPagination.pageSize"
-              :total="hostPagination.total"
-              :page-sizes="[10, 20, 50, 100]"
-              layout="total, sizes, prev, pager, next, jumper"
-              @size-change="loadHostList"
-              @current-change="loadHostList"
-            />
-          </div>
+                </template>
+              </a-table-column>
+            </template>
+          </a-table>
         </div>
         </div>
 
@@ -397,86 +427,79 @@
         <div v-show="activeView === 'terminal'" class="view-container terminal-view">
           <div class="terminal-view-header">
             <div class="terminal-view-title">
-              <el-icon><Monitor /></el-icon>
+              <icon-desktop />
               <span>Web终端</span>
               <span v-if="activeTerminalHost" class="terminal-current-group">
                 / {{ activeTerminalHost.name }}
               </span>
             </div>
-            <el-button size="small" @click="switchToHostsView">
-              <el-icon style="margin-right: 4px;"><ArrowLeft /></el-icon>
+            <a-button size="small" @click="switchToHostsView">
+              <template #icon><icon-left /></template>
               返回主机列表
-            </el-button>
+            </a-button>
           </div>
           <div class="terminal-content">
             <!-- 资产分组树（左） -->
             <div class="terminal-sidebar">
               <div class="panel-header">
                 <div class="panel-title">
-                  <el-icon class="panel-icon"><Collection /></el-icon>
+                  <icon-apps class="panel-icon" />
                   <span>资产分组</span>
                 </div>
                 <div class="panel-actions">
-                  <el-tooltip :content="isExpandAll ? '折叠全部' : '展开全部'" placement="top">
-                    <el-button circle size="small" @click="toggleExpandAll">
-                      <el-icon><Sort /></el-icon>
-                    </el-button>
-                  </el-tooltip>
+                  <a-tooltip :content="isExpandAll ? '折叠全部' : '展开全部'" position="top">
+                    <a-button shape="circle" size="small" @click="toggleExpandAll">
+                      <icon-swap />
+                    </a-button>
+                  </a-tooltip>
                 </div>
               </div>
               <div class="panel-body">
-                <el-input
+                <a-input
                   v-model="groupSearchKeyword"
                   placeholder="搜索分组..."
-                  clearable
+                  allow-clear
                   size="small"
                   class="group-search"
                   @input="filterGroupTree"
                 >
                   <template #prefix>
-                    <el-icon><Search /></el-icon>
+                    <icon-search />
                   </template>
-                </el-input>
-                <div class="tree-container" v-loading="groupLoading">
-                  <el-tree
-                    ref="groupTreeRef"
-                    :data="terminalGroupTree"
-                    :props="treeProps"
-                    :default-expand-all="false"
-                    :expand-on-click-node="false"
-                    :highlight-current="true"
-                    node-key="id"
-                    class="group-tree"
-                  >
-                    <template #default="{ node, data }">
-                      <div class="tree-node" @dblclick="handleHostDblClick(data)" :style="{ cursor: data.type === 'host' ? 'pointer' : 'default' }">
-                        <span class="node-icon">
-                          <el-icon v-if="data.type === 'group' || !data.parentId || data.parentId === 0" color="#67c23a">
-                            <Collection />
-                          </el-icon>
-                          <el-icon v-else-if="data.type === 'host'" :color="getStatusColor(data.status)">
-                            <Monitor />
-                          </el-icon>
-                          <el-icon v-else color="#409eff">
-                            <Folder />
-                          </el-icon>
-                        </span>
-                        <span class="node-label">{{ node.label }}</span>
-                        <span v-if="data.type === 'group' || !data.type" class="node-count">({{ data.hostCount || 0 }})</span>
-                        <span v-if="data.type === 'host'" class="node-ip">{{ data.ip }}</span>
-                      </div>
-                    </template>
-                  </el-tree>
-                  <el-empty v-if="!terminalGroupTree || terminalGroupTree.length === 0" description="暂无数据" :image-size="60" />
+                </a-input>
+                <div class="tree-container">
+                  <a-spin :loading="groupLoading" style="width: 100%;">
+                    <a-tree
+                      ref="groupTreeRef"
+                      :data="terminalGroupTree"
+                      :field-names="{ key: 'id', title: 'title', children: 'children' }"
+                      :default-expand-all="false"
+                      :block-node="true"
+                      :show-line="false"
+                    >
+                      <template #title="nodeData">
+                        <div @dblclick="handleHostDblClick(nodeData)" :style="{ cursor: nodeData.type === 'host' ? 'pointer' : 'default' }">
+                          <span>
+                            <icon-apps v-if="nodeData.type === 'group' || !nodeData.parentId || nodeData.parentId === 0" style="color: #67c23a;" />
+                            <icon-desktop v-else-if="nodeData.type === 'host'" :style="{ color: getStatusColor(nodeData.status) }" />
+                            <icon-folder v-else style="color: #409eff;" />
+                          </span>
+                          <span >{{ nodeData.title || nodeData.name }}</span>
+                          <span v-if="nodeData.type === 'group' || !nodeData.type" class="node-count">({{ nodeData.hostCount || 0 }})</span>
+                          <span v-if="nodeData.type === 'host'">{{ nodeData.ip }}</span>
+                        </div>
+                      </template>
+                    </a-tree>
+                  </a-spin>
+                  <a-empty v-if="!terminalGroupTree || terminalGroupTree.length === 0" description="暂无数据" />
                 </div>
               </div>
             </div>
-
             <!-- 终端区域（右） -->
             <div class="terminal-main">
               <div v-if="activeTerminalHost" class="terminal-header">
                 <div class="terminal-info">
-                  <el-icon class="terminal-icon"><Monitor /></el-icon>
+                  <icon-desktop class="terminal-icon" />
                   <div class="terminal-details">
                     <div class="terminal-title">{{ activeTerminalHost.name }}</div>
                     <div class="terminal-meta">
@@ -486,11 +509,14 @@
                   </div>
                 </div>
                 <div class="terminal-actions">
-                  <el-button size="small" @click="closeTerminal" :icon="Close">关闭</el-button>
+                  <a-button size="small" @click="closeTerminal">
+                    <template #icon><icon-close /></template>
+                    关闭
+                  </a-button>
                 </div>
               </div>
               <div v-else class="terminal-placeholder">
-                <el-icon class="placeholder-icon"><Monitor /></el-icon>
+                <icon-desktop class="placeholder-icon" />
                 <div class="placeholder-text">请双击左侧主机连接终端</div>
                 <div class="placeholder-hint">展开分组查看主机，双击主机即可连接</div>
               </div>
@@ -506,473 +532,432 @@
     </div>
 
     <!-- 直接导入对话框 -->
-    <el-dialog
-      v-model="directImportVisible"
+    <a-modal
+      v-model:visible="directImportVisible"
       :title="hostForm.id && hostForm.id > 0 ? '编辑主机' : '新增主机'"
-      width="60%"
+      :width="800"
+      unmount-on-close
       class="host-import-dialog responsive-dialog"
       @close="handleDirectImportClose"
     >
-      <el-form :model="hostForm" :rules="hostRules" ref="hostFormRef" label-width="120px">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="主机名称" prop="name">
-              <el-input v-model="hostForm.name" placeholder="请输入主机名称" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="主机类型" prop="type">
-              <el-select v-model="hostForm.type" placeholder="请选择主机类型" style="width: 100%">
-                <el-option label="自建主机" value="self">
+      <a-form :model="hostForm" :rules="hostRules" ref="hostFormRef" auto-label-width layout="horizontal">
+        <a-row :gutter="20">
+          <a-col :span="12">
+            <a-form-item label="主机名称" field="name">
+              <a-input v-model="hostForm.name" placeholder="请输入主机名称" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="主机类型" field="type">
+              <a-select v-model="hostForm.type" placeholder="请选择主机类型">
+                <a-option value="self">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <el-icon><Monitor /></el-icon>
+                    <icon-desktop />
                     <span>自建主机</span>
                   </div>
-                </el-option>
-                <el-option label="云主机" value="cloud">
+                </a-option>
+                <a-option value="cloud">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <el-icon><Cloudy /></el-icon>
+                    <icon-cloud />
                     <span>云主机</span>
                   </div>
-                </el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+                </a-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="所属分组" prop="groupId">
-              <el-tree-select
+        <a-row :gutter="20">
+          <a-col :span="12">
+            <a-form-item label="所属分组" field="groupId">
+              <a-tree-select
                 v-model="hostForm.groupId"
                 :data="groupTreeOptions"
-                :props="{ value: 'id', label: 'name', children: 'children' }"
-                clearable
-                check-strictly
+                :field-names="{ key: 'id', title: 'name', children: 'children' }"
+                allow-clear
                 placeholder="请选择分组"
               />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12"></el-col>
-        </el-row>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12"></a-col>
+        </a-row>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="IP地址" prop="ip">
-              <el-input v-model="hostForm.ip" placeholder="请输入IP地址" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="SSH端口" prop="port">
-              <el-input-number v-model="hostForm.port" :min="1" :max="65535" :step="1" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <a-row :gutter="20">
+          <a-col :span="12">
+            <a-form-item label="IP地址" field="ip">
+              <a-input v-model="hostForm.ip" placeholder="请输入IP地址" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="SSH端口" field="port">
+              <a-input-number v-model="hostForm.port" :min="1" :max="65535" :step="1" />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="SSH用户名" prop="sshUser">
-              <el-input v-model="hostForm.sshUser" placeholder="如：root" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="认证凭据">
-              <el-select v-model="hostForm.credentialId" placeholder="选择或新建凭证" clearable filterable>
-                <el-option
+        <a-row :gutter="20">
+          <a-col :span="12">
+            <a-form-item label="SSH用户名" field="sshUser">
+              <a-input v-model="hostForm.sshUser" placeholder="如：root" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="认证凭据">
+              <a-select v-model="hostForm.credentialId" placeholder="选择或新建凭证" allow-clear allow-search>
+                <a-option
                   v-for="cred in credentialList"
                   :key="cred.id"
                   :label="`${cred.name} (${cred.typeText})`"
                   :value="cred.id"
                 />
                 <template #footer>
-                  <el-button text @click="showCredentialDialog = true" style="width: 100%">
-                    <el-icon><Plus /></el-icon> 新建凭证
-                  </el-button>
+                  <a-button type="text" @click="showCredentialDialog = true" long>
+                    <icon-plus /> 新建凭证
+                  </a-button>
                 </template>
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="主机标签">
-              <el-input v-model="hostForm.tags" placeholder="多个标签用逗号分隔，如：web,prod" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <a-row :gutter="20">
+          <a-col :span="24">
+            <a-form-item label="主机标签">
+              <a-select v-model="hostTagsArray" multiple allow-create allow-search placeholder="选择或输入标签，回车确认">
+                <a-option v-for="label in serviceLabelOptions" :key="label" :value="label">{{ label }}</a-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="备注">
-              <el-input v-model="hostForm.description" type="textarea" :rows="3" placeholder="请输入备注信息" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
+        <a-row :gutter="20">
+          <a-col :span="24">
+            <a-form-item label="备注">
+              <a-textarea v-model="hostForm.description" :auto-size="{ minRows: 3 }" placeholder="请输入备注信息" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="directImportVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleDirectImportSubmit" :loading="hostSubmitting">
+          <a-button @click="directImportVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleDirectImportSubmit" :loading="hostSubmitting">
             {{ hostForm.id && hostForm.id > 0 ? '保存' : '确定' }}
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 主机详情对话框 -->
-    <el-dialog
-      v-model="showHostDetailDialog"
+    <a-modal
+      v-model:visible="showHostDetailDialog"
       title=""
-      width="65%"
+      :width="960"
+      unmount-on-close
       class="host-detail-dialog"
       @close="handleCloseHostDetail"
     >
-      <template #header="{ close }">
+      <template #title>
         <div class="detail-dialog-header">
           <div class="detail-header-left">
             <div class="host-avatar-lg" :class="`host-status-${hostDetail?.status}`">
-              <el-icon><Monitor /></el-icon>
+              <icon-desktop />
             </div>
             <div class="detail-header-info">
               <div class="detail-hostname">{{ hostDetail?.name }}</div>
               <div class="detail-hostmeta">
                 <span class="detail-ip">{{ hostDetail?.ip }}:{{ hostDetail?.port }}</span>
-                <el-tag :type="getStatusType(hostDetail?.status)" size="small">{{ hostDetail?.statusText }}</el-tag>
+                <a-tag :color="getStatusTagColor(hostDetail?.status)" size="small">{{ hostDetail?.statusText }}</a-tag>
+                <a-tag v-if="hostDetail?.type === 'cloud'" size="small" color="orangered">{{ hostDetail?.cloudProviderText || '云主机' }}</a-tag>
+                <a-tag v-else size="small" color="gray">自建主机</a-tag>
               </div>
             </div>
           </div>
-          <el-button link @click="close"><el-icon><Close /></el-icon></el-button>
         </div>
       </template>
-      <div v-loading="hostDetailLoading" class="host-detail-content">
+      <a-spin :loading="hostDetailLoading" class="host-detail-content">
         <template v-if="hostDetail">
-          <!-- 信息网格 -->
-          <div class="info-grid">
-            <!-- 基本信息 -->
-            <div class="info-card">
-              <div class="info-card-header">
-                <div class="info-icon info-icon-basic">
-                  <el-icon><InfoFilled /></el-icon>
-                </div>
-                <span class="info-card-title">基本信息</span>
+          <!-- 资源概览 -->
+          <div class="detail-resource-row" v-if="hostDetail.cpuCores || hostDetail.memoryTotal">
+            <div class="detail-resource-item">
+              <div class="detail-resource-icon cpu-bg"><icon-code-block /></div>
+              <div class="detail-resource-info">
+                <div class="detail-resource-label">CPU</div>
+                <div class="detail-resource-val">{{ hostDetail.cpuCores || '-' }}核</div>
               </div>
-              <div class="info-card-body">
-                <div class="info-row">
-                  <span class="info-label">主机类型</span>
-                  <span class="info-value">
-                    <el-tag v-if="hostDetail.type === 'cloud'" :icon="Cloudy" size="small" type="warning">
-                      {{ hostDetail.cloudProviderText || '云主机' }}
-                    </el-tag>
-                    <el-tag v-else :icon="Monitor" size="small" type="info">
-                      自建主机
-                    </el-tag>
-                  </span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">SSH用户</span>
-                  <span class="info-value">{{ hostDetail.sshUser }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">分组</span>
-                  <span class="info-value">{{ hostDetail.groupName || '未分组' }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">最后连接</span>
-                  <span class="info-value">{{ hostDetail.lastSeen || '未连接' }}</span>
-                </div>
-                <div class="info-row" v-if="hostDetail.createTime">
-                  <span class="info-label">创建时间</span>
-                  <span class="info-value">{{ hostDetail.createTime }}</span>
-                </div>
+              <div class="detail-resource-bar">
+                <a-progress
+                  :percent="hostDetail.cpuUsage ? parseFloat((hostDetail.cpuUsage / 100).toFixed(3)) : 0"
+                  :color="getUsageColor(hostDetail.cpuUsage)"
+                  :stroke-width="6"
+                  :show-text="false"
+                />
+                <span class="detail-resource-pct" :class="getUsageLevel(hostDetail.cpuUsage)">{{ hostDetail.cpuUsage ? hostDetail.cpuUsage.toFixed(1) : '0' }}%</span>
               </div>
             </div>
-
-            <!-- 系统信息 -->
-            <div class="info-card">
-              <div class="info-card-header">
-                <div class="info-icon info-icon-system">
-                  <el-icon><Platform /></el-icon>
-                </div>
-                <span class="info-card-title">系统信息</span>
+            <div class="detail-resource-item">
+              <div class="detail-resource-icon mem-bg"><icon-storage /></div>
+              <div class="detail-resource-info">
+                <div class="detail-resource-label">内存</div>
+                <div class="detail-resource-val">{{ formatBytes(hostDetail.memoryTotal) }}</div>
               </div>
-              <div class="info-card-body">
-                <div class="info-row">
-                  <span class="info-label">操作系统</span>
-                  <span class="info-value">{{ hostDetail.os || '-' }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">内核版本</span>
-                  <span class="info-value">{{ hostDetail.kernel || '-' }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">系统架构</span>
-                  <span class="info-value">{{ hostDetail.arch || '-' }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">主机名</span>
-                  <span class="info-value">{{ hostDetail.hostname || '-' }}</span>
-                </div>
+              <div class="detail-resource-bar">
+                <a-progress
+                  :percent="hostDetail.memoryUsage ? parseFloat((hostDetail.memoryUsage / 100).toFixed(3)) : 0"
+                  :color="getUsageColor(hostDetail.memoryUsage)"
+                  :stroke-width="6"
+                  :show-text="false"
+                />
+                <span class="detail-resource-pct" :class="getUsageLevel(hostDetail.memoryUsage)">{{ hostDetail.memoryUsage ? hostDetail.memoryUsage.toFixed(1) : '0' }}%</span>
               </div>
             </div>
-
-            <!-- 认证信息 -->
-            <div class="info-card" v-if="hostDetail.credential">
-              <div class="info-card-header">
-                <div class="info-icon info-icon-auth">
-                  <el-icon><Lock /></el-icon>
-                </div>
-                <span class="info-card-title">认证信息</span>
+            <div class="detail-resource-item">
+              <div class="detail-resource-icon disk-bg"><icon-common /></div>
+              <div class="detail-resource-info">
+                <div class="detail-resource-label">磁盘</div>
+                <div class="detail-resource-val">{{ formatBytes(hostDetail.diskTotal) }}</div>
               </div>
-              <div class="info-card-body">
-                <div class="info-row">
-                  <span class="info-label">凭证名称</span>
-                  <span class="info-value">{{ hostDetail.credential.name }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">认证方式</span>
-                  <el-tag :type="hostDetail.credential.type === 'password' ? 'warning' : 'success'" size="small">
-                    {{ hostDetail.credential.typeText }}
-                  </el-tag>
-                </div>
-                <div class="info-row" v-if="hostDetail.credential.username">
-                  <span class="info-label">用户名</span>
-                  <span class="info-value">{{ hostDetail.credential.username }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 标签 -->
-            <div class="info-card" v-if="hostDetail.tags && hostDetail.tags.length > 0">
-              <div class="info-card-header">
-                <div class="info-icon info-icon-tags">
-                  <el-icon><Collection /></el-icon>
-                </div>
-                <span class="info-card-title">标签</span>
-              </div>
-              <div class="info-card-body">
-                <div class="tags-list">
-                  <el-tag v-for="(tag, index) in hostDetail.tags" :key="index" size="large">
-                    {{ tag }}
-                  </el-tag>
-                </div>
+              <div class="detail-resource-bar">
+                <a-progress
+                  :percent="hostDetail.diskUsage ? parseFloat((hostDetail.diskUsage / 100).toFixed(3)) : 0"
+                  :color="getUsageColor(hostDetail.diskUsage)"
+                  :stroke-width="6"
+                  :show-text="false"
+                />
+                <span class="detail-resource-pct" :class="getUsageLevel(hostDetail.diskUsage)">{{ hostDetail.diskUsage ? hostDetail.diskUsage.toFixed(1) : '0' }}%</span>
               </div>
             </div>
           </div>
 
-          <!-- 资源信息 -->
-          <div class="resource-section" v-if="hostDetail.cpuCores || hostDetail.memoryTotal">
-            <div class="info-card resource-card-wrapper">
-              <div class="info-card-header">
-                <div class="info-icon info-icon-resource">
-                  <el-icon><DataLine /></el-icon>
-                </div>
-                <span class="info-card-title">资源信息</span>
+          <!-- 平铺信息区 -->
+          <div class="detail-flat-section">
+            <div class="detail-section-title">基本信息</div>
+            <div class="detail-flat-grid">
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">SSH用户</span>
+                <span class="detail-flat-value">{{ hostDetail.sshUser || '-' }}</span>
               </div>
-              <div class="info-card-body">
-                <div class="resource-grid">
-                  <!-- CPU -->
-                  <div class="resource-card">
-                    <div class="resource-card-header">
-                      <el-icon class="resource-icon cpu-icon"><Cpu /></el-icon>
-                      <span>CPU</span>
-                    </div>
-                    <div class="resource-card-body">
-                      <div class="resource-value">{{ hostDetail.cpuCores }}核</div>
-                      <div class="resource-usage" :class="`usage-${getUsageLevel(hostDetail.cpuUsage)}`">
-                        <el-progress
-                          :percentage="hostDetail.cpuUsage ? parseFloat(hostDetail.cpuUsage.toFixed(1)) : 0"
-                          :color="getUsageColor(hostDetail.cpuUsage)"
-                          :stroke-width="8"
-                          :show-text="false"
-                        />
-                        <span class="usage-text" :class="getUsageLevel(hostDetail.cpuUsage)">{{ hostDetail.cpuUsage ? hostDetail.cpuUsage.toFixed(1) : '-' }}%</span>
-                      </div>
-                    </div>
-                  </div>
-                  <!-- 内存 -->
-                  <div class="resource-card">
-                    <div class="resource-card-header">
-                      <el-icon class="resource-icon memory-icon"><Coin /></el-icon>
-                      <span>内存</span>
-                    </div>
-                    <div class="resource-card-body">
-                      <div class="resource-value">{{ formatBytes(hostDetail.memoryTotal) }}</div>
-                      <div class="resource-usage" :class="`usage-${getUsageLevel(hostDetail.memoryUsage)}`">
-                        <el-progress
-                          :percentage="hostDetail.memoryUsage ? parseFloat(hostDetail.memoryUsage.toFixed(1)) : 0"
-                          :color="getUsageColor(hostDetail.memoryUsage)"
-                          :stroke-width="8"
-                          :show-text="false"
-                        />
-                        <span class="usage-text" :class="getUsageLevel(hostDetail.memoryUsage)">{{ hostDetail.memoryUsage ? hostDetail.memoryUsage.toFixed(1) : '-' }}%</span>
-                      </div>
-                    </div>
-                  </div>
-                  <!-- 磁盘 -->
-                  <div class="resource-card">
-                    <div class="resource-card-header">
-                      <el-icon class="resource-icon disk-icon"><Files /></el-icon>
-                      <span>磁盘</span>
-                    </div>
-                    <div class="resource-card-body">
-                      <div class="resource-value">{{ formatBytes(hostDetail.diskTotal) }}</div>
-                      <div class="resource-usage" :class="`usage-${getUsageLevel(hostDetail.diskUsage)}`">
-                        <el-progress
-                          :percentage="hostDetail.diskUsage ? parseFloat(hostDetail.diskUsage.toFixed(1)) : 0"
-                          :color="getUsageColor(hostDetail.diskUsage)"
-                          :stroke-width="8"
-                          :show-text="false"
-                        />
-                        <span class="usage-text" :class="getUsageLevel(hostDetail.diskUsage)">{{ hostDetail.diskUsage ? hostDetail.diskUsage.toFixed(1) : '-' }}%</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="resource-legend">
-                  <span class="legend-item"><span class="legend-dot legend-low"></span>正常 &lt;70%</span>
-                  <span class="legend-item"><span class="legend-dot legend-high"></span>繁忙 ≥70%</span>
-                  <span class="legend-item"><span class="legend-dot legend-critical"></span>严重 ≥90%</span>
-                </div>
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">所属分组</span>
+                <span class="detail-flat-value">{{ hostDetail.groupName || '未分组' }}</span>
               </div>
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">最后连接</span>
+                <span class="detail-flat-value">{{ hostDetail.lastSeen || '未连接' }}</span>
+              </div>
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">创建时间</span>
+                <span class="detail-flat-value">{{ hostDetail.createTime || '-' }}</span>
+              </div>
+              <div class="detail-flat-item" v-if="hostDetail.credential">
+                <span class="detail-flat-label">凭证名称</span>
+                <span class="detail-flat-value">{{ hostDetail.credential.name }}</span>
+              </div>
+              <div class="detail-flat-item" v-if="hostDetail.credential">
+                <span class="detail-flat-label">认证方式</span>
+                <span class="detail-flat-value">
+                  <a-tag :color="hostDetail.credential.type === 'password' ? 'orangered' : 'green'" size="small">{{ hostDetail.credential.typeText }}</a-tag>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-flat-section">
+            <div class="detail-section-title">系统信息</div>
+            <div class="detail-flat-grid">
+              <div class="detail-flat-item detail-flat-item-wide">
+                <span class="detail-flat-label">操作系统</span>
+                <span class="detail-flat-value">{{ hostDetail.os || '-' }}</span>
+              </div>
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">内核版本</span>
+                <span class="detail-flat-value">{{ hostDetail.kernel || '-' }}</span>
+              </div>
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">系统架构</span>
+                <span class="detail-flat-value">{{ hostDetail.arch || '-' }}</span>
+              </div>
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">主机名</span>
+                <span class="detail-flat-value">{{ hostDetail.hostname || '-' }}</span>
+              </div>
+              <div class="detail-flat-item">
+                <span class="detail-flat-label">运行时间</span>
+                <span class="detail-flat-value">{{ hostDetail.uptime || '-' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 标签 -->
+          <div class="detail-flat-section" v-if="hostDetail.tags && hostDetail.tags.length > 0">
+            <div class="detail-section-title">标签</div>
+            <div class="detail-tags-row">
+              <a-tag v-for="(tag, index) in hostDetail.tags" :key="index" size="medium" color="arcoblue">{{ tag }}</a-tag>
             </div>
           </div>
 
           <!-- 备注 -->
-          <div class="remark-section" v-if="hostDetail.description">
-            <div class="remark-header">
-              <div class="info-icon info-icon-remark">
-                <el-icon><Document /></el-icon>
-              </div>
-              <span class="section-title">备注</span>
-            </div>
-            <div class="remark-content">{{ hostDetail.description }}</div>
+          <div class="detail-flat-section" v-if="hostDetail.description">
+            <div class="detail-section-title">备注</div>
+            <div class="detail-remark-text">{{ hostDetail.description }}</div>
           </div>
         </template>
-      </div>
+      </a-spin>
       <template #footer>
-        <el-button @click="showHostDetailDialog = false">关闭</el-button>
-        <el-button type="primary" @click="handleCollectHostFromDetail" :loading="hostDetailLoading">
-          <el-icon><Refresh /></el-icon>
+        <a-button @click="showHostDetailDialog = false">关闭</a-button>
+        <a-button type="primary" @click="handleCollectHostFromDetail" :loading="hostDetailLoading">
+          <template #icon><icon-refresh /></template>
           采集信息
-        </el-button>
+        </a-button>
       </template>
-    </el-dialog>
+    </a-modal>
+
+    <!-- Agent部署/更新对话框 -->
+    <a-modal
+      v-model:visible="showAgentDeployDialog"
+      :title="agentDeployMode === 'deploy' ? '部署Agent' : agentDeployMode === 'update' ? '更新Agent' : '批量部署Agent'"
+      :width="520"
+      unmount-on-close
+      @ok="confirmAgentDeploy"
+      @cancel="showAgentDeployDialog = false"
+    >
+      <div style="margin-bottom: 16px; color: var(--ops-text-secondary, #4e5969); font-size: 14px;">
+        <template v-if="agentDeployMode === 'batch'">
+          即将在选中的 {{ selectedHosts.length }} 台主机上部署Agent。
+        </template>
+        <template v-else-if="agentDeployMode === 'update'">
+          即将更新主机 {{ agentDeployTarget?.name }} ({{ agentDeployTarget?.ip }}) 上的Agent，更新期间服务将短暂中断。
+        </template>
+        <template v-else>
+          即将在主机 {{ agentDeployTarget?.name }} ({{ agentDeployTarget?.ip }}) 上部署Agent。
+        </template>
+      </div>
+      <a-form :model="{}" layout="vertical">
+        <a-form-item label="服务端连接地址">
+          <a-input
+            v-model="agentDeployServerAddr"
+            placeholder="留空则自动检测，如有NAT映射请手动填写"
+            allow-clear
+          />
+          <template #extra>
+            <div style="color: var(--ops-text-tertiary, #86909c); font-size: 12px; margin-top: 4px;">
+              Agent安装后会通过此地址连接服务端。格式：IP 或 IP:Port。默认自动检测，如果服务端IP经过NAT映射，请填写映射后的地址。
+            </div>
+          </template>
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- Excel导入对话框 -->
-    <el-dialog
-      v-model="excelImportVisible"
+    <a-modal
+      v-model:visible="excelImportVisible"
       title="Excel批量导入"
-      width="50%"
+      :width="660"
+      unmount-on-close
       class="excel-import-dialog responsive-dialog"
       @close="handleExcelImportClose"
     >
       <div class="excel-import-content">
-        <el-alert title="导入说明" type="info" :closable="false" style="margin-bottom: 20px;">
+        <a-alert title="导入说明" type="info" :closable="false" style="margin-bottom: 20px;">
           <ul style="margin: 8px 0 0 0; padding-left: 20px;">
             <li>请先下载Excel模板文件</li>
             <li>按照模板格式填写主机信息</li>
             <li>支持批量导入多台主机</li>
             <li>IP地址重复的主机会自动跳过</li>
           </ul>
-        </el-alert>
+        </a-alert>
 
-        <el-form :model="excelImportForm" label-width="120px">
-          <el-form-item label="主机类型">
-            <el-select v-model="excelImportForm.type" placeholder="请选择主机类型" style="width: 100%">
-              <el-option label="自建主机" value="self">
+        <a-form :model="excelImportForm" auto-label-width layout="horizontal">
+          <a-form-item label="主机类型">
+            <a-select v-model="excelImportForm.type" placeholder="请选择主机类型">
+              <a-option value="self">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <el-icon><Monitor /></el-icon>
+                  <icon-desktop />
                   <span>自建主机</span>
                 </div>
-              </el-option>
-              <el-option label="云主机" value="cloud">
+              </a-option>
+              <a-option value="cloud">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <el-icon><Cloudy /></el-icon>
+                  <icon-cloud />
                   <span>云主机</span>
                 </div>
-              </el-option>
-            </el-select>
-          </el-form-item>
+              </a-option>
+            </a-select>
+          </a-form-item>
 
-          <el-form-item label="所属分组">
-            <el-tree-select
+          <a-form-item label="所属分组">
+            <a-tree-select
               v-model="excelImportForm.groupId"
               :data="groupTreeOptions"
-              :props="{ value: 'id', label: 'name', children: 'children' }"
-              clearable
-              check-strictly
+              :field-names="{ key: 'id', title: 'name', children: 'children' }"
+              allow-clear
               placeholder="请选择默认分组"
             />
-          </el-form-item>
+          </a-form-item>
 
-          <el-form-item label="下载模板">
-            <el-button @click="downloadTemplate">
-              <el-icon style="margin-right: 6px;"><Download /></el-icon>
+          <a-form-item label="下载模板">
+            <a-button @click="downloadTemplate">
+              <template #icon><icon-download /></template>
               下载Excel模板
-            </el-button>
-          </el-form-item>
+            </a-button>
+          </a-form-item>
 
-          <el-form-item label="上传文件">
-            <el-upload
+          <a-form-item label="上传文件">
+            <a-upload
               ref="uploadRef"
-              class="upload-demo"
-              drag
-              action="#"
+              draggable
               :auto-upload="false"
-              :on-change="handleFileChange"
+              @change="handleFileChange"
               :limit="1"
               accept=".xlsx,.xls"
             >
-              <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-              <div class="el-upload__text">
-                将文件拖到此处，或<em>点击上传</em>
-              </div>
-              <template #tip>
-                <div class="el-upload__tip">
-                  只支持 .xlsx 或 .xls 格式的Excel文件
+              <template #upload-button>
+                <div class="upload-drag-area">
+                  <icon-upload style="font-size: 28px; color: var(--ops-text-tertiary);" />
+                  <div>将文件拖到此处，或<span style="color: var(--ops-primary);">点击上传</span></div>
+                  <div style="font-size: 12px; color: var(--ops-text-tertiary);">只支持 .xlsx 或 .xls 格式的Excel文件</div>
                 </div>
               </template>
-            </el-upload>
-          </el-form-item>
-
-          <el-form-item v-if="uploadedFile" label="已选择文件">
+            </a-upload>
+          </a-form-item>
+          <a-form-item v-if="uploadedFile" label="已选择文件">
             <div class="file-info">
-              <el-icon><Document /></el-icon>
+              <icon-file />
               <span>{{ uploadedFile.name }}</span>
-              <el-tag size="small" type="success">{{ (uploadedFile.size / 1024).toFixed(2) }} KB</el-tag>
+              <a-tag size="small" color="green">{{ (uploadedFile.size / 1024).toFixed(2) }} KB</a-tag>
             </div>
-          </el-form-item>
-        </el-form>
+          </a-form-item>
+        </a-form>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="excelImportVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleExcelImportSubmit" :loading="excelImporting">开始导入</el-button>
+          <a-button @click="excelImportVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleExcelImportSubmit" :loading="excelImporting">开始导入</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 云主机导入对话框 -->
-    <el-dialog
-      v-model="cloudImportVisible"
+    <a-modal
+      v-model:visible="cloudImportVisible"
       title="云主机导入"
-      width="70%"
+      :width="920"
+      unmount-on-close
       class="cloud-import-dialog responsive-dialog"
       @close="handleCloudImportClose"
     >
-      <el-steps :active="cloudImportStep" align-center style="margin-bottom: 30px;">
-        <el-step title="选择云平台" />
-        <el-step title="选择主机" />
-        <el-step title="确认导入" />
-      </el-steps>
+      <a-steps :current="cloudImportStep + 1" style="margin-bottom: 30px;">
+        <a-step title="选择云平台" />
+        <a-step title="选择主机" />
+        <a-step title="确认导入" />
+      </a-steps>
 
       <!-- 步骤1: 选择云平台 -->
       <div v-if="cloudImportStep === 0" class="cloud-step-content">
-        <el-form :model="cloudImportForm" label-width="120px">
-          <el-form-item label="云平台">
-            <el-select v-model="cloudImportForm.accountId" placeholder="请选择云平台账号" filterable>
-              <el-option
+        <a-form :model="cloudImportForm" auto-label-width layout="horizontal">
+          <a-form-item label="云平台">
+            <a-select v-model="cloudImportForm.accountId" placeholder="请选择云平台账号" allow-search>
+              <a-option
                 v-for="account in enabledCloudAccounts"
                 :key="account.id"
                 :label="`${account.name} (${account.providerText})`"
@@ -980,334 +965,355 @@
               >
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <span>{{ account.name }}</span>
-                  <el-tag size="small" :type="account.provider === 'aliyun' ? 'warning' : 'primary'">
+                  <a-tag size="small" :color="account.provider === 'aliyun' ? 'orangered' : 'arcoblue'">
                     {{ account.providerText }}
-                  </el-tag>
+                  </a-tag>
                 </div>
-              </el-option>
+              </a-option>
               <template #footer>
-                <el-button text @click="showCloudAccountDialog = true" style="width: 100%">
-                  <el-icon><Plus /></el-icon> 新增云平台账号
-                </el-button>
+                <a-button type="text" @click="showCloudAccountDialog = true" long>
+                  <icon-plus /> 新增云平台账号
+                </a-button>
               </template>
-            </el-select>
-          </el-form-item>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="区域">
+            <a-select v-model="cloudImportForm.region" placeholder="请先选择云平台账号" allow-search :loading="loadingCloudRegions">
+              <a-option v-for="region in cloudRegions" :key="region.value" :label="region.label" :value="region.value" />
+            </a-select>
+          </a-form-item>
 
-          <el-form-item label="区域">
-            <el-select v-model="cloudImportForm.region" placeholder="请先选择云平台账号" filterable :loading="loadingCloudRegions">
-              <el-option v-for="region in cloudRegions" :key="region.value" :label="region.label" :value="region.value" />
-            </el-select>
-          </el-form-item>
-
-          <el-form-item label="导入到分组">
-            <el-tree-select
+          <a-form-item label="导入到分组">
+            <a-tree-select
               v-model="cloudImportForm.groupId"
               :data="groupTreeOptions"
-              :props="{ value: 'id', label: 'name', children: 'children' }"
-              clearable
-              check-strictly
+              :field-names="{ key: 'id', title: 'name', children: 'children' }"
+              allow-clear
               placeholder="请选择分组"
             />
-          </el-form-item>
-        </el-form>
+          </a-form-item>
+        </a-form>
 
-        <el-alert title="提示" type="info" :closable="false">
+        <a-alert title="提示" type="info" :closable="false">
           <ul style="margin: 8px 0 0 0; padding-left: 20px;">
             <li>请先添加云平台账号（Access Key / Secret Key）</li>
             <li>系统将自动获取该账号下指定区域的ECS实例</li>
             <li>支持阿里云、腾讯云等主流云厂商</li>
           </ul>
-        </el-alert>
+        </a-alert>
       </div>
 
       <!-- 步骤2: 选择主机 -->
       <div v-if="cloudImportStep === 1" class="cloud-step-content">
         <div class="step-header">
           <span>找到 {{ cloudHostList.length }} 台云主机，请选择要导入的主机</span>
-          <el-checkbox v-model="selectAllCloudHosts" @change="handleSelectAllCloudHosts">全选</el-checkbox>
+          <a-checkbox v-model="selectAllCloudHosts" @change="handleSelectAllCloudHosts">全选</a-checkbox>
         </div>
 
-        <el-table
+        <a-table
           :data="cloudHostList"
-          v-loading="loadingCloudHosts"
+          :loading="loadingCloudHosts"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true }"
           @selection-change="handleCloudHostSelectionChange"
-          max-height="400"
+          :scroll="{ y: 400 }"
+          row-key="instanceId"
+          :bordered="{ cell: true }"
+          stripe
         >
-          <el-table-column type="selection" width="55" />
-          <el-table-column label="实例名称" prop="name" min-width="150" />
-          <el-table-column label="实例ID" prop="instanceId" min-width="180" />
-          <el-table-column label="公网IP" prop="publicIp" min-width="140" />
-          <el-table-column label="私网IP" prop="privateIp" min-width="140" />
-          <el-table-column label="操作系统" prop="os" min-width="150" show-overflow-tooltip />
-          <el-table-column label="状态" width="80">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 'Running' ? 'success' : 'info'" size="small">
-                {{ row.status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+          <template #columns>
+            <a-table-column title="实例名称" data-index="name" :width="150" />
+            <a-table-column title="实例ID" data-index="instanceId" :width="180" />
+            <a-table-column title="公网IP" data-index="publicIp" :width="140" />
+            <a-table-column title="私网IP" data-index="privateIp" :width="140" />
+            <a-table-column title="操作系统" data-index="os" :width="150" :tooltip="true" />
+            <a-table-column title="状态" :width="80">
+              <template #cell="{ record }">
+                <a-tag :color="record.status === 'Running' ? 'green' : 'gray'" size="small">
+                  {{ record.status }}
+                </a-tag>
+              </template>
+            </a-table-column>
+          </template>
+        </a-table>
 
-        <el-empty v-if="cloudHostList.length === 0 && !loadingCloudHosts" description="暂无云主机数据" />
+        <a-empty v-if="cloudHostList.length === 0 && !loadingCloudHosts" description="暂无云主机数据" />
       </div>
-
       <!-- 步骤3: 确认导入 -->
       <div v-if="cloudImportStep === 2" class="cloud-step-content">
-        <el-result icon="success" title="准备就绪" sub-title="以下主机将被导入到系统中">
+        <a-result status="success" title="准备就绪" subtitle="以下主机将被导入到系统中">
           <template #extra>
             <div class="import-summary">
-              <el-descriptions :column="1" border>
-                <el-descriptions-item label="云平台账号">{{ selectedCloudAccount?.name }}</el-descriptions-item>
-                <el-descriptions-item label="目标分组">{{ selectedCloudGroup?.name }}</el-descriptions-item>
-                <el-descriptions-item label="待导入主机">{{ selectedCloudHosts.length }} 台</el-descriptions-item>
-              </el-descriptions>
+              <a-descriptions :column="1" bordered>
+                <a-descriptions-item label="云平台账号">{{ selectedCloudAccount?.name }}</a-descriptions-item>
+                <a-descriptions-item label="目标分组">{{ selectedCloudGroup?.name }}</a-descriptions-item>
+                <a-descriptions-item label="待导入主机">{{ selectedCloudHosts.length }} 台</a-descriptions-item>
+              </a-descriptions>
 
               <div class="host-list-preview">
                 <h4>主机列表：</h4>
-                <el-tag
+                <a-tag
                   v-for="host in selectedCloudHosts"
                   :key="host.instanceId"
                   style="margin: 4px;"
                 >
                   {{ host.name }}
-                </el-tag>
+                </a-tag>
               </div>
             </div>
           </template>
-        </el-result>
+        </a-result>
       </div>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button v-if="cloudImportStep > 0" @click="cloudImportStep--">上一步</el-button>
-          <el-button @click="cloudImportVisible = false">取消</el-button>
-          <el-button
+          <a-button v-if="cloudImportStep > 0" @click="cloudImportStep--">上一步</a-button>
+          <a-button @click="cloudImportVisible = false">取消</a-button>
+          <a-button
             v-if="cloudImportStep === 0"
-            class="black-button"
+            type="primary"
             @click="handleGetCloudHosts"
             :loading="loadingCloudHosts"
           >
             下一步
-          </el-button>
-          <el-button
+          </a-button>
+          <a-button
             v-if="cloudImportStep === 1"
-            class="black-button"
+            type="primary"
             @click="cloudImportStep++"
             :disabled="selectedCloudHosts.length === 0"
           >
             下一步
-          </el-button>
-          <el-button
+          </a-button>
+          <a-button
             v-if="cloudImportStep === 2"
-            class="black-button"
+            type="primary"
             @click="handleCloudImportSubmit"
             :loading="cloudImporting"
           >
             开始导入
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
-
+    </a-modal>
     <!-- 新建凭证对话框 -->
-    <el-dialog
-      v-model="showCredentialDialog"
+    <a-modal
+      v-model:visible="showCredentialDialog"
       title="新建凭证"
-      width="50%"
+      :width="660"
+      unmount-on-close
       class="credential-dialog responsive-dialog"
       @close="handleCredentialDialogClose"
     >
-      <el-form :model="credentialForm" :rules="credentialRules" ref="credentialFormRef" label-width="120px">
-        <el-form-item label="凭证名称" prop="name">
-          <el-input v-model="credentialForm.name" placeholder="请输入凭证名称，如：生产环境root凭证" />
-        </el-form-item>
+      <a-form :model="credentialForm" :rules="credentialRules" ref="credentialFormRef" auto-label-width layout="horizontal">
+        <a-form-item label="凭证名称" field="name">
+          <a-input v-model="credentialForm.name" placeholder="请输入凭证名称，如：生产环境root凭证" />
+        </a-form-item>
 
-        <el-form-item label="认证方式" prop="type">
-          <el-radio-group v-model="credentialForm.type" @change="handleAuthTypeChange">
-            <el-radio label="password">密码认证</el-radio>
-            <el-radio label="key">密钥认证</el-radio>
-          </el-radio-group>
-        </el-form-item>
+        <a-form-item label="认证方式" field="type">
+          <a-radio-group v-model="credentialForm.type" @change="handleAuthTypeChange">
+            <a-radio :value="'password'">密码认证</a-radio>
+            <a-radio :value="'key'">密钥认证</a-radio>
+          </a-radio-group>
+        </a-form-item>
 
-        <el-form-item v-if="credentialForm.type === 'password'" label="用户名" prop="username">
-          <el-input v-model="credentialForm.username" placeholder="如：root" />
-        </el-form-item>
+        <a-form-item v-if="credentialForm.type === 'password'" label="用户名" field="username">
+          <a-input v-model="credentialForm.username" placeholder="如：root" />
+        </a-form-item>
 
-        <el-form-item v-if="credentialForm.type === 'password'" label="密码" prop="password">
-          <el-input v-model="credentialForm.password" type="password" placeholder="请输入密码" show-password />
-        </el-form-item>
+        <a-form-item v-if="credentialForm.type === 'password'" label="密码" field="password">
+          <a-input-password v-model="credentialForm.password" placeholder="请输入密码" />
+        </a-form-item>
 
-        <el-form-item v-if="credentialForm.type === 'key'" label="用户名">
-          <el-input v-model="credentialForm.username" placeholder="如：root（可选）" />
-        </el-form-item>
+        <a-form-item v-if="credentialForm.type === 'key'" label="用户名">
+          <a-input v-model="credentialForm.username" placeholder="如：root（可选）" />
+        </a-form-item>
 
-        <el-form-item v-if="credentialForm.type === 'key'" label="私钥" prop="privateKey">
-          <el-input
+        <a-form-item v-if="credentialForm.type === 'key'" label="私钥" field="privateKey">
+          <a-textarea
             v-model="credentialForm.privateKey"
-            type="textarea"
-            :rows="8"
+            :auto-size="{ minRows: 8 }"
             placeholder="请粘贴PEM格式的私钥内容"
           />
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item v-if="credentialForm.type === 'key'" label="私钥密码">
-          <el-input v-model="credentialForm.passphrase" type="password" placeholder="如果私钥有密码请输入（可选）" show-password />
-        </el-form-item>
+        <a-form-item v-if="credentialForm.type === 'key'" label="私钥密码">
+          <a-input-password v-model="credentialForm.passphrase" placeholder="如果私钥有密码请输入（可选）" />
+        </a-form-item>
 
-        <el-form-item label="备注">
-          <el-input v-model="credentialForm.description" type="textarea" :rows="2" placeholder="请输入备注信息" />
-        </el-form-item>
-      </el-form>
+        <a-form-item label="备注">
+          <a-textarea v-model="credentialForm.description" :auto-size="{ minRows: 2 }" placeholder="请输入备注信息" />
+        </a-form-item>
+      </a-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="showCredentialDialog = false">取消</el-button>
-          <el-button class="black-button" @click="handleCredentialSubmit" :loading="credentialSubmitting">确定</el-button>
+          <a-button @click="showCredentialDialog = false">取消</a-button>
+          <a-button type="primary" @click="handleCredentialSubmit" :loading="credentialSubmitting">确定</a-button>
         </div>
       </template>
-    </el-dialog>
-
+    </a-modal>
     <!-- 新增云平台账号对话框 -->
-    <el-dialog
-      v-model="showCloudAccountDialog"
+    <a-modal
+      v-model:visible="showCloudAccountDialog"
       title="新增云平台账号"
-      width="50%"
+      :width="660"
+      unmount-on-close
       class="cloud-account-dialog responsive-dialog"
       @close="handleCloudAccountDialogClose"
     >
-      <el-form :model="cloudAccountForm" :rules="cloudAccountRules" ref="cloudAccountFormRef" label-width="120px">
-        <el-form-item label="账号名称" prop="name">
-          <el-input v-model="cloudAccountForm.name" placeholder="请输入账号名称，如：阿里云生产账号" />
-        </el-form-item>
+      <a-form :model="cloudAccountForm" :rules="cloudAccountRules" ref="cloudAccountFormRef" auto-label-width layout="horizontal">
+        <a-form-item label="账号名称" field="name">
+          <a-input v-model="cloudAccountForm.name" placeholder="请输入账号名称，如：阿里云生产账号" />
+        </a-form-item>
 
-        <el-form-item label="云厂商" prop="provider">
-          <el-select v-model="cloudAccountForm.provider" placeholder="请选择云厂商">
-            <el-option label="阿里云" value="aliyun" />
-            <el-option label="腾讯云" value="tencent" />
-            <el-option label="AWS" value="aws" />
-            <el-option label="华为云" value="huawei" />
-          </el-select>
-        </el-form-item>
+        <a-form-item label="云厂商" field="provider">
+          <a-select v-model="cloudAccountForm.provider" placeholder="请选择云厂商">
+            <a-option label="阿里云" value="aliyun" />
+            <a-option label="腾讯云" value="tencent" />
+            <a-option label="AWS" value="aws" />
+            <a-option label="华为云" value="huawei" />
+          </a-select>
+        </a-form-item>
 
-        <el-form-item label="Access Key" prop="accessKey">
-          <el-input v-model="cloudAccountForm.accessKey" placeholder="请输入Access Key ID" />
-        </el-form-item>
+        <a-form-item label="Access Key" field="accessKey">
+          <a-input v-model="cloudAccountForm.accessKey" placeholder="请输入Access Key ID" />
+        </a-form-item>
 
-        <el-form-item label="Secret Key" prop="secretKey">
-          <el-input v-model="cloudAccountForm.secretKey" type="password" placeholder="请输入Access Key Secret" show-password />
-        </el-form-item>
+        <a-form-item label="Secret Key" field="secretKey">
+          <a-input-password v-model="cloudAccountForm.secretKey" placeholder="请输入Access Key Secret" />
+        </a-form-item>
 
-        <el-form-item label="默认区域">
-          <el-input v-model="cloudAccountForm.region" placeholder="如：cn-hangzhou（可选）" />
-        </el-form-item>
+        <a-form-item label="默认区域">
+          <a-input v-model="cloudAccountForm.region" placeholder="如：cn-hangzhou（可选）" />
+        </a-form-item>
 
-        <el-form-item label="备注">
-          <el-input v-model="cloudAccountForm.description" type="textarea" :rows="2" placeholder="请输入备注信息" />
-        </el-form-item>
-      </el-form>
+        <a-form-item label="备注">
+          <a-textarea v-model="cloudAccountForm.description" :auto-size="{ minRows: 2 }" placeholder="请输入备注信息" />
+        </a-form-item>
+      </a-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="showCloudAccountDialog = false">取消</el-button>
-          <el-button class="black-button" @click="handleCloudAccountSubmit" :loading="cloudAccountSubmitting">确定</el-button>
+          <a-button @click="showCloudAccountDialog = false">取消</a-button>
+          <a-button type="primary" @click="handleCloudAccountSubmit" :loading="cloudAccountSubmitting">确定</a-button>
         </div>
       </template>
-    </el-dialog>
-
+    </a-modal>
     <!-- 新增/编辑分组对话框 -->
-    <el-dialog
-      v-model="groupDialogVisible"
+    <a-modal
+      v-model:visible="groupDialogVisible"
       :title="groupDialogTitle"
-      width="50%"
+      :width="660"
+      unmount-on-close
       class="group-edit-dialog responsive-dialog"
       @close="handleGroupDialogClose"
     >
-      <el-form :model="groupForm" :rules="groupRules" ref="groupFormRef" label-width="100px">
-        <el-form-item label="上级分组">
-          <el-tree-select
+      <a-form :model="groupForm" :rules="groupRules" ref="groupFormRef" auto-label-width layout="horizontal">
+        <a-form-item label="上级分组">
+          <a-tree-select
             v-model="groupForm.parentId"
             :data="groupTreeOptions"
-            :props="{ value: 'id', label: 'name', children: 'children' }"
-            clearable
-            check-strictly
+            :field-names="{ key: 'id', title: 'name', children: 'children' }"
+            allow-clear
             placeholder="不选择则为顶级分组"
           />
-        </el-form-item>
-        <el-form-item label="分组名称" prop="name">
-          <el-input v-model="groupForm.name" placeholder="请输入分组名称" />
-        </el-form-item>
-        <el-form-item label="分组编码" prop="code">
-          <el-input v-model="groupForm.code" placeholder="请输入分组编码" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="groupForm.description" type="textarea" :rows="3" placeholder="请输入描述" />
-        </el-form-item>
-        <el-form-item label="排序">
-          <el-input-number v-model="groupForm.sort" :min="0" />
-        </el-form-item>
-        <el-form-item label="状态" prop="status">
-          <el-radio-group v-model="groupForm.status">
-            <el-radio :label="1">正常</el-radio>
-            <el-radio :label="0">停用</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
+        </a-form-item>
+        <a-form-item label="分组名称" field="name">
+          <a-input v-model="groupForm.name" placeholder="请输入分组名称" />
+        </a-form-item>
+        <a-form-item label="分组编码" field="code">
+          <a-input v-model="groupForm.code" placeholder="请输入分组编码" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea v-model="groupForm.description" :auto-size="{ minRows: 3 }" placeholder="请输入描述" />
+        </a-form-item>
+        <a-form-item label="排序">
+          <a-input-number v-model="groupForm.sort" :min="0" />
+        </a-form-item>
+        <a-form-item label="状态" field="status">
+          <a-radio-group v-model="groupForm.status">
+            <a-radio :value="1">正常</a-radio>
+            <a-radio :value="0">停用</a-radio>
+          </a-radio-group>
+        </a-form-item>
+      </a-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="groupDialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleGroupSubmit" :loading="groupSubmitting">确定</el-button>
+          <a-button @click="groupDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleGroupSubmit" :loading="groupSubmitting">确定</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 文件浏览器对话框 -->
     <HostFileBrowser
       v-model:visible="fileBrowserVisible"
       :hostId="selectedHostId"
       :hostName="selectedHostName"
+      :connectionMode="selectedHostConnectionMode"
+      :agentStatus="selectedHostAgentStatus"
     />
+
+    <!-- 生成Agent安装包对话框 -->
+    <a-modal v-model:visible="showInstallPackageDialog" title="生成Agent安装包" :width="520" :footer="false" @cancel="installPackageResult = null">
+      <a-space direction="vertical" fill style="width: 100%;">
+        <a-form layout="vertical">
+          <a-form-item label="服务端地址" help="Agent连接的服务端IP或域名">
+            <a-input v-model="installPackageServerAddr" placeholder="如: 192.168.1.100" />
+          </a-form-item>
+        </a-form>
+        <a-button type="primary" :loading="installPackageLoading" long @click="handleGenerateInstallPackage">生成安装包</a-button>
+        <template v-if="installPackageResult">
+          <a-alert type="success" style="margin-top: 12px;">
+            <template #title>安装包已生成</template>
+            <div>Agent ID: <a-typography-text copyable>{{ installPackageResult.agentId }}</a-typography-text></div>
+            <div style="margin-top: 8px;">
+              <a-link :href="installPackageResult.downloadUrl" target="_blank">下载安装包</a-link>
+              <span style="color: var(--color-text-3); margin-left: 8px;">（30分钟内有效）</span>
+            </div>
+          </a-alert>
+        </template>
+      </a-space>
+    </a-modal>
 
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebLinksAddon } from 'xterm-addon-web-links'
 import 'xterm/css/xterm.css'
 import 'xterm/lib/xterm.js'
-import { ElMessage, ElMessageBox, FormInstance, FormRules, UploadFile, UploadProps } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
+import type { FieldRule } from '@arco-design/web-vue'
 import {
-  Plus,
-  Edit,
-  Delete,
-  Monitor,
-  Search,
-  Refresh,
-  RefreshLeft,
-  Collection,
-  Folder,
-  FolderOpened,
-  Sort,
-  Close,
-  MoreFilled,
-  ArrowDown,
-  ArrowLeft,
-  DocumentAdd,
-  Upload,
-  Cloudy,
-  Download,
-  Document,
-  UploadFilled,
-  Platform,
-  Operation,
-  Cpu,
-  Lock,
-  Key,
-  DataLine,
-  InfoFilled,
-  Coin,
-  Files
-} from '@element-plus/icons-vue'
+  IconDesktop,
+  IconPlus,
+  IconDown,
+  IconFile,
+  IconUpload,
+  IconCloud,
+  IconApps,
+  IconSwap,
+  IconSearch,
+  IconFolder,
+  IconMore,
+  IconEdit,
+  IconDelete,
+  IconRefresh,
+  IconFolderAdd,
+  IconClose,
+  IconComputer,
+  IconCodeBlock,
+  IconLeft,
+  IconInfoCircle,
+  IconLock,
+  IconBarChart,
+  IconStorage,
+  IconCommon,
+  IconDownload
+} from '@arco-design/web-vue/es/icon'
 import HostFileBrowser from './components/HostFileBrowser.vue'
 import {
   getGroupTree,
@@ -1336,12 +1342,19 @@ import {
   batchDeleteHosts
 } from '@/api/host'
 import type { CloudInstanceVO, CloudRegionVO } from '@/api/host'
+import { deployAgent, batchDeployAgent, getAgentStatuses, updateAgent, uninstallAgent, generateInstallPackage } from '@/api/agent'
+import { getServiceLabels } from '@/api/serviceLabel'
 import { PERMISSION, hasPermission } from '@/utils/permission'
 import { getUserHostPermissions } from '@/api/assetPermission'
 import { useUserStore } from '@/stores/user'
+import { usePermissionStore } from '@/stores/permission'
+
+// 路由
+const router = useRouter()
 
 // 用户状态
 const userStore = useUserStore()
+const permissionStore = usePermissionStore()
 
 // 检查当前用户是否是管理员
 const isAdmin = computed(() => {
@@ -1381,6 +1394,14 @@ const showCloudAccountDialog = ref(false)
 const fileBrowserVisible = ref(false)
 const selectedHostId = ref(0)
 const selectedHostName = ref('')
+const selectedHostConnectionMode = ref('')
+const selectedHostAgentStatus = ref('')
+
+// Agent安装包生成
+const showInstallPackageDialog = ref(false)
+const installPackageServerAddr = ref('')
+const installPackageLoading = ref(false)
+const installPackageResult = ref<{ agentId: string; downloadUrl: string } | null>(null)
 
 // 主机详情
 const showHostDetailDialog = ref(false)
@@ -1392,10 +1413,10 @@ const groupDialogTitle = ref('')
 const isGroupEdit = ref(false)
 
 // 表单引用
-const hostFormRef = ref<FormInstance>()
-const credentialFormRef = ref<FormInstance>()
-const cloudAccountFormRef = ref<FormInstance>()
-const groupFormRef = ref<FormInstance>()
+const hostFormRef = ref()
+const credentialFormRef = ref()
+const cloudAccountFormRef = ref()
+const groupFormRef = ref()
 const groupTreeRef = ref()
 const uploadRef = ref()
 
@@ -1408,10 +1429,11 @@ const isExpandAll = ref(false)
 
 // 主机列表数据
 const hostList = ref([])
-const hostPermissions = ref<Map<number, number>>(new Map()) // 存储每个主机的用户权限
-const userHasEditPermission = ref(false) // 用户是否有任何主机的编辑权限
+const hostPermissions = ref<Map<number, number>>(new Map())
+const userHasEditPermission = ref(false)
 const credentialList = ref([])
 const cloudAccountList = ref([])
+const serviceLabelOptions = ref<string[]>([])
 
 // 搜索表单
 const searchForm = reactive({
@@ -1425,13 +1447,6 @@ const hostPagination = reactive({
   pageSize: 20,
   total: 0
 })
-
-// 树形组件配置
-const treeProps = {
-  children: 'children',
-  label: 'name',
-  value: 'id'
-}
 
 // 主机表单
 const hostForm = reactive({
@@ -1477,7 +1492,7 @@ const excelImportForm = reactive({
   type: 'self',
   groupId: null as number | null
 })
-const uploadedFile = ref<UploadFile | null>(null)
+const uploadedFile = ref<any>(null)
 
 // 云主机导入
 const cloudImportStep = ref(0)
@@ -1510,32 +1525,32 @@ const groupForm = reactive({
 })
 
 // 表单验证规则
-const hostRules: FormRules = {
-  name: [{ required: true, message: '请输入主机名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择主机类型', trigger: 'change' }],
-  ip: [{ required: true, message: '请输入IP地址', trigger: 'blur' }],
-  sshUser: [{ required: true, message: '请输入SSH用户名', trigger: 'blur' }],
-  port: [{ required: true, message: '请输入SSH端口', trigger: 'blur' }]
+const hostRules: Record<string, FieldRule[]> = {
+  name: [{ required: true, message: '请输入主机名称' }],
+  type: [{ required: true, message: '请选择主机类型' }],
+  ip: [{ required: true, message: '请输入IP地址' }],
+  sshUser: [{ required: true, message: '请输入SSH用户名' }],
+  port: [{ required: true, message: '请输入SSH端口' }]
 }
 
-const credentialRules: FormRules = {
-  name: [{ required: true, message: '请输入凭证名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择认证方式', trigger: 'change' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  privateKey: [{ required: true, message: '请输入私钥', trigger: 'blur' }]
+const credentialRules: Record<string, FieldRule[]> = {
+  name: [{ required: true, message: '请输入凭证名称' }],
+  type: [{ required: true, message: '请选择认证方式' }],
+  password: [{ required: true, message: '请输入密码' }],
+  privateKey: [{ required: true, message: '请输入私钥' }]
 }
 
-const cloudAccountRules: FormRules = {
-  name: [{ required: true, message: '请输入账号名称', trigger: 'blur' }],
-  provider: [{ required: true, message: '请选择云厂商', trigger: 'change' }],
-  accessKey: [{ required: true, message: '请输入Access Key', trigger: 'blur' }],
-  secretKey: [{ required: true, message: '请输入Secret Key', trigger: 'blur' }]
+const cloudAccountRules: Record<string, FieldRule[]> = {
+  name: [{ required: true, message: '请输入账号名称' }],
+  provider: [{ required: true, message: '请选择云厂商' }],
+  accessKey: [{ required: true, message: '请输入Access Key' }],
+  secretKey: [{ required: true, message: '请输入Secret Key' }]
 }
 
-const groupRules: FormRules = {
-  name: [{ required: true, message: '请输入分组名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入分组编码', trigger: 'blur' }],
-  status: [{ required: true, message: '请选择状态', trigger: 'change' }]
+const groupRules: Record<string, FieldRule[]> = {
+  name: [{ required: true, message: '请输入分组名称' }],
+  code: [{ required: true, message: '请输入分组编码' }],
+  status: [{ required: true, message: '请选择状态' }]
 }
 
 // 分组树选项（用于表单中的选择器）
@@ -1583,11 +1598,12 @@ const searchTreeNodes = (nodes: any[], keyword: string): any[] => {
 // 展开/折叠全部
 const toggleExpandAll = () => {
   isExpandAll.value = !isExpandAll.value
-  const allNodeKeys = getAllNodeKeys(filteredGroupTree.value)
-  if (isExpandAll.value) {
-    allNodeKeys.forEach(key => groupTreeRef.value?.store.nodesMap[key]?.expand())
-  } else {
-    allNodeKeys.forEach(key => groupTreeRef.value?.store.nodesMap[key]?.collapse())
+  if (groupTreeRef.value) {
+    if (isExpandAll.value) {
+      groupTreeRef.value.expandAll(true)
+    } else {
+      groupTreeRef.value.expandAll(false)
+    }
   }
 }
 
@@ -1606,15 +1622,26 @@ const getAllNodeKeys = (nodes: any[]): any[] => {
   return keys
 }
 
-// 点击分组节点
-const handleGroupClick = (data: any) => {
-  selectedGroup.value = data
+// 点击分组节点 (a-tree @select handler)
+const handleGroupSelect = (selectedKeys: (string | number)[], data: { node?: any }) => {
+  const nodeData = data.node
+  if (!nodeData) return
+  selectedGroup.value = nodeData
 
   if (activeView.value === 'terminal') {
-    // 终端视图：加载该分组的主机到终端列表
+    loadTerminalHostList(nodeData.id)
+  } else {
+    hostPagination.page = 1
+    loadHostList()
+  }
+}
+
+// Legacy handler kept for compatibility
+const handleGroupClick = (data: any) => {
+  selectedGroup.value = data
+  if (activeView.value === 'terminal') {
     loadTerminalHostList(data.id)
   } else {
-    // 主机列表视图：加载该分组的主机到表格
     hostPagination.page = 1
     loadHostList()
   }
@@ -1623,7 +1650,6 @@ const handleGroupClick = (data: any) => {
 // 清除分组选择
 const clearGroupSelection = () => {
   selectedGroup.value = null
-  groupTreeRef.value?.setCurrentKey(null)
   hostPagination.page = 1
   loadHostList()
 }
@@ -1651,7 +1677,7 @@ const getStatusColor = (status: number) => {
   }
 }
 
-// 获取状态类型
+// 获取状态类型 (for a-tag color)
 const getStatusType = (status: number) => {
   switch (status) {
     case 1: return 'success'
@@ -1660,18 +1686,37 @@ const getStatusType = (status: number) => {
   }
 }
 
+// 获取状态标签颜色 (for a-tag)
+const getStatusTagColor = (status: number | undefined) => {
+  switch (status) {
+    case 1: return 'green'
+    case 0: return 'gray'
+    default: return 'gray'
+  }
+}
+
 // 加载分组树
 const loadGroupTree = async () => {
   groupLoading.value = true
   try {
     const data = await getGroupTree()
-    groupTree.value = data || []
-    filteredGroupTree.value = data || []
+    const enriched = enrichTreeData(data || [])
+    groupTree.value = enriched
+    filteredGroupTree.value = enriched
   } catch (error) {
-    ElMessage.error('获取分组树失败')
+    Message.error('获取分组树失败')
   } finally {
     groupLoading.value = false
   }
+}
+
+// 递归处理树节点数据，添加 title 字段供 Arco tree 渲染
+const enrichTreeData = (nodes: any[]): any[] => {
+  return nodes.map(node => ({
+    ...node,
+    title: node.name,
+    children: node.children ? enrichTreeData(node.children) : undefined
+  }))
 }
 
 // 加载主机列表
@@ -1686,7 +1731,6 @@ const loadHostList = async () => {
     if (searchForm.status !== undefined) {
       params.status = searchForm.status
     }
-    // 添加分组ID筛选
     if (selectedGroup.value && selectedGroup.value.id) {
       params.groupId = selectedGroup.value.id
     }
@@ -1695,11 +1739,11 @@ const loadHostList = async () => {
     hostList.value = res.list || []
     hostPagination.total = res.total || 0
 
-    // 加载每个主机的用户权限
-    // 管理员默认拥有所有权限
+    // 合并已有的Agent状态
+    mergeAgentStatuses()
+
     if (isAdmin.value) {
       userHasEditPermission.value = true
-      // 为管理员设置所有主机的完整权限
       if (hostList.value && hostList.value.length > 0) {
         const permissionsMap = new Map<number, number>()
         for (const host of hostList.value) {
@@ -1715,7 +1759,6 @@ const loadHostList = async () => {
           const permRes = await getUserHostPermissions(host.id)
           if (permRes && permRes.permissions !== undefined) {
             permissionsMap.set(host.id, permRes.permissions)
-            // 检查是否有编辑权限
             if ((permRes.permissions & PERMISSION.EDIT) > 0) {
               hasEditPerm = true
             }
@@ -1729,7 +1772,7 @@ const loadHostList = async () => {
       userHasEditPermission.value = false
     }
   } catch (error) {
-    ElMessage.error('获取主机列表失败')
+    Message.error('获取主机列表失败')
   } finally {
     hostLoading.value = false
   }
@@ -1743,6 +1786,21 @@ const loadCredentialList = async () => {
   } catch (error) {
   }
 }
+
+// 加载服务标签列表
+const loadServiceLabels = async () => {
+  try {
+    const res = await getServiceLabels({ page: 1, pageSize: 1000 })
+    const list = res.list || res.data || []
+    serviceLabelOptions.value = list.map((item: any) => item.name).filter(Boolean)
+  } catch {}
+}
+
+// 主机标签：逗号分隔字符串 <-> 数组
+const hostTagsArray = computed({
+  get: () => hostForm.tags ? hostForm.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
+  set: (val: string[]) => { hostForm.tags = val.join(',') }
+})
 
 // 加载云平台账号列表
 const loadCloudAccountList = async () => {
@@ -1765,17 +1823,36 @@ const openTerminalTab = () => {
 }
 
 const handleHostDblClick = async (data: any) => {
-  // 如果是主机节点，跳转到终端页面
   if (data.type === 'host' || data.ip) {
-    // 将主机信息存储到 sessionStorage
+    // Use original host ID for terminal connection
+    const hostData = { ...data, id: data.hostId || data.id }
     const dblClickHosts = JSON.parse(sessionStorage.getItem('dblClickHosts') || '[]')
-    dblClickHosts.push(data)
+    dblClickHosts.push(hostData)
     sessionStorage.setItem('dblClickHosts', JSON.stringify(dblClickHosts))
-    // 跳转到终端页面
-    window.location.href = '/terminal'
-  } else if (activeView.value !== 'terminal') {
-    // 如果是分组节点且不在终端视图，切换到终端视图
-    await openTerminalView()
+    router.push('/terminal')
+  }
+}
+
+// 主机表格行双击打开终端
+let hostnameClickTimer: ReturnType<typeof setTimeout> | null = null
+const handleHostnameClick = (record: any) => {
+  if (hostnameClickTimer) {
+    clearTimeout(hostnameClickTimer)
+    hostnameClickTimer = null
+    return
+  }
+  hostnameClickTimer = setTimeout(() => {
+    hostnameClickTimer = null
+    handleShowHostDetail(record)
+  }, 250)
+}
+
+const handleTableRowDblClick = (record: any) => {
+  if (record && record.id) {
+    const dblClickHosts = JSON.parse(sessionStorage.getItem('dblClickHosts') || '[]')
+    dblClickHosts.push(record)
+    sessionStorage.setItem('dblClickHosts', JSON.stringify(dblClickHosts))
+    router.push('/terminal')
   }
 }
 
@@ -1815,10 +1892,10 @@ const terminalGroupTree = computed(() => {
     return []
   }
 
-  // 深拷贝分组树
   const copyTree = (groups: any[]): any[] => {
     return groups.map((group: any) => ({
       ...group,
+      id: `group-${group.id}`,
       type: 'group',
       label: group.name,
       children: group.children ? copyTree(group.children) : []
@@ -1827,23 +1904,24 @@ const terminalGroupTree = computed(() => {
 
   const tree = copyTree(groupTree.value)
 
-  // 将主机添加到对应的分组
   const addHostsToGroups = (groups: any[], hosts: any[]) => {
     groups.forEach((group: any) => {
-      // 查找属于该分组的主机
-      const groupHosts = hosts.filter((h: any) => h.groupId === group.id)
+      // Extract original group ID from prefixed ID
+      const originalGroupId = typeof group.id === 'string' && group.id.startsWith('group-')
+        ? parseInt(group.id.replace('group-', ''))
+        : group.id
+      const groupHosts = hosts.filter((h: any) => h.groupId === originalGroupId)
       if (groupHosts.length > 0) {
-        // 将主机转换为树节点格式
         const hostNodes = groupHosts.map((host: any) => ({
           ...host,
+          id: `host-${host.id}`,
+          hostId: host.id,
           type: 'host',
+          title: host.name,
           label: host.name
         }))
-        // 将主机添加到分组的children中
         group.children = [...(group.children || []), ...hostNodes]
       }
-
-      // 递归处理子分组
       if (group.children && group.children.length > 0) {
         addHostsToGroups(group.children, hosts)
       }
@@ -1861,12 +1939,10 @@ const initTerminal = async () => {
 
   if (!terminalRef.value) return
 
-  // 清理旧的终端
   if (terminal.value) {
     terminal.value.dispose()
   }
 
-  // 创建新终端
   terminal.value = new Terminal({
     cursorBlink: true,
     fontSize: 14,
@@ -1894,15 +1970,12 @@ const initTerminal = async () => {
     }
   })
 
-  // 加载插件
   fitAddon.value = new FitAddon()
   terminal.value.loadAddon(fitAddon.value)
   terminal.value.loadAddon(new WebLinksAddon())
 
-  // 打开终端
   terminal.value.open(terminalRef.value)
 
-  // 欢迎信息
   terminal.value.writeln('\x1b[1;32m欢迎使用 SSH Web 终端\x1b[0m')
   terminal.value.writeln('正在连接...')
 }
@@ -1947,18 +2020,14 @@ const getTerminalUrl = (host: any): string => {
 }
 
 const closeTerminal = () => {
-  // 关闭WebSocket
   if (ws.value) {
     ws.value.close()
     ws.value = null
   }
-
-  // 清理终端
   if (terminal.value) {
     terminal.value.dispose()
     terminal.value = null
   }
-
   activeTerminalHost.value = null
 }
 
@@ -1968,7 +2037,6 @@ const switchToHostsView = async () => {
 }
 
 const handleOpenTerminal = () => {
-  // 打开新标签页到终端页面
   const url = window.location.origin + '/terminal'
   window.open(url, '_blank')
 }
@@ -1999,8 +2067,8 @@ const handleImportCommand = (command: string) => {
 
 // 直接导入
 const handleDirectImport = async () => {
-  // 确保凭证列表已加载
   await loadCredentialList()
+  loadServiceLabels()
 
   Object.assign(hostForm, {
     id: 0,
@@ -2025,46 +2093,40 @@ const handleDirectImportClose = () => {
 // 直接导入提交
 const handleDirectImportSubmit = async () => {
   if (!hostFormRef.value) return
-  await hostFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    hostSubmitting.value = true
-    try {
-      let hostId = 0
-      // 判断是创建还是更新
-      if (hostForm.id && hostForm.id > 0) {
-        // 更新主机
-        await updateHost(hostForm.id, hostForm)
-        hostId = hostForm.id
-        ElMessage.success('主机更新成功')
-      } else {
-        // 创建主机
-        const result = await createHost(hostForm)
-        hostId = result.id
-        ElMessage.success('主机导入成功')
-      }
-
-      directImportVisible.value = false
-      loadHostList()
-      loadGroupTree()
-
-      // 如果配置了凭证，自动采集主机信息
-      if (hostForm.credentialId && hostId > 0) {
-        setTimeout(async () => {
-          try {
-            await collectHostInfo(hostId)
-            ElMessage.success('主机信息采集成功')
-            loadHostList()
-          } catch (error: any) {
-            // 采集失败不阻塞主流程，只记录错误
-          }
-        }, 500)
-      }
-    } catch (error: any) {
-      ElMessage.error(error.message || '操作失败')
-    } finally {
-      hostSubmitting.value = false
+  const errors = await hostFormRef.value.validate()
+  if (errors) return
+  hostSubmitting.value = true
+  try {
+    let hostId = 0
+    if (hostForm.id && hostForm.id > 0) {
+      await updateHost(hostForm.id, hostForm)
+      hostId = hostForm.id
+      Message.success('主机更新成功')
+    } else {
+      const result = await createHost(hostForm)
+      hostId = result.id
+      Message.success('主机导入成功')
     }
-  })
+
+    directImportVisible.value = false
+    loadHostList()
+    loadGroupTree()
+
+    if (hostForm.credentialId && hostId > 0) {
+      setTimeout(async () => {
+        try {
+          await collectHostInfo(hostId)
+          Message.success('主机信息采集成功')
+          loadHostList()
+        } catch (error: any) {
+        }
+      }, 500)
+    }
+  } catch (error: any) {
+    Message.error(error.message || '操作失败')
+  } finally {
+    hostSubmitting.value = false
+  }
 }
 
 // Excel导入
@@ -2080,7 +2142,6 @@ const handleExcelImport = () => {
 const downloadTemplate = async () => {
   try {
     const blob = await downloadExcelTemplate()
-    // 创建下载链接
     const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
     const link = document.createElement('a')
     link.href = url
@@ -2089,72 +2150,69 @@ const downloadTemplate = async () => {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    ElMessage.success('模板下载成功')
+    Message.success('模板下载成功')
   } catch (error) {
-    ElMessage.error('模板下载失败')
+    Message.error('模板下载失败')
   }
 }
 
-// 文件变化
-const handleFileChange: UploadProps['onChange'] = (uploadFile) => {
-  uploadedFile.value = uploadFile
+// 文件变化 (Arco upload onChange)
+const handleFileChange = (fileList: any[], fileItem: any) => {
+  if (fileList.length > 0) {
+    uploadedFile.value = fileItem.file
+  } else {
+    uploadedFile.value = null
+  }
 }
 
 // Excel导入关闭
 const handleExcelImportClose = () => {
   uploadedFile.value = null
-  uploadRef.value?.clearFiles()
 }
 
 // Excel导入提交
 const handleExcelImportSubmit = async () => {
   if (!uploadedFile.value) {
-    ElMessage.warning('请先上传Excel文件')
+    Message.warning('请先上传Excel文件')
     return
   }
   try {
     excelImporting.value = true
-    const file = uploadedFile.value.raw
+    const file = uploadedFile.value
     const result = await importFromExcel(file, excelImportForm.type, excelImportForm.groupId || undefined)
 
     if (result.successCount > 0) {
-      ElMessage.success(`成功导入 ${result.successCount} 台主机`)
-      // 刷新列表和分组树
+      Message.success(`成功导入 ${result.successCount} 台主机`)
       await loadHostList()
       loadGroupTree()
 
-      // 自动采集新导入的主机（状态为-1的主机）
       await new Promise(resolve => setTimeout(resolve, 500))
       const newHosts = hostList.value.filter((h: any) => h.status === -1)
       if (newHosts.length > 0) {
-        ElMessage.info('正在自动采集主机信息...')
+        Message.info('正在自动采集主机信息...')
         const hostIds = newHosts.map((h: any) => h.id)
         try {
           await batchCollectHostInfo({ hostIds })
           await loadHostList()
-          ElMessage.success(`成功采集 ${newHosts.length} 台主机信息`)
+          Message.success(`成功采集 ${newHosts.length} 台主机信息`)
         } catch (error) {
         }
       }
     }
     if (result.failedCount > 0) {
-      ElMessage.warning(`${result.failedCount} 台主机导入失败`)
-      // 显示错误详情
+      Message.warning(`${result.failedCount} 台主机导入失败`)
       if (result.errors && result.errors.length > 0) {
-        ElMessageBox.alert(
-          result.errors.join('<br>'),
-          '导入详情',
-          { dangerouslyUseHTMLString: true }
-        )
+        Modal.warning({
+          title: '导入详情',
+          content: result.errors.join('\n'),
+        })
       }
     }
 
-    // 关闭对话框
     excelImportVisible.value = false
     uploadedFile.value = null
-    uploadRef.value?.clearFiles()
   } catch (error: any) {
-    ElMessage.error(error.message || '导入失败')
+    Message.error(error.message || '导入失败')
   } finally {
     excelImporting.value = false
   }
@@ -2177,24 +2235,23 @@ const handleCloudImport = () => {
 // 获取云主机列表
 const handleGetCloudHosts = async () => {
   if (!cloudImportForm.accountId) {
-    ElMessage.warning('请选择云平台账号')
+    Message.warning('请选择云平台账号')
     return
   }
   if (!cloudImportForm.region) {
-    ElMessage.warning('请选择区域')
+    Message.warning('请选择区域')
     return
   }
 
   loadingCloudHosts.value = true
   try {
-    // 调用真实的云平台API获取实例列表
     const res = await getCloudInstances(cloudImportForm.accountId!, cloudImportForm.region)
     cloudHostList.value = Array.isArray(res) ? res : []
     selectedCloudAccount.value = cloudAccountList.value.find(a => a.id === cloudImportForm.accountId)
     selectedCloudGroup.value = groupTree.value.find((g: any) => g.id === cloudImportForm.groupId)
     cloudImportStep.value = 1
   } catch (error: any) {
-    ElMessage.error(error.message || '获取云主机列表失败')
+    Message.error(error.message || '获取云主机列表失败')
   } finally {
     loadingCloudHosts.value = false
   }
@@ -2213,31 +2270,155 @@ const handleHostSelectionChange = (selection: any[]) => {
 // 批量删除主机
 const handleBatchDelete = async () => {
   if (selectedHosts.value.length === 0) {
-    ElMessage.warning('请先选择要删除的主机')
+    Message.warning('请先选择要删除的主机')
     return
   }
 
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除选中的 ${selectedHosts.value.length} 台主机吗？`,
-      '批量删除确认',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
+  Modal.warning({
+    title: '批量删除确认',
+    content: `确定要删除选中的 ${selectedHosts.value.length} 台主机吗？`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        const hostIds = selectedHosts.value.map((h: any) => h.id)
+        await batchDeleteHosts(hostIds)
+        Message.success('批量删除成功')
+        selectedHosts.value = []
+        loadHostList()
+        loadGroupTree()
+      } catch (error: any) {
+        Message.error(error.message || '批量删除失败')
       }
-    )
+    }
+  })
+}
 
-    const hostIds = selectedHosts.value.map((h: any) => h.id)
-    await batchDeleteHosts(hostIds)
+// 部署Agent到单台主机
+const handleDeployAgent = async (record: any) => {
+  agentDeployMode.value = 'deploy'
+  agentDeployTarget.value = record
+  agentDeployServerAddr.value = ''
+  showAgentDeployDialog.value = true
+}
 
-    ElMessage.success('批量删除成功')
-    selectedHosts.value = []
-    loadHostList()
-    loadGroupTree()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '批量删除失败')
+// 更新Agent
+const handleUpdateAgent = async (record: any) => {
+  agentDeployMode.value = 'update'
+  agentDeployTarget.value = record
+  agentDeployServerAddr.value = ''
+  showAgentDeployDialog.value = true
+}
+
+// 确认Agent部署/更新
+const confirmAgentDeploy = async () => {
+  const addr = agentDeployServerAddr.value.trim() || undefined
+  showAgentDeployDialog.value = false
+  if (agentDeployMode.value === 'batch') {
+    try {
+      const hostIds = selectedHosts.value.map((h: any) => h.id)
+      await batchDeployAgent(hostIds, addr)
+      Message.success('批量部署完成')
+      selectedHosts.value = []
+      loadHostList()
+      loadAgentStatuses()
+    } catch (error: any) {
+      Message.error(error.message || '批量部署失败')
+    }
+  } else if (agentDeployMode.value === 'update') {
+    const record = agentDeployTarget.value
+    try {
+      record._updating = true
+      await updateAgent(record.id, addr)
+      Message.success('Agent更新成功')
+      loadHostList()
+      loadAgentStatuses()
+    } catch (error: any) {
+      Message.error(error.message || 'Agent更新失败')
+    } finally {
+      record._updating = false
+    }
+  } else {
+    const record = agentDeployTarget.value
+    try {
+      record._deploying = true
+      await deployAgent(record.id, addr)
+      Message.success('Agent部署成功')
+      loadHostList()
+      loadAgentStatuses()
+    } catch (error: any) {
+      Message.error(error.message || 'Agent部署失败')
+    } finally {
+      record._deploying = false
+    }
+  }
+}
+
+// 卸载Agent
+const handleUninstallAgent = async (record: any) => {
+  Modal.warning({
+    title: '卸载Agent',
+    content: `确定要卸载主机 ${record.name} (${record.ip}) 上的Agent吗？卸载后将回退为SSH连接方式。`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        record._uninstalling = true
+        await uninstallAgent(record.id)
+        Message.success('Agent卸载成功')
+        loadHostList()
+        loadAgentStatuses()
+      } catch (error: any) {
+        Message.error(error.message || 'Agent卸载失败')
+      } finally {
+        record._uninstalling = false
+      }
+    }
+  })
+}
+
+// 批量部署Agent
+const handleBatchDeployAgent = async () => {
+  if (selectedHosts.value.length === 0) {
+    Message.warning('请先选择要部署Agent的主机')
+    return
+  }
+  agentDeployMode.value = 'batch'
+  agentDeployTarget.value = null
+  agentDeployServerAddr.value = ''
+  showAgentDeployDialog.value = true
+}
+
+// Agent部署对话框状态
+const showAgentDeployDialog = ref(false)
+const agentDeployMode = ref<'deploy' | 'update' | 'batch'>('deploy')
+const agentDeployTarget = ref<any>(null)
+const agentDeployServerAddr = ref('')
+
+// 加载Agent状态并合并到主机列表
+const agentStatusMap = ref<Record<number, any>>({})
+const loadAgentStatuses = async () => {
+  try {
+    const data = await getAgentStatuses()
+    const map: Record<number, any> = {}
+    const list = Array.isArray(data) ? data : []
+    for (const item of list) {
+      map[item.hostId] = item
+    }
+    agentStatusMap.value = map
+    // 合并Agent状态到主机列表
+    mergeAgentStatuses()
+  } catch {
+    // 静默失败
+  }
+}
+
+// 将agentStatusMap合并到hostList中
+const mergeAgentStatuses = () => {
+  if (!hostList.value || hostList.value.length === 0) return
+  for (const host of hostList.value) {
+    const agentInfo = agentStatusMap.value[(host as any).id]
+    if (agentInfo) {
+      ;(host as any).agentStatus = agentInfo.status
+      ;(host as any).connectionMode = 'agent'
     }
   }
 }
@@ -2265,12 +2446,12 @@ const handleCloudImportSubmit = async () => {
       instanceIds: selectedCloudHosts.value.map(h => h.instanceId)
     }
     await importFromCloud(data)
-    ElMessage.success('云主机导入成功')
+    Message.success('云主机导入成功')
     cloudImportVisible.value = false
     loadHostList()
     loadGroupTree()
   } catch (error: any) {
-    ElMessage.error(error.message || '导入失败')
+    Message.error(error.message || '导入失败')
   } finally {
     cloudImporting.value = false
   }
@@ -2278,7 +2459,6 @@ const handleCloudImportSubmit = async () => {
 
 // 认证方式变化
 const handleAuthTypeChange = (type: string) => {
-  // 清空对应字段
   if (type === 'password') {
     credentialForm.privateKey = ''
     credentialForm.passphrase = ''
@@ -2295,20 +2475,19 @@ const handleCredentialDialogClose = () => {
 // 提交凭证表单
 const handleCredentialSubmit = async () => {
   if (!credentialFormRef.value) return
-  await credentialFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    credentialSubmitting.value = true
-    try {
-      await createCredential(credentialForm)
-      ElMessage.success('凭证创建成功')
-      showCredentialDialog.value = false
-      loadCredentialList()
-    } catch (error: any) {
-      ElMessage.error(error.message || '创建失败')
-    } finally {
-      credentialSubmitting.value = false
-    }
-  })
+  const errors = await credentialFormRef.value.validate()
+  if (errors) return
+  credentialSubmitting.value = true
+  try {
+    await createCredential(credentialForm)
+    Message.success('凭证创建成功')
+    showCredentialDialog.value = false
+    loadCredentialList()
+  } catch (error: any) {
+    Message.error(error.message || '创建失败')
+  } finally {
+    credentialSubmitting.value = false
+  }
 }
 
 // 云平台账号对话框关闭
@@ -2319,26 +2498,25 @@ const handleCloudAccountDialogClose = () => {
 // 提交云平台账号表单
 const handleCloudAccountSubmit = async () => {
   if (!cloudAccountFormRef.value) return
-  await cloudAccountFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    cloudAccountSubmitting.value = true
-    try {
-      await createCloudAccount(cloudAccountForm)
-      ElMessage.success('云平台账号添加成功')
-      showCloudAccountDialog.value = false
-      loadCloudAccountList()
-    } catch (error: any) {
-      ElMessage.error(error.message || '添加失败')
-    } finally {
-      cloudAccountSubmitting.value = false
-    }
-  })
+  const errors = await cloudAccountFormRef.value.validate()
+  if (errors) return
+  cloudAccountSubmitting.value = true
+  try {
+    await createCloudAccount(cloudAccountForm)
+    Message.success('云平台账号添加成功')
+    showCloudAccountDialog.value = false
+    loadCloudAccountList()
+  } catch (error: any) {
+    Message.error(error.message || '添加失败')
+  } finally {
+    cloudAccountSubmitting.value = false
+  }
 }
 
 // 编辑主机
 const handleEditHost = async (row: any) => {
-  // 重新加载凭证列表，确保显示最新的凭证
   await loadCredentialList()
+  loadServiceLabels()
 
   Object.assign(hostForm, {
     id: row.id,
@@ -2362,6 +2540,8 @@ const handleEditHost = async (row: any) => {
 const handleFileManager = (row: any) => {
   selectedHostId.value = row.id
   selectedHostName.value = row.name
+  selectedHostConnectionMode.value = row.connectionMode || 'ssh'
+  selectedHostAgentStatus.value = row.agentStatus || ''
   fileBrowserVisible.value = true
 }
 
@@ -2373,7 +2553,7 @@ const handleShowHostDetail = async (row: any) => {
     const data = await getHost(row.id)
     hostDetail.value = data
   } catch (error: any) {
-    ElMessage.error(error.message || '获取主机详情失败')
+    Message.error(error.message || '获取主机详情失败')
   } finally {
     hostDetailLoading.value = false
   }
@@ -2391,14 +2571,12 @@ const handleCollectHostFromDetail = async () => {
   try {
     hostDetailLoading.value = true
     await collectHostInfo(hostDetail.value.id)
-    ElMessage.success('采集成功')
-    // 重新获取详情
+    Message.success('采集成功')
     const data = await getHost(hostDetail.value.id)
     hostDetail.value = data
-    // 刷新列表
     loadHostList()
   } catch (error: any) {
-    ElMessage.error(error.message || '采集失败')
+    Message.error(error.message || '采集失败')
   } finally {
     hostDetailLoading.value = false
   }
@@ -2406,20 +2584,21 @@ const handleCollectHostFromDetail = async () => {
 
 // 删除主机
 const handleDeleteHost = (row: any) => {
-  ElMessageBox.confirm(`确定要删除主机"${row.name}"吗？`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteHost(row.id)
-      ElMessage.success('删除成功')
-      loadHostList()
-      loadGroupTree()
-    } catch (error: any) {
-      ElMessage.error(error.message || '删除失败')
+  Modal.warning({
+    title: '提示',
+    content: `确定要删除主机"${row.name}"吗？`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await deleteHost(row.id)
+        Message.success('删除成功')
+        loadHostList()
+        loadGroupTree()
+      } catch (error: any) {
+        Message.error(error.message || '删除失败')
+      }
     }
-  }).catch(() => {})
+  })
 }
 
 // 新增分组
@@ -2461,46 +2640,46 @@ const handleDeleteGroup = (data: any) => {
     ? `该分组下有 ${data.children.length} 个子分组，确定要删除吗？`
     : `确定要删除分组"${data.name}"吗？`
 
-  ElMessageBox.confirm(confirmMsg, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteGroup(data.id)
-      ElMessage.success('删除成功')
-      loadGroupTree()
-      if (selectedGroup.value?.id === data.id) {
-        clearGroupSelection()
+  Modal.warning({
+    title: '提示',
+    content: confirmMsg,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await deleteGroup(data.id)
+        Message.success('删除成功')
+        loadGroupTree()
+        if (selectedGroup.value?.id === data.id) {
+          clearGroupSelection()
+        }
+      } catch (error: any) {
+        Message.error(error.message || '删除失败')
       }
-    } catch (error: any) {
-      ElMessage.error(error.message || '删除失败')
     }
-  }).catch(() => {})
+  })
 }
 
 // 提交分组表单
 const handleGroupSubmit = async () => {
   if (!groupFormRef.value) return
-  await groupFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    groupSubmitting.value = true
-    try {
-      const data = { ...groupForm }
-      if (isGroupEdit.value) {
-        await updateGroup(data.id, data)
-      } else {
-        await createGroup(data)
-      }
-      ElMessage.success(isGroupEdit.value ? '更新成功' : '创建成功')
-      groupDialogVisible.value = false
-      loadGroupTree()
-    } catch (error: any) {
-      ElMessage.error(error.message || (isGroupEdit.value ? '更新失败' : '创建失败'))
-    } finally {
-      groupSubmitting.value = false
+  const errors = await groupFormRef.value.validate()
+  if (errors) return
+  groupSubmitting.value = true
+  try {
+    const data = { ...groupForm }
+    if (isGroupEdit.value) {
+      await updateGroup(data.id, data)
+    } else {
+      await createGroup(data)
     }
-  })
+    Message.success(isGroupEdit.value ? '更新成功' : '创建成功')
+    groupDialogVisible.value = false
+    loadGroupTree()
+  } catch (error: any) {
+    Message.error(error.message || (isGroupEdit.value ? '更新失败' : '创建失败'))
+  } finally {
+    groupSubmitting.value = false
+  }
 }
 
 // 分组对话框关闭
@@ -2508,13 +2687,12 @@ const handleGroupDialogClose = () => {
   groupFormRef.value?.resetFields()
 }
 
-// 格式化字节数
-
 // 检查用户对主机的权限
 const hasHostPermission = (hostId: number, permission: number): boolean => {
   const userPermissions = hostPermissions.value.get(hostId) || 0
   return hasPermission(userPermissions, permission)
 }
+
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -2523,7 +2701,6 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// 格式化字节数（紧凑格式，不换行）
 const formatBytesCompact = (bytes: number): string => {
   if (bytes === 0) return '0B'
   const k = 1024
@@ -2555,10 +2732,10 @@ const getUsageLevel = (usage: number | undefined): string => {
 const handleCollectHost = async (row: any) => {
   try {
     await collectHostInfo(row.id)
-    ElMessage.success('采集成功')
+    Message.success('采集成功')
     loadHostList()
   } catch (error: any) {
-    ElMessage.error(error.message || '采集失败')
+    Message.error(error.message || '采集失败')
   }
 }
 
@@ -2583,13 +2760,12 @@ watch(() => cloudImportForm.accountId, async (accountId) => {
       const res = await getCloudRegions(accountId)
       cloudRegions.value = Array.isArray(res) ? res : []
 
-      // 如果账号有默认区域且在列表中，自动选中
       const account = cloudAccountList.value.find((a: any) => a.id === accountId)
       if (account?.region && cloudRegions.value.some((r: any) => r.value === account.region)) {
         cloudImportForm.region = account.region
       }
     } catch (error: any) {
-      ElMessage.error(error.message || '加载区域列表失败')
+      Message.error(error.message || '加载区域列表失败')
     } finally {
       loadingCloudRegions.value = false
     }
@@ -2599,16 +2775,45 @@ watch(() => cloudImportForm.accountId, async (accountId) => {
   }
 })
 
+// 生成Agent安装包
+const handleGenerateInstallPackage = async () => {
+  if (!installPackageServerAddr.value) {
+    Message.warning('请输入服务端地址')
+    return
+  }
+  installPackageLoading.value = true
+  installPackageResult.value = null
+  try {
+    const res: any = await generateInstallPackage(installPackageServerAddr.value)
+    installPackageResult.value = res
+    Message.success('安装包生成成功')
+  } catch (e: any) {
+    Message.error(e.message || '生成失败')
+  } finally {
+    installPackageLoading.value = false
+  }
+}
+
 // 组件销毁时清理资源
 onBeforeUnmount(() => {
   closeTerminal()
 })
 
-onMounted(() => {
+onMounted(async () => {
+  // 确保用户信息已加载，否则 isAdmin 判断会失败导致操作按钮不显示
+  if (!userStore.userInfo) {
+    try {
+      await userStore.getProfile()
+    } catch (e) {
+      // ignore - 用户可能未登录
+    }
+  }
   loadGroupTree()
   loadHostList()
   loadCredentialList()
+  loadServiceLabels()
   loadCloudAccountList()
+  loadAgentStatuses()
 })
 </script>
 
@@ -2625,7 +2830,7 @@ onMounted(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 12px;
   padding: 16px 20px;
   background: #fff;
@@ -2636,37 +2841,34 @@ onMounted(() => {
 
 .page-title-group {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--ops-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
-  font-size: 22px;
+  color: #fff;
+  font-size: 18px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
-  color: #303133;
-  line-height: 1.3;
+  color: var(--ops-text-primary);
 }
 
 .page-subtitle {
-  margin: 4px 0 0 0;
+  margin: 2px 0 0;
   font-size: 13px;
-  color: #909399;
-  line-height: 1.4;
+  color: var(--ops-text-tertiary);
 }
 
 .header-actions {
@@ -2700,7 +2902,7 @@ onMounted(() => {
 
 .panel-header {
   padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2712,12 +2914,12 @@ onMounted(() => {
   gap: 8px;
   font-weight: 600;
   font-size: 15px;
-  color: #303133;
+  color: var(--ops-text-primary);
 }
 
 .panel-icon {
   font-size: 18px;
-  color: #d4af37;
+  color: var(--ops-primary);
 }
 
 .panel-actions {
@@ -2737,10 +2939,6 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.group-search :deep(.el-input__wrapper) {
-  border-radius: 20px;
-}
-
 .tree-container {
   flex: 1;
   overflow-y: auto;
@@ -2748,21 +2946,6 @@ onMounted(() => {
 
 .group-tree {
   background: transparent;
-}
-
-.group-tree :deep(.el-tree-node__content) {
-  border-radius: 6px;
-  padding: 6px 8px;
-  transition: all 0.2s ease;
-}
-
-.group-tree :deep(.el-tree-node__content:hover) {
-  background-color: #f5f7fa;
-}
-
-.group-tree :deep(.is-current > .el-tree-node__content) {
-  background-color: #ecf5ff;
-  color: #409eff;
 }
 
 .tree-node {
@@ -2779,14 +2962,19 @@ onMounted(() => {
 
 .node-label {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
   white-space: nowrap;
 }
 
 .node-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
+  flex-shrink: 0;
+}
+
+.node-ip {
+  font-size: 11px;
+  color: var(--ops-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -2796,18 +2984,18 @@ onMounted(() => {
   transition: opacity 0.2s;
 }
 
-.group-tree :deep(.el-tree-node__content:hover) .node-actions {
+.tree-node:hover .node-actions {
   opacity: 1;
 }
 
 .more-icon {
   font-size: 14px;
   cursor: pointer;
-  color: #909399;
+  color: var(--ops-text-tertiary);
 }
 
 .more-icon:hover {
-  color: #409eff;
+  color: var(--ops-primary);
 }
 
 /* 右侧主机列表面板 */
@@ -2827,7 +3015,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color);
 }
 
 .filter-inputs {
@@ -2845,22 +3033,8 @@ onMounted(() => {
   gap: 10px;
 }
 
-.filter-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  transition: all 0.3s ease;
-}
-
-.filter-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-}
-
-.filter-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-}
-
 .search-icon {
-  color: #d4af37;
+  color: var(--ops-text-tertiary);
 }
 
 .reset-btn {
@@ -2877,7 +3051,7 @@ onMounted(() => {
 .selected-group-bar {
   padding: 10px 16px;
   background: #f0f9ff;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2885,7 +3059,7 @@ onMounted(() => {
 }
 
 .group-path {
-  color: #409eff;
+  color: var(--ops-primary);
   font-weight: 500;
 }
 
@@ -2903,31 +3077,11 @@ onMounted(() => {
   flex: 1;
 }
 
-.modern-table :deep(.el-table__body-wrapper) {
-  overflow-y: auto;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
-.modern-table :deep(.el-table__header th) {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.modern-table :deep(.el-table__body td) {
-  font-size: 13px;
-}
-
 .hostname-cell {
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
 }
 
 /* 主机头像/状态图标 */
@@ -2941,6 +3095,7 @@ onMounted(() => {
   flex-shrink: 0;
   background: #f0f2f5;
   color: #909399;
+  font-size: 18px;
 }
 
 .host-avatar.host-status-1 {
@@ -2958,10 +3113,6 @@ onMounted(() => {
   color: #909399;
 }
 
-.host-avatar .el-icon {
-  font-size: 18px;
-}
-
 /* 主机信息 */
 .host-info {
   flex: 1;
@@ -2970,7 +3121,7 @@ onMounted(() => {
 
 .hostname {
   font-weight: 500;
-  color: #303133;
+  color: var(--ops-text-primary);
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2979,7 +3130,7 @@ onMounted(() => {
 
 .host-meta {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -2993,77 +3144,6 @@ onMounted(() => {
 
 .port {
   flex-shrink: 0;
-}
-
-/* 分组单元格 */
-.group-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: #f5f7fa;
-  border-radius: 6px;
-  width: fit-content;
-}
-
-.group-icon {
-  font-size: 14px;
-  color: #409eff;
-  flex-shrink: 0;
-}
-
-.group-name {
-  font-size: 13px;
-  color: #606266;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 70px;
-}
-
-/* 凭证单元格新样式 */
-.credential-cell-new {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: #f5f7fa;
-  border-radius: 6px;
-  width: fit-content;
-  max-width: 100%;
-}
-
-.credential-icon {
-  font-size: 14px;
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.credential-icon.icon-key {
-  color: #e6a23c;
-}
-
-.credential-icon.icon-lock {
-  color: #67c23a;
-}
-
-.credential-cell-new .credential-name {
-  font-size: 12px;
-  color: #606266;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 70px;
-}
-
-/* 空状态文本 */
-.empty-text {
-  font-size: 13px;
-  color: #c0c4cc;
-}
-
-.empty-warning {
-  color: #e6a23c;
 }
 
 /* 状态单元格 */
@@ -3113,28 +3193,11 @@ onMounted(() => {
   color: #909399;
 }
 
-.host-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.config-info {
-  font-size: 13px;
-  color: #606266;
-}
-
 .text-muted {
   color: #c0c4cc;
 }
 
-.pagination-wrapper {
-  padding: 12px 16px;
-  border-top: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* 旧的操作按钮样式 - 保留兼容 */
+/* 操作按钮 */
 .action-buttons {
   display: flex;
   gap: 8px;
@@ -3152,17 +3215,13 @@ onMounted(() => {
   transition: all 0.2s ease;
 }
 
-.action-btn :deep(.el-icon) {
-  font-size: 14px;
-}
-
 .action-btn:hover {
   transform: scale(1.1);
 }
 
 .action-edit:hover {
   background-color: #e8f4ff;
-  color: #409eff;
+  color: var(--ops-primary);
 }
 
 .action-delete:hover {
@@ -3172,7 +3231,7 @@ onMounted(() => {
 
 .action-refresh:hover {
   background-color: #e8f4ff;
-  color: #409eff;
+  color: var(--ops-primary);
 }
 
 .action-files:hover {
@@ -3180,207 +3239,85 @@ onMounted(() => {
   color: #e6a23c;
 }
 
-.hostname-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* 主机头像/状态图标 */
-.host-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+/* 资源显示单元格样式 */
+.resource-cell {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  background: #f0f2f5;
-  color: #909399;
+  min-height: 40px;
 }
 
-.host-avatar.host-status-1 {
-  background: #e7f8e8;
-  color: #67c23a;
-}
-
-.host-avatar.host-status-0 {
-  background: #fef0f0;
-  color: #f56c6c;
-}
-
-.host-avatar.host-status--1 {
-  background: #f4f4f5;
-  color: #909399;
-}
-
-.host-avatar .el-icon {
-  font-size: 18px;
-}
-
-/* 主机信息 */
-.host-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.hostname {
-  font-weight: 500;
-  color: #303133;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.host-meta {
-  font-size: 12px;
-  color: #909399;
+.resource-info {
   display: flex;
-  align-items: center;
-  gap: 2px;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 0 4px;
 }
 
-.ip {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.port {
-  flex-shrink: 0;
-}
-
-/* 分组单元格 */
-.group-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: #f5f7fa;
-  border-radius: 6px;
-  width: fit-content;
-}
-
-.group-icon {
-  font-size: 14px;
-  color: #409eff;
-  flex-shrink: 0;
-}
-
-.group-name {
-  font-size: 13px;
-  color: #606266;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 70px;
-}
-
-/* 凭证单元格新样式 */
-.credential-cell-new {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: #f5f7fa;
-  border-radius: 6px;
-  width: fit-content;
-  max-width: 100%;
-}
-
-.credential-icon {
-  font-size: 14px;
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.credential-icon.icon-key {
-  color: #e6a23c;
-}
-
-.credential-icon.icon-lock {
-  color: #67c23a;
-}
-
-.credential-cell-new .credential-name {
+.resource-label {
   font-size: 12px;
   color: #606266;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.resource-compact {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 配置单元格样式 */
+.config-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 0 8px;
+}
+
+.config-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #606266;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 70px;
 }
 
-/* 空状态文本 */
-.empty-text {
-  font-size: 13px;
-  color: #c0c4cc;
+.config-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.empty-warning {
-  color: #e6a23c;
-}
-
-/* 状态单元格 */
-.status-cell {
+/* 标签单元格样式 */
+.tags-cell {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.tags-cell .tag-item {
+  font-size: 11px;
 }
 
-.status-dot-1 {
-  background: #67c23a;
-  box-shadow: 0 0 0 2px rgba(103, 194, 58, 0.2);
+.tags-cell .tag-more {
+  font-size: 11px;
 }
 
-.status-dot-0 {
-  background: #f56c6c;
-  box-shadow: 0 0 0 2px rgba(245, 108, 108, 0.2);
+/* 主机名点击样式 */
+.hostname-clickable {
+  cursor: pointer;
+  transition: color 0.2s ease;
 }
 
-.status-dot--1 {
-  background: #909399;
-  box-shadow: 0 0 0 2px rgba(144, 148, 153, 0.2);
-}
-
-.status-text {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.status-text-1 {
-  color: #67c23a;
-}
-
-.status-text-0 {
-  color: #f56c6c;
-}
-
-.status-text--1 {
-  color: #909399;
-}
-
-.host-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.config-info {
-  font-size: 13px;
-  color: #606266;
-}
-
-.text-muted {
-  color: #c0c4cc;
+.hostname-clickable:hover {
+  color: var(--ops-primary);
 }
 
 .black-button {
@@ -3404,72 +3341,26 @@ onMounted(() => {
   gap: 12px;
 }
 
-:deep(.host-import-dialog),
-:deep(.excel-import-dialog),
-:deep(.cloud-import-dialog),
-:deep(.credential-dialog),
-:deep(.cloud-account-dialog),
-:deep(.group-edit-dialog) {
-  border-radius: 12px;
+/* Upload drag area */
+.upload-drag-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 30px 20px;
+  border: 1px dashed var(--ops-border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s;
 }
 
-:deep(.host-import-dialog .el-dialog__header),
-:deep(.excel-import-dialog .el-dialog__header),
-:deep(.cloud-import-dialog .el-dialog__header),
-:deep(.credential-dialog .el-dialog__header),
-:deep(.cloud-account-dialog .el-dialog__header),
-:deep(.group-edit-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.host-import-dialog .el-dialog__body),
-:deep(.excel-import-dialog .el-dialog__body),
-:deep(.cloud-import-dialog .el-dialog__body),
-:deep(.credential-dialog .el-dialog__body),
-:deep(.cloud-account-dialog .el-dialog__body),
-:deep(.group-edit-dialog .el-dialog__body) {
-  padding: 24px;
-}
-
-:deep(.host-import-dialog .el-dialog__footer),
-:deep(.excel-import-dialog .el-dialog__footer),
-:deep(.cloud-import-dialog .el-dialog__footer),
-:deep(.credential-dialog .el-dialog__footer),
-:deep(.cloud-account-dialog .el-dialog__footer),
-:deep(.group-edit-dialog .el-dialog__footer) {
-  padding: 16px 24px;
-  border-top: 1px solid #f0f0f0;
-}
-
-:deep(.el-tag) {
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-weight: 500;
-  height: auto;
-  line-height: 1.5;
-}
-
-:deep(.responsive-dialog) {
-  max-width: 1200px;
-  min-width: 500px;
-}
-
-@media (max-width: 768px) {
-  :deep(.responsive-dialog .el-dialog) {
-    width: 95% !important;
-    max-width: none;
-    min-width: auto;
-  }
+.upload-drag-area:hover {
+  border-color: var(--ops-primary);
 }
 
 /* Excel导入样式 */
 .excel-import-content {
   padding: 10px 0;
-}
-
-.upload-demo {
-  width: 100%;
 }
 
 .file-info {
@@ -3516,339 +3407,6 @@ onMounted(() => {
   color: #606266;
 }
 
-/* 新的表格样式 */
-.host-table {
-  border-radius: 0 0 8px 8px;
-}
-
-.host-table :deep(.el-table__header-wrapper) {
-  border-radius: 0;
-}
-
-.host-table :deep(.el-table__header th) {
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.host-table :deep(.el-table__body tr) {
-  transition: all 0.2s ease;
-}
-
-.host-table :deep(.el-table__body tr:hover > td) {
-  background-color: #f8fafc !important;
-}
-
-/* 资源显示单元格样式 */
-.resource-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-}
-
-.resource-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  padding: 0 4px;
-}
-
-.resource-label {
-  font-size: 12px;
-  color: #606266;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.resource-compact {
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.resource-info :deep(.el-progress) {
-  margin: 0;
-}
-
-.resource-info :deep(.el-progress__text) {
-  font-size: 10px !important;
-  min-width: 28px;
-}
-
-.resource-info :deep(.el-progress-bar__outer) {
-  height: 5px !important;
-}
-
-/* 配置单元格样式 */
-.config-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  padding: 0 8px;
-}
-
-.config-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #606266;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.config-item .el-icon {
-  font-size: 14px;
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.config-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 标签单元格样式 */
-.tags-cell {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.tags-cell .tag-item {
-  font-size: 11px;
-  padding: 2px 6px;
-  height: auto;
-}
-
-.tags-cell .tag-more {
-  font-size: 11px;
-  padding: 2px 6px;
-  height: auto;
-}
-
-/* 凭证单元格样式 */
-.credential-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  width: 100%;
-}
-
-.credential-type-tag {
-  font-size: 10px;
-  padding: 1px 6px;
-  height: 18px;
-  line-height: 16px;
-}
-
-.credential-name {
-  font-size: 12px;
-  color: #303133;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.text-danger {
-  color: #f56c6c !important;
-}
-
-/* 终端按钮样式 */
-/* 主机详情对话框样式 */
-.host-detail-dialog {
-  border-radius: 12px;
-}
-
-.host-detail-content {
-  padding: 10px 0;
-}
-
-/* 信息网格布局 */
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.info-card {
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.info-card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-  border-bottom: 1px solid #e4e7ed;
-}
-
-.info-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.info-icon-basic {
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
-}
-
-.info-icon-system {
-  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-}
-
-.info-icon-auth {
-  background: linear-gradient(135deg, #e6a23c 0%, #ebb563 100%);
-}
-
-.info-icon-tags {
-  background: linear-gradient(135deg, #909399 0%, #a6a9ad 100%);
-}
-
-.info-icon-resource {
-  background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%);
-}
-
-.info-icon-remark {
-  background: linear-gradient(135deg, #606266 0%, #909399 100%);
-}
-
-.info-card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.info-card-body {
-  padding: 16px 20px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-label {
-  font-size: 14px;
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.info-value {
-  font-size: 15px;
-  color: #303133;
-  font-weight: 500;
-  text-align: right;
-  word-break: break-all;
-}
-
-/* 资源区域 */
-.resource-section {
-  margin-bottom: 24px;
-}
-
-.resource-card-wrapper .info-card-body {
-  padding: 20px;
-}
-
-.resource-section-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #303133;
-}
-
-/* 备注区域 */
-.remark-section {
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.remark-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-  border-bottom: 1px solid #e4e7ed;
-}
-
-.remark-content {
-  padding: 16px 20px;
-  font-size: 15px;
-  color: #606266;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.tags-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* 主机名点击样式 */
-.hostname-clickable {
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.hostname-clickable:hover {
-  color: #409eff;
-}
-
-.hostname-cell {
-  cursor: pointer;
-}
-
-.terminal-button {
-  background-color: #1a1a1a !important;
-  color: #ffffff !important;
-  border-color: #1a1a1a !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-  margin-right: 12px;
-}
-
-.terminal-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
 /* 视图容器 */
 .view-container {
   display: flex;
@@ -3882,11 +3440,6 @@ onMounted(() => {
   color: #fff;
 }
 
-.terminal-view-title .el-icon {
-  font-size: 20px;
-  color: #d4af37;
-}
-
 .terminal-current-group {
   margin-left: 8px;
   font-size: 14px;
@@ -3909,147 +3462,6 @@ onMounted(() => {
   border-right: 1px solid #3e3e42;
   display: flex;
   flex-direction: column;
-}
-
-/* 主机列表面板（中间） */
-.terminal-host-panel {
-  width: 320px;
-  min-width: 320px;
-  background: #2d2d30;
-  border-right: 1px solid #3e3e42;
-  display: flex;
-  flex-direction: column;
-}
-
-.terminal-host-panel-header {
-  padding: 16px;
-  border-bottom: 1px solid #3e3e42;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.host-panel-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #cccccc;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.host-panel-title .el-icon {
-  color: #4ec9b0;
-}
-
-.terminal-host-panel-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-.terminal-host-panel-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.terminal-host-panel-content::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.terminal-host-panel-content::-webkit-scrollbar-thumb {
-  background: #424242;
-  border-radius: 4px;
-}
-
-.terminal-host-panel-content::-webkit-scrollbar-thumb:hover {
-  background: #4e4e4e;
-}
-
-.terminal-host-count {
-  margin-left: auto;
-}
-
-.terminal-search {
-  margin-bottom: 12px;
-}
-
-.terminal-search :deep(.el-input__wrapper) {
-  background: #3c3c3c;
-  border: 1px solid #3e3e42;
-  box-shadow: none;
-}
-
-.terminal-search :deep(.el-input__inner) {
-  color: #cccccc;
-}
-
-.terminal-search :deep(.el-input__wrapper:hover) {
-  border-color: #555;
-}
-
-.terminal-search :deep(.el-input__wrapper.is-focus) {
-  border-color: #007acc;
-}
-
-/* 终端主机列表 */
-.terminal-host-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.terminal-host-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #2d2d30;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.terminal-host-item:hover {
-  background: #3e3e42;
-}
-
-.terminal-host-item.host-item-active {
-  background: #094771;
-  border: 1px solid #007acc;
-}
-
-.host-status-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.host-item-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.host-item-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: #cccccc;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.host-item-ip {
-  font-size: 11px;
-  color: #858585;
-  margin-top: 2px;
-}
-
-.host-item-group {
-  font-size: 11px;
-  color: #4ec9b0;
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 终端主区域 */
@@ -4113,17 +3525,6 @@ onMounted(() => {
 .terminal-actions {
   display: flex;
   gap: 8px;
-}
-
-.terminal-actions :deep(.el-button) {
-  background: #3c3c3c;
-  border: 1px solid #3e3e42;
-  color: #cccccc;
-}
-
-.terminal-actions :deep(.el-button:hover) {
-  background: #4e4e4e;
-  border-color: #555;
 }
 
 .terminal-placeholder {
@@ -4197,29 +3598,14 @@ onMounted(() => {
 }
 
 .host-avatar-lg {
-  width: 72px;
-  height: 72px;
-  border-radius: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  font-size: 26px;
   flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.host-avatar-lg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), transparent);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
 }
 
 .host-avatar-lg.host-status-1 {
@@ -4242,167 +3628,174 @@ onMounted(() => {
 }
 
 .detail-hostname {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 600;
-  color: #303133;
-  margin-bottom: 8px;
+  color: var(--ops-text-primary);
+  margin-bottom: 6px;
 }
 
 .detail-hostmeta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .detail-ip {
-  font-size: 16px;
-  color: #606266;
+  font-size: 14px;
+  color: var(--ops-text-secondary);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
-/* 资源卡片网格 */
-.resource-grid {
+.host-detail-content {
+  padding: 4px 0;
+}
+
+/* 资源概览行 */
+.detail-resource-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 
-.resource-card {
-  background: #fafbfc;
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
-  padding: 16px;
-  transition: all 0.3s ease;
-}
-
-.resource-card:hover {
-  background: #f5f6f7;
-  border-color: #d8d8d8;
-}
-
-.resource-card-header {
+.detail-resource-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #606266;
-  margin-bottom: 10px;
-}
-
-.resource-icon {
-  font-size: 20px;
-}
-
-.cpu-icon {
-  color: #409eff;
-}
-
-.memory-icon {
-  color: #67c23a;
-}
-
-.disk-icon {
-  color: #e6a23c;
-}
-
-.resource-card-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 12px;
+  background: var(--ops-bg-secondary, #f7f8fa);
+  border-radius: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
-.resource-value {
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.resource-usage {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.resource-usage :deep(.el-progress) {
-  flex: 1;
-}
-
-.resource-usage.usage-low :deep(.el-progress-bar__inner) {
-  background: linear-gradient(90deg, #67c23a 0%, #85ce61 100%);
-}
-
-.resource-usage.usage-high :deep(.el-progress-bar__inner) {
-  background: linear-gradient(90deg, #e6a23c 0%, #ebb563 100%);
-}
-
-.resource-usage.usage-critical :deep(.el-progress-bar__inner) {
-  background: linear-gradient(90deg, #f56c6c 0%, #f78989 100%);
-}
-
-.usage-text {
-  font-size: 15px;
-  font-weight: 600;
-  min-width: 50px;
-  text-align: right;
-}
-
-.usage-text.low {
-  color: #67c23a;
-}
-
-.usage-text.high {
-  color: #e6a23c;
-}
-
-.usage-text.critical {
-  color: #f56c6c;
-}
-
-.usage-legend {
+.detail-resource-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  margin-top: 16px;
+  font-size: 18px;
+  color: #fff;
+  flex-shrink: 0;
 }
 
-.legend-item {
+.cpu-bg { background: linear-gradient(135deg, #165dff, #4080ff); }
+.mem-bg { background: linear-gradient(135deg, #00b42a, #23c343); }
+.disk-bg { background: linear-gradient(135deg, #ff7d00, #ff9a2e); }
+
+.detail-resource-info {
+  flex-shrink: 0;
+  min-width: 56px;
+}
+
+.detail-resource-label {
+  font-size: 12px;
+  color: var(--ops-text-tertiary, #86909c);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.detail-resource-val {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ops-text-primary, #1d2129);
+  line-height: 1.2;
+}
+
+.detail-resource-bar {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail-resource-pct {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.detail-resource-pct.low { color: #00b42a; }
+.detail-resource-pct.high { color: #ff7d00; }
+.detail-resource-pct.critical { color: #f53f3f; }
+
+/* 平铺信息区 */
+.detail-flat-section {
+  margin-bottom: 20px;
+}
+
+.detail-section-title {
   font-size: 14px;
-  color: #909399;
+  font-weight: 600;
+  color: var(--ops-text-primary, #1d2129);
+  margin-bottom: 12px;
+  padding-left: 10px;
+  border-left: 3px solid var(--ops-primary, #165dff);
+  line-height: 1;
 }
 
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.detail-flat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  background: var(--ops-bg-secondary, #f7f8fa);
+  border-radius: 8px;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  overflow: hidden;
 }
 
-.legend-dot.low {
-  background: #67c23a;
+.detail-flat-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
+  border-right: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
-.legend-dot.high {
-  background: #e6a23c;
+.detail-flat-item:nth-child(3n) {
+  border-right: none;
 }
 
-.legend-dot.critical {
-  background: #f56c6c;
+.detail-flat-item-wide {
+  grid-column: span 2;
+}
+
+.detail-flat-label {
+  display: block;
+  font-size: 12px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-bottom: 4px;
+  line-height: 1;
+}
+
+.detail-flat-value {
+  font-size: 14px;
+  color: var(--ops-text-primary, #1d2129);
+  font-weight: 500;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* 标签行 */
+.detail-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 备注 */
+.detail-remark-text {
+  background: var(--ops-bg-secondary, #f7f8fa);
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--ops-text-secondary, #4e5969);
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 </style>
 
-// 文件管理
-const handleFileManager = (row: any) => {
-  selectedHostId.value = row.id
-  selectedHostName.value = row.name
-  fileBrowserVisible.value = true
-}

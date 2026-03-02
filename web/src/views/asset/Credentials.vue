@@ -3,224 +3,216 @@
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
       <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Lock /></el-icon>
-        </div>
+        <div class="page-title-icon"><icon-lock /></div>
         <div>
           <h2 class="page-title">凭证管理</h2>
           <p class="page-subtitle">管理SSH认证凭证，支持密码和密钥两种认证方式</p>
         </div>
       </div>
       <div class="header-actions">
-        <el-button v-permission="'credentials:create'" class="black-button" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+        <a-button v-permission="'credentials:create'" type="primary" @click="handleAdd">
+          <template #icon><icon-plus /></template>
           新建凭证
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 搜索和筛选栏 -->
     <div class="filter-bar">
       <div class="filter-inputs">
-        <el-input
+        <a-input
           v-model="searchForm.keyword"
           placeholder="搜索凭证名称..."
-          clearable
-          class="filter-input"
+          allow-clear
           style="width: 300px;"
-          @input="handleSearch"
+          @press-enter="handleSearch"
+          @clear="handleSearch"
         >
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
 
-        <el-select
+        <a-select
           v-model="searchForm.type"
           placeholder="认证方式"
-          clearable
-          class="filter-input"
+          allow-clear
+          style="width: 220px;"
           @change="handleSearch"
         >
-          <el-option label="密码认证" value="password" />
-          <el-option label="密钥认证" value="key" />
-        </el-select>
+          <a-option label="密码认证" value="password" />
+          <a-option label="密钥认证" value="key" />
+        </a-select>
       </div>
 
       <div class="filter-actions">
-        <el-button class="reset-btn" @click="handleReset">
-          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
+        <a-button @click="handleReset">
+          <template #icon><icon-refresh /></template>
           重置
-        </el-button>
-        <el-button @click="loadCredentialList">
-          <el-icon style="margin-right: 4px;"><Refresh /></el-icon>
+        </a-button>
+        <a-button @click="loadCredentialList">
+          <template #icon><icon-refresh /></template>
           刷新
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 凭证列表 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="credentialList"
-        v-loading="loading"
-        class="modern-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :loading="loading"
+        :bordered="{ cell: true }"
+        stripe
+        :pagination="{
+          current: pagination.page,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showTotal: true,
+          showPageSize: true,
+          pageSizeOptions: [10, 20, 50, 100]
+        }"
+        @page-change="(p: number) => { pagination.page = p; loadCredentialList() }"
+        @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadCredentialList() }"
       >
-        <el-table-column label="凭证名称" prop="name" min-width="180">
-          <template #default="{ row }">
-            <div class="name-cell">
-              <el-icon class="credential-icon" :color="row.type === 'password' ? '#e6a23c' : '#67c23a'">
-                <Key v-if="row.type === 'key'" />
-                <Lock v-else />
-              </el-icon>
-              <span class="name">{{ row.name }}</span>
-            </div>
-          </template>
-        </el-table-column>
+        <template #columns>
+          <a-table-column title="凭证名称" data-index="name" :min-width="180">
+            <template #cell="{ record }">
+              <div class="name-cell">
+                <icon-safe v-if="record.type === 'key'" :style="{ color: '#67c23a', fontSize: '20px' }" />
+                <icon-lock v-else :style="{ color: '#e6a23c', fontSize: '20px' }" />
+                <span class="name">{{ record.name }}</span>
+              </div>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="认证方式" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.type === 'password' ? 'warning' : 'success'" size="small">
-              {{ row.typeText }}
-            </el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="认证方式" :width="120" align="center">
+            <template #cell="{ record }">
+              <a-tag size="small" :color="record.type === 'password' ? 'orangered' : 'green'">
+                {{ record.typeText }}
+              </a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="用户名" prop="username" min-width="120">
-          <template #default="{ row }">
-            <span v-if="row.username">{{ row.username }}</span>
-            <span v-else class="text-muted">-</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="用户名" data-index="username" :min-width="120">
+            <template #cell="{ record }">
+              <span v-if="record.username">{{ record.username }}</span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="使用情况" min-width="150">
-          <template #default="{ row }">
-            <div class="usage-cell">
-              <span class="usage-count">{{ row.hostCount || 0 }} 台主机</span>
-            </div>
-          </template>
-        </el-table-column>
+          <a-table-column title="使用情况" :min-width="150">
+            <template #cell="{ record }">
+              <div class="usage-cell">
+                <span class="usage-count">{{ record.hostCount || 0 }} 台主机</span>
+              </div>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="描述" prop="description" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.description">{{ row.description }}</span>
-            <span v-else class="text-muted">-</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="描述" data-index="description" :min-width="200" ellipsis tooltip>
+            <template #cell="{ record }">
+              <span v-if="record.description">{{ record.description }}</span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="创建时间" prop="createTime" width="180" />
+          <a-table-column title="创建时间" data-index="createTime" :width="180" />
 
-        <el-table-column label="操作" width="180" fixed="right" align="center">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="编辑" placement="top">
-                <el-button v-permission="'credentials:update'" link class="action-btn action-edit" @click="handleEdit(row)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'credentials:delete'" link class="action-btn action-delete" @click="handleDelete(row)" :disabled="row.hostCount > 0">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="loadCredentialList"
-          @current-change="loadCredentialList"
-        />
-      </div>
+          <a-table-column title="操作" :width="180" fixed="right" align="center">
+            <template #cell="{ record }">
+              <div class="action-buttons">
+                <a-tooltip content="编辑" position="top">
+                  <a-button v-permission="'credentials:update'" type="text" size="small" class="action-btn action-edit" @click="handleEdit(record)">
+                    <template #icon><icon-edit /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="删除" position="top">
+                  <a-button v-permission="'credentials:delete'" type="text" size="small" class="action-btn action-delete" @click="handleDelete(record)" :disabled="record.hostCount > 0">
+                    <template #icon><icon-delete /></template>
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
     </div>
 
     <!-- 新增/编辑凭证对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="isEdit ? '编辑凭证' : '新建凭证'"
-      width="50%"
-      class="credential-dialog responsive-dialog"
+      :width="600"
+      unmount-on-close
       @close="handleDialogClose"
     >
-      <el-alert v-if="isEdit" type="info" :closable="false" style="margin-bottom: 20px;">
-        <template #title>
-          <span style="font-size: 13px;">出于安全考虑，私钥和密码不会在编辑时显示。如需修改，请重新填写。留空则保持原值不变。</span>
-        </template>
-      </el-alert>
+      <a-alert v-if="isEdit" type="info" :closable="false" style="margin-bottom: 20px;">
+        出于安全考虑，私钥和密码不会在编辑时显示。如需修改，请重新填写。留空则保持原值不变。
+      </a-alert>
 
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
-        <el-form-item label="凭证名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入凭证名称，如：生产环境root凭证" />
-        </el-form-item>
+      <a-form ref="formRef" :model="form" :rules="rules" layout="horizontal" auto-label-width>
+        <a-form-item label="凭证名称" field="name">
+          <a-input v-model="form.name" placeholder="请输入凭证名称，如：生产环境root凭证" />
+        </a-form-item>
 
-        <el-form-item label="认证方式" prop="type">
-          <el-radio-group v-model="form.type" @change="handleAuthTypeChange">
-            <el-radio label="password">密码认证</el-radio>
-            <el-radio label="key">密钥认证</el-radio>
-          </el-radio-group>
-        </el-form-item>
+        <a-form-item label="认证方式" field="type">
+          <a-radio-group v-model="form.type" @change="handleAuthTypeChange">
+            <a-radio value="password">密码认证</a-radio>
+            <a-radio value="key">密钥认证</a-radio>
+          </a-radio-group>
+        </a-form-item>
 
-        <el-form-item v-if="form.type === 'password'" label="用户名">
-          <el-input v-model="form.username" placeholder="如：root" />
-        </el-form-item>
+        <a-form-item v-if="form.type === 'password'" label="用户名">
+          <a-input v-model="form.username" placeholder="如：root" />
+        </a-form-item>
 
-        <el-form-item v-if="form.type === 'password'" label="密码" prop="password">
-          <el-input v-model="form.password" type="password" :placeholder="isEdit ? '如需修改密码请在此填写，留空则保持不变' : '请输入密码'" show-password />
-        </el-form-item>
+        <a-form-item v-if="form.type === 'password'" label="密码" field="password">
+          <a-input-password v-model="form.password" :placeholder="isEdit ? '如需修改密码请在此填写，留空则保持不变' : '请输入密码'" />
+        </a-form-item>
 
-        <el-form-item v-if="form.type === 'key'" label="用户名">
-          <el-input v-model="form.username" placeholder="如：root（可选）" />
-        </el-form-item>
+        <a-form-item v-if="form.type === 'key'" label="用户名">
+          <a-input v-model="form.username" placeholder="如：root（可选）" />
+        </a-form-item>
 
-        <el-form-item v-if="form.type === 'key'" label="私钥" prop="privateKey">
-          <el-input
+        <a-form-item v-if="form.type === 'key'" label="私钥" field="privateKey">
+          <a-textarea
             v-model="form.privateKey"
-            type="textarea"
-            :rows="8"
+            :auto-size="{ minRows: 8 }"
             :placeholder="isEdit ? '如需修改私钥请在此填写，留空则保持不变' : '请粘贴PEM格式的私钥内容'"
           />
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item v-if="form.type === 'key'" label="私钥密码">
-          <el-input v-model="form.passphrase" type="password" placeholder="如果私钥有密码请输入（可选）" show-password />
-        </el-form-item>
+        <a-form-item v-if="form.type === 'key'" label="私钥密码">
+          <a-input-password v-model="form.passphrase" placeholder="如果私钥有密码请输入（可选）" />
+        </a-form-item>
 
-        <el-form-item label="备注">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="请输入备注信息" />
-        </el-form-item>
-      </el-form>
+        <a-form-item label="备注">
+          <a-textarea v-model="form.description" :auto-size="{ minRows: 2 }" placeholder="请输入备注信息" />
+        </a-form-item>
+      </a-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleSubmit" :loading="submitting">{{ isEdit ? '保存' : '确定' }}</el-button>
+          <a-button @click="dialogVisible = false">取消</a-button>
+          <a-button type="primary" :loading="submitting" @click="handleSubmit">{{ isEdit ? '保存' : '确定' }}</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
+import type { FormInstance } from '@arco-design/web-vue'
 import {
-  Plus,
-  Edit,
-  Delete,
-  Search,
-  Refresh,
-  RefreshLeft,
-  Lock,
-  Key
-} from '@element-plus/icons-vue'
+  IconPlus,
+  IconEdit,
+  IconDelete,
+  IconSearch,
+  IconRefresh,
+  IconLock,
+  IconSafe
+} from '@arco-design/web-vue/es/icon'
 import {
   getCredentialList,
   getCredential,
@@ -269,11 +261,11 @@ const form = reactive({
 })
 
 // 表单验证规则
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入凭证名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择认证方式', trigger: 'change' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  privateKey: [{ required: true, message: '请输入私钥', trigger: 'blur' }]
+const rules = {
+  name: [{ required: true, message: '请输入凭证名称' }],
+  type: [{ required: true, message: '请选择认证方式' }],
+  password: [{ required: true, message: '请输入密码' }],
+  privateKey: [{ required: true, message: '请输入私钥' }]
 }
 
 // 加载凭证列表
@@ -293,7 +285,7 @@ const loadCredentialList = async () => {
     credentialList.value = res.list || []
     pagination.total = res.total || 0
   } catch (error) {
-    ElMessage.error('获取凭证列表失败')
+    Message.error('获取凭证列表失败')
   } finally {
     loading.value = false
   }
@@ -330,8 +322,6 @@ const handleAdd = () => {
 
 // 编辑凭证
 const handleEdit = async (row: any) => {
-
-  // 获取完整的凭证信息（包括解密后的私钥）
   try {
     const credential = await getCredential(row.id)
 
@@ -346,7 +336,7 @@ const handleEdit = async (row: any) => {
       description: credential.description || ''
     })
   } catch (error) {
-    ElMessage.error('获取凭证详情失败')
+    Message.error('获取凭证详情失败')
     return
   }
 
@@ -357,28 +347,28 @@ const handleEdit = async (row: any) => {
 // 删除凭证
 const handleDelete = (row: any) => {
   if (row.hostCount > 0) {
-    ElMessage.warning('该凭证正在被使用，无法删除')
+    Message.warning('该凭证正在被使用，无法删除')
     return
   }
 
-  ElMessageBox.confirm(`确定要删除凭证"${row.name}"吗？`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteCredential(row.id)
-      ElMessage.success('删除成功')
-      loadCredentialList()
-    } catch (error: any) {
-      ElMessage.error(error.message || '删除失败')
+  Modal.warning({
+    title: '提示',
+    content: `确定要删除凭证"${row.name}"吗？`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await deleteCredential(row.id)
+        Message.success('删除成功')
+        loadCredentialList()
+      } catch (error: any) {
+        Message.error(error.message || '删除失败')
+      }
     }
-  }).catch(() => {})
+  })
 }
 
 // 认证方式变化
-const handleAuthTypeChange = (type: string) => {
-  // 清空对应字段
+const handleAuthTypeChange = (type: string | number | boolean) => {
   if (type === 'password') {
     form.privateKey = ''
     form.passphrase = ''
@@ -395,44 +385,41 @@ const handleDialogClose = () => {
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+  const errors = await formRef.value.validate()
+  if (errors) return
 
-    submitting.value = true
-    try {
-      if (isEdit.value) {
-        // 编辑凭证时，如果不修改密码或私钥，需要从请求对象中删除这些字段
-        const updateData: any = {
-          id: form.id,
-          name: form.name,
-          type: form.type,
-          username: form.username,
-          description: form.description
-        }
-        // 只有当用户填写了密码或私钥时，才包含这些字段
-        if (form.password) {
-          updateData.password = form.password
-        }
-        if (form.privateKey) {
-          updateData.privateKey = form.privateKey
-        }
-        if (form.passphrase) {
-          updateData.passphrase = form.passphrase
-        }
-        await updateCredential(form.id, updateData)
-        ElMessage.success('更新成功')
-      } else {
-        await createCredential(form)
-        ElMessage.success('创建成功')
+  submitting.value = true
+  try {
+    if (isEdit.value) {
+      const updateData: any = {
+        id: form.id,
+        name: form.name,
+        type: form.type,
+        username: form.username,
+        description: form.description
       }
-      dialogVisible.value = false
-      loadCredentialList()
-    } catch (error: any) {
-      ElMessage.error(error.message || '操作失败')
-    } finally {
-      submitting.value = false
+      if (form.password) {
+        updateData.password = form.password
+      }
+      if (form.privateKey) {
+        updateData.privateKey = form.privateKey
+      }
+      if (form.passphrase) {
+        updateData.passphrase = form.passphrase
+      }
+      await updateCredential(form.id, updateData)
+      Message.success('更新成功')
+    } else {
+      await createCredential(form)
+      Message.success('创建成功')
     }
-  })
+    dialogVisible.value = false
+    loadCredentialList()
+  } catch (error: any) {
+    Message.error(error.message || '操作失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
 onMounted(() => {
@@ -469,17 +456,16 @@ onMounted(() => {
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  background: var(--ops-primary);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
-  font-size: 22px;
+  color: #fff;
+  font-size: 18px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
@@ -522,42 +508,9 @@ onMounted(() => {
   flex: 1;
 }
 
-.filter-input {
-  width: 220px;
-}
-
 .filter-actions {
   display: flex;
   gap: 10px;
-}
-
-.filter-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  transition: all 0.3s ease;
-}
-
-.filter-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-}
-
-.filter-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-.reset-btn {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #606266;
-}
-
-.reset-btn:hover {
-  background: #e6e8eb;
-  border-color: #c0c4cc;
 }
 
 /* 表格 */
@@ -571,31 +524,10 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.modern-table {
-  flex: 1;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  overflow-y: auto;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
 .name-cell {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.credential-icon {
-  font-size: 20px;
-  flex-shrink: 0;
 }
 
 .name {
@@ -618,13 +550,6 @@ onMounted(() => {
   color: #c0c4cc;
 }
 
-.pagination-wrapper {
-  padding: 12px 16px;
-  border-top: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: flex-end;
-}
-
 /* 操作按钮 */
 .action-buttons {
   display: flex;
@@ -641,10 +566,6 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-}
-
-.action-btn :deep(.el-icon) {
-  font-size: 14px;
 }
 
 .action-btn:hover {
@@ -691,42 +612,5 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-}
-
-:deep(.credential-dialog) {
-  border-radius: 12px;
-}
-
-:deep(.credential-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.credential-dialog .el-dialog__body) {
-  padding: 24px;
-}
-
-:deep(.credential-dialog .el-dialog__footer) {
-  padding: 16px 24px;
-  border-top: 1px solid #f0f0f0;
-}
-
-:deep(.el-tag) {
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-weight: 500;
-}
-
-:deep(.responsive-dialog) {
-  max-width: 1200px;
-  min-width: 500px;
-}
-
-@media (max-width: 768px) {
-  :deep(.responsive-dialog .el-dialog) {
-    width: 95% !important;
-    max-width: none;
-    min-width: auto;
-  }
 }
 </style>

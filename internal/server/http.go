@@ -34,8 +34,10 @@ import (
 	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	"github.com/ydcloud-dy/opshub/internal/plugin"
 	assetserver "github.com/ydcloud-dy/opshub/internal/server/asset"
+	agentserver "github.com/ydcloud-dy/opshub/internal/server/agent"
 	auditserver "github.com/ydcloud-dy/opshub/internal/server/audit"
 	identityserver "github.com/ydcloud-dy/opshub/internal/server/identity"
+	inspectionserver "github.com/ydcloud-dy/opshub/internal/server/inspection"
 	"github.com/ydcloud-dy/opshub/internal/server/rbac"
 	systemserver "github.com/ydcloud-dy/opshub/internal/server/system"
 	"github.com/ydcloud-dy/opshub/internal/service"
@@ -52,17 +54,19 @@ import (
 
 // HTTPServer HTTP服务器
 type HTTPServer struct {
-	server      *http.Server
-	conf        *conf.Config
-	svc         *service.Service
-	db          *gorm.DB
-	redisClient *redis.Client
-	pluginMgr   *plugin.Manager
-	uploadSrv   *UploadServer
+	server           *http.Server
+	conf             *conf.Config
+	svc              *service.Service
+	db               *gorm.DB
+	redisClient      *redis.Client
+	pluginMgr        *plugin.Manager
+	uploadSrv        *UploadServer
+	inspectionServer *inspectionserver.HTTPServer
+	grpcServer       *agentserver.GRPCServer
 }
 
 // NewHTTPServer 创建HTTP服务器
-func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisClient *redis.Client) *HTTPServer {
+func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisClient *redis.Client, grpcServer *agentserver.GRPCServer) *HTTPServer {
 	// 设置Gin模式
 	gin.SetMode(conf.Server.Mode)
 
@@ -89,7 +93,11 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisCl
 	}
 
 	// 注册 Task 插件
-	if err := pluginMgr.Register(taskplugin.New()); err != nil {
+	taskPlugin := taskplugin.New()
+	if grpcServer != nil {
+		taskPlugin.SetAgentHub(grpcServer.Hub())
+	}
+	if err := pluginMgr.Register(taskPlugin); err != nil {
 		appLogger.Error("注册Task插件失败", zap.Error(err))
 	}
 
@@ -116,6 +124,7 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisCl
 		redisClient: redisClient,
 		pluginMgr:   pluginMgr,
 		uploadSrv:   uploadSrv,
+		grpcServer:  grpcServer,
 	}
 
 	// 先启用所有插件（在注册路由之前）
@@ -166,7 +175,12 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	operationLogService, loginLogService, dataLogService, mwAuditLogService := auditserver.NewAuditServices(s.db)
 
 	// 创建 Asset 服务
-	assetGroupService, hostService, middlewareService, mwPermissionService, terminalManager := assetserver.NewAssetServices(s.db)
+	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, terminalManager, hostUseCase, serviceLabelRepo, hostRepo, credentialRepo := assetserver.NewAssetServices(s.db)
+
+	// 设置Agent命令执行工厂，使主机采集支持Agent方式
+	if s.grpcServer != nil {
+		hostUseCase.SetAgentCommandFactory(agentserver.NewAgentCommandFactory(s.grpcServer.Hub()))
+	}
 
 	// 设置authMiddleware的assetPermissionRepo
 	assetPermissionRepo := rbacdata.NewAssetPermissionRepo(s.db)
@@ -177,12 +191,19 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	authMiddleware.SetMiddlewarePermissionRepo(mwPermissionRepo)
 
 	// Asset 路由
-	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, terminalManager, s.db, authMiddleware)
+	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, terminalManager, s.db, authMiddleware)
 
 	// API v1 - 公开接口(不需要认证)
 	public := router.Group("/api/v1/public")
 	{
 		public.GET("/example", s.svc.Example)
+	}
+
+	// Agent安装包下载（无需认证，包ID随机且30分钟过期）
+	if s.grpcServer != nil {
+		router.GET("/api/v1/agents/install-package/:id", func(c *gin.Context) {
+			agentserver.DownloadInstallPackagePublic(c)
+		})
 	}
 
 	// API v1 - 需要认证的接口
@@ -205,6 +226,15 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 			identityServer.RegisterRoutes(v1)
 		}
 
+		// 注册 Inspection（智能巡检）路由
+		s.inspectionServer = inspectionserver.NewInspectionServices(s.db, s.redisClient, hostRepo, credentialRepo)
+		s.inspectionServer.RegisterRoutes(v1)
+
+		// 设置Agent命令执行工厂，使拨测支持Agent方式
+		if s.grpcServer != nil {
+			s.inspectionServer.SetAgentCommandFactory(agentserver.NewAgentCommandFactory(s.grpcServer.Hub()))
+		}
+
 		// 上传接口
 		v1.POST("/upload/avatar", s.uploadSrv.UploadAvatar)
 		v1.PUT("/profile/avatar", s.uploadSrv.UpdateUserAvatar)
@@ -212,6 +242,14 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		// 系统配置路由
 		systemHTTPServer := systemserver.NewHTTPServer(configService)
 		systemHTTPServer.RegisterRoutes(v1, public)
+
+		// Agent路由
+		if s.grpcServer != nil {
+			s.grpcServer.SetServiceLabelRepo(serviceLabelRepo)
+			s.grpcServer.SetHostRepo(hostUseCase)
+			agentHTTPServer := agentserver.NewHTTPServer(s.grpcServer, hostUseCase, s.db, authMiddleware)
+			agentHTTPServer.RegisterRoutes(v1)
+		}
 	}
 
 	// 插件路由
@@ -440,6 +478,9 @@ func (s *HTTPServer) Start() error {
 
 // Stop 停止服务器
 func (s *HTTPServer) Stop(ctx context.Context) error {
+	// 停止巡检调度器
+	inspectionserver.StopScheduler(s.inspectionServer)
+
 	appLogger.Info("HTTP服务器停止中...")
 	if err := s.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("HTTP服务器停止失败: %w", err)

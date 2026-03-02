@@ -1,0 +1,4 @@
+agent_id: ""
+server_addr: "your-server-ip:9090"
+cert_dir: "certs"
+log_file: "/var/log/srehub-agent.log"
