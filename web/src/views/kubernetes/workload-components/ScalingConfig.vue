@@ -9,7 +9,7 @@
       <template v-if="workloadType === 'Deployment' || workloadType === 'StatefulSet'">
         <div class="form-row">
           <label>当前副本数</label>
-          <el-input-number :model-value="formData.replicas" @update:model-value="updateReplicas" :min="0" :max="100" size="small" style="width: 100%" />
+          <a-input-number :model-value="formData.replicas" @update:model-value="updateReplicas" :min="0" :max="100" size="small" style="width: 100%" />
           <div class="form-tip" v-if="workloadType === 'Deployment'">
             Deployment 会持续维护指定数量的 Pod 副本，确保应用的高可用性
           </div>
@@ -24,42 +24,42 @@
           </div>
           <div class="form-row">
             <label>策略类型</label>
-            <el-select :model-value="scalingStrategy.strategyType" @update:model-value="updateScalingStrategy('strategyType', $event)" size="small" style="width: 100%">
-              <el-option label="RollingUpdate (滚动更新)" value="RollingUpdate" />
-              <el-option label="OnDelete (删除时更新)" value="OnDelete" v-if="workloadType === 'StatefulSet'" />
-              <el-option label="Recreate (重建)" value="Recreate" v-if="workloadType === 'Deployment'" />
-            </el-select>
+            <a-select :model-value="scalingStrategy.strategyType" @update:model-value="updateScalingStrategy('strategyType', $event)" size="small" style="width: 100%">
+              <a-option label="RollingUpdate (滚动更新)" value="RollingUpdate" />
+              <a-option label="OnDelete (删除时更新)" value="OnDelete" v-if="workloadType === 'StatefulSet'" />
+              <a-option label="Recreate (重建)" value="Recreate" v-if="workloadType === 'Deployment'" />
+            </a-select>
           </div>
 
           <template v-if="scalingStrategy.strategyType === 'RollingUpdate'">
             <div class="form-row">
               <label>最大激增 (Max Surge)</label>
-              <el-input :model-value="scalingStrategy.maxSurge" @update:model-value="updateScalingStrategy('maxSurge', $event)" size="small" placeholder="例如: 25%" />
+              <a-input :model-value="scalingStrategy.maxSurge" @update:model-value="updateScalingStrategy('maxSurge', $event)" size="small" placeholder="例如: 25%" />
               <div class="form-tip">滚动更新期间最多可以超出期望副本数的数量，可以是数量或百分比</div>
             </div>
 
             <div class="form-row">
               <label>最大不可用 (Max Unavailable)</label>
-              <el-input :model-value="scalingStrategy.maxUnavailable" @update:model-value="updateScalingStrategy('maxUnavailable', $event)" size="small" placeholder="例如: 25%" />
+              <a-input :model-value="scalingStrategy.maxUnavailable" @update:model-value="updateScalingStrategy('maxUnavailable', $event)" size="small" placeholder="例如: 25%" />
               <div class="form-tip">滚动更新期间最多可以不可用的 Pod 数量，可以是数量或百分比</div>
             </div>
           </template>
 
           <div class="form-row">
             <label>最小就绪时间 (秒)</label>
-            <el-input-number :model-value="scalingStrategy.minReadySeconds" @update:model-value="updateScalingStrategy('minReadySeconds', $event)" :min="0" :max="3600" size="small" style="width: 100%" />
+            <a-input-number :model-value="scalingStrategy.minReadySeconds" @update:model-value="updateScalingStrategy('minReadySeconds', $event)" :min="0" :max="3600" size="small" style="width: 100%" />
             <div class="form-tip">新 Pod 就绪后至少保持多久才认为可用，默认 0 秒</div>
           </div>
 
           <div class="form-row">
             <label>进度截止时间 (秒)</label>
-            <el-input-number :model-value="scalingStrategy.progressDeadlineSeconds" @update:model-value="updateScalingStrategy('progressDeadlineSeconds', $event)" :min="0" :max="3600" size="small" style="width: 100%" />
+            <a-input-number :model-value="scalingStrategy.progressDeadlineSeconds" @update:model-value="updateScalingStrategy('progressDeadlineSeconds', $event)" :min="0" :max="3600" size="small" style="width: 100%" />
             <div class="form-tip">滚动更新的超时时间，超时后会标记为失败，默认 600 秒</div>
           </div>
 
           <div class="form-row">
             <label>版本历史限制</label>
-            <el-input-number :model-value="scalingStrategy.revisionHistoryLimit" @update:model-value="updateScalingStrategy('revisionHistoryLimit', $event)" :min="0" :max="100" size="small" style="width: 100%" />
+            <a-input-number :model-value="scalingStrategy.revisionHistoryLimit" @update:model-value="updateScalingStrategy('revisionHistoryLimit', $event)" :min="0" :max="100" size="small" style="width: 100%" />
             <div class="form-tip">保留的历史版本数量，用于回滚操作，默认 10 个</div>
           </div>
         </div>
@@ -96,16 +96,16 @@
             </div>
             <div class="form-row">
               <label>策略类型</label>
-              <el-select :model-value="scalingStrategy.strategyType" @update:model-value="updateScalingStrategy('strategyType', $event)" size="small" style="width: 100%">
-                <el-option label="RollingUpdate (滚动更新)" value="RollingUpdate" />
-                <el-option label="OnDelete (删除时更新)" value="OnDelete" />
-              </el-select>
+              <a-select :model-value="scalingStrategy.strategyType" @update:model-value="updateScalingStrategy('strategyType', $event)" size="small" style="width: 100%">
+                <a-option label="RollingUpdate (滚动更新)" value="RollingUpdate" />
+                <a-option label="OnDelete (删除时更新)" value="OnDelete" />
+              </a-select>
             </div>
 
             <template v-if="scalingStrategy.strategyType === 'RollingUpdate'">
               <div class="form-row">
                 <label>最大不可用 (Max Unavailable)</label>
-                <el-input :model-value="scalingStrategy.maxUnavailable" @update:model-value="updateScalingStrategy('maxUnavailable', $event)" size="small" placeholder="例如: 1" />
+                <a-input :model-value="scalingStrategy.maxUnavailable" @update:model-value="updateScalingStrategy('maxUnavailable', $event)" size="small" placeholder="例如: 1" />
                 <div class="form-tip">滚动更新期间最多可以不可用的 Pod 数量</div>
               </div>
             </template>
@@ -121,25 +121,25 @@
           </div>
           <div class="form-row">
             <label>完成次数 (Completions)</label>
-            <el-input-number :model-value="jobConfig.completions" @update:model-value="updateJobConfig('completions', $event)" :min="1" :max="1000" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.completions" @update:model-value="updateJobConfig('completions', $event)" :min="1" :max="1000" size="small" style="width: 100%" />
             <div class="form-tip">需要成功完成的 Pod 数量。设置为 1 表示只需要一个 Pod 成功完成任务</div>
           </div>
 
           <div class="form-row">
             <label>并行度 (Parallelism)</label>
-            <el-input-number :model-value="jobConfig.parallelism" @update:model-value="updateJobConfig('parallelism', $event)" :min="1" :max="100" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.parallelism" @update:model-value="updateJobConfig('parallelism', $event)" :min="1" :max="100" size="small" style="width: 100%" />
             <div class="form-tip">同时运行的 Pod 最大数量。设置为 1 表示串行执行</div>
           </div>
 
           <div class="form-row">
             <label>失败重试次数 (Backoff Limit)</label>
-            <el-input-number :model-value="jobConfig.backoffLimit" @update:model-value="updateJobConfig('backoffLimit', $event)" :min="0" :max="20" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.backoffLimit" @update:model-value="updateJobConfig('backoffLimit', $event)" :min="0" :max="20" size="small" style="width: 100%" />
             <div class="form-tip">Pod 失败后的重试次数。设置为 0 表示不重试，6 表示最多重试 6 次</div>
           </div>
 
           <div class="form-row">
             <label>活跃终止时间 (Active Deadline Seconds)</label>
-            <el-input-number :model-value="jobConfig.activeDeadlineSeconds" @update:model-value="updateJobConfig('activeDeadlineSeconds', $event)" :min="0" :max="86400" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.activeDeadlineSeconds" @update:model-value="updateJobConfig('activeDeadlineSeconds', $event)" :min="0" :max="86400" size="small" style="width: 100%" />
             <div class="form-tip">Job 的最长运行时间（秒）。超过此时间 Job 将被标记为失败并终止所有 Pod。设置为 0 表示无限制</div>
           </div>
 
@@ -173,7 +173,7 @@
           </div>
           <div class="form-row">
             <label>Cron 表达式</label>
-            <el-input :model-value="cronJobConfig.schedule" @update:model-value="updateCronJobConfig('schedule', $event)" size="small" placeholder="例如: */5 * * * *" />
+            <a-input :model-value="cronJobConfig.schedule" @update:model-value="updateCronJobConfig('schedule', $event)" size="small" placeholder="例如: */5 * * * *" />
             <div class="form-tip">Cron 表达式格式: 分 时 日 月 周</div>
           </div>
 
@@ -219,11 +219,11 @@
           </div>
           <div class="form-row">
             <label>策略类型</label>
-            <el-select :model-value="cronJobConfig.concurrencyPolicy" @update:model-value="updateCronJobConfig('concurrencyPolicy', $event)" size="small" style="width: 100%">
-              <el-option label="Allow (允许并发运行)" value="Allow" />
-              <el-option label="Forbid (禁止并发运行)" value="Forbid" />
-              <el-option label="Replace (替换旧任务)" value="Replace" />
-            </el-select>
+            <a-select :model-value="cronJobConfig.concurrencyPolicy" @update:model-value="updateCronJobConfig('concurrencyPolicy', $event)" size="small" style="width: 100%">
+              <a-option label="Allow (允许并发运行)" value="Allow" />
+              <a-option label="Forbid (禁止并发运行)" value="Forbid" />
+              <a-option label="Replace (替换旧任务)" value="Replace" />
+            </a-select>
             <div class="form-tip">
               Allow: 允许同时运行多个任务 | Forbid: 跳过新任务如果上次任务还在运行 | Replace: 替换正在运行的任务
             </div>
@@ -231,7 +231,7 @@
 
           <div class="form-row">
             <label>暂停调度</label>
-            <el-switch :model-value="cronJobConfig.suspend" @update:model-value="updateCronJobConfig('suspend', $event)" active-text="暂停" inactive-text="启用" />
+            <a-switch :model-value="cronJobConfig.suspend" @update:model-value="updateCronJobConfig('suspend', $event)" active-text="暂停" inactive-text="启用" />
             <div class="form-tip">暂停后不会创建新的 Job，但正在运行的 Job 不会受影响</div>
           </div>
         </div>
@@ -242,25 +242,25 @@
           </div>
           <div class="form-row">
             <label>完成次数 (Completions)</label>
-            <el-input-number :model-value="jobConfig.completions" @update:model-value="updateJobConfig('completions', $event)" :min="1" :max="1000" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.completions" @update:model-value="updateJobConfig('completions', $event)" :min="1" :max="1000" size="small" style="width: 100%" />
             <div class="form-tip">每次调度执行需要成功完成的 Pod 数量</div>
           </div>
 
           <div class="form-row">
             <label>并行度 (Parallelism)</label>
-            <el-input-number :model-value="jobConfig.parallelism" @update:model-value="updateJobConfig('parallelism', $event)" :min="1" :max="100" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.parallelism" @update:model-value="updateJobConfig('parallelism', $event)" :min="1" :max="100" size="small" style="width: 100%" />
             <div class="form-tip">每次调度同时运行的 Pod 最大数量</div>
           </div>
 
           <div class="form-row">
             <label>失败重试次数 (Backoff Limit)</label>
-            <el-input-number :model-value="jobConfig.backoffLimit" @update:model-value="updateJobConfig('backoffLimit', $event)" :min="0" :max="20" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.backoffLimit" @update:model-value="updateJobConfig('backoffLimit', $event)" :min="0" :max="20" size="small" style="width: 100%" />
             <div class="form-tip">Pod 失败后的重试次数</div>
           </div>
 
           <div class="form-row">
             <label>活跃终止时间 (Active Deadline Seconds)</label>
-            <el-input-number :model-value="jobConfig.activeDeadlineSeconds" @update:model-value="updateJobConfig('activeDeadlineSeconds', $event)" :min="0" :max="86400" size="small" style="width: 100%" />
+            <a-input-number :model-value="jobConfig.activeDeadlineSeconds" @update:model-value="updateJobConfig('activeDeadlineSeconds', $event)" :min="0" :max="86400" size="small" style="width: 100%" />
             <div class="form-tip">单次 Job 的最长运行时间（秒）</div>
           </div>
         </div>
@@ -271,13 +271,13 @@
           </div>
           <div class="form-row">
             <label>成功任务保留数</label>
-            <el-input-number :model-value="cronJobConfig.successfulJobsHistoryLimit" @update:model-value="updateCronJobConfig('successfulJobsHistoryLimit', $event)" :min="0" :max="100" size="small" style="width: 100%" />
+            <a-input-number :model-value="cronJobConfig.successfulJobsHistoryLimit" @update:model-value="updateCronJobConfig('successfulJobsHistoryLimit', $event)" :min="0" :max="100" size="small" style="width: 100%" />
             <div class="form-tip">控制保留多少个已完成的 Job 记录</div>
           </div>
 
           <div class="form-row">
             <label>失败任务保留数</label>
-            <el-input-number :model-value="cronJobConfig.failedJobsHistoryLimit" @update:model-value="updateCronJobConfig('failedJobsHistoryLimit', $event)" :min="0" :max="100" size="small" style="width: 100%" />
+            <a-input-number :model-value="cronJobConfig.failedJobsHistoryLimit" @update:model-value="updateCronJobConfig('failedJobsHistoryLimit', $event)" :min="0" :max="100" size="small" style="width: 100%" />
             <div class="form-tip">控制保留多少个失败的 Job 记录</div>
           </div>
         </div>
@@ -288,13 +288,13 @@
           </div>
           <div class="form-row">
             <label>启动截止时间 (秒)</label>
-            <el-input-number :model-value="cronJobConfig.startingDeadlineSeconds" @update:model-value="updateCronJobConfig('startingDeadlineSeconds', $event)" :min="0" :max="300" size="small" style="width: 100%" />
+            <a-input-number :model-value="cronJobConfig.startingDeadlineSeconds" @update:model-value="updateCronJobConfig('startingDeadlineSeconds', $event)" :min="0" :max="300" size="small" style="width: 100%" />
             <div class="form-tip">如果任务错过调度时间超过此秒数，将不再执行。设置为 0 表示不限制</div>
           </div>
 
           <div class="form-row">
             <label>时区</label>
-            <el-input :model-value="cronJobConfig.timeZone" @update:model-value="updateCronJobConfig('timeZone', $event)" size="small" placeholder="例如: Asia/Shanghai" />
+            <a-input :model-value="cronJobConfig.timeZone" @update:model-value="updateCronJobConfig('timeZone', $event)" size="small" placeholder="例如: Asia/Shanghai" />
             <div class="form-tip">留空使用集群默认时区</div>
           </div>
         </div>
@@ -530,15 +530,15 @@ const applyScheduleExample = (schedule: string) => {
   letter-spacing: 0.3px;
 }
 
-.form-row .el-input,
-.form-row .el-input-number,
-.form-row .el-select {
+.form-row .arco-input,
+.form-row .arco-input-number,
+.form-row .arco-select {
   width: 100%;
 }
 
-.form-row .el-input :deep(.el-input__wrapper),
-.form-row .el-input-number :deep(.el-input__wrapper),
-.form-row .el-select :deep(.el-input__wrapper) {
+.form-row .arco-input :deep(.arco-input__wrapper),
+.form-row .arco-input-number :deep(.arco-input__wrapper),
+.form-row .arco-select :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -546,16 +546,16 @@ const applyScheduleExample = (schedule: string) => {
   transition: all 0.3s ease;
 }
 
-.form-row .el-input :deep(.el-input__wrapper:hover),
-.form-row .el-input-number :deep(.el-input__wrapper:hover),
-.form-row .el-select :deep(.el-input__wrapper:hover) {
+.form-row .arco-input :deep(.arco-input__wrapper:hover),
+.form-row .arco-input-number :deep(.arco-input__wrapper:hover),
+.form-row .arco-select :deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.form-row .el-input :deep(.el-input__wrapper.is-focus),
-.form-row .el-input-number :deep(.el-input__wrapper.is-focus),
-.form-row .el-select :deep(.el-input__wrapper.is-focus) {
+.form-row .arco-input :deep(.arco-input__wrapper.is-focus),
+.form-row .arco-input-number :deep(.arco-input__wrapper.is-focus),
+.form-row .arco-select :deep(.arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
 }

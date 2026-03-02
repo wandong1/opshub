@@ -4,28 +4,28 @@
     <div class="page-header">
       <h2 class="page-title">角色管理</h2>
       <div class="header-actions">
-        <el-select
+        <a-select
           v-model="selectedClusterId"
           placeholder="请选择集群"
           style="width: 250px; margin-right: 12px;"
           @change="handleClusterChange"
         >
-          <el-option
+          <a-option
             v-for="cluster in clusters"
             :key="cluster.id"
             :label="cluster.alias || cluster.name"
             :value="cluster.id"
           />
-        </el-select>
-        <el-button class="black-button" @click="handleRefresh">
-          <el-icon style="margin-right: 4px;"><Refresh /></el-icon>
+        </a-select>
+        <a-button class="black-button" @click="handleRefresh">
+          <icon-refresh />
           刷新
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 提示信息 -->
-    <el-alert
+    <a-alert
       v-if="!selectedClusterId"
       title="请先选择一个集群"
       type="info"
@@ -34,17 +34,17 @@
     />
 
     <!-- 角色类型标签页 -->
-    <el-tabs v-if="selectedClusterId" v-model="activeTab" class="role-tabs" @tab-change="handleTabChange">
-      <el-tab-pane label="集群角色" name="cluster">
+    <a-tabs v-if="selectedClusterId" v-model:active-key="activeTab" class="role-tabs" @tab-change="handleTabChange">
+      <a-tab-pane title="集群角色" key="cluster">
         <ClusterRoles :cluster-id="selectedClusterId" @role-click="handleRoleDetail" />
-      </el-tab-pane>
-      <el-tab-pane label="命名空间角色" name="namespace">
+      </a-tab-pane>
+      <a-tab-pane title="命名空间角色" key="namespace">
         <NamespaceRoles :cluster-id="selectedClusterId" @role-click="handleRoleDetail" />
-      </el-tab-pane>
-    </el-tabs>
+      </a-tab-pane>
+    </a-tabs>
 
     <!-- 角色详情对话框 -->
-    <el-dialog
+    <a-modal
       v-model="detailDialogVisible"
       :title="roleDetail.name"
       width="900px"
@@ -56,13 +56,12 @@
         :role="roleDetail"
         @close="detailDialogVisible = false"
       />
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
 import ClusterRoles from './components/ClusterRoles.vue'
 import NamespaceRoles from './components/NamespaceRoles.vue'
 import RoleDetail from './components/RoleDetail.vue'
@@ -160,11 +159,11 @@ onMounted(() => {
   }
 
   .role-tabs {
-    :deep(.el-tabs__header) {
+    :deep(.arco-tabs__header) {
       margin: 0 0 20px 0;
     }
 
-    :deep(.el-tabs__nav-wrap::after) {
+    :deep(.arco-tabs__nav-wrap::after) {
       background-color: #e0e0e0;
     }
   }

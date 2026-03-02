@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <a-modal
     v-model="visible"
     :title="isEdit ? '编辑 Service' : '创建 Service'"
     width="900px"
@@ -9,95 +9,95 @@
   >
     <!-- 基本信息区域 -->
     <div class="basic-info-section">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
-        <el-row :gutter="20">
-          <el-col :span="8">
-            <el-form-item label="名称" prop="name">
-              <el-input v-model="formData.name" placeholder="Service 名称" :disabled="isEdit" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="命名空间" prop="namespace">
-              <el-select v-model="formData.namespace" placeholder="选择命名空间" :disabled="isEdit" style="width: 100%">
-                <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="类型" prop="type">
-              <el-select v-model="formData.type" placeholder="选择类型" style="width: 100%">
-                <el-option label="ClusterIP" value="ClusterIP" />
-                <el-option label="NodePort" value="NodePort" />
-                <el-option label="LoadBalancer" value="LoadBalancer" />
-                <el-option label="ExternalName" value="ExternalName" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
+      <a-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
+        <a-row :gutter="20">
+          <a-col :span="8">
+            <a-form-item label="名称" field="name">
+              <a-input v-model="formData.name" placeholder="Service 名称" :disabled="isEdit" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="命名空间" field="namespace">
+              <a-select v-model="formData.namespace" placeholder="选择命名空间" :disabled="isEdit" style="width: 100%">
+                <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="类型" field="type">
+              <a-select v-model="formData.type" placeholder="选择类型" style="width: 100%">
+                <a-option label="ClusterIP" value="ClusterIP" />
+                <a-option label="NodePort" value="NodePort" />
+                <a-option label="LoadBalancer" value="LoadBalancer" />
+                <a-option label="ExternalName" value="ExternalName" />
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
     </div>
 
     <!-- Tab 导航 -->
-    <el-tabs v-model="activeTab" class="service-tabs">
+    <a-tabs v-model:active-key="activeTab" class="service-tabs">
       <!-- 端口配置 -->
-      <el-tab-pane label="端口" name="ports">
+      <a-tab-pane title="端口" key="ports">
         <div class="tab-content">
           <div class="ports-config">
             <div v-for="(port, index) in formData.ports" :key="index" class="port-item">
               <div class="port-header">
                 <span>端口 {{ index + 1 }}</span>
-                <el-button type="danger" link @click="removePort(index)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
+                <a-button status="danger" type="text" @click="removePort(index)">
+                  <icon-delete />
+                </a-button>
               </div>
-              <el-row :gutter="12">
-                <el-col :span="6">
+              <a-row :gutter="12">
+                <a-col :span="6">
                   <div class="field-group">
                     <label>名称</label>
-                    <el-input v-model="port.name" placeholder="可选" size="small" />
+                    <a-input v-model="port.name" placeholder="可选" size="small" />
                   </div>
-                </el-col>
-                <el-col :span="6">
+                </a-col>
+                <a-col :span="6">
                   <div class="field-group">
                     <label>协议</label>
-                    <el-select v-model="port.protocol" size="small" style="width: 100%">
-                      <el-option label="TCP" value="TCP" />
-                      <el-option label="UDP" value="UDP" />
-                      <el-option label="SCTP" value="SCTP" />
-                    </el-select>
+                    <a-select v-model="port.protocol" size="small" style="width: 100%">
+                      <a-option label="TCP" value="TCP" />
+                      <a-option label="UDP" value="UDP" />
+                      <a-option label="SCTP" value="SCTP" />
+                    </a-select>
                   </div>
-                </el-col>
-                <el-col :span="6">
+                </a-col>
+                <a-col :span="6">
                   <div class="field-group">
                     <label>端口</label>
-                    <el-input-number v-model="port.port" :min="1" :max="65535" size="small" style="width: 100%" />
+                    <a-input-number v-model="port.port" :min="1" :max="65535" size="small" style="width: 100%" />
                   </div>
-                </el-col>
-                <el-col :span="6">
+                </a-col>
+                <a-col :span="6">
                   <div class="field-group">
                     <label>目标端口</label>
-                    <el-input-number v-model="port.targetPort" :min="1" :max="65535" size="small" style="width: 100%" />
+                    <a-input-number v-model="port.targetPort" :min="1" :max="65535" size="small" style="width: 100%" />
                   </div>
-                </el-col>
-              </el-row>
-              <el-row :gutter="12" v-if="formData.type === 'NodePort'">
-                <el-col :span="6">
+                </a-col>
+              </a-row>
+              <a-row :gutter="12" v-if="formData.type === 'NodePort'">
+                <a-col :span="6">
                   <div class="field-group">
                     <label>NodePort</label>
-                    <el-input-number v-model="port.nodePort" :min="30000" :max="32767" size="small" style="width: 100%" />
+                    <a-input-number v-model="port.nodePort" :min="30000" :max="32767" size="small" style="width: 100%" />
                   </div>
-                </el-col>
-              </el-row>
+                </a-col>
+              </a-row>
             </div>
-            <el-button type="primary" link @click="addPort" style="margin-top: 8px">
-              <el-icon><Plus /></el-icon> 添加端口
-            </el-button>
+            <a-button type="text" @click="addPort" style="margin-top: 8px">
+              <icon-plus /> 添加端口
+            </a-button>
           </div>
         </div>
-      </el-tab-pane>
+      </a-tab-pane>
 
       <!-- 选择器配置 -->
-      <el-tab-pane label="选择器" name="selector">
+      <a-tab-pane title="选择器" key="selector">
         <div class="tab-content">
           <div class="selector-config">
             <div class="config-header-with-desc">
@@ -105,12 +105,12 @@
                 <div class="title">Pod 标签选择器</div>
                 <div class="description">配置用于选择 Pod 的标签</div>
               </div>
-              <el-button type="primary" link @click="addSelector">
-                <el-icon><Plus /></el-icon> 添加
-              </el-button>
+              <a-button type="text" @click="addSelector">
+                <icon-plus /> 添加
+              </a-button>
             </div>
             <div v-if="selectorList.length === 0" class="empty-state">
-              <el-icon class="empty-icon"><Connection /></el-icon>
+              <icon-link />
               <p>暂无选择器配置，点击上方"添加"按钮添加</p>
             </div>
             <div v-else>
@@ -118,27 +118,27 @@
                 <div class="selector-row">
                   <div class="field-group">
                     <label>键</label>
-                    <el-input v-model="item.key" placeholder="例如: app" size="small" />
+                    <a-input v-model="item.key" placeholder="例如: app" size="small" />
                   </div>
                   <div class="equal-sign">=</div>
                   <div class="field-group">
                     <label>值</label>
-                    <el-input v-model="item.value" placeholder="例如: nginx" size="small" />
+                    <a-input v-model="item.value" placeholder="例如: nginx" size="small" />
                   </div>
                   <div class="action-area">
-                    <el-button type="danger" link @click="removeSelector(index)">
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
+                    <a-button status="danger" type="text" @click="removeSelector(index)">
+                      <icon-delete />
+                    </a-button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </el-tab-pane>
+      </a-tab-pane>
 
       <!-- Session Affinity -->
-      <el-tab-pane label="Session Affinity" name="sessionAffinity">
+      <a-tab-pane title="Session Affinity" key="sessionAffinity">
         <div class="tab-content">
           <div class="affinity-config-new">
             <!-- 类型选择 -->
@@ -148,14 +148,14 @@
                 @click="formData.sessionAffinity = 'None'"
               >
                 <div class="card-icon">
-                  <el-icon><SwitchButton /></el-icon>
+                  <icon-poweroff />
                 </div>
                 <div class="card-content">
                   <div class="card-title">None</div>
                   <div class="card-desc">不保持会话亲和性，来自同一客户端的请求可能被分发到不同的 Pod</div>
                 </div>
                 <div class="card-check">
-                  <el-icon v-if="formData.sessionAffinity === 'None'"><CircleCheckFilled /></el-icon>
+                  <icon-check-circle-fill />
                 </div>
               </div>
 
@@ -164,14 +164,14 @@
                 @click="formData.sessionAffinity = 'ClientIP'"
               >
                 <div class="card-icon">
-                  <el-icon><Position /></el-icon>
+                  <icon-location />
                 </div>
                 <div class="card-content">
                   <div class="card-title">ClientIP</div>
                   <div class="card-desc">基于客户端 IP 的会话亲和性，同一客户端的请求将被发送到同一个 Pod</div>
                 </div>
                 <div class="card-check">
-                  <el-icon v-if="formData.sessionAffinity === 'ClientIP'"><CircleCheckFilled /></el-icon>
+                  <icon-check-circle-fill />
                 </div>
               </div>
             </div>
@@ -182,7 +182,7 @@
                 <div class="config-card-header">
                   <div class="header-left">
                     <div class="header-icon">
-                      <el-icon><Clock /></el-icon>
+                      <icon-clock-circle />
                     </div>
                     <div class="header-text">
                       <div class="header-title">会话保持时间</div>
@@ -192,7 +192,7 @@
                 </div>
                 <div class="config-card-body">
                   <div class="timeout-input-wrapper">
-                    <el-input-number
+                    <a-input-number
                       v-model="formData.sessionAffinityConfig.clientIP.timeoutSeconds"
                       :min="1"
                       :max="86400"
@@ -208,7 +208,7 @@
                     </div>
                   </div>
                   <div class="timeout-info-box">
-                    <el-icon class="info-icon"><InfoFilled /></el-icon>
+                    <icon-info-circle />
                     <div class="info-text">
                       <div class="info-main">默认 10800 秒（3 小时），最大 86400 秒（24 小时）</div>
                       <div class="info-sub">建议根据业务需求调整时间，过短可能导致频繁切换 Pod，过长可能影响负载均衡效果</div>
@@ -219,17 +219,17 @@
             </div>
           </div>
         </div>
-      </el-tab-pane>
+      </a-tab-pane>
 
       <!-- IP 地址配置 -->
-      <el-tab-pane label="IP地址" name="ipAddresses">
+      <a-tab-pane title="IP地址" key="ipAddresses">
         <div class="tab-content">
           <div class="ip-config">
             <!-- Cluster IP -->
             <div class="ip-section">
               <div class="ip-section-header">
                 <div class="header-icon">
-                  <el-icon><Link /></el-icon>
+                  <icon-link />
                 </div>
                 <div class="header-text">
                   <div class="title">Cluster IP</div>
@@ -237,18 +237,18 @@
                 </div>
               </div>
               <div class="ip-input-group">
-                <el-input
+                <a-input
                   v-model="formData.clusterIP"
                   placeholder="留空自动分配，或输入 'None' 创建无头服务"
                   size="large"
                 >
                   <template #prefix>
-                    <el-icon><Connection /></el-icon>
+                    <icon-link />
                   </template>
-                </el-input>
+                </a-input>
               </div>
               <div class="ip-hint">
-                <el-icon><InfoFilled /></el-icon>
+                <icon-info-circle />
                 <span>留空则由系统自动分配 ClusterIP；输入 'None' 可创建无头服务（Headless Service）</span>
               </div>
             </div>
@@ -257,47 +257,47 @@
             <div class="ip-section" style="margin-top: 30px">
               <div class="ip-section-header">
                 <div class="header-icon">
-                  <el-icon><Position /></el-icon>
+                  <icon-location />
                 </div>
                 <div class="header-text">
                   <div class="title">外部 IP</div>
                   <div class="description">配置外部可访问的 IP 地址</div>
                 </div>
-                <el-button type="primary" link @click="addExternalIP">
-                  <el-icon><Plus /></el-icon> 添加
-                </el-button>
+                <a-button type="text" @click="addExternalIP">
+                  <icon-plus /> 添加
+                </a-button>
               </div>
               <div v-if="formData.externalIPs.length === 0" class="empty-state">
-                <el-icon class="empty-icon"><Position /></el-icon>
+                <icon-location />
                 <p>暂无外部 IP 配置，点击上方"添加"按钮添加</p>
               </div>
               <div v-else class="external-ip-list">
                 <div v-for="(ip, index) in formData.externalIPs" :key="index" class="external-ip-item">
                   <div class="ip-input-wrapper">
-                    <el-input
+                    <a-input
                       v-model="formData.externalIPs[index]"
                       placeholder="例如: 192.168.1.100"
                       size="small"
                     >
                       <template #prefix>
-                        <el-icon><Position /></el-icon>
+                        <icon-location />
                       </template>
-                    </el-input>
+                    </a-input>
                   </div>
                   <div class="ip-actions">
-                    <el-button type="danger" link @click="removeExternalIP(index)">
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
+                    <a-button status="danger" type="text" @click="removeExternalIP(index)">
+                      <icon-delete />
+                    </a-button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </el-tab-pane>
+      </a-tab-pane>
 
       <!-- 标签/注解 -->
-      <el-tab-pane label="标签/注解" name="labelsAnnotations">
+      <a-tab-pane title="标签/注解" key="labelsAnnotations">
         <div class="tab-content">
           <!-- 标签 -->
           <div class="labels-config">
@@ -306,12 +306,12 @@
                 <div class="title">标签 (Labels)</div>
                 <div class="description">用于标识和选择组织的键值对</div>
               </div>
-              <el-button type="primary" link @click="addLabel">
-                <el-icon><Plus /></el-icon> 添加
-              </el-button>
+              <a-button type="text" @click="addLabel">
+                <icon-plus /> 添加
+              </a-button>
             </div>
             <div v-if="labelsList.length === 0" class="empty-state">
-              <el-icon class="empty-icon"><PriceTag /></el-icon>
+              <icon-tag />
               <p>暂无标签配置，点击上方"添加"按钮添加</p>
             </div>
             <div v-else class="kv-list">
@@ -320,18 +320,18 @@
                   <div class="kv-fields">
                     <div class="field-group">
                       <label>键</label>
-                      <el-input v-model="item.key" placeholder="键名" size="small" />
+                      <a-input v-model="item.key" placeholder="键名" size="small" />
                     </div>
                     <div class="equal-sign">=</div>
                     <div class="field-group">
                       <label>值</label>
-                      <el-input v-model="item.value" placeholder="键值" size="small" />
+                      <a-input v-model="item.value" placeholder="键值" size="small" />
                     </div>
                   </div>
                   <div class="kv-actions">
-                    <el-button type="danger" link @click="removeLabel(index)">
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
+                    <a-button status="danger" type="text" @click="removeLabel(index)">
+                      <icon-delete />
+                    </a-button>
                   </div>
                 </div>
               </div>
@@ -345,12 +345,12 @@
                 <div class="title">注解 (Annotations)</div>
                 <div class="description">用于存储任意非标识性数据的键值对</div>
               </div>
-              <el-button type="primary" link @click="addAnnotation">
-                <el-icon><Plus /></el-icon> 添加
-              </el-button>
+              <a-button type="text" @click="addAnnotation">
+                <icon-plus /> 添加
+              </a-button>
             </div>
             <div v-if="annotationsList.length === 0" class="empty-state">
-              <el-icon class="empty-icon"><Document /></el-icon>
+              <icon-file />
               <p>暂无注解配置，点击上方"添加"按钮添加</p>
             </div>
             <div v-else class="kv-list">
@@ -359,40 +359,39 @@
                   <div class="kv-fields">
                     <div class="field-group">
                       <label>键</label>
-                      <el-input v-model="item.key" placeholder="键名" size="small" />
+                      <a-input v-model="item.key" placeholder="键名" size="small" />
                     </div>
                     <div class="equal-sign">=</div>
                     <div class="field-group">
                       <label>值</label>
-                      <el-input v-model="item.value" placeholder="键值" size="small" />
+                      <a-input v-model="item.value" placeholder="键值" size="small" />
                     </div>
                   </div>
                   <div class="kv-actions">
-                    <el-button type="danger" link @click="removeAnnotation(index)">
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
+                    <a-button status="danger" type="text" @click="removeAnnotation(index)">
+                      <icon-delete />
+                    </a-button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </a-tab-pane>
+    </a-tabs>
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleClose">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+        <a-button @click="handleClose">取消</a-button>
+        <a-button type="primary" @click="handleSave" :loading="saving">保存</a-button>
       </div>
     </template>
-  </el-dialog>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Delete, Plus, Connection, Clock, InfoFilled, Position, PriceTag, Document, Link, SwitchButton, CircleCheckFilled } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getServiceYAML, updateServiceYAML, createService, type ServiceInfo } from '@/api/kubernetes'
 
 interface PortConfig {
@@ -445,9 +444,9 @@ const labelsList = ref<KeyValueItem[]>([])
 const annotationsList = ref<KeyValueItem[]>([])
 
 const rules = {
-  name: [{ required: true, message: '请输入 Service 名称', trigger: 'blur' }],
-  namespace: [{ required: true, message: '请选择命名空间', trigger: 'change' }],
-  type: [{ required: true, message: '请选择类型', trigger: 'change' }]
+  name: [{ required: true, content: '请输入 Service 名称', trigger: 'blur' }],
+  namespace: [{ required: true, content: '请选择命名空间', trigger: 'change' }],
+  type: [{ required: true, content: '请选择类型', trigger: 'change' }]
 }
 
 // 打开对话框（编辑模式）
@@ -497,7 +496,7 @@ const openEdit = async (service: ServiceInfo, nsList: any[]) => {
       addPort()
     }
   } catch (error) {
-    ElMessage.error('获取 Service 详情失败')
+    Message.error('获取 Service 详情失败')
   }
 }
 
@@ -764,7 +763,7 @@ const handleSave = async () => {
 
   // 验证端口配置
   if (formData.value.ports.length === 0) {
-    ElMessage.error('请至少配置一个端口')
+    Message.error('请至少配置一个端口')
     return
   }
 
@@ -772,7 +771,7 @@ const handleSave = async () => {
   syncSelectorToList()
   const hasValidSelector = Object.values(formData.value.selector).some(v => v)
   if (!hasValidSelector && formData.value.type !== 'ExternalName') {
-    ElMessage.error('请配置至少一个选择器')
+    Message.error('请配置至少一个选择器')
     return
   }
 
@@ -787,7 +786,7 @@ const handleSave = async () => {
         formData.value.name,
         serviceData
       )
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     } else {
       await createService(props.clusterId!, formData.value.namespace, {
         name: formData.value.name,
@@ -803,13 +802,13 @@ const handleSave = async () => {
         selector: formData.value.selector,
         sessionAffinity: formData.value.sessionAffinity
       })
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     }
 
     emit('success')
     handleClose()
   } catch (error) {
-    ElMessage.error('保存失败')
+    Message.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -845,21 +844,21 @@ defineExpose({
   margin-top: 10px;
 }
 
-.service-tabs :deep(.el-tabs__header) {
+.service-tabs :deep(.arco-tabs__header) {
   margin-bottom: 20px;
 }
 
-.service-tabs :deep(.el-tabs__item) {
+.service-tabs :deep(.arco-tabs__item) {
   color: #606266;
   font-weight: 500;
 }
 
-.service-tabs :deep(.el-tabs__item.is-active) {
-  color: #d4af37;
+.service-tabs :deep(.arco-tabs__item.is-active) {
+  color: #165dff;
 }
 
-.service-tabs :deep(.el-tabs__active-bar) {
-  background-color: #d4af37;
+.service-tabs :deep(.arco-tabs__active-bar) {
+  background-color: #165dff;
 }
 
 .tab-content {
@@ -890,7 +889,7 @@ defineExpose({
   align-items: center;
   margin-bottom: 16px;
   font-weight: 500;
-  color: #d4af37;
+  color: #165dff;
 }
 
 .field-group {
@@ -933,66 +932,61 @@ defineExpose({
 }
 
 /* 输入框样式 */
-:deep(.el-input__wrapper) {
+:deep(.arco-input__wrapper) {
   background-color: #fff;
   border-color: #dcdfe6;
   box-shadow: none;
 }
 
-:deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
+:deep(.arco-input__wrapper:hover) {
+  border-color: #165dff;
 }
 
-:deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 0 0 1px #d4af37;
+:deep(.arco-input__wrapper.is-focus) {
+  border-color: #165dff;
+  box-shadow: 0 0 0 1px #165dff;
 }
 
-:deep(.el-input__inner) {
+:deep(.arco-input__inner) {
   color: #606266;
 }
 
-:deep(.el-select .el-input__wrapper) {
+:deep(.arco-select .arco-input__wrapper) {
   background-color: #fff;
 }
 
-:deep(.el-select .el-input__inner) {
+:deep(.arco-select .arco-input__inner) {
   color: #606266;
 }
 
-:deep(.el-input-number .el-input__wrapper) {
+:deep(.arco-input-number .arco-input__wrapper) {
   background-color: #fff;
 }
 
-:deep(.el-input-number .el-input__inner) {
+:deep(.arco-input-number .arco-input__inner) {
   color: #606266;
 }
 
-:deep(.el-input-number__decrease),
-:deep(.el-input-number__increase) {
+:deep(.arco-input-number__decrease),
+:deep(.arco-input-number__increase) {
   background-color: #f5f7fa;
   border-color: #dcdfe6;
   color: #606266;
 }
 
-:deep(.el-input-number__decrease:hover),
-:deep(.el-input-number__increase:hover) {
-  color: #d4af37;
+:deep(.arco-input-number__decrease:hover),
+:deep(.arco-input-number__increase:hover) {
+  color: #165dff;
 }
 
 /* 单选框样式 */
-:deep(.el-radio__label) {
+:deep(.arco-radio__label) {
   color: #606266;
 }
 
-:deep(.el-radio.is-checked .el-radio__inner) {
-  border-color: #d4af37;
-  background: #d4af37;
-}
-
-:deep(.el-radio__input.is-checked .el-radio__inner) {
-  border-color: #d4af37;
-  background: #d4af37;
+:deep(.arco-radio-button.arco-radio-button-checked) {
+  border-color: #165dff;
+  background: #165dff;
 }
 
 .dialog-footer {
@@ -1002,96 +996,96 @@ defineExpose({
 }
 
 /* 按钮样式 */
-:deep(.el-button--primary) {
-  background-color: #d4af37;
-  border-color: #d4af37;
-  color: #000000;
+:deep(.arco-button--primary) {
+  background-color: #165dff;
+  border-color: #165dff;
+  color: #ffffff;
   font-weight: 500;
 }
 
-:deep(.el-button--primary:hover) {
-  background-color: #bfa13f;
-  border-color: #bfa13f;
-  color: #000000;
+:deep(.arco-button--primary:hover) {
+  background-color: #4080ff;
+  border-color: #4080ff;
+  color: #ffffff;
 }
 
-:deep(.el-button--default) {
+:deep(.arco-button--default) {
   background-color: #fff;
   border-color: #dcdfe6;
   color: #606266;
 }
 
-:deep(.el-button--default:hover) {
-  border-color: #d4af37;
-  color: #d4af37;
+:deep(.arco-button--default:hover) {
+  border-color: #165dff;
+  color: #165dff;
   background-color: #fff;
 }
 
 /* Link 按钮样式 */
-:deep(.el-button.is-link) {
-  color: #409eff;
+:deep(.arco-button.is-link) {
+  color: #165dff;
   font-weight: 500;
 }
 
-:deep(.el-button.is-link:hover) {
-  color: #66b1ff;
+:deep(.arco-button.is-link:hover) {
+  color: #4080ff;
 }
 
 /* Primary Link 按钮样式（添加按钮）- 金色文字 */
-:deep(.el-button--primary.is-link) {
-  color: #d4af37;
+:deep(.arco-button--primary.is-link) {
+  color: #165dff;
   font-weight: 500;
   background-color: transparent;
 }
 
-:deep(.el-button--primary.is-link:hover) {
-  color: #bfa13f;
+:deep(.arco-button--primary.is-link:hover) {
+  color: #4080ff;
   background-color: transparent;
 }
 
-:deep(.el-button.is-link.is-danger) {
+:deep(.arco-button.is-link.is-danger) {
   color: #f56c6c;
 }
 
-:deep(.el-button.is-link.is-danger:hover) {
+:deep(.arco-button.is-link.is-danger:hover) {
   color: #f78989;
 }
 
 /* Dialog 对话框背景 */
-:deep(.el-dialog) {
+:deep(.arco-dialog) {
   background-color: #fff;
 }
 
-:deep(.el-dialog__header) {
-  border-bottom: 1px solid #d4af37;
+:deep(.arco-dialog__header) {
+  border-bottom: 1px solid #165dff;
   padding: 20px;
 }
 
-:deep(.el-dialog__title) {
-  color: #d4af37;
+:deep(.arco-dialog__title) {
+  color: #165dff;
   font-weight: 500;
 }
 
-:deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: #d4af37;
+:deep(.arco-dialog__headerbtn .arco-modal__close) {
+  color: #165dff;
 }
 
-:deep(.el-dialog__headerbtn .el-dialog__close:hover) {
-  color: #bfa13f;
+:deep(.arco-dialog__headerbtn .arco-modal__close:hover) {
+  color: #4080ff;
 }
 
-:deep(.el-dialog__body) {
+:deep(.arco-dialog__body) {
   padding: 20px;
   color: #606266;
 }
 
-:deep(.el-dialog__footer) {
+:deep(.arco-dialog__footer) {
   border-top: 1px solid #dcdfe6;
   padding: 15px 20px;
 }
 
 /* Form label */
-:deep(.el-form-item__label) {
+:deep(.arco-form-item__label) {
   color: #606266;
   font-weight: 500;
 }
@@ -1158,8 +1152,8 @@ defineExpose({
 }
 
 .selector-item:hover {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.1);
+  border-color: #165dff;
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.1);
 }
 
 .selector-row {
@@ -1209,15 +1203,15 @@ defineExpose({
 }
 
 .affinity-type-card:hover {
-  border-color: #d4af37;
-  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.15);
+  border-color: #165dff;
+  box-shadow: 0 4px 20px rgba(22, 93, 255, 0.15);
   transform: translateY(-2px);
 }
 
 .affinity-type-card.is-selected {
-  border-color: #d4af37;
+  border-color: #165dff;
   background-color: #fff;
-  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.2);
+  box-shadow: 0 4px 20px rgba(22, 93, 255, 0.2);
 }
 
 .affinity-type-card .card-icon {
@@ -1226,16 +1220,16 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fef9e7;
+  background-color: #e8f3ff;
   border-radius: 12px;
   flex-shrink: 0;
-  color: #d4af37;
+  color: #165dff;
   font-size: 28px;
-  border: 2px solid #d4af37;
+  border: 2px solid #165dff;
 }
 
 .affinity-type-card.is-selected .card-icon {
-  background: #d4af37;
+  background: #165dff;
   color: #fff;
 }
 
@@ -1264,7 +1258,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #d4af37;
+  background-color: #165dff;
   border-radius: 50%;
   color: #fff;
   font-size: 20px;
@@ -1279,15 +1273,15 @@ defineExpose({
 .timeout-config-card {
   padding: 24px;
   background-color: #fff;
-  border: 2px solid #d4af37;
+  border: 2px solid #165dff;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.15);
+  box-shadow: 0 4px 20px rgba(22, 93, 255, 0.15);
 }
 
 .timeout-config-card .config-card-header {
   margin-bottom: 24px;
   padding-bottom: 20px;
-  border-bottom: 2px dashed #d4af37;
+  border-bottom: 2px dashed #165dff;
 }
 
 .timeout-config-card .header-left {
@@ -1302,7 +1296,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #d4af37;
+  background-color: #165dff;
   border-radius: 10px;
   color: #fff;
   font-size: 24px;
@@ -1341,28 +1335,28 @@ defineExpose({
   padding: 20px;
   background-color: #fff;
   border-radius: 10px;
-  border: 1px solid #d4af37;
+  border: 1px solid #165dff;
 }
 
 .timeout-config-card .timeout-input {
   flex-shrink: 0;
 }
 
-.timeout-config-card .timeout-input :deep(.el-input__wrapper) {
+.timeout-config-card .timeout-input :deep(.arco-input__wrapper) {
   width: 200px;
   padding: 8px 16px;
   background-color: #fff;
-  border: 2px solid #d4af37;
+  border: 2px solid #165dff;
   border-radius: 8px;
   font-size: 16px;
   font-weight: 600;
   color: #303133;
 }
 
-.timeout-config-card .timeout-input :deep(.el-input__inner) {
+.timeout-config-card .timeout-input :deep(.arco-input__inner) {
   font-size: 18px;
   font-weight: 700;
-  color: #d4af37;
+  color: #165dff;
   text-align: center;
 }
 
@@ -1378,15 +1372,15 @@ defineExpose({
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  background-color: #fef9e7;
+  background-color: #e8f3ff;
   border-radius: 6px;
-  border: 1px solid #d4af37;
+  border: 1px solid #165dff;
 }
 
 .timeout-config-card .conversion-label {
   font-size: 14px;
   font-weight: 600;
-  color: #d4af37;
+  color: #165dff;
   min-width: 24px;
 }
 
@@ -1400,14 +1394,14 @@ defineExpose({
   display: flex;
   gap: 12px;
   padding: 16px 20px;
-  background-color: #fef9e7;
+  background-color: #e8f3ff;
   border-radius: 10px;
-  border: 1px dashed #d4af37;
+  border: 1px dashed #165dff;
 }
 
 .timeout-config-card .info-icon {
   font-size: 24px;
-  color: #d4af37;
+  color: #165dff;
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -1459,9 +1453,9 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fef9e7;
+  background-color: #e8f3ff;
   border-radius: 8px;
-  color: #d4af37;
+  color: #165dff;
   font-size: 20px;
   flex-shrink: 0;
 }
@@ -1487,11 +1481,11 @@ defineExpose({
   margin-bottom: 12px;
 }
 
-.ip-input-group :deep(.el-input__wrapper) {
+.ip-input-group :deep(.arco-input__wrapper) {
   padding-left: 12px;
 }
 
-.ip-input-group :deep(.el-input__prefix) {
+.ip-input-group :deep(.arco-input__prefix) {
   color: #909399;
 }
 
@@ -1506,9 +1500,9 @@ defineExpose({
   border-radius: 4px;
 }
 
-.ip-hint .el-icon {
+.ip-hint .arco-icon {
   font-size: 14px;
-  color: #d4af37;
+  color: #165dff;
 }
 
 .ip-hint span {
@@ -1553,8 +1547,8 @@ defineExpose({
 }
 
 .kv-item:hover {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.1);
+  border-color: #165dff;
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.1);
 }
 
 .kv-row {

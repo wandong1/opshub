@@ -1,14 +1,14 @@
 <template>
   <div class="thread-list-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
-    <div v-else class="panel-content" v-loading="loading">
+    <div v-else class="panel-content" :loading="loading">
       <!-- 状态统计栏 -->
       <div class="status-bar">
         <div class="status-info">
@@ -16,7 +16,7 @@
           <span class="total-value">{{ threads.length }}</span>
           <span class="divider">|</span>
           <span class="status-label">状态分布</span>
-          <el-tag
+          <a-tag
             v-for="(count, state) in stateStats"
             :key="state"
             :type="getStateTagType(state as string)"
@@ -25,84 +25,82 @@
             @click="filterByState(state as string)"
           >
             {{ state }} {{ count }}
-          </el-tag>
+          </a-tag>
         </div>
-        <el-button type="primary" size="small" @click="loadThreads" :loading="loading">
-          <el-icon><Refresh /></el-icon> 更新
-        </el-button>
+        <a-button type="primary" size="small" @click="loadThreads" :loading="loading">
+          <icon-refresh /> 更新
+        </a-button>
       </div>
 
       <!-- 线程表格 -->
       <div class="table-section">
-        <el-table
+        <a-table
           :data="displayThreads"
           stripe
           size="small"
           :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
           style="width: 100%"
           @row-click="handleRowClick"
-          :row-class-name="() => 'clickable-row'"
-        >
-          <el-table-column prop="id" label="ID" width="60" align="center" />
-          <el-table-column prop="name" label="名称" show-overflow-tooltip />
-          <el-table-column prop="group" label="Group" width="80" align="center" />
-          <el-table-column prop="priority" label="Priority" width="80" align="center" />
-          <el-table-column prop="state" label="State" width="130" align="center">
-            <template #default="{ row }">
-              <el-tag :type="getStateTagType(row.state)" size="small" effect="light">{{ row.state }}</el-tag>
+          :columns="tableColumns">
+          <template #state="{ record }">
+              <a-tag :type="getStateTagType(record.state)" size="small">{{ record.state }}</a-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="cpu" label="CPU(%)" width="80" align="right" />
-          <el-table-column prop="time" label="Time(秒)" width="90" align="right" />
-          <el-table-column prop="interrupted" label="Interrupted" width="100" align="center">
-            <template #default="{ row }">
-              <span :class="row.interrupted ? 'text-danger' : 'text-muted'">{{ row.interrupted ? 'true' : 'false' }}</span>
+          <template #interrupted="{ record }">
+              <span :class="record.interrupted ? 'text-danger' : 'text-muted'">{{ record.interrupted ? 'true' : 'false' }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="daemon" label="Daemon" width="80" align="center">
-            <template #default="{ row }">
-              <span :class="row.daemon ? 'text-primary' : 'text-muted'">{{ row.daemon ? 'true' : 'false' }}</span>
+          <template #daemon="{ record }">
+              <span :class="record.daemon ? 'text-primary' : 'text-muted'">{{ record.daemon ? 'true' : 'false' }}</span>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
 
         <!-- 空状态 -->
-        <el-empty v-if="displayThreads.length === 0 && !loading" description="暂无数据" :image-size="60">
+        <a-empty v-if="displayThreads.length === 0 && !loading" description="暂无数据" :image-size="60">
           <template #default>
-            <el-link type="primary" @click="loadThreads">查看更多</el-link>
+            <a-link type="primary" @click="loadThreads">查看更多</a-link>
           </template>
-        </el-empty>
+        </a-empty>
 
         <!-- 查看更多 -->
         <div v-if="!showAll && filteredThreads.length > pageSize" class="load-more">
-          <el-link type="primary" @click="showAll = true">查看更多 (共 {{ filteredThreads.length }} 条)</el-link>
+          <a-link type="primary" @click="showAll = true">查看更多 (共 {{ filteredThreads.length }} 条)</a-link>
         </div>
       </div>
 
       <!-- 线程堆栈详情对话框 -->
-      <el-dialog v-model="stackDialogVisible" :title="`线程堆栈 - ${currentThread?.name || ''}`" width="900px" top="5vh">
+      <a-modal v-model:visible="stackDialogVisible" :title="`线程堆栈 - ${currentThread?.name || ''}`" width="900px" top="5vh">
         <div class="stack-header" v-if="currentThread">
-          <el-descriptions :column="4" size="small" border>
-            <el-descriptions-item label="ID">{{ currentThread.id }}</el-descriptions-item>
-            <el-descriptions-item label="名称">{{ currentThread.name }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag :type="getStateTagType(currentThread.state)" size="small">{{ currentThread.state }}</el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="CPU">{{ currentThread.cpu }}%</el-descriptions-item>
-          </el-descriptions>
+          <a-descriptions :column="4" size="small" :bordered="true">
+            <a-descriptions-item label="ID">{{ currentThread.id }}</a-descriptions-item>
+            <a-descriptions-item label="名称">{{ currentThread.name }}</a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :type="getStateTagType(currentThread.state)" size="small">{{ currentThread.state }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="CPU">{{ currentThread.cpu }}%</a-descriptions-item>
+          </a-descriptions>
         </div>
         <div class="stack-content" v-loading="stackLoading">
           <pre>{{ currentStack || '暂无堆栈信息' }}</pre>
         </div>
-      </el-dialog>
+      </a-modal>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns = [
+  { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
+  { title: '名称', dataIndex: 'name', ellipsis: true, tooltip: true },
+  { title: 'Group', dataIndex: 'group', width: 80, align: 'center' },
+  { title: 'Priority', dataIndex: 'priority', width: 80, align: 'center' },
+  { title: 'State', dataIndex: 'state', slotName: 'state', width: 130, align: 'center' },
+  { title: 'CPU(%)', dataIndex: 'cpu', width: 80, align: 'right' },
+  { title: 'Time(秒)', dataIndex: 'time', width: 90, align: 'right' },
+  { title: 'Interrupted', dataIndex: 'interrupted', slotName: 'interrupted', width: 100, align: 'center' },
+  { title: 'Daemon', dataIndex: 'daemon', slotName: 'daemon', width: 80, align: 'center' }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Refresh } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getThreadList, getThreadStack } from '@/api/arthas'
 
 const props = defineProps<{
@@ -299,7 +297,7 @@ const loadThreads = async () => {
     if (threads.value.length === 0 && output) {
     }
   } catch (error: any) {
-    ElMessage.error('获取线程列表失败: ' + (error.message || '未知错误'))
+    Message.error('获取线程列表失败: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
@@ -330,7 +328,7 @@ const loadThreadStack = async (threadId: string) => {
     })
     currentStack.value = typeof res === 'string' ? res : (res?.data || '暂无堆栈信息')
   } catch (error: any) {
-    ElMessage.error('获取线程堆栈失败: ' + (error.message || '未知错误'))
+    Message.error('获取线程堆栈失败: ' + (error.message || '未知错误'))
     currentStack.value = '获取失败: ' + (error.message || '未知错误')
   } finally {
     stackLoading.value = false

@@ -1,209 +1,204 @@
 <template>
-  <div class="dept-info-container">
-    <!-- 页面标题和操作按钮 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><OfficeBuilding /></el-icon>
+  <div class="page-container">
+    <!-- 页面头部 -->
+    <div class="page-header-card">
+      <div class="page-header-inner">
+        <div class="page-icon">
+          <icon-common />
         </div>
         <div>
-          <h2 class="page-title">部门信息</h2>
-          <p class="page-subtitle">管理组织架构，支持公司、中心、部门三级层级结构</p>
+          <div class="page-title">部门信息</div>
+          <div class="page-desc">管理组织架构，支持公司、中心、部门三级层级结构</div>
         </div>
       </div>
-      <div class="header-actions">
-        <el-button v-permission="'depts:create'" class="black-button" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
-          新增部门
-        </el-button>
-        <el-button @click="toggleExpandAll">
-          <el-icon style="margin-right: 6px;"><Sort /></el-icon>
-          {{ isExpandAll ? '折叠全部' : '展开全部' }}
-        </el-button>
-      </div>
     </div>
 
-    <!-- 搜索栏 -->
-    <div class="search-bar">
-      <div class="search-inputs">
-        <el-input
-          v-model="searchForm.deptName"
-          placeholder="搜索部门名称..."
-          clearable
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
+    <!-- 搜索区域 -->
+    <a-card class="search-card" :bordered="false">
+      <a-row :gutter="16" align="center">
+        <a-col :flex="'auto'">
+          <a-space :size="16" wrap>
+            <a-space>
+              <span class="search-label">部门名称:</span>
+              <a-input v-model="searchForm.deptName" placeholder="请输入" allow-clear style="width: 200px" @press-enter="handleSearch" />
+            </a-space>
+            <a-space>
+              <span class="search-label">部门状态:</span>
+              <a-select v-model="searchForm.deptStatus" placeholder="请选择" allow-clear style="width: 140px" @change="handleSearch">
+                <a-option :value="1">正常</a-option>
+                <a-option :value="0">停用</a-option>
+              </a-select>
+            </a-space>
+            <a-button type="primary" @click="handleSearch">
+              <template #icon><icon-search /></template>
+              搜索
+            </a-button>
+            <a-button @click="handleReset">
+              <template #icon><icon-refresh /></template>
+              重置
+            </a-button>
+          </a-space>
+        </a-col>
+      </a-row>
+    </a-card>
 
-        <el-select
-          v-model="searchForm.deptStatus"
-          placeholder="部门状态"
-          clearable
-          class="search-input"
-        >
-          <el-option label="正常" :value="1" />
-          <el-option label="停用" :value="0" />
-        </el-select>
-      </div>
+    <!-- 部门树表格 -->
+    <a-card class="table-card" :bordered="false">
+      <template #title>
+        <span class="card-title">部门列表</span>
+      </template>
+      <template #extra>
+        <a-space>
+          <a-button v-permission="'depts:create'" type="primary" @click="handleAdd">
+            <template #icon><icon-plus /></template>
+            新增部门
+          </a-button>
+          <a-button @click="toggleExpandAll">
+            <template #icon><icon-swap /></template>
+            {{ isExpandAll ? '折叠全部' : '展开全部' }}
+          </a-button>
+          <a-button @click="loadDeptTree">
+            <template #icon><icon-refresh /></template>
+          </a-button>
+        </a-space>
+      </template>
 
-      <div class="search-actions">
-        <el-button class="reset-btn" @click="handleReset">
-          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
-          重置
-        </el-button>
-      </div>
-    </div>
-
-    <!-- 表格容器 -->
-    <div class="table-wrapper">
-      <el-table
+      <a-table
         ref="tableRef"
         :data="filteredDeptTree"
-        v-loading="loading"
+        :loading="loading"
         row-key="id"
-        :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
-        :default-expand-all="isExpandAll"
-        :indent="30"
-        class="modern-table dept-tree-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :default-expand-all-rows="isExpandAll"
+        :expanded-keys="expandedKeys"
+        @expand="handleExpand"
+        :pagination="false"
+        :key="tableKey"
       >
-        <el-table-column label="部门名称" prop="deptName" min-width="350">
-          <template #default="{ row }">
-            <span style="display: inline-flex; align-items: center;">
-              <el-icon v-if="row.deptType === 1" style="color: #409eff; margin-right: 8px;"><OfficeBuilding /></el-icon>
-              <el-icon v-else-if="row.deptType === 2" style="color: #67c23a; margin-right: 8px;"><Location /></el-icon>
-              <el-icon v-else style="color: #e6a23c; margin-right: 8px;"><Folder /></el-icon>
-              {{ row.deptName }}
-            </span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="code" min-width="120">
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-gold"><Key /></el-icon>
-              部门编码
-            </span>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="部门类型" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.deptType === 1" class="dept-type-tag company-tag">公司</el-tag>
-            <el-tag v-else-if="row.deptType === 2" class="dept-type-tag center-tag">中心</el-tag>
-            <el-tag v-else class="dept-type-tag dept-tag">部门</el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.deptStatus === 1 ? 'success' : 'danger'" effect="dark">
-              {{ row.deptStatus === 1 ? '正常' : '停用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="创建时间" prop="createTime" min-width="180" />
-
-        <el-table-column label="操作" width="200" fixed="right" align="center">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="编辑" placement="top">
-                <el-button v-permission="'depts:update'" link class="action-btn action-edit" @click="handleEdit(row)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'depts:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+        <template #columns>
+          <a-table-column title="部门名称" data-index="deptName" :width="350">
+            <template #cell="{ record }">
+              <a-space>
+                <icon-home v-if="record.deptType === 1" style="color: var(--ops-primary);" />
+                <icon-location v-else-if="record.deptType === 2" style="color: var(--ops-success);" />
+                <icon-folder v-else style="color: var(--ops-warning);" />
+                <span>{{ record.deptName }}</span>
+              </a-space>
+            </template>
+          </a-table-column>
+          <a-table-column title="部门编码" data-index="code" :width="140" />
+          <a-table-column title="部门类型" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-tag v-if="record.deptType === 1" color="arcoblue" size="small">公司</a-tag>
+              <a-tag v-else-if="record.deptType === 2" color="green" size="small">中心</a-tag>
+              <a-tag v-else color="orangered" size="small">部门</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="状态" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-tag :color="record.deptStatus === 1 ? 'green' : 'red'" size="small">
+                {{ record.deptStatus === 1 ? '正常' : '停用' }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="创建时间" data-index="createTime" :width="180" />
+          <a-table-column title="操作" :width="120" align="center" fixed="right">
+            <template #cell="{ record }">
+              <a-space>
+                <a-link v-permission="'depts:update'" @click="handleEdit(record)">编辑</a-link>
+                <a-popconfirm :content="getDeleteMsg(record)" @ok="handleDelete(record)">
+                  <a-link v-permission="'depts:delete'" status="danger">删除</a-link>
+                </a-popconfirm>
+              </a-space>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
+    </a-card>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="dialogTitle"
-      width="50%"
-      class="dept-edit-dialog responsive-dialog"
-      :close-on-click-modal="false"
-      @close="handleDialogClose"
+      :width="600"
+      :unmount-on-close="true"
+      @ok="handleSubmit"
+      @cancel="dialogVisible = false"
     >
-      <el-form :model="deptForm" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="上级部门" prop="parentId" v-if="showParentSelect && !isRootDept">
-          <el-cascader
+      <a-form :model="deptForm" layout="vertical" ref="formRef">
+        <a-form-item label="部门类型" field="deptType" :rules="[{ required: true, message: '请选择部门类型' }]">
+          <a-radio-group v-model="deptForm.deptType" type="button" :disabled="isEdit" @change="handleDeptTypeChange">
+            <a-radio :value="1">公司</a-radio>
+            <a-radio :value="2">中心</a-radio>
+            <a-radio :value="3">部门</a-radio>
+          </a-radio-group>
+          <div class="form-tip">部门类型决定层级关系：公司 > 中心 > 部门</div>
+        </a-form-item>
+
+        <a-form-item
+          v-if="deptForm.deptType !== 1 && !isRootDept"
+          label="上级部门"
+          field="parentId"
+        >
+          <a-cascader
             v-model="parentPath"
             :options="filteredParentOptions"
-            :props="cascaderProps"
-            clearable
+            :field-names="{ value: 'id', label: 'label' }"
             placeholder="请选择上级部门"
+            allow-clear
+            check-strictly
             style="width: 100%"
             @change="handleParentChange"
           />
           <div class="form-tip" v-if="deptForm.deptType === 2">中心的上级只能是公司</div>
           <div class="form-tip" v-else-if="deptForm.deptType === 3">部门的上级可以是公司或中心</div>
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item label="部门类型" prop="deptType">
-          <el-radio-group v-model="deptForm.deptType" :disabled="deptTypeDisabled" @change="handleDeptTypeChange">
-            <el-radio :label="1">公司</el-radio>
-            <el-radio :label="2">中心</el-radio>
-            <el-radio :label="3">部门</el-radio>
-          </el-radio-group>
-          <div class="form-tip">部门类型决定层级关系：公司 > 中心 > 部门</div>
-        </el-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="部门名称" field="deptName" :rules="[{ required: true, message: '请输入部门名称' }, { minLength: 2, maxLength: 50, message: '长度在 2 到 50 个字符' }]">
+              <a-input v-model="deptForm.deptName" placeholder="请输入部门名称" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="部门编码" field="code" :rules="[{ required: true, message: '请输入部门编码' }, { minLength: 2, maxLength: 50, message: '长度在 2 到 50 个字符' }]">
+              <a-input v-model="deptForm.code" placeholder="请输入部门编码" />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <el-form-item label="部门名称" prop="deptName">
-          <el-input v-model="deptForm.deptName" placeholder="请输入部门名称" />
-        </el-form-item>
-
-        <el-form-item label="部门编码" prop="code">
-          <el-input v-model="deptForm.code" placeholder="请输入部门编码" />
-        </el-form-item>
-
-        <el-form-item label="显示顺序" prop="sort">
-          <el-input-number v-model="deptForm.sort" :min="0" />
-        </el-form-item>
-
-        <el-form-item label="状态" prop="deptStatus">
-          <el-radio-group v-model="deptForm.deptStatus">
-            <el-radio :label="1">正常</el-radio>
-            <el-radio :label="0">停用</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleSubmit" :loading="submitting">确定</el-button>
-        </div>
-      </template>
-    </el-dialog>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="显示顺序" field="sort">
+              <a-input-number v-model="deptForm.sort" :min="0" style="width: 100%;" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="状态" field="deptStatus" :rules="[{ required: true, message: '请选择状态' }]">
+              <a-radio-group v-model="deptForm.deptStatus" type="button">
+                <a-radio :value="1">正常</a-radio>
+                <a-radio :value="0">停用</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { ElMessage, ElMessageBox, FormInstance, FormRules, ElTable } from 'element-plus'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import {
-  Plus,
-  Edit,
-  Delete,
-  OfficeBuilding,
-  Location,
-  Folder,
-  Search,
-  RefreshLeft,
-  Sort,
-  Key
-} from '@element-plus/icons-vue'
+  IconCommon,
+  IconSearch,
+  IconRefresh,
+  IconPlus,
+  IconSwap,
+  IconHome,
+  IconLocation,
+  IconFolder,
+} from '@arco-design/web-vue/es/icon'
 import {
   getDepartmentTree,
   getParentOptions,
@@ -212,19 +207,15 @@ import {
   deleteDepartment
 } from '@/api/department'
 
-// 加载状态
 const loading = ref(false)
 const submitting = ref(false)
-
-// 对话框状态
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
 const isRootDept = ref(false)
-
-// 表单引用
-const formRef = ref<FormInstance>()
-const tableRef = ref<InstanceType<typeof ElTable>>()
+const formRef = ref()
+const tableRef = ref()
+const tableKey = ref(0)
 
 // 部门树数据
 const deptTree = ref<any[]>([])
@@ -235,8 +226,21 @@ const searchForm = reactive({
   deptStatus: undefined as number | undefined
 })
 
-// 展开/折叠状态
+// 展开/折叠
 const isExpandAll = ref(true)
+const expandedKeys = ref<(string | number)[]>([])
+
+// 收集所有有children的节点id
+const collectExpandableKeys = (nodes: any[]): (string | number)[] => {
+  const keys: (string | number)[] = []
+  for (const node of nodes) {
+    if (node.children && node.children.length > 0) {
+      keys.push(node.id)
+      keys.push(...collectExpandableKeys(node.children))
+    }
+  }
+  return keys
+}
 
 // 过滤后的部门树
 const filteredDeptTree = computed(() => {
@@ -249,7 +253,6 @@ const filteredDeptTree = computed(() => {
 // 递归过滤树节点
 const filterTree = (nodes: any[]): any[] => {
   const result: any[] = []
-
   for (const node of nodes) {
     const matchName = !searchForm.deptName || node.deptName?.includes(searchForm.deptName)
     const matchStatus = searchForm.deptStatus === undefined || node.deptStatus === searchForm.deptStatus
@@ -259,7 +262,6 @@ const filterTree = (nodes: any[]): any[] => {
       filteredChildren = filterTree(node.children)
     }
 
-    // 如果当前节点匹配或有匹配的子节点，则保留
     if ((matchName && matchStatus) || filteredChildren.length > 0) {
       result.push({
         ...node,
@@ -267,55 +269,45 @@ const filterTree = (nodes: any[]): any[] => {
       })
     }
   }
-
   return result
 }
 
 // 父级选项
 const parentOptions = ref([])
-const parentPath = ref<number[]>([])
+const parentPath = ref<(string | number)[]>([])
 
 // 根据部门类型过滤上级选项
 const filteredParentOptions = computed(() => {
   const currentType = deptForm.deptType
 
-  // 创建一个ID到部门类型的映射
   const deptTypeMap = new Map<number, number>()
   const buildMap = (nodes: any[]) => {
     for (const node of nodes) {
       deptTypeMap.set(node.id, node.deptType)
-      if (node.children) {
-        buildMap(node.children)
-      }
+      if (node.children) buildMap(node.children)
     }
   }
   buildMap(deptTree.value)
 
-  // 递归过滤树节点
   const filterNodes = (nodes: any[]): any[] => {
     const result: any[] = []
     for (const node of nodes) {
       const nodeType = deptTypeMap.get(node.id)
-
       if (currentType === 2) {
-        // 中心的上级只能是公司
         if (nodeType === 1) {
           result.push({ ...node, children: undefined })
         }
       } else if (currentType === 3) {
-        // 部门的上级可以是公司或中心
         if (nodeType === 1) {
-          // 公司：保留并展开显示其下的中心
           const filteredNode = { ...node }
           if (node.children && node.children.length > 0) {
-            filteredNode.children = node.children.map((child: any) => {
-              const childType = deptTypeMap.get(child.id)
-              // 只保留中心作为子选项，部门不能作为上级
-              if (childType === 2) {
-                return { ...child, children: undefined }
-              }
-              return null
-            }).filter((c: any) => c !== null)
+            filteredNode.children = node.children
+              .map((child: any) => {
+                const childType = deptTypeMap.get(child.id)
+                if (childType === 2) return { ...child, children: undefined }
+                return null
+              })
+              .filter((c: any) => c !== null)
           }
           result.push(filteredNode)
         }
@@ -326,15 +318,6 @@ const filteredParentOptions = computed(() => {
 
   return currentType === 1 ? [] : filterNodes(parentOptions.value)
 })
-
-// 级联选择器配置
-const cascaderProps = {
-  value: 'id',
-  label: 'label',
-  children: 'children',
-  checkStrictly: true,
-  emitPath: true
-}
 
 // 部门表单
 const deptForm = reactive({
@@ -347,77 +330,54 @@ const deptForm = reactive({
   deptStatus: 1
 })
 
-// 部门类型是否禁用
-const deptTypeDisabled = computed(() => {
-  return isEdit.value
-})
-
-// 是否显示上级部门选择
-const showParentSelect = computed(() => {
-  return deptForm.deptType !== 1 // 公司不显示上级部门
-})
-
-// 表单验证规则
-const rules: FormRules = {
-  deptType: [{ required: true, message: '请选择部门类型', trigger: 'change' }],
-  deptName: [
-    { required: true, message: '请输入部门名称', trigger: 'blur' },
-    { min: 2, max: 50, message: '部门名称长度在 2 到 50 个字符', trigger: 'blur' }
-  ],
-  code: [
-    { required: true, message: '请输入部门编码', trigger: 'blur' },
-    { min: 2, max: 50, message: '部门编码长度在 2 到 50 个字符', trigger: 'blur' }
-  ],
-  deptStatus: [{ required: true, message: '请选择状态', trigger: 'change' }]
-}
-
-// 搜索后自动展开
+// 搜索
 const handleSearch = () => {
   if (searchForm.deptName || searchForm.deptStatus !== undefined) {
     isExpandAll.value = true
     nextTick(() => {
-      toggleExpandAllRows(true)
+      expandedKeys.value = collectExpandableKeys(filteredDeptTree.value)
+      tableKey.value++
     })
   }
 }
 
-// 监听搜索条件变化
-import { watch } from 'vue'
 watch([() => searchForm.deptName, () => searchForm.deptStatus], () => {
   handleSearch()
 })
 
-// 重置搜索
 const handleReset = () => {
   searchForm.deptName = ''
   searchForm.deptStatus = undefined
   isExpandAll.value = false
-  nextTick(() => {
-    toggleExpandAllRows(false)
-  })
+  expandedKeys.value = []
+  tableKey.value++
 }
 
-// 切换全部展开/折叠
 const toggleExpandAll = () => {
   isExpandAll.value = !isExpandAll.value
-  toggleExpandAllRows(isExpandAll.value)
+  if (isExpandAll.value) {
+    expandedKeys.value = collectExpandableKeys(filteredDeptTree.value)
+  } else {
+    expandedKeys.value = []
+  }
+  tableKey.value++
 }
 
-// 展开/折叠所有行
-const toggleExpandAllRows = (expand: boolean) => {
-  const table = tableRef.value
-  if (!table) return
-
-  const toggleRows = (rows: any[]) => {
-    rows.forEach(row => {
-      if (row.children && row.children.length > 0) {
-        table.toggleRowExpansion(row, expand)
-        toggleRows(row.children)
-      }
-    })
+const handleExpand = (rowKey: string | number, record: any) => {
+  const idx = expandedKeys.value.indexOf(rowKey)
+  if (idx >= 0) {
+    expandedKeys.value.splice(idx, 1)
+  } else {
+    expandedKeys.value.push(rowKey)
   }
+}
 
-  toggleRows(filteredDeptTree.value)
+// 删除确认消息
+const getDeleteMsg = (row: any) => {
+  const hasChildren = row.children && row.children.length > 0
+  return hasChildren
+    ? `该部门下有 ${row.children.length} 个子部门，确定要删除吗？`
+    : `确定要删除部门"${row.deptName}"吗？`
 }
 
 // 加载部门树
@@ -425,57 +385,24 @@ const loadDeptTree = async () => {
   loading.value = true
   try {
     const data = await getDepartmentTree()
-    // 后端已经返回树形结构，直接使用
     deptTree.value = data || []
-  } catch (error) {
-    ElMessage.error('获取部门列表失败')
+    // 初始展开所有
+    expandedKeys.value = collectExpandableKeys(deptTree.value)
+    tableKey.value++
+  } catch {
+    Message.error('获取部门列表失败')
   } finally {
     loading.value = false
   }
-}
-
-// 构建树形结构
-const buildTree = (data: any[]) => {
-  const map = new Map()
-  data.forEach(item => {
-    map.set(item.id, { ...item, children: [] })
-  })
-
-  const tree: any[] = []
-  data.forEach(item => {
-    const node = map.get(item.id)
-    if (item.parentId === 0 || item.parentId === null) {
-      tree.push(node)
-    } else {
-      const parent = map.get(item.parentId)
-      if (parent) {
-        parent.children.push(node)
-      }
-    }
-  })
-
-  // 清理空children
-  const cleanEmptyChildren = (nodes: any[]) => {
-    nodes.forEach(node => {
-      if (node.children.length === 0) {
-        delete node.children
-      } else {
-        cleanEmptyChildren(node.children)
-      }
-    })
-  }
-  cleanEmptyChildren(tree)
-
-  return tree
 }
 
 // 加载父级选项
 const loadParentOptions = async () => {
   try {
     const data = await getParentOptions()
-    // 后端已经返回树形结构，直接使用
     parentOptions.value = data || []
-  } catch (error) {
+  } catch {
+    // ignore
   }
 }
 
@@ -493,7 +420,6 @@ const resetForm = () => {
   formRef.value?.clearValidate()
 }
 
-// 新增顶级部门
 const handleAdd = () => {
   resetForm()
   loadParentOptions()
@@ -503,7 +429,6 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-// 编辑部门
 const handleEdit = (row: any) => {
   Object.assign(deptForm, {
     id: row.id,
@@ -517,87 +442,59 @@ const handleEdit = (row: any) => {
   dialogTitle.value = '编辑部门'
   isEdit.value = true
   isRootDept.value = !row.parentId || row.parentId === 0
-  if (row.parentId && row.parentId !== 0) {
-    parentPath.value = [row.parentId]
-  } else {
-    parentPath.value = []
-  }
+  parentPath.value = row.parentId && row.parentId !== 0 ? [row.parentId] : []
+  loadParentOptions()
   dialogVisible.value = true
 }
 
-// 删除部门
-const handleDelete = (row: any) => {
-  const hasChildren = row.children && row.children.length > 0
-  const confirmMsg = hasChildren
-    ? `该部门下有 ${row.children.length} 个子部门，确定要删除部门"${row.deptName}"及其所有子部门吗？`
-    : `确定要删除部门"${row.deptName}"吗？`
-
-  ElMessageBox.confirm(confirmMsg, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteDepartment(row.id)
-      ElMessage.success('删除成功')
-      loadDeptTree()
-      loadParentOptions()
-    } catch (error: any) {
-      ElMessage.error(error.message || '删除失败')
-    }
-  }).catch(() => {})
+const handleDelete = async (row: any) => {
+  try {
+    await deleteDepartment(row.id)
+    Message.success('删除成功')
+    loadDeptTree()
+    loadParentOptions()
+  } catch (error: any) {
+    Message.error(error.message || '删除失败')
+  }
 }
 
-// 父级改变
 const handleDeptTypeChange = () => {
-  // 部门类型改变时，重置上级部门选择
   parentPath.value = []
   deptForm.parentId = 0
 }
 
-const handleParentChange = (value: number[]) => {
-  if (value && value.length > 0) {
-    const parentId = value[value.length - 1]
-    deptForm.parentId = parentId
+const handleParentChange = (value: any) => {
+  if (value && Array.isArray(value) && value.length > 0) {
+    deptForm.parentId = value[value.length - 1]
+  } else if (value && !Array.isArray(value)) {
+    deptForm.parentId = value
   } else {
     deptForm.parentId = 0
   }
 }
 
-// 提交表单
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  const errors = await formRef.value?.validate()
+  if (errors) return
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-
-    submitting.value = true
-    try {
-      const data = { ...deptForm }
-
-      if (isEdit.value) {
-        await updateDepartment(data.id, data)
-        ElMessage.success('更新成功')
-      } else {
-        await createDepartment(data)
-        ElMessage.success('创建成功')
-      }
-
-      dialogVisible.value = false
-      loadDeptTree()
-      loadParentOptions()
-    } catch (error: any) {
-      ElMessage.error(error.message || (isEdit.value ? '更新失败' : '创建失败'))
-    } finally {
-      submitting.value = false
+  submitting.value = true
+  try {
+    const data = { ...deptForm }
+    if (isEdit.value) {
+      await updateDepartment(data.id, data)
+      Message.success('更新成功')
+    } else {
+      await createDepartment(data)
+      Message.success('创建成功')
     }
-  })
-}
-
-// 对话框关闭事件
-const handleDialogClose = () => {
-  formRef.value?.resetFields()
-  resetForm()
+    dialogVisible.value = false
+    loadDeptTree()
+    loadParentOptions()
+  } catch (error: any) {
+    Message.error(error.message || (isEdit.value ? '更新失败' : '创建失败'))
+  } finally {
+    submitting.value = false
+  }
 }
 
 onMounted(() => {
@@ -606,357 +503,73 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.dept-info-container {
-  padding: 0;
-  background-color: transparent;
-}
-
-/* 页面头部 */
-.page-header {
+<style scoped lang="scss">
+.page-container {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 16px;
 }
 
-.page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
+.page-header-card {
+  background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px);
+  padding: 20px 24px;
+}
+
+.page-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ops-primary, #165dff) 0%, #4080ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
-  margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
-  line-height: 1.3;
-}
-
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.4;
 }
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+.page-desc {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 2px;
 }
 
-/* 搜索栏 */
-.search-bar {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
+.search-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.search-inputs {
-  display: flex;
-  gap: 12px;
+.search-label {
+  font-size: 14px;
+  color: var(--ops-text-secondary, #4e5969);
+  white-space: nowrap;
+}
+
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
   flex: 1;
+
+  .card-title {
+    font-weight: 600;
+  }
 }
 
-.search-input {
-  width: 280px;
-}
-
-.search-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.reset-btn {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #606266;
-}
-
-.reset-btn:hover {
-  background: #e6e8eb;
-  border-color: #c0c4cc;
-}
-
-/* 搜索框样式 */
-.search-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.search-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-/* 表格容器 */
-.table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
-
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
-/* 树形表格特定样式 */
-.dept-tree-table :deep(.el-table__expand-icon) {
-  color: #606266 !important;
-  font-size: 16px !important;
-  padding: 0 !important;
-}
-
-.dept-tree-table :deep(.el-table__expand-icon:hover) {
-  color: #d4af37 !important;
-}
-
-.dept-tree-table :deep(.el-table__expand-icon--expanded) {
-  transform: rotate(90deg);
-}
-
-/* 缩进元素 */
-.dept-tree-table :deep(.el-table__indent) {
-  display: inline-block !important;
-  width: 30px !important;
-}
-
-/* 展开图标容器 */
-.dept-tree-table :deep(.el-table__cell .el-table__expand-icon) {
-  display: inline-block !important;
-  margin-right: 4px !important;
-}
-
-/* 表头图标 */
-.header-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-icon {
-  font-size: 16px;
-}
-
-.header-icon-gold {
-  color: #d4af37;
-}
-
-/* 部门名称单元格 */
-.dept-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.dept-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.company-icon {
-  color: #409eff;
-}
-
-.center-icon {
-  color: #67c23a;
-}
-
-.folder-icon {
-  color: #e6a23c;
-}
-
-.dept-name {
-  flex: 1;
-  font-weight: 500;
-}
-
-/* 部门类型标签 */
-.dept-type-tag {
-  border-radius: 6px;
-  font-size: 12px;
-  padding: 4px 10px;
-  font-weight: 500;
-}
-
-.company-tag {
-  background-color: #ecf5ff;
-  color: #409eff;
-  border-color: #b3d8ff;
-}
-
-.center-tag {
-  background-color: #e8f5e9;
-  color: #4caf50;
-  border-color: #a5d6a7;
-}
-
-.dept-tag {
-  background-color: #fdf6ec;
-  color: #e6a23c;
-  border-color: #f5dab1;
-}
-
-/* 操作按钮 */
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.action-btn :deep(.el-icon) {
-  font-size: 16px;
-}
-
-.action-btn:hover {
-  transform: scale(1.1);
-}
-
-.action-edit:hover {
-  background-color: #e8f4ff;
-  color: #409eff;
-}
-
-.action-delete:hover {
-  background-color: #fee;
-  color: #f56c6c;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-/* 表单提示 */
 .form-tip {
   font-size: 12px;
-  color: #999;
+  color: var(--ops-text-tertiary, #86909c);
   margin-top: 4px;
-}
-
-/* 对话框样式 */
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-:deep(.dept-edit-dialog) {
-  border-radius: 12px;
-}
-
-:deep(.dept-edit-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.dept-edit-dialog .el-dialog__body) {
-  padding: 24px;
-}
-
-:deep(.dept-edit-dialog .el-dialog__footer) {
-  padding: 16px 24px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 标签样式 */
-:deep(.el-tag) {
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-weight: 500;
-}
-
-/* 展开/折叠图标 */
-:deep(.el-table__expand-icon) {
-  color: #606266;
-  font-size: 14px;
-}
-
-:deep(.el-table__expand-icon--expanded) {
-  transform: rotate(90deg);
-}
-
-/* 响应式对话框 */
-:deep(.responsive-dialog) {
-  max-width: 900px;
-  min-width: 500px;
-}
-
-@media (max-width: 768px) {
-  :deep(.responsive-dialog .el-dialog) {
-    width: 95% !important;
-    max-width: none;
-    min-width: auto;
-  }
 }
 </style>

@@ -4,31 +4,34 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-top">
-          <el-button class="back-btn" @click="goBack" :icon="ArrowLeft">返回列表</el-button>
-          <el-button class="black-button" @click="refreshData">
-            <el-icon><Refresh /></el-icon>
+          <a-button class="back-btn" @click="goBack" :icon="ArrowLeft">返回列表</a-button>
+          <a-button class="black-button" @click="refreshData">
+            <icon-refresh />
             刷新
-          </el-button>
+          </a-button>
         </div>
         <div class="node-name-section">
           <h1 class="node-title">
-            <el-icon class="title-icon" :size="28"><Monitor /></el-icon>
+            <icon-desktop />
             {{ nodeName }}
           </h1>
-          <el-tag v-if="nodeInfo.status === 'Ready'" type="success" effect="dark" size="large" class="status-tag">正常</el-tag>
-          <el-tag v-else type="danger" effect="dark" size="large" class="status-tag">异常</el-tag>
+          <a-tag v-if="nodeInfo.status === 'Ready'" color="green" size="large" class="status-tag">正常</a-tag>
+          <a-tag v-else color="red" size="large" class="status-tag">异常</a-tag>
         </div>
         <div class="node-meta">
           <span class="meta-item">
-            <el-icon><Platform /></el-icon>
+            <icon-apps />
+          </span>
             {{ clusterName }}
           </span>
           <span class="meta-item">
-            <el-icon><Connection /></el-icon>
+            <icon-link />
+          </span>
             {{ nodeInfo.internalIP }}
           </span>
           <span class="meta-item" v-if="nodeInfo.version">
-            <el-icon><InfoFilled /></el-icon>
+            <icon-info-circle />
+          </span>
             {{ nodeInfo.version }}
           </span>
         </div>
@@ -39,7 +42,7 @@
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon stat-icon-cpu">
-          <el-icon><Cpu /></el-icon>
+          <icon-thunderbolt />
         </div>
         <div class="stat-content">
           <div class="stat-label">CPU 使用率</div>
@@ -53,7 +56,7 @@
 
       <div class="stat-card">
         <div class="stat-icon stat-icon-memory">
-          <el-icon><Coin /></el-icon>
+          <icon-common />
         </div>
         <div class="stat-content">
           <div class="stat-label">内存使用率</div>
@@ -67,7 +70,7 @@
 
       <div class="stat-card">
         <div class="stat-icon stat-icon-pod">
-          <el-icon><Odometer /></el-icon>
+          <icon-dashboard />
         </div>
         <div class="stat-content">
           <div class="stat-label">运行 Pod</div>
@@ -78,7 +81,7 @@
 
       <div class="stat-card">
         <div class="stat-icon stat-icon-uptime">
-          <el-icon><Clock /></el-icon>
+          <icon-clock-circle />
         </div>
         <div class="stat-content">
           <div class="stat-label">运行时间</div>
@@ -93,7 +96,7 @@
       <div class="info-card">
         <div class="card-header">
           <div class="header-left">
-            <el-icon class="header-icon"><InfoFilled /></el-icon>
+            <icon-info-circle />
             <h3>基本信息</h3>
           </div>
         </div>
@@ -116,9 +119,9 @@
           </div>
           <div class="info-row">
             <span class="info-label">调度状态</span>
-            <el-tag :type="nodeInfo.schedulable ? 'success' : 'warning'" size="small">
+            <a-tag :type="nodeInfo.schedulable ? 'success' : 'warning'" size="small">
               {{ nodeInfo.schedulable ? '可调度' : '不可调度' }}
-            </el-tag>
+            </a-tag>
           </div>
         </div>
       </div>
@@ -127,7 +130,7 @@
       <div class="info-card">
         <div class="card-header">
           <div class="header-left">
-            <el-icon class="header-icon"><Monitor /></el-icon>
+            <icon-desktop />
             <h3>系统信息</h3>
           </div>
         </div>
@@ -155,7 +158,7 @@
       <div class="info-card">
         <div class="card-header">
           <div class="header-left">
-            <el-icon class="header-icon"><Connection /></el-icon>
+            <icon-link />
             <h3>网络信息</h3>
           </div>
         </div>
@@ -177,7 +180,7 @@
       <div class="info-card">
         <div class="card-header">
           <div class="header-left">
-            <el-icon class="header-icon"><PriceTag /></el-icon>
+            <icon-tag />
             <h3>标签 ({{ Object.keys(nodeInfo.labels || {}).length }})</h3>
           </div>
         </div>
@@ -201,7 +204,7 @@
       <div class="info-card">
         <div class="card-header">
           <div class="header-left">
-            <el-icon class="header-icon"><WarnTriangleFilled /></el-icon>
+            <icon-exclamation-circle-fill />
             <h3>污点 ({{ nodeInfo.taintCount || 0 }})</h3>
           </div>
         </div>
@@ -228,7 +231,7 @@
       <div class="info-card">
         <div class="card-header">
           <div class="header-left">
-            <el-icon class="header-icon"><Document /></el-icon>
+            <icon-file />
             <h3>注解 ({{ Object.keys(nodeInfo.annotations || {}).length }})</h3>
           </div>
         </div>
@@ -251,11 +254,11 @@
     <div class="section-card">
       <div class="section-header">
         <div class="section-title">
-          <el-icon class="title-icon"><Odometer /></el-icon>
+          <icon-dashboard />
           <h3>运行的 Pod ({{ pods.length }})</h3>
         </div>
         <div class="search-wrapper">
-          <el-input
+          <a-input
             v-model="podSearchKeyword"
             placeholder="搜索Pod名称或命名空间"
             prefix-icon="Search"
@@ -266,34 +269,25 @@
         </div>
       </div>
       <div class="table-wrapper">
-        <el-table :data="paginatedPods" class="modern-table" v-loading="podsLoading">
-          <el-table-column prop="name" label="Pod 名称" min-width="200">
-            <template #default="{ row }">
+        <a-table :data="paginatedPods" class="modern-table" v-loading="podsLoading" :columns="tableColumns3">
+          <template #name="{ record }">
               <div class="pod-name-cell">
-                <span class="pod-name">{{ row.name }}</span>
+                <span class="pod-name">{{ record.name }}</span>
               </div>
             </template>
-          </el-table-column>
-          <el-table-column prop="namespace" label="命名空间" width="150" />
-          <el-table-column prop="ready" label="就绪" width="100" align="center" />
-          <el-table-column prop="status" label="状态" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)" size="small">
-                {{ row.status }}
-              </el-tag>
+          <template #status="{ record }">
+              <a-tag :color="getStatusType(record.status)" size="small">
+                {{ record.status }}
+              </a-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="ip" label="IP" width="140" />
-          <el-table-column prop="age" label="运行时间" width="120" />
-          <el-table-column prop="restarts" label="重启次数" width="100" align="center" />
-        </el-table>
+        </a-table>
         <div class="pagination-wrapper">
-          <el-pagination
-            v-model:current-page="podCurrentPage"
+          <a-pagination
+            v-model:current="podCurrentPage"
             v-model:page-size="podPageSize"
-            :page-sizes="[10, 20, 50, 100]"
+            :page-size-options="[10, 20, 50, 100]"
             :total="filteredPods.length"
-            layout="total, sizes, prev, pager, next, jumper"
+            show-total show-page-size show-jumper
             @size-change="handlePodPageSizeChange"
             @current-change="handlePodPageChange"
           />
@@ -305,25 +299,18 @@
     <div class="section-card">
       <div class="section-header">
         <div class="section-title">
-          <el-icon class="title-icon"><InfoFilled /></el-icon>
+          <icon-info-circle />
           <h3>节点状态</h3>
         </div>
       </div>
       <div class="conditions-content">
-        <el-table :data="nodeInfo.conditions || []" class="conditions-table">
-          <el-table-column prop="type" label="Type" width="180" />
-          <el-table-column prop="status" label="Status" width="100" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 'True' ? 'success' : 'info'" size="small">
-                {{ row.status }}
-              </el-tag>
+        <a-table :data="nodeInfo.conditions || []" class="conditions-table" :columns="tableColumns2">
+          <template #status="{ record }">
+              <a-tag :type="record.status === 'True' ? 'success' : 'info'" size="small">
+                {{ record.status }}
+              </a-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="lastHeartbeatTime" label="LastHeartbeatTime" width="180" />
-          <el-table-column prop="lastTransitionTime" label="LastTransitionTime" width="180" />
-          <el-table-column prop="reason" label="Reason" width="180" />
-          <el-table-column prop="message" label="Message" min-width="300" />
-        </el-table>
+        </a-table>
       </div>
     </div>
 
@@ -331,51 +318,55 @@
     <div class="section-card">
       <div class="section-header">
         <div class="section-title">
-          <el-icon class="title-icon"><Bell /></el-icon>
+          <icon-notification />
           <h3>事件 ({{ events.length }})</h3>
         </div>
       </div>
       <div class="table-wrapper">
-        <el-table :data="recentEvents" class="modern-table" v-loading="eventsLoading">
-          <el-table-column prop="type" label="类型" width="100" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.type === 'Warning' ? 'warning' : 'success'" size="small">
-                {{ row.type }}
-              </el-tag>
+        <a-table :data="recentEvents" class="modern-table" v-loading="eventsLoading" :columns="tableColumns">
+          <template #type="{ record }">
+              <a-tag :type="record.type === 'Warning' ? 'warning' : 'success'" size="small">
+                {{ record.type }}
+              </a-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="reason" label="原因" width="150" />
-          <el-table-column prop="message" label="消息" min-width="300" />
-          <el-table-column prop="source" label="来源" width="150" />
-          <el-table-column prop="count" label="次数" width="80" align="center" />
-          <el-table-column prop="lastTimestamp" label="最后时间" width="180" />
-        </el-table>
+        </a-table>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns3 = [
+  { title: 'Pod 名称', dataIndex: 'name', slotName: 'name', width: 200 },
+  { title: '命名空间', dataIndex: 'namespace', width: 150 },
+  { title: '就绪', dataIndex: 'ready', width: 100, align: 'center' },
+  { title: '状态', dataIndex: 'status', slotName: 'status', width: 120, align: 'center' },
+  { title: 'IP', dataIndex: 'ip', width: 140 },
+  { title: '运行时间', dataIndex: 'age', width: 120 },
+  { title: '重启次数', dataIndex: 'restarts', width: 100, align: 'center' }
+]
+
+const tableColumns2 = [
+  { title: 'Type', dataIndex: 'type', width: 180 },
+  { title: 'Status', dataIndex: 'status', slotName: 'status', width: 100, align: 'center' },
+  { title: 'LastHeartbeatTime', dataIndex: 'lastHeartbeatTime', width: 180 },
+  { title: 'LastTransitionTime', dataIndex: 'lastTransitionTime', width: 180 },
+  { title: 'Reason', dataIndex: 'reason', width: 180 },
+  { title: 'Message', dataIndex: 'message', width: 300 }
+]
+
+const tableColumns = [
+  { title: '类型', dataIndex: 'type', slotName: 'type', width: 100, align: 'center' },
+  { title: '原因', dataIndex: 'reason', width: 150 },
+  { title: '消息', dataIndex: 'message', width: 300 },
+  { title: '来源', dataIndex: 'source', width: 150 },
+  { title: '次数', dataIndex: 'count', width: 80, align: 'center' },
+  { title: '最后时间', dataIndex: 'lastTimestamp', width: 180 }
+]
+
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  ArrowLeft,
-  Monitor,
-  Refresh,
-  Cpu,
-  Coin,
-  Odometer,
-  Clock,
-  InfoFilled,
-  PriceTag,
-  Connection,
-  Document,
-  Bell,
-  Platform,
-  Delete,
-  WarnTriangleFilled
-} from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getNodes, type NodeInfo } from '@/api/kubernetes'
 import axios from 'axios'
 
@@ -440,7 +431,7 @@ const loadNodeDetail = async () => {
       await loadNodeMetrics()
     }
   } catch (error) {
-    ElMessage.error('获取节点信息失败')
+    Message.error('获取节点信息失败')
   } finally {
     loading.value = false
   }
@@ -471,7 +462,7 @@ const loadPods = async () => {
     })
     pods.value = response.data.data || []
   } catch (error) {
-    ElMessage.error('获取 Pod 列表失败')
+    Message.error('获取 Pod 列表失败')
   } finally {
     podsLoading.value = false
   }
@@ -494,7 +485,7 @@ const loadEvents = async () => {
       event.involvedObject.kind === 'Node'
     )
   } catch (error) {
-    ElMessage.error('获取事件列表失败')
+    Message.error('获取事件列表失败')
   } finally {
     eventsLoading.value = false
   }
@@ -1007,14 +998,14 @@ onMounted(() => {
 }
 
 /* 污点编辑弹窗 */
-.taint-edit-dialog :deep(.el-dialog__header) {
+.taint-edit-dialog :deep(.arco-dialog__header) {
   background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
   color: #d4af37;
   border-radius: 8px 8px 0 0;
   padding: 20px 24px;
 }
 
-.taint-edit-dialog :deep(.el-dialog__title) {
+.taint-edit-dialog :deep(.arco-dialog__title) {
   color: #d4af37;
   font-size: 16px;
   font-weight: 600;
@@ -1115,30 +1106,30 @@ onMounted(() => {
   align-items: center;
 }
 
-.search-input :deep(.el-input__wrapper) {
+.search-input :deep(.arco-input__wrapper) {
   background-color: #f5f7fa;
   border-color: #dcdfe6;
   border-radius: 6px;
 }
 
-.search-input :deep(.el-input__wrapper:hover) {
+.search-input :deep(.arco-input__wrapper:hover) {
   border-color: #c0c4cc;
 }
 
-.search-input :deep(.el-input__wrapper.is-focus) {
+.search-input :deep(.arco-input__wrapper.is-focus) {
   border-color: #409eff;
   box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
 }
 
-.search-input :deep(.el-input__inner) {
+.search-input :deep(.arco-input__inner) {
   color: #303133;
 }
 
-.search-input :deep(.el-input__inner::placeholder) {
+.search-input :deep(.arco-input__inner::placeholder) {
   color: #a8abb2;
 }
 
-.search-input :deep(.el-input__prefix) {
+.search-input :deep(.arco-input__prefix) {
   color: #909399;
 }
 
@@ -1154,11 +1145,11 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-.conditions-table :deep(.el-table__header) {
+.conditions-table :deep(.arco-table__header) {
   background: #fafbfc;
 }
 
-.conditions-table :deep(.el-table__header th) {
+.conditions-table :deep(.arco-table__header th) {
   background: #f5f7fa;
   color: #606266;
   font-weight: 600;
@@ -1167,27 +1158,27 @@ onMounted(() => {
   font-size: 13px !important;
 }
 
-.conditions-table :deep(.el-table__body) {
+.conditions-table :deep(.arco-table__body) {
   font-family: 'Monaco', 'Menlo', monospace !important;
   font-size: 13px !important;
 }
 
-.conditions-table :deep(.el-table__row) {
+.conditions-table :deep(.arco-table__row) {
   transition: background-color 0.2s ease;
 }
 
-.conditions-table :deep(.el-table__row:hover) {
+.conditions-table :deep(.arco-table__row:hover) {
   background-color: #f5f7fa;
 }
 
-.conditions-table :deep(.el-table__row td) {
+.conditions-table :deep(.arco-table__row td) {
   border-bottom: 1px solid #f0f0f0;
   padding: 12px 0;
   font-family: 'Monaco', 'Menlo', monospace !important;
   font-size: 13px !important;
 }
 
-.conditions-table :deep(.el-table__cell) {
+.conditions-table :deep(.arco-table__cell) {
   font-family: 'Monaco', 'Menlo', monospace !important;
   font-size: 13px !important;
 }
@@ -1203,34 +1194,34 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-.modern-table :deep(.el-table__header) {
+.modern-table :deep(.arco-table__header) {
   background: #fafbfc;
 }
 
-.modern-table :deep(.el-table__header th) {
+.modern-table :deep(.arco-table__header th) {
   font-family: 'Monaco', 'Menlo', monospace !important;
   font-size: 13px !important;
 }
 
-.modern-table :deep(.el-table__body) {
+.modern-table :deep(.arco-table__body) {
   font-family: 'Monaco', 'Menlo', monospace !important;
   font-size: 13px !important;
 }
 
-.modern-table :deep(.el-table__row) {
+.modern-table :deep(.arco-table__row) {
   transition: background-color 0.2s ease;
 }
 
-.modern-table :deep(.el-table__row:hover) {
+.modern-table :deep(.arco-table__row:hover) {
   background-color: #f8fafc !important;
 }
 
-.modern-table :deep(.el-table__row td) {
+.modern-table :deep(.arco-table__row td) {
   font-family: 'Monaco', 'Menlo', monospace !important;
   font-size: 13px !important;
 }
 
-.modern-table :deep(.el-table__cell) {
+.modern-table :deep(.arco-table__cell) {
   font-family: 'Monaco', 'Menlo', monospace !important;
   font-size: 13px !important;
 }
@@ -1254,31 +1245,31 @@ onMounted(() => {
   border-top: 1px solid #f0f0f0;
 }
 
-.pagination-wrapper :deep(.el-pagination) {
+.pagination-wrapper :deep(.arco-pagination) {
   display: flex;
   gap: 8px;
 }
 
-.pagination-wrapper :deep(.el-pagination__total) {
+.pagination-wrapper :deep(.arco-pagination__total) {
   color: #606266;
 }
 
-.pagination-wrapper :deep(.el-pagination__sizes) {
+.pagination-wrapper :deep(.arco-pagination__sizes) {
   color: #606266;
 }
 
-.pagination-wrapper :deep(.el-pager li) {
+.pagination-wrapper :deep(.arco-pager li) {
   background: #fff;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
 }
 
-.pagination-wrapper :deep(.el-pager li.is-active) {
+.pagination-wrapper :deep(.arco-pager li.is-active) {
   background: #409eff;
   border-color: #409eff;
 }
 
-.pagination-wrapper :deep(.el-pager li.is-active .number) {
+.pagination-wrapper :deep(.arco-pager li.is-active .number) {
   color: #fff;
 }
 

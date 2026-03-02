@@ -1,20 +1,20 @@
 <template>
   <div class="dashboard-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
-    <div v-else class="dashboard-content" v-loading="loading">
+    <div v-else class="dashboard-content" :loading="loading">
       <div class="toolbar">
-        <el-button type="primary" :icon="Refresh" @click="loadDashboard" :loading="loading">刷新</el-button>
+        <a-button type="primary" @click="loadDashboard" :loading="loading">刷新</a-button>
       </div>
 
       <!-- 错误提示 -->
-      <el-alert
+      <a-alert
         v-if="hasConnectionError && isDataEmpty"
         title="Arthas 连接问题"
         type="warning"
@@ -33,7 +33,7 @@
             </ul>
           </div>
         </template>
-      </el-alert>
+      </a-alert>
 
       <!-- 线程 TOP-10 -->
       <div class="section">
@@ -41,32 +41,20 @@
           <h3>线程 TOP-10</h3>
         </div>
         <div class="section-body">
-          <el-table :data="dashboardData.threads" stripe size="small" :header-cell-style="{ background: '#f5f7fa', color: '#606266' }" style="width: 100%">
-            <el-table-column prop="id" label="ID" width="50" align="center" />
-            <el-table-column prop="name" label="名称" show-overflow-tooltip />
-            <el-table-column prop="group" label="Group" width="70" align="center" />
-            <el-table-column prop="priority" label="优先级" width="70" align="center" />
-            <el-table-column prop="state" label="状态" width="100" align="center">
-              <template #default="{ row }">
-                <el-tooltip :content="row.state" placement="top" :disabled="row.state?.length < 10">
-                  <el-tag :type="getStateType(row.state)" size="small" effect="light" class="state-tag">{{ formatState(row.state) }}</el-tag>
-                </el-tooltip>
+          <a-table :data="dashboardData.threads" stripe size="small" :header-cell-style="{ background: '#f5f7fa', color: '#606266' }" style="width: 100%" :columns="tableColumns">
+          <template #state="{ record }">
+                <a-tooltip :content="record.state" placement="top" :disabled="record.state?.length < 10">
+                  <a-tag :type="getStateType(record.state)" size="small" class="state-tag">{{ formatState(record.state) }}</a-tag>
+                </a-tooltip>
               </template>
-            </el-table-column>
-            <el-table-column prop="cpu" label="CPU" width="60" align="right" />
-            <el-table-column prop="time" label="时长" width="80" align="right" />
-            <el-table-column prop="interrupted" label="中断" width="60" align="center">
-              <template #default="{ row }">
-                <span :class="row.interrupted ? 'text-danger' : 'text-muted'">{{ row.interrupted ? '是' : '否' }}</span>
+          <template #interrupted="{ record }">
+                <span :class="record.interrupted ? 'text-danger' : 'text-muted'">{{ record.interrupted ? '是' : '否' }}</span>
               </template>
-            </el-table-column>
-            <el-table-column prop="daemon" label="守护" width="60" align="center">
-              <template #default="{ row }">
-                <span :class="row.daemon ? 'text-primary' : 'text-muted'">{{ row.daemon ? '是' : '否' }}</span>
+          <template #daemon="{ record }">
+                <span :class="record.daemon ? 'text-primary' : 'text-muted'">{{ record.daemon ? '是' : '否' }}</span>
               </template>
-            </el-table-column>
-          </el-table>
-          <el-empty v-if="dashboardData.threads.length === 0 && !loading" description="暂无线程数据" :image-size="60" />
+        </a-table>
+          <a-empty v-if="dashboardData.threads.length === 0 && !loading" description="暂无线程数据" :image-size="60" />
         </div>
       </div>
 
@@ -84,7 +72,7 @@
                   <span class="memory-type">{{ mem.type }}</span>
                   <span class="memory-usage" :style="{ color: getUsageColor(calcMemoryUsage(mem)) }">{{ formatMemoryUsage(mem) }}</span>
                 </div>
-                <el-progress
+                <a-progress
                   :percentage="calcMemoryUsage(mem)"
                   :stroke-width="8"
                   :color="getUsageColor(calcMemoryUsage(mem))"
@@ -118,7 +106,7 @@
               </div>
             </div>
           </div>
-          <el-empty v-if="dashboardData.memory.length === 0 && dashboardData.gc.length === 0 && !loading" description="暂无内存数据" :image-size="60" />
+          <a-empty v-if="dashboardData.memory.length === 0 && dashboardData.gc.length === 0 && !loading" description="暂无内存数据" :image-size="60" />
         </div>
       </div>
 
@@ -134,26 +122,37 @@
               <span class="runtime-value">{{ item.value }}</span>
             </div>
           </div>
-          <el-empty v-if="dashboardData.runtime.length === 0 && !loading" description="暂无运行时数据" :image-size="60" />
+          <a-empty v-if="dashboardData.runtime.length === 0 && !loading" description="暂无运行时数据" :image-size="60" />
         </div>
       </div>
 
       <!-- 原始输出（可折叠） -->
-      <el-collapse v-if="dashboardData.rawOutput" class="raw-output-collapse">
-        <el-collapse-item title="原始输出" name="raw">
+      <a-collapse v-if="dashboardData.rawOutput" class="raw-output-collapse">
+        <a-collapse-item title="原始输出" name="raw">
           <div class="output-content">
             <pre>{{ dashboardData.rawOutput }}</pre>
           </div>
-        </el-collapse-item>
-      </el-collapse>
+        </a-collapse-item>
+      </a-collapse>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns = [
+  { title: 'ID', dataIndex: 'id', width: 50, align: 'center' },
+  { title: '名称', dataIndex: 'name', ellipsis: true, tooltip: true },
+  { title: 'Group', dataIndex: 'group', width: 70, align: 'center' },
+  { title: '优先级', dataIndex: 'priority', width: 70, align: 'center' },
+  { title: '状态', dataIndex: 'state', slotName: 'state', width: 100, align: 'center' },
+  { title: 'CPU', dataIndex: 'cpu', width: 60, align: 'right' },
+  { title: '时长', dataIndex: 'time', width: 80, align: 'right' },
+  { title: '中断', dataIndex: 'interrupted', slotName: 'interrupted', width: 60, align: 'center' },
+  { title: '守护', dataIndex: 'daemon', slotName: 'daemon', width: 60, align: 'center' }
+]
+
 import { ref, watch, reactive, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Refresh } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getDashboard } from '@/api/arthas'
 
 const props = defineProps<{
@@ -361,7 +360,7 @@ const loadDashboard = async () => {
       dashboardData.rawOutput = res
     }
   } catch (error: any) {
-    ElMessage.error('加载Dashboard失败: ' + (error.message || '未知错误'))
+    Message.error('加载Dashboard失败: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }

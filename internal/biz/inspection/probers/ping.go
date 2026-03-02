@@ -42,12 +42,27 @@ func (p *PingProber) Probe(target string, port, timeout, count, packetSize int) 
 	output, err := cmd.CombinedOutput()
 	elapsed := float64(time.Since(start).Microseconds()) / 1000.0
 
-	outStr := string(output)
-
 	result := &Result{Latency: elapsed}
+	ParsePingOutput(string(output), result)
 
+	// If parsing found no stats and command failed, set error
+	if result.PingPacketsSent == 0 && err != nil {
+		result.Success = false
+		errMsg := strings.TrimSpace(string(output))
+		if errMsg == "" {
+			errMsg = fmt.Sprintf("ping failed: %v", err)
+		}
+		result.Error = errMsg
+	}
+
+	return result
+}
+
+// ParsePingOutput parses standard ping command output into a Result.
+// Exported so it can be reused by AgentPingProber.
+func ParsePingOutput(output string, result *Result) {
 	// Parse packet stats
-	if m := statsRe.FindStringSubmatch(outStr); len(m) == 4 {
+	if m := statsRe.FindStringSubmatch(output); len(m) == 4 {
 		sent, _ := strconv.Atoi(m[1])
 		recv, _ := strconv.Atoi(m[2])
 		lossPercent, _ := strconv.ParseFloat(m[3], 64)
@@ -56,18 +71,10 @@ func (p *PingProber) Probe(target string, port, timeout, count, packetSize int) 
 		result.PingPacketsRecv = recv
 		result.PacketLoss = lossPercent / 100.0
 		result.Success = recv > 0
-	} else if err != nil {
-		// No stats parsed and command failed
-		result.Success = false
-		result.Error = strings.TrimSpace(outStr)
-		if result.Error == "" {
-			result.Error = fmt.Sprintf("ping failed: %v", err)
-		}
-		return result
 	}
 
 	// Parse RTT min/avg/max/mdev
-	if m := rttRe.FindStringSubmatch(outStr); len(m) == 5 {
+	if m := rttRe.FindStringSubmatch(output); len(m) == 5 {
 		result.PingRttMin, _ = strconv.ParseFloat(m[1], 64)
 		result.PingRttAvg, _ = strconv.ParseFloat(m[2], 64)
 		result.PingRttMax, _ = strconv.ParseFloat(m[3], 64)
@@ -75,7 +82,7 @@ func (p *PingProber) Probe(target string, port, timeout, count, packetSize int) 
 	}
 
 	// If 100% loss, mark as failure
-	if result.PingPacketsRecv == 0 {
+	if result.PingPacketsSent > 0 && result.PingPacketsRecv == 0 {
 		result.Success = false
 		if result.Error == "" {
 			result.Error = "100% packet loss"
@@ -86,6 +93,4 @@ func (p *PingProber) Probe(target string, port, timeout, count, packetSize int) 
 	if math.IsNaN(result.PingStddev) || math.IsInf(result.PingStddev, 0) {
 		result.PingStddev = 0
 	}
-
-	return result
 }

@@ -1,30 +1,30 @@
 <template>
-  <el-drawer
-    :model-value="visible"
+  <a-drawer
+    :visible="visible"
     :title="'Redis 控制台 - ' + (middleware?.name || '')"
-    direction="rtl"
-    size="100%"
-    :destroy-on-close="true"
+    placement="right"
+    :width="'100%'"
+    :unmount-on-close="true"
     class="redis-console-drawer"
-    @close="emit('update:visible', false)"
+    @cancel="emit('update:visible', false)"
   >
-    <template #header>
+    <template #title>
       <div class="console-header">
         <div class="header-left">
-          <el-icon style="font-size: 18px; color: #f56c6c;"><Connection /></el-icon>
+          <icon-storage style="font-size: 18px; color: #f56c6c;" />
           <span class="header-title">Redis 控制台 - {{ middleware?.name }}</span>
         </div>
         <div class="header-actions">
-          <el-select v-model="currentDb" size="small" style="width: 150px" @change="handleDbChange">
-            <el-option v-for="db in databases" :key="db.db" :label="`db${db.db} (${db.keys})`" :value="db.db" />
-          </el-select>
-          <el-button size="small" @click="refreshKeys">
-            <el-icon style="margin-right: 4px;"><Refresh /></el-icon>刷新
-          </el-button>
-          <el-button type="primary" size="small" @click="showNewKeyDialog">
-            <el-icon style="margin-right: 4px;"><Plus /></el-icon>新建 Key
-          </el-button>
-          <el-button size="small" @click="activeRightTab = 'info'">服务器信息</el-button>
+          <a-select v-model="currentDb" size="small" style="width: 150px" @change="handleDbChange">
+            <a-option v-for="db in databases" :key="db.db" :label="`db${db.db} (${db.keys})`" :value="db.db" />
+          </a-select>
+          <a-button size="small" @click="refreshKeys">
+            <template #icon><icon-refresh /></template>刷新
+          </a-button>
+          <a-button type="primary" size="small" @click="showNewKeyDialog">
+            <template #icon><icon-plus /></template>新建 Key
+          </a-button>
+          <a-button size="small" @click="activeRightTab = 'info'">服务器信息</a-button>
         </div>
       </div>
     </template>
@@ -33,138 +33,152 @@
       <!-- 左侧键浏览器 -->
       <div class="sidebar">
         <div class="sidebar-search">
-          <el-input v-model="searchPattern" placeholder="搜索键名 (支持*通配符)" size="small" clearable @keyup.enter="refreshKeys" @clear="refreshKeys">
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
+          <a-input v-model="searchPattern" placeholder="搜索键名 (支持*通配符)" size="small" allow-clear @keyup.enter="refreshKeys" @clear="refreshKeys">
+            <template #prefix><icon-search /></template>
+          </a-input>
         </div>
-        <div class="key-list" v-loading="keysLoading" ref="keyListRef" @scroll="onKeyListScroll">
-          <div :style="{ height: totalHeight + 'px', position: 'relative' }">
-            <div :style="{ position: 'absolute', top: offsetTop + 'px', left: 0, right: 0 }">
-              <div
-                v-for="item in visibleKeys"
-                :key="item.key"
-                class="key-item"
-                :class="{ active: selectedKey === item.key }"
-                @click="handleSelectKey(item.key)"
-                @contextmenu.prevent="handleKeyContextMenu($event, item)"
-              >
-                <span class="key-type-badge" :class="'type-' + item.type">{{ getTypeLabel(item.type) }}</span>
-                <span class="key-name" :title="item.key">{{ item.key }}</span>
-                <span class="key-ttl" v-if="item.ttl >= 0">{{ formatTTL(item.ttl) }}</span>
-                <span class="key-ttl-forever" v-else>-</span>
+        <div class="key-list" ref="keyListRef" @scroll="onKeyListScroll">
+          <a-spin :loading="keysLoading" style="width: 100%;">
+            <div :style="{ height: totalHeight + 'px', position: 'relative' }">
+              <div :style="{ position: 'absolute', top: offsetTop + 'px', left: 0, right: 0 }">
+                <div
+                  v-for="item in visibleKeys"
+                  :key="item.key"
+                  class="key-item"
+                  :class="{ active: selectedKey === item.key }"
+                  @click="handleSelectKey(item.key)"
+                  @contextmenu.prevent="handleKeyContextMenu($event, item)"
+                >
+                  <span class="key-type-badge" :class="'type-' + item.type">{{ getTypeLabel(item.type) }}</span>
+                  <span class="key-name" :title="item.key">{{ item.key }}</span>
+                  <span class="key-ttl" v-if="item.ttl >= 0">{{ formatTTL(item.ttl) }}</span>
+                  <span class="key-ttl-forever" v-else>-</span>
+                </div>
               </div>
             </div>
-          </div>
-          <div v-if="!keyList.length && !keysLoading" class="key-empty">暂无数据</div>
-          <div v-if="scanCursor !== 0" class="load-more">
-            <el-button link type="primary" size="small" @click="loadMoreKeys" :loading="keysLoading">加载更多</el-button>
-          </div>
+            <div v-if="!keyList.length && !keysLoading" class="key-empty">暂无数据</div>
+            <div v-if="scanCursor !== 0" class="load-more">
+              <a-button type="text" status="normal" size="small" @click="loadMoreKeys" :loading="keysLoading">加载更多</a-button>
+            </div>
+          </a-spin>
         </div>
       </div>
 
       <!-- 右侧主区域 -->
       <div class="main-area">
-        <el-tabs v-model="activeRightTab" type="border-card">
+        <a-tabs v-model:active-key="activeRightTab" type="card-gutter">
           <!-- 键值详情 Tab -->
-          <el-tab-pane label="键值详情" name="detail">
+          <a-tab-pane title="键值详情" key="detail">
             <div v-if="!selectedKey" class="empty-tip">请从左侧选择一个键</div>
-            <div v-else-if="detailLoading" v-loading="true" style="height: 200px;"></div>
+            <a-spin v-else-if="detailLoading" :loading="true" style="height: 200px; width: 100%; display: flex; align-items: center; justify-content: center;" />
             <div v-else-if="keyDetail" class="key-detail">
               <!-- 公共头部 -->
               <div class="detail-header">
-                <el-tag :type="getTypeTagColor(keyDetail.type)" size="small">{{ keyDetail.type }}</el-tag>
+                <a-tag :color="getTypeTagColor(keyDetail.type)" size="small">{{ keyDetail.type }}</a-tag>
                 <span class="detail-key-name">{{ keyDetail.key }}</span>
-                <el-tag v-if="keyDetail.ttl >= 0" size="small" type="warning">TTL: {{ keyDetail.ttl }}s</el-tag>
-                <el-tag v-else size="small" type="info">永不过期</el-tag>
-                <el-tag v-if="keyDetail.size" size="small">{{ formatBytes(keyDetail.size) }}</el-tag>
+                <a-tag v-if="keyDetail.ttl >= 0" size="small" color="orangered">TTL: {{ keyDetail.ttl }}s</a-tag>
+                <a-tag v-else size="small" color="gray">永不过期</a-tag>
+                <a-tag v-if="keyDetail.size" size="small">{{ formatBytes(keyDetail.size) }}</a-tag>
                 <div style="flex:1"></div>
-                <el-button size="small" @click="loadKeyDetail(selectedKey)"><el-icon><Refresh /></el-icon></el-button>
-                <el-button size="small" @click="showTTLDialog(keyDetail.key, keyDetail.ttl)">设置 TTL</el-button>
-                <el-button size="small" @click="showRenameDialog(keyDetail.key)">重命名</el-button>
-                <el-button size="small" type="danger" @click="handleDeleteKey(keyDetail.key)">删除</el-button>
+                <a-button size="small" @click="loadKeyDetail(selectedKey)"><template #icon><icon-refresh /></template></a-button>
+                <a-button size="small" @click="showTTLDialog(keyDetail.key, keyDetail.ttl)">设置 TTL</a-button>
+                <a-button size="small" @click="showRenameDialog(keyDetail.key)">重命名</a-button>
+                <a-button size="small" status="danger" @click="handleDeleteKey(keyDetail.key)">删除</a-button>
               </div>
 
               <!-- String 类型 -->
               <div v-if="keyDetail.type === 'string'" class="detail-body">
-                <el-input v-model="stringValue" type="textarea" :rows="12" />
+                <a-textarea v-model="stringValue" :auto-size="{ minRows: 12 }" />
                 <div class="detail-actions">
-                  <el-button type="primary" size="small" @click="saveStringValue">保存</el-button>
+                  <a-button type="primary" size="small" @click="saveStringValue">保存</a-button>
                 </div>
               </div>
 
               <!-- Hash 类型 -->
               <div v-if="keyDetail.type === 'hash'" class="detail-body">
                 <div class="detail-actions" style="margin-bottom:8px;">
-                  <el-button type="primary" size="small" @click="showHashAddDialog">添加字段</el-button>
+                  <a-button type="primary" size="small" @click="showHashAddDialog">添加字段</a-button>
                 </div>
-                <el-table :data="hashRows" size="small" border max-height="400">
-                  <el-table-column prop="field" label="字段" min-width="200" show-overflow-tooltip />
-                  <el-table-column prop="value" label="值" min-width="300" show-overflow-tooltip />
-                  <el-table-column label="操作" width="120" fixed="right">
-                    <template #default="{ row }">
-                      <el-button link type="primary" size="small" @click="editHashField(row)">编辑</el-button>
-                      <el-button link type="danger" size="small" @click="deleteHashField(row.field)">删除</el-button>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                <a-table :data="hashRows" size="small" :bordered="{ cell: true }" stripe :scroll="{ y: 400 }" :pagination="false">
+                  <template #columns>
+                    <a-table-column title="字段" data-index="field" :width="200" ellipsis tooltip />
+                    <a-table-column title="值" data-index="value" :width="300" ellipsis tooltip />
+                    <a-table-column title="操作" :width="120" fixed="right">
+                      <template #cell="{ record }">
+                        <a-button type="text" size="small" @click="editHashField(record)">编辑</a-button>
+                        <a-button type="text" status="danger" size="small" @click="deleteHashField(record.field)">删除</a-button>
+                      </template>
+                    </a-table-column>
+                  </template>
+                </a-table>
               </div>
 
               <!-- List 类型 -->
               <div v-if="keyDetail.type === 'list'" class="detail-body">
                 <div class="detail-actions" style="margin-bottom:8px;">
-                  <el-button type="primary" size="small" @click="showListAddDialog('LPUSH')">LPUSH</el-button>
-                  <el-button type="primary" size="small" @click="showListAddDialog('RPUSH')">RPUSH</el-button>
-                  <el-button size="small" @click="listPop('LPOP')">LPOP</el-button>
-                  <el-button size="small" @click="listPop('RPOP')">RPOP</el-button>
+                  <a-button type="primary" size="small" @click="showListAddDialog('LPUSH')">LPUSH</a-button>
+                  <a-button type="primary" size="small" @click="showListAddDialog('RPUSH')">RPUSH</a-button>
+                  <a-button size="small" @click="listPop('LPOP')">LPOP</a-button>
+                  <a-button size="small" @click="listPop('RPOP')">RPOP</a-button>
                 </div>
-                <el-table :data="listRows" size="small" border max-height="400">
-                  <el-table-column prop="index" label="索引" width="80" />
-                  <el-table-column prop="value" label="值" min-width="400" show-overflow-tooltip />
-                  <el-table-column label="操作" width="80" fixed="right">
-                    <template #default="{ row }">
-                      <el-button link type="primary" size="small" @click="editListItem(row)">编辑</el-button>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                <a-table :data="listRows" size="small" :bordered="{ cell: true }" stripe :scroll="{ y: 400 }" :pagination="false">
+                  <template #columns>
+                    <a-table-column title="索引" data-index="index" :width="80" />
+                    <a-table-column title="值" data-index="value" :width="400" ellipsis tooltip />
+                    <a-table-column title="操作" :width="80" fixed="right">
+                      <template #cell="{ record }">
+                        <a-button type="text" size="small" @click="editListItem(record)">编辑</a-button>
+                      </template>
+                    </a-table-column>
+                  </template>
+                </a-table>
               </div>
 
               <!-- Set 类型 -->
               <div v-if="keyDetail.type === 'set'" class="detail-body">
                 <div class="detail-actions" style="margin-bottom:8px;">
-                  <el-button type="primary" size="small" @click="showSetAddDialog">添加成员</el-button>
+                  <a-button type="primary" size="small" @click="showSetAddDialog">添加成员</a-button>
                 </div>
-                <el-table :data="setRows" size="small" border max-height="400">
-                  <el-table-column type="index" label="#" width="60" />
-                  <el-table-column prop="value" label="成员" min-width="400" show-overflow-tooltip />
-                  <el-table-column label="操作" width="80" fixed="right">
-                    <template #default="{ row }">
-                      <el-button link type="danger" size="small" @click="deleteSetMember(row.value)">删除</el-button>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                <a-table :data="setRows" size="small" :bordered="{ cell: true }" stripe :scroll="{ y: 400 }" :pagination="false">
+                  <template #columns>
+                    <a-table-column title="#" :width="60">
+                      <template #cell="{ rowIndex }">{{ rowIndex + 1 }}</template>
+                    </a-table-column>
+                    <a-table-column title="成员" data-index="value" :width="400" ellipsis tooltip />
+                    <a-table-column title="操作" :width="80" fixed="right">
+                      <template #cell="{ record }">
+                        <a-button type="text" status="danger" size="small" @click="deleteSetMember(record.value)">删除</a-button>
+                      </template>
+                    </a-table-column>
+                  </template>
+                </a-table>
               </div>
 
               <!-- ZSet 类型 -->
               <div v-if="keyDetail.type === 'zset'" class="detail-body">
                 <div class="detail-actions" style="margin-bottom:8px;">
-                  <el-button type="primary" size="small" @click="showZsetAddDialog">添加成员</el-button>
+                  <a-button type="primary" size="small" @click="showZsetAddDialog">添加成员</a-button>
                 </div>
-                <el-table :data="zsetRows" size="small" border max-height="400">
-                  <el-table-column type="index" label="#" width="60" />
-                  <el-table-column prop="member" label="成员" min-width="300" show-overflow-tooltip />
-                  <el-table-column prop="score" label="分数" width="150" sortable />
-                  <el-table-column label="操作" width="80" fixed="right">
-                    <template #default="{ row }">
-                      <el-button link type="danger" size="small" @click="deleteZsetMember(row.member)">删除</el-button>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                <a-table :data="zsetRows" size="small" :bordered="{ cell: true }" stripe :scroll="{ y: 400 }" :pagination="false">
+                  <template #columns>
+                    <a-table-column title="#" :width="60">
+                      <template #cell="{ rowIndex }">{{ rowIndex + 1 }}</template>
+                    </a-table-column>
+                    <a-table-column title="成员" data-index="member" :width="300" ellipsis tooltip />
+                    <a-table-column title="分数" data-index="score" :width="150" :sortable="{ sortDirections: ['ascend', 'descend'] }" />
+                    <a-table-column title="操作" :width="80" fixed="right">
+                      <template #cell="{ record }">
+                        <a-button type="text" status="danger" size="small" @click="deleteZsetMember(record.member)">删除</a-button>
+                      </template>
+                    </a-table-column>
+                  </template>
+                </a-table>
               </div>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
           <!-- 命令行 Tab -->
-          <el-tab-pane label="命令行" name="cli">
+          <a-tab-pane title="命令行" key="cli">
             <div class="cli-container">
               <div class="cli-output" ref="cliOutputRef">
                 <div v-for="(item, idx) in cliHistory" :key="idx" class="cli-line">
@@ -174,7 +188,7 @@
               </div>
               <div class="cli-input-row">
                 <span class="cli-prompt">{{ middleware?.host }}:{{ middleware?.port }}&gt;</span>
-                <el-input
+                <a-input
                   v-model="cliCommand"
                   placeholder="输入 Redis 命令..."
                   size="small"
@@ -185,25 +199,25 @@
                 />
               </div>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
           <!-- 服务器信息 Tab -->
-          <el-tab-pane label="服务器信息" name="info">
-            <div v-loading="infoLoading" class="info-container">
+          <a-tab-pane title="服务器信息" key="info">
+            <a-spin :loading="infoLoading" class="info-container" style="width: 100%; display: block;">
               <div class="info-actions">
-                <el-button size="small" @click="loadServerInfo"><el-icon><Refresh /></el-icon> 刷新</el-button>
+                <a-button size="small" @click="loadServerInfo"><template #icon><icon-refresh /></template> 刷新</a-button>
               </div>
-              <el-collapse v-model="infoActiveNames">
-                <el-collapse-item v-for="(section, name) in serverInfo" :key="name" :title="String(name)" :name="String(name)">
-                  <el-descriptions :column="2" border size="small">
-                    <el-descriptions-item v-for="(val, key) in section" :key="key" :label="String(key)">{{ val }}</el-descriptions-item>
-                  </el-descriptions>
-                </el-collapse-item>
-              </el-collapse>
+              <a-collapse v-model:active-key="infoActiveNames">
+                <a-collapse-item v-for="(section, name) in serverInfo" :key="String(name)" :header="String(name)">
+                  <a-descriptions :column="2" bordered size="small">
+                    <a-descriptions-item v-for="(val, key) in section" :key="key" :label="String(key)">{{ val }}</a-descriptions-item>
+                  </a-descriptions>
+                </a-collapse-item>
+              </a-collapse>
               <div v-if="!Object.keys(serverInfo).length && !infoLoading" class="empty-tip">点击刷新加载服务器信息</div>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
+            </a-spin>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </div>
 
@@ -216,84 +230,84 @@
     </div>
 
     <!-- 新建 Key 弹窗 -->
-    <el-dialog v-model="newKeyVisible" title="新建 Key" width="500px" destroy-on-close append-to-body>
-      <el-form :model="newKeyForm" label-width="80px">
-        <el-form-item label="键名"><el-input v-model="newKeyForm.key" /></el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="newKeyForm.type" style="width:100%">
-            <el-option label="String" value="string" />
-            <el-option label="Hash" value="hash" />
-            <el-option label="List" value="list" />
-            <el-option label="Set" value="set" />
-            <el-option label="ZSet" value="zset" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="值">
-          <el-input v-model="newKeyForm.value" type="textarea" :rows="4" placeholder="String: 直接输入值; 其他类型暂设为空" />
-        </el-form-item>
-        <el-form-item label="TTL(秒)">
-          <el-input-number v-model="newKeyForm.ttl" :min="-1" style="width:100%" />
-          <div style="font-size:12px;color:#909399;">-1 表示永不过期</div>
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="newKeyVisible" title="新建 Key" :width="500" unmount-on-close :mask-closable="false">
+      <a-form :model="newKeyForm" auto-label-width layout="horizontal">
+        <a-form-item label="键名" field="key"><a-input v-model="newKeyForm.key" /></a-form-item>
+        <a-form-item label="类型" field="type">
+          <a-select v-model="newKeyForm.type" style="width:100%">
+            <a-option label="String" value="string" />
+            <a-option label="Hash" value="hash" />
+            <a-option label="List" value="list" />
+            <a-option label="Set" value="set" />
+            <a-option label="ZSet" value="zset" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="值" field="value">
+          <a-textarea v-model="newKeyForm.value" :auto-size="{ minRows: 4 }" placeholder="String: 直接输入值; 其他类型暂设为空" />
+        </a-form-item>
+        <a-form-item label="TTL(秒)" field="ttl">
+          <a-input-number v-model="newKeyForm.ttl" :min="-1" style="width:100%" />
+          <div style="font-size:12px;color:#86909c;">-1 表示永不过期</div>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="newKeyVisible = false">取消</el-button>
-        <el-button type="primary" @click="createNewKey">确定</el-button>
+        <a-button @click="newKeyVisible = false">取消</a-button>
+        <a-button type="primary" @click="createNewKey">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 通用输入弹窗 -->
-    <el-dialog v-model="inputDialog.visible" :title="inputDialog.title" width="450px" destroy-on-close append-to-body>
-      <el-form label-width="80px">
-        <el-form-item v-if="inputDialog.showField" :label="inputDialog.fieldLabel || '字段'">
-          <el-input v-model="inputDialog.field" />
-        </el-form-item>
-        <el-form-item v-if="inputDialog.showValue" :label="inputDialog.valueLabel || '值'">
-          <el-input v-model="inputDialog.value" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item v-if="inputDialog.showScore" label="分数">
-          <el-input-number v-model="inputDialog.score" style="width:100%" />
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="inputDialog.visible" :title="inputDialog.title" :width="450" unmount-on-close :mask-closable="false">
+      <a-form auto-label-width layout="horizontal">
+        <a-form-item v-if="inputDialog.showField" :label="inputDialog.fieldLabel || '字段'">
+          <a-input v-model="inputDialog.field" />
+        </a-form-item>
+        <a-form-item v-if="inputDialog.showValue" :label="inputDialog.valueLabel || '值'">
+          <a-textarea v-model="inputDialog.value" :auto-size="{ minRows: 3 }" />
+        </a-form-item>
+        <a-form-item v-if="inputDialog.showScore" label="分数">
+          <a-input-number v-model="inputDialog.score" style="width:100%" />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="inputDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="inputDialog.onConfirm?.()">确定</el-button>
+        <a-button @click="inputDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="inputDialog.onConfirm?.()">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- TTL 弹窗 -->
-    <el-dialog v-model="ttlDialog.visible" title="设置 TTL" width="400px" destroy-on-close append-to-body>
-      <el-form label-width="80px">
-        <el-form-item label="键名"><el-input :model-value="ttlDialog.key" disabled /></el-form-item>
-        <el-form-item label="TTL(秒)">
-          <el-input-number v-model="ttlDialog.ttl" :min="-1" style="width:100%" />
-          <div style="font-size:12px;color:#909399;">-1 表示移除过期时间（永不过期）</div>
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="ttlDialog.visible" title="设置 TTL" :width="400" unmount-on-close :mask-closable="false">
+      <a-form auto-label-width layout="horizontal">
+        <a-form-item label="键名"><a-input :model-value="ttlDialog.key" disabled /></a-form-item>
+        <a-form-item label="TTL(秒)">
+          <a-input-number v-model="ttlDialog.ttl" :min="-1" style="width:100%" />
+          <div style="font-size:12px;color:#86909c;">-1 表示移除过期时间（永不过期）</div>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="ttlDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="confirmSetTTL">确定</el-button>
+        <a-button @click="ttlDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="confirmSetTTL">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 重命名弹窗 -->
-    <el-dialog v-model="renameDialog.visible" title="重命名" width="400px" destroy-on-close append-to-body>
-      <el-form label-width="80px">
-        <el-form-item label="原键名"><el-input :model-value="renameDialog.oldKey" disabled /></el-form-item>
-        <el-form-item label="新键名"><el-input v-model="renameDialog.newKey" /></el-form-item>
-      </el-form>
+    <a-modal v-model:visible="renameDialog.visible" title="重命名" :width="400" unmount-on-close :mask-closable="false">
+      <a-form auto-label-width layout="horizontal">
+        <a-form-item label="原键名"><a-input :model-value="renameDialog.oldKey" disabled /></a-form-item>
+        <a-form-item label="新键名"><a-input v-model="renameDialog.newKey" /></a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="renameDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="confirmRename">确定</el-button>
+        <a-button @click="renameDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="confirmRename">确定</a-button>
       </template>
-    </el-dialog>
-  </el-drawer>
+    </a-modal>
+  </a-drawer>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, reactive } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Refresh, Plus, Search } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import { IconStorage, IconRefresh, IconPlus, IconSearch } from '@arco-design/web-vue/es/icon'
 import {
   getRedisDatabases, scanRedisKeys, getRedisKeyDetail, setRedisKey,
   redisKeyAction, deleteRedisKeys, setRedisKeyTTL, renameRedisKey,
@@ -424,8 +438,8 @@ const getTypeLabel = (type: string) => {
 }
 
 const getTypeTagColor = (type: string) => {
-  const map: Record<string, string> = { string: '', hash: 'success', list: 'warning', set: 'danger', zset: 'info' }
-  return map[type] || ''
+  const map: Record<string, string> = { string: 'blue', hash: 'green', list: 'orangered', set: 'red', zset: 'gray' }
+  return map[type] || 'blue'
 }
 
 const formatTTL = (ttl: number) => {
@@ -442,8 +456,6 @@ const formatBytes = (bytes: number) => {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-// PLACEHOLDER_METHODS_CONTINUE
-
 const loadDatabases = async () => {
   if (!props.middleware?.id) return
   try {
@@ -453,7 +465,7 @@ const loadDatabases = async () => {
       currentDb.value = databases.value[0].db
     }
   } catch (e: any) {
-    ElMessage.error('获取数据库列表失败: ' + (e.message || ''))
+    Message.error('获取数据库列表失败: ' + (e.message || ''))
   }
 }
 
@@ -481,7 +493,7 @@ const loadKeys = async () => {
     }
     scanCursor.value = res?.cursor || 0
   } catch (e: any) {
-    ElMessage.error('扫描键失败: ' + (e.message || ''))
+    Message.error('扫描键失败: ' + (e.message || ''))
   } finally {
     keysLoading.value = false
   }
@@ -513,7 +525,7 @@ const loadKeyDetail = async (key: string) => {
       stringValue.value = res.value || ''
     }
   } catch (e: any) {
-    ElMessage.error('获取键详情失败: ' + (e.message || ''))
+    Message.error('获取键详情失败: ' + (e.message || ''))
   } finally {
     detailLoading.value = false
   }
@@ -528,9 +540,9 @@ const saveStringValue = async () => {
       value: stringValue.value,
       ttl: keyDetail.value.ttl
     }, currentDb.value)
-    ElMessage.success('保存成功')
+    Message.success('保存成功')
   } catch (e: any) {
-    ElMessage.error('保存失败: ' + (e.message || ''))
+    Message.error('保存失败: ' + (e.message || ''))
   }
 }
 
@@ -552,7 +564,7 @@ const showHashAddDialog = () => {
       }, currentDb.value)
       inputDialog.visible = false
       loadKeyDetail(selectedKey.value)
-    } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+    } catch (e: any) { Message.error(e.message || '操作失败') }
   }
   inputDialog.visible = true
 }
@@ -574,7 +586,7 @@ const editHashField = (row: { field: string; value: any }) => {
       }, currentDb.value)
       inputDialog.visible = false
       loadKeyDetail(selectedKey.value)
-    } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+    } catch (e: any) { Message.error(e.message || '操作失败') }
   }
   inputDialog.visible = true
 }
@@ -585,10 +597,8 @@ const deleteHashField = async (field: string) => {
       key: keyDetail.value.key, action: 'HDEL', field
     }, currentDb.value)
     loadKeyDetail(selectedKey.value)
-  } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+  } catch (e: any) { Message.error(e.message || '操作失败') }
 }
-
-// PLACEHOLDER_METHODS_PART2
 
 // List 操作
 const showListAddDialog = (action: string) => {
@@ -605,7 +615,7 @@ const showListAddDialog = (action: string) => {
       }, currentDb.value)
       inputDialog.visible = false
       loadKeyDetail(selectedKey.value)
-    } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+    } catch (e: any) { Message.error(e.message || '操作失败') }
   }
   inputDialog.visible = true
 }
@@ -615,9 +625,9 @@ const listPop = async (action: string) => {
     const res = await redisKeyAction(props.middleware.id, {
       key: keyDetail.value.key, action
     }, currentDb.value)
-    ElMessage.success(`弹出值: ${res}`)
+    Message.success(`弹出值: ${res}`)
     loadKeyDetail(selectedKey.value)
-  } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+  } catch (e: any) { Message.error(e.message || '操作失败') }
 }
 
 const editListItem = (row: { index: number; value: string }) => {
@@ -636,7 +646,7 @@ const editListItem = (row: { index: number; value: string }) => {
       }, currentDb.value)
       inputDialog.visible = false
       loadKeyDetail(selectedKey.value)
-    } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+    } catch (e: any) { Message.error(e.message || '操作失败') }
   }
   inputDialog.visible = true
 }
@@ -656,7 +666,7 @@ const showSetAddDialog = () => {
       }, currentDb.value)
       inputDialog.visible = false
       loadKeyDetail(selectedKey.value)
-    } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+    } catch (e: any) { Message.error(e.message || '操作失败') }
   }
   inputDialog.visible = true
 }
@@ -667,7 +677,7 @@ const deleteSetMember = async (value: string) => {
       key: keyDetail.value.key, action: 'SREM', value
     }, currentDb.value)
     loadKeyDetail(selectedKey.value)
-  } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+  } catch (e: any) { Message.error(e.message || '操作失败') }
 }
 
 // ZSet 操作
@@ -687,7 +697,7 @@ const showZsetAddDialog = () => {
       }, currentDb.value)
       inputDialog.visible = false
       loadKeyDetail(selectedKey.value)
-    } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+    } catch (e: any) { Message.error(e.message || '操作失败') }
   }
   inputDialog.visible = true
 }
@@ -698,22 +708,27 @@ const deleteZsetMember = async (member: string) => {
       key: keyDetail.value.key, action: 'ZREM', value: member
     }, currentDb.value)
     loadKeyDetail(selectedKey.value)
-  } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+  } catch (e: any) { Message.error(e.message || '操作失败') }
 }
 
 // 删除键
 const handleDeleteKey = (key: string) => {
-  ElMessageBox.confirm(`确定删除键「${key}」？`, '提示', { type: 'warning' }).then(async () => {
-    try {
-      await deleteRedisKeys(props.middleware.id, [key], currentDb.value)
-      ElMessage.success('删除成功')
-      if (selectedKey.value === key) {
-        selectedKey.value = ''
-        keyDetail.value = null
-      }
-      refreshKeys()
-    } catch (e: any) { ElMessage.error(e.message || '删除失败') }
-  }).catch(() => {})
+  Modal.warning({
+    title: '提示',
+    content: `确定删除键「${key}」？`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await deleteRedisKeys(props.middleware.id, [key], currentDb.value)
+        Message.success('删除成功')
+        if (selectedKey.value === key) {
+          selectedKey.value = ''
+          keyDetail.value = null
+        }
+        refreshKeys()
+      } catch (e: any) { Message.error(e.message || '删除失败') }
+    }
+  })
 }
 
 // TTL
@@ -726,11 +741,11 @@ const showTTLDialog = (key: string, ttl: number) => {
 const confirmSetTTL = async () => {
   try {
     await setRedisKeyTTL(props.middleware.id, { key: ttlDialog.key, ttl: ttlDialog.ttl }, currentDb.value)
-    ElMessage.success('设置成功')
+    Message.success('设置成功')
     ttlDialog.visible = false
     if (selectedKey.value === ttlDialog.key) loadKeyDetail(selectedKey.value)
     refreshKeys()
-  } catch (e: any) { ElMessage.error(e.message || '设置失败') }
+  } catch (e: any) { Message.error(e.message || '设置失败') }
 }
 
 // 重命名
@@ -743,17 +758,15 @@ const showRenameDialog = (key: string) => {
 const confirmRename = async () => {
   try {
     await renameRedisKey(props.middleware.id, { oldKey: renameDialog.oldKey, newKey: renameDialog.newKey }, currentDb.value)
-    ElMessage.success('重命名成功')
+    Message.success('重命名成功')
     renameDialog.visible = false
     if (selectedKey.value === renameDialog.oldKey) {
       selectedKey.value = renameDialog.newKey
       loadKeyDetail(renameDialog.newKey)
     }
     refreshKeys()
-  } catch (e: any) { ElMessage.error(e.message || '重命名失败') }
+  } catch (e: any) { Message.error(e.message || '重命名失败') }
 }
-
-// PLACEHOLDER_METHODS_PART3
 
 // 右键菜单
 const handleKeyContextMenu = (e: MouseEvent, item: any) => {
@@ -765,7 +778,7 @@ const handleKeyContextMenu = (e: MouseEvent, item: any) => {
 
 const handleCopyKeyName = () => {
   navigator.clipboard.writeText(contextMenu.key).then(() => {
-    ElMessage.success('已复制')
+    Message.success('已复制')
   })
 }
 
@@ -779,7 +792,7 @@ const showNewKeyDialog = () => {
 }
 
 const createNewKey = async () => {
-  if (!newKeyForm.key) return ElMessage.warning('请输入键名')
+  if (!newKeyForm.key) return Message.warning('请输入键名')
   try {
     let value: any = newKeyForm.value
     if (newKeyForm.type === 'hash') value = {}
@@ -789,10 +802,10 @@ const createNewKey = async () => {
     await setRedisKey(props.middleware.id, {
       key: newKeyForm.key, type: newKeyForm.type, value, ttl: newKeyForm.ttl
     }, currentDb.value)
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     newKeyVisible.value = false
     refreshKeys()
-  } catch (e: any) { ElMessage.error(e.message || '创建失败') }
+  } catch (e: any) { Message.error(e.message || '创建失败') }
 }
 
 // 命令行
@@ -843,7 +856,7 @@ const loadServerInfo = async () => {
     const res: any = await getRedisInfo(props.middleware.id, currentDb.value)
     serverInfo.value = res || {}
   } catch (e: any) {
-    ElMessage.error('获取服务器信息失败: ' + (e.message || ''))
+    Message.error('获取服务器信息失败: ' + (e.message || ''))
   } finally {
     infoLoading.value = false
   }
@@ -903,14 +916,14 @@ watch(() => props.visible, (val) => {
 .sidebar {
   width: 280px;
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   flex-direction: column;
   background: #fafafa;
 }
 .sidebar-search {
   padding: 8px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
 }
 .key-list {
   flex: 1;
@@ -927,10 +940,10 @@ watch(() => props.visible, (val) => {
   transition: background 0.15s;
 }
 .key-item:hover {
-  background: #ecf5ff;
+  background: rgb(var(--primary-1, 232, 243, 255));
 }
 .key-item.active {
-  background: #d9ecff;
+  background: rgb(var(--primary-2, 201, 225, 255));
 }
 .key-type-badge {
   display: inline-block;
@@ -943,11 +956,11 @@ watch(() => props.visible, (val) => {
   color: #fff;
   flex-shrink: 0;
 }
-.type-string { background: #409eff; }
-.type-hash { background: #67c23a; }
-.type-list { background: #e6a23c; }
-.type-set { background: #f56c6c; }
-.type-zset { background: #909399; }
+.type-string { background: #165dff; }
+.type-hash { background: #00b42a; }
+.type-list { background: #ff7d00; }
+.type-set { background: #f53f3f; }
+.type-zset { background: #86909c; }
 .key-name {
   flex: 1;
   overflow: hidden;
@@ -956,12 +969,12 @@ watch(() => props.visible, (val) => {
 }
 .key-ttl, .key-ttl-forever {
   font-size: 11px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   flex-shrink: 0;
 }
 .key-empty {
   text-align: center;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   padding: 30px;
   font-size: 13px;
 }
@@ -974,18 +987,17 @@ watch(() => props.visible, (val) => {
   min-width: 0;
   overflow: hidden;
 }
-/* PLACEHOLDER_STYLE_CONTINUE */
-.main-area :deep(.el-tabs) {
+.main-area :deep(.arco-tabs) {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
-.main-area :deep(.el-tabs__content) {
+.main-area :deep(.arco-tabs-content) {
   flex: 1;
   overflow: auto;
   padding: 12px;
 }
-.main-area :deep(.el-tab-pane) {
+.main-area :deep(.arco-tabs-content-item) {
   height: 100%;
 }
 .empty-tip {
@@ -993,7 +1005,7 @@ watch(() => props.visible, (val) => {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   font-size: 14px;
 }
 .key-detail {
@@ -1052,7 +1064,7 @@ watch(() => props.visible, (val) => {
   font-size: inherit;
 }
 .cli-result.cli-error {
-  color: #f56c6c;
+  color: #f53f3f;
 }
 .cli-input-row {
   display: flex;
@@ -1063,16 +1075,16 @@ watch(() => props.visible, (val) => {
   gap: 8px;
 }
 .cli-prompt {
-  color: #67c23a;
+  color: #00b42a;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 13px;
   white-space: nowrap;
 }
-.cli-input-row :deep(.el-input__wrapper) {
+.cli-input-row :deep(.arco-input-wrapper) {
   background: transparent;
-  box-shadow: none;
+  border: none;
 }
-.cli-input-row :deep(.el-input__inner) {
+.cli-input-row :deep(.arco-input) {
   color: #d4d4d4;
   font-family: 'Consolas', 'Monaco', monospace;
 }
@@ -1087,7 +1099,7 @@ watch(() => props.visible, (val) => {
 .context-menu {
   position: fixed;
   background: #fff;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   border-radius: 4px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.1);
   z-index: 9999;
@@ -1101,12 +1113,12 @@ watch(() => props.visible, (val) => {
   transition: background 0.15s;
 }
 .context-menu-item:hover {
-  background: #ecf5ff;
+  background: rgb(var(--primary-1, 232, 243, 255));
 }
 .context-menu-item.danger {
-  color: #f56c6c;
+  color: #f53f3f;
 }
 .context-menu-item.danger:hover {
-  background: #fef0f0;
+  background: #ffece8;
 }
 </style>

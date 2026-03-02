@@ -1,11 +1,11 @@
 <template>
   <div class="flame-graph-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
     <div v-else class="panel-content">
@@ -14,17 +14,17 @@
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">采样事件</span>
-            <el-select v-model="eventType" size="small" style="width: 120px">
-              <el-option label="CPU" value="cpu" />
-              <el-option label="内存分配" value="alloc" />
-              <el-option label="锁竞争" value="lock" />
-              <el-option label="Wall Clock" value="wall" />
-            </el-select>
+            <a-select v-model="eventType" size="small" style="width: 120px">
+              <a-option label="CPU" value="cpu" />
+              <a-option label="内存分配" value="alloc" />
+              <a-option label="锁竞争" value="lock" />
+              <a-option label="Wall Clock" value="wall" />
+            </a-select>
           </div>
 
           <div class="input-group">
             <span class="input-label">采样时长</span>
-            <el-input-number
+            <a-input-number
               v-model="duration"
               :min="5"
               :max="300"
@@ -36,7 +36,7 @@
 
           <div class="input-group">
             <span class="input-label">线程ID</span>
-            <el-select
+            <a-select
               v-model="threadId"
               placeholder="可选，采样指定线程"
               size="small"
@@ -46,7 +46,7 @@
               :loading="loadingThreads"
               @focus="loadThreadListForSelect"
             >
-              <el-option
+              <a-option
                 v-for="thread in threadOptions"
                 :key="thread.id"
                 :label="`${thread.id} - ${thread.name}`"
@@ -54,45 +54,45 @@
               >
                 <span style="float: left">{{ thread.id }}</span>
                 <span style="float: right; color: #8492a6; font-size: 12px; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ thread.name }}</span>
-              </el-option>
-            </el-select>
+              </a-option>
+            </a-select>
           </div>
 
-          <el-checkbox v-model="includeThreads" size="small">
+          <a-checkbox v-model="includeThreads" size="small">
             按线程分组
-          </el-checkbox>
+          </a-checkbox>
 
-          <el-button
+          <a-button
             type="primary"
             size="small"
             @click="startProfiling"
             :loading="loading"
             :disabled="loading"
           >
-            <el-icon><VideoPlay /></el-icon>
+            <icon-play-arrow />
             {{ loading ? `采样中 (${countdown}s)` : '开始采样' }}
-          </el-button>
+          </a-button>
 
-          <el-button
+          <a-button
             size="small"
             @click="stopProfiling"
             :disabled="!loading"
             type="danger"
           >
-            <el-icon><VideoPause /></el-icon>
+            <icon-pause-circle />
             停止
-          </el-button>
+          </a-button>
         </div>
 
         <div class="toolbar-tips">
-          <el-icon><InfoFilled /></el-icon>
+          <icon-info-circle />
           <span>提示：火焰图采样期间会对应用产生轻微性能影响，建议采样时长 10-60 秒</span>
         </div>
       </div>
 
       <!-- 采样进度 -->
       <div class="progress-section" v-if="loading">
-        <el-progress
+        <a-progress
           :percentage="progressPercent"
           :stroke-width="8"
           :format="formatProgress"
@@ -106,22 +106,22 @@
         <div class="section-header">
           <span>火焰图结果</span>
           <div class="header-actions">
-            <el-tag :type="isEmptyFlameGraph ? 'warning' : 'info'" size="small">
+            <a-tag :type="isEmptyFlameGraph ? 'warning' : 'info'" size="small">
               {{ eventTypeLabel }} | {{ lastDuration }}秒
               <span v-if="isEmptyFlameGraph"> (无数据)</span>
-            </el-tag>
-            <el-button size="small" @click="openInNewWindow">
-              <el-icon><FullScreen /></el-icon>
+            </a-tag>
+            <a-button size="small" @click="openInNewWindow">
+              <icon-fullscreen />
               新窗口打开
-            </el-button>
-            <el-button size="small" @click="downloadHtml">
-              <el-icon><Download /></el-icon>
+            </a-button>
+            <a-button size="small" @click="downloadHtml">
+              <icon-download />
               下载 HTML
-            </el-button>
+            </a-button>
           </div>
         </div>
         <!-- 空火焰图警告 -->
-        <el-alert
+        <a-alert
           v-if="isEmptyFlameGraph"
           title="采样数据为空"
           type="warning"
@@ -137,7 +137,7 @@
             </ul>
             <div style="margin-top: 8px;">建议：清空「线程ID」字段，采样所有线程试试</div>
           </template>
-        </el-alert>
+        </a-alert>
         <div class="flame-graph-container">
           <iframe
             ref="flameIframe"
@@ -152,30 +152,30 @@
 
       <!-- 空状态 -->
       <div class="empty-state" v-if="!flameGraphHtml && !loading">
-        <el-empty description="点击「开始采样」生成火焰图">
+        <a-empty description="点击「开始采样」生成火焰图">
           <template #image>
             <div class="flame-icon">
-              <el-icon :size="80" color="#f56c6c"><Histogram /></el-icon>
+              <icon-bar-chart />
             </div>
           </template>
-        </el-empty>
+        </a-empty>
         <div class="event-type-guide">
           <h4>采样事件类型说明</h4>
           <div class="guide-items">
             <div class="guide-item">
-              <el-tag type="danger" effect="plain">CPU</el-tag>
+              <a-tag color="red">CPU</a-tag>
               <span>分析 CPU 热点，查看哪些方法消耗最多 CPU 时间</span>
             </div>
             <div class="guide-item">
-              <el-tag type="warning" effect="plain">内存分配</el-tag>
+              <a-tag color="orangered">内存分配</a-tag>
               <span>分析内存分配热点，查看哪些方法分配最多内存</span>
             </div>
             <div class="guide-item">
-              <el-tag type="primary" effect="plain">锁竞争</el-tag>
+              <a-tag type="primary">锁竞争</a-tag>
               <span>分析锁竞争情况，查看线程阻塞等待的位置</span>
             </div>
             <div class="guide-item">
-              <el-tag type="info" effect="plain">Wall Clock</el-tag>
+              <a-tag color="gray">Wall Clock</a-tag>
               <span>分析墙钟时间，包括 I/O 等待、sleep 等</span>
             </div>
           </div>
@@ -183,7 +183,7 @@
       </div>
 
       <!-- 错误信息 -->
-      <el-alert
+      <a-alert
         v-if="errorMessage"
         :title="errorMessage"
         type="error"
@@ -198,16 +198,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import {
-  Connection,
-  VideoPlay,
-  VideoPause,
-  Download,
-  FullScreen,
-  InfoFilled,
-  Histogram
-} from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { generateFlameGraph, getThreadList } from '@/api/arthas'
 
 const props = defineProps<{
@@ -326,7 +317,7 @@ const parseThreadListOutput = (output: string): {id: string; name: string}[] => 
 // 开始采样
 const startProfiling = async () => {
   if (!props.clusterId || !props.namespace || !props.pod || !props.container) {
-    ElMessage.warning('请先选择完整的Pod信息')
+    Message.warning('请先选择完整的Pod信息')
     return
   }
 
@@ -381,10 +372,10 @@ const startProfiling = async () => {
       if (!hasData && htmlContent.length < 3000) {
         // 火焰图可能是空的
         isEmptyFlameGraph.value = true
-        ElMessage.warning('火焰图生成成功，但采样数据为空')
+        Message.warning('火焰图生成成功，但采样数据为空')
       } else {
         isEmptyFlameGraph.value = false
-        ElMessage.success('火焰图生成成功')
+        Message.success('火焰图生成成功')
       }
     } else {
       // 检查输出中是否有错误信息
@@ -423,7 +414,7 @@ const stopProfiling = () => {
     clearInterval(countdownTimer)
     countdownTimer = null
   }
-  ElMessage.info('采样已中断')
+  Message.info('采样已中断')
 }
 
 // 从输出中提取 HTML 内容
@@ -674,7 +665,7 @@ watch(() => props.attached, (newVal) => {
   color: #606266;
 }
 
-.guide-item .el-tag {
+.guide-item .arco-tag {
   flex-shrink: 0;
   width: 80px;
   text-align: center;

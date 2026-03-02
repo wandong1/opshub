@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+- name: 'production-dashboards'
+  orgId: 1
+  type: file
+  updateIntervalSeconds: 30 
+  options:
+    path: /var/lib/grafana/grafana-dashboard/
+    foldersFromFilesStructure: true

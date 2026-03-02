@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><Lock /></el-icon>
+          <icon-lock />
         </div>
         <div>
           <h2 class="page-title">中间件权限</h2>
@@ -11,99 +11,110 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button v-permission="'middleware-perms:create'" type="primary" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+        <a-button v-permission="'middleware-perms:create'" type="primary" @click="handleAdd">
+          <template #icon><icon-plus /></template>
           添加权限
-        </el-button>
+        </a-button>
       </div>
     </div>
 
-    <div class="content-card">
-      <div class="filter-bar">
-        <el-select v-model="filterRoleId" placeholder="角色筛选" clearable style="width: 180px" @change="loadList">
-          <el-option v-for="r in roleList" :key="r.ID" :label="r.name" :value="r.ID" />
-        </el-select>
-      </div>
+    <div class="filter-bar">
+      <a-select v-model="filterRoleId" placeholder="角色筛选" allow-clear style="width: 180px" @change="loadList">
+        <a-option v-for="r in roleList" :key="r.ID" :label="r.name" :value="r.ID" />
+      </a-select>
+    </div>
 
-      <el-table :data="tableData" v-loading="loading" style="width: 100%">
-        <el-table-column prop="roleName" label="角色" width="120" />
-        <el-table-column prop="assetGroupName" label="业务分组" width="120" />
-        <el-table-column label="中间件类型" width="110">
-          <template #default="{ row }">
-            <el-tag v-if="row.middlewareType" size="small">{{ mwTypeLabel(row.middlewareType) }}</el-tag>
+    <a-table
+      :data="tableData"
+      :loading="loading"
+      :bordered="{ cell: true }"
+      stripe
+      :pagination="{
+        current: pagination.page,
+        pageSize: pagination.pageSize,
+        total: pagination.total,
+        showTotal: true,
+        showPageSize: true,
+        pageSizeOptions: [10, 20, 50]
+      }"
+      @page-change="(p: number) => { pagination.page = p; loadList() }"
+      @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadList() }"
+    >
+      <template #columns>
+        <a-table-column title="角色" data-index="roleName" :width="120" />
+        <a-table-column title="业务分组" data-index="assetGroupName" :width="120" />
+        <a-table-column title="中间件类型" :width="110">
+          <template #cell="{ record }">
+            <a-tag v-if="record.middlewareType" size="small">{{ mwTypeLabel(record.middlewareType) }}</a-tag>
             <span v-else style="color:#909399">全部类型</span>
           </template>
-        </el-table-column>
-        <el-table-column label="中间件范围" min-width="180">
-          <template #default="{ row }">
-            <span v-if="!row.middlewareIds || row.middlewareIds.length === 0">全部实例</span>
-            <span v-else>{{ row.middlewareIds.length }} 个指定实例</span>
+        </a-table-column>
+        <a-table-column title="中间件范围" :min-width="180">
+          <template #cell="{ record }">
+            <span v-if="!record.middlewareIds || record.middlewareIds.length === 0">全部实例</span>
+            <span v-else>{{ record.middlewareIds.length }} 个指定实例</span>
           </template>
-        </el-table-column>
-        <el-table-column label="权限" min-width="250">
-          <template #default="{ row }">
-            <el-tag v-if="row.permissions & 1" size="small" style="margin: 2px;">查看</el-tag>
-            <el-tag v-if="row.permissions & 2" size="small" type="warning" style="margin: 2px;">编辑</el-tag>
-            <el-tag v-if="row.permissions & 4" size="small" type="danger" style="margin: 2px;">删除</el-tag>
-            <el-tag v-if="row.permissions & 8" size="small" type="success" style="margin: 2px;">连接</el-tag>
-            <el-tag v-if="row.permissions & 16" size="small" type="info" style="margin: 2px;">执行</el-tag>
-            <el-tag v-if="row.permissions & 32" size="small" type="primary" style="margin: 2px;">查询数据</el-tag>
-            <el-tag v-if="row.permissions & 64" size="small" type="warning" style="margin: 2px;">修改数据</el-tag>
+        </a-table-column>
+        <a-table-column title="权限" :min-width="250">
+          <template #cell="{ record }">
+            <a-tag v-if="record.permissions & 1" size="small" style="margin: 2px;">查看</a-tag>
+            <a-tag v-if="record.permissions & 2" size="small" color="orangered" style="margin: 2px;">编辑</a-tag>
+            <a-tag v-if="record.permissions & 4" size="small" color="red" style="margin: 2px;">删除</a-tag>
+            <a-tag v-if="record.permissions & 8" size="small" color="green" style="margin: 2px;">连接</a-tag>
+            <a-tag v-if="record.permissions & 16" size="small" color="gray" style="margin: 2px;">执行</a-tag>
+            <a-tag v-if="record.permissions & 32" size="small" color="arcoblue" style="margin: 2px;">查询数据</a-tag>
+            <a-tag v-if="record.permissions & 64" size="small" color="orangered" style="margin: 2px;">修改数据</a-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button v-permission="'middleware-perms:update'" link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'middleware-perms:delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+        </a-table-column>
+        <a-table-column title="操作" :width="150" fixed="right">
+          <template #cell="{ record }">
+            <a-button v-permission="'middleware-perms:update'" type="text" size="small" @click="handleEdit(record)">编辑</a-button>
+            <a-button v-permission="'middleware-perms:delete'" type="text" size="small" status="danger" @click="handleDelete(record)">删除</a-button>
           </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pagination-container">
-        <el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize" :total="pagination.total" :page-sizes="[10, 20, 50]" layout="total, sizes, prev, pager, next" @size-change="loadList" @current-change="loadList" />
-      </div>
-    </div>
+        </a-table-column>
+      </template>
+    </a-table>
 
     <!-- 添加/编辑权限弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
-      <el-form :model="formData" label-width="100px">
-        <el-form-item label="角色" required>
-          <el-select v-model="formData.roleId" placeholder="请选择角色" style="width: 100%">
-            <el-option v-for="r in roleList" :key="r.ID" :label="r.name" :value="r.ID" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="业务分组" required>
-          <el-tree-select v-if="!isEdit" v-model="formData.assetGroupIds" :data="groupTree" :props="{ label: 'name', children: 'children', value: 'id' }" placeholder="请选择分组（可多选）" style="width: 100%" check-strictly multiple @change="onGroupOrTypeChange" />
-          <el-tree-select v-else v-model="formData.assetGroupId" :data="groupTree" :props="{ label: 'name', children: 'children', value: 'id' }" placeholder="请选择分组" style="width: 100%" check-strictly @change="onGroupOrTypeChange" />
-        </el-form-item>
-        <el-form-item label="中间件类型">
-          <el-select v-model="formData.middlewareType" placeholder="全部类型" clearable style="width: 100%" @change="onGroupOrTypeChange">
-            <el-option v-for="t in mwTypeOptions" :key="t.value" :label="t.label" :value="t.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="中间件实例">
-          <el-select v-model="formData.middlewareIds" multiple placeholder="全部实例（不选则为全部）" style="width: 100%" filterable :loading="mwListLoading">
-            <el-option v-for="mw in filteredMiddlewares" :key="mw.id" :label="`${mw.name} (${mw.host}:${mw.port})`" :value="mw.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="权限">
-          <el-checkbox-group v-model="selectedPerms">
-            <el-checkbox v-for="p in permOptions" :key="p.value" :value="p.value">{{ p.label }}</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="dialogVisible" :title="dialogTitle" :width="600" unmount-on-close>
+      <a-form :model="formData" layout="horizontal" auto-label-width>
+        <a-form-item label="角色" field="roleId" required>
+          <a-select v-model="formData.roleId" placeholder="请选择角色" style="width: 100%" allow-search>
+            <a-option v-for="r in roleList" :key="r.ID" :label="r.name" :value="r.ID" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="业务分组" field="assetGroupIds" required>
+          <a-tree-select v-if="!isEdit" v-model="formData.assetGroupIds" :data="groupTree" :field-names="{ key: 'id', title: 'name', children: 'children' }" placeholder="请选择分组（可多选）" style="width: 100%" tree-checkable allow-search @change="onGroupOrTypeChange" />
+          <a-tree-select v-else v-model="formData.assetGroupId" :data="groupTree" :field-names="{ key: 'id', title: 'name', children: 'children' }" placeholder="请选择分组" style="width: 100%" allow-search @change="onGroupOrTypeChange" />
+        </a-form-item>
+        <a-form-item label="中间件类型" field="middlewareType">
+          <a-select v-model="formData.middlewareType" placeholder="全部类型" allow-clear style="width: 100%" @change="onGroupOrTypeChange">
+            <a-option v-for="t in mwTypeOptions" :key="t.value" :label="t.label" :value="t.value" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="中间件实例" field="middlewareIds">
+          <a-select v-model="formData.middlewareIds" multiple placeholder="全部实例（不选则为全部）" style="width: 100%" allow-search :loading="mwListLoading">
+            <a-option v-for="mw in filteredMiddlewares" :key="mw.id" :label="`${mw.name} (${mw.host}:${mw.port})`" :value="mw.id" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="权限" field="permissions">
+          <a-checkbox-group v-model="selectedPerms">
+            <a-checkbox v-for="p in permOptions" :key="p.value" :value="p.value">{{ p.label }}</a-checkbox>
+          </a-checkbox-group>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitLoading">确定</el-button>
+        <a-button @click="dialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="handleSubmit" :loading="submitLoading">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Lock } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import { IconLock, IconPlus } from '@arco-design/web-vue/es/icon'
 import { getMiddlewarePermissions, createMiddlewarePermission, updateMiddlewarePermission, deleteMiddlewarePermission, getMiddlewareList } from '@/api/middleware'
 import { getGroupTree } from '@/api/assetGroup'
 import request from '@/utils/request'
@@ -249,11 +260,11 @@ const handleEdit = (row: any) => {
 }
 
 const handleSubmit = async () => {
-  if (!formData.roleId) return ElMessage.warning('请选择角色')
+  if (!formData.roleId) return Message.warning('请选择角色')
   const gids = isEdit.value
     ? (formData.assetGroupId ? [formData.assetGroupId] : [])
     : formData.assetGroupIds
-  if (gids.length === 0) return ElMessage.warning('请选择至少一个业务分组')
+  if (gids.length === 0) return Message.warning('请选择至少一个业务分组')
 
   submitLoading.value = true
   try {
@@ -266,7 +277,7 @@ const handleSubmit = async () => {
         middlewareType: formData.middlewareType,
         permissions: perms,
       })
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     } else {
       await createMiddlewarePermission({
         roleId: formData.roleId,
@@ -275,23 +286,28 @@ const handleSubmit = async () => {
         middlewareType: formData.middlewareType,
         permissions: perms,
       })
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     }
     dialogVisible.value = false
     loadList()
   } catch (e: any) {
-    ElMessage.error(e.message || '操作失败')
+    Message.error(e.message || '操作失败')
   } finally {
     submitLoading.value = false
   }
 }
 
 const handleDelete = (row: any) => {
-  ElMessageBox.confirm('确定删除该权限配置？', '提示', { type: 'warning' }).then(async () => {
-    await deleteMiddlewarePermission(row.id)
-    ElMessage.success('删除成功')
-    loadList()
-  }).catch(() => {})
+  Modal.warning({
+    title: '提示',
+    content: '确定删除该权限配置？',
+    hideCancel: false,
+    onOk: async () => {
+      await deleteMiddlewarePermission(row.id)
+      Message.success('删除成功')
+      loadList()
+    }
+  })
 }
 
 onMounted(() => {
@@ -303,15 +319,38 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.mw-permission-page { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.mw-permission-page { padding: 0; }
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 16px 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
 .page-title-group { display: flex; align-items: center; gap: 12px; }
-.page-title-icon { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; }
+.page-title-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--ops-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 18px;
+}
 .page-title { margin: 0; font-size: 18px; font-weight: 600; }
 .page-subtitle { margin: 2px 0 0; font-size: 13px; color: #909399; }
-.content-card { background: #fff; border-radius: 8px; border: 1px solid #ebeef5; padding: 16px; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 16px; }
-.pagination-container { margin-top: 16px; display: flex; justify-content: flex-end; }
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
 </style>
-
-

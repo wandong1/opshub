@@ -2,83 +2,70 @@
   <div class="endpoints-list">
     <div class="search-bar">
       <div class="search-bar-left">
-        <el-input v-model="searchName" placeholder="搜索 Endpoints 名称..." clearable class="search-input" @input="handleSearch">
+        <a-input v-model="searchName" placeholder="搜索 Endpoints 名称..." allow-clear class="search-input" @input="handleSearch">
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
 
-        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-          <el-option label="全部" value="" />
-          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-        </el-select>
+        <a-select v-model="filterNamespace" placeholder="命名空间" allow-clear @change="handleSearch" class="filter-select">
+          <a-option label="全部" value="" />
+          <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </a-select>
       </div>
 
       <div class="search-bar-right">
-        <el-button v-permission="'k8s-endpoints:create'" class="black-button" @click="handleCreateYAML">
-          <el-icon><Document /></el-icon> YAML创建
-        </el-button>
+        <a-button v-permission="'k8s-endpoints:create'" type="primary" @click="handleCreateYAML">
+          <icon-file /> YAML创建
+        </a-button>
       </div>
     </div>
 
     <div class="table-wrapper">
-      <el-table :data="filteredEndpoints" v-loading="loading" class="modern-table" size="default">
-        <el-table-column label="名称" prop="name" min-width="200" fixed>
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Connection /></el-icon>
-              名称
-            </span>
-          </template>
-          <template #default="{ row }">
+      <a-table :data="filteredEndpoints" :loading="loading" class="modern-table" size="default" :columns="tableColumns">
+          <template #name="{ record }">
             <div class="name-cell">
-              <el-icon class="name-icon"><Connection /></el-icon>
+              <icon-link />
               <div>
-                <div class="name-text">{{ row.name }}</div>
-                <div class="namespace-text">{{ row.namespace }}</div>
+                <div class="name-text">{{ record.name }}</div>
+                <div class="namespace-text">{{ record.namespace }}</div>
               </div>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="端点" min-width="300">
-          <template #default="{ row }">
-            <div v-if="row.subsets.length > 0">
-              <div v-for="(subset, idx) in row.subsets" :key="idx" class="subset-item">
-                <el-tag size="small" type="success" class="endpoint-tag">
+          <template #col_6900="{ record }">
+            <div v-if="record.subsets.length > 0">
+              <div v-for="(subset, idx) in record.subsets" :key="idx" class="subset-item">
+                <a-tag size="small" color="green" class="endpoint-tag">
                   {{ subset.addresses.length }} 就绪
-                </el-tag>
-                <el-tag v-if="subset.notReadyAddresses.length > 0" size="small" type="warning" class="endpoint-tag">
+                </a-tag>
+                <a-tag v-if="subset.notReadyAddresses.length > 0" size="small" color="orangered" class="endpoint-tag">
                   {{ subset.notReadyAddresses.length }} 未就绪
-                </el-tag>
+                </a-tag>
                 <div class="ports-display">
                   {{ subset.ports.map(p => `${p.port}/${p.protocol}`).join(', ') }}
                 </div>
               </div>
             </div>
-            <el-tag v-else type="info" size="small">无端点</el-tag>
+            <a-tag v-else color="gray" size="small">无端点</a-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="存活时间" prop="age" width="120" />
-        <el-table-column label="操作" width="120" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <div class="action-buttons">
-              <el-tooltip content="编辑 YAML" placement="top">
-                <el-button v-permission="'k8s-endpoints:update'" link class="action-btn" @click="handleEditYAML(row)">
-                  <el-icon :size="18"><Document /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'k8s-endpoints:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <a-tooltip content="编辑 YAML" placement="top">
+                <a-button v-permission="'k8s-endpoints:update'" type="text" class="action-btn" @click="handleEditYAML(record)">
+                  <icon-file />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="删除" placement="top">
+                <a-button v-permission="'k8s-endpoints:delete'" type="text" class="action-btn danger" @click="handleDelete(record)">
+                  <icon-delete />
+                </a-button>
+              </a-tooltip>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
     </div>
 
-    <el-dialog v-model="yamlDialogVisible" :title="`Endpoints YAML - ${selectedEndpoint?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="yamlDialogVisible" :title="`Endpoints YAML - ${selectedEndpoint?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -94,13 +81,13 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveYAML" :loading="saving">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="saving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
-    <el-dialog v-model="detailDialogVisible" :title="`Endpoints 详情 - ${selectedEndpoint?.name}`" width="800px">
+    <a-modal v-model:visible="detailDialogVisible" :title="`Endpoints 详情 - ${selectedEndpoint?.name}`" width="800px">
       <div v-if="selectedEndpoint">
         <div v-for="(subset, idx) in selectedEndpoint.subsets" :key="idx" class="detail-subset">
           <h4>Subset {{ idx + 1 }}</h4>
@@ -121,12 +108,12 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <a-button @click="detailDialogVisible = false">关闭</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- YAML 创建弹窗 -->
-    <el-dialog v-model="createYamlDialogVisible" title="YAML 创建 Endpoints" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="createYamlDialogVisible" title="YAML 创建 Endpoints" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in createYamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -142,18 +129,25 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="createYamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</el-button>
+          <a-button @click="createYamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 200 },
+  { title: '端点', slotName: 'col_6900', width: 300 },
+  { title: '存活时间', dataIndex: 'age', width: 120 },
+  { title: '操作', slotName: 'actions', width: 120, fixed: 'right', align: 'center' }
+]
+
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Document, Connection, Delete } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getEndpoints, getEndpointsDetail, createEndpointYAML, getEndpointYAML, updateEndpointYAML, deleteEndpoint, getNamespaces, type EndpointsInfo } from '@/api/kubernetes'
 import { load, dump } from 'js-yaml'
 
@@ -223,10 +217,10 @@ const loadEndpoints = async (showSuccess = false) => {
     const data = await getEndpoints(props.clusterId, props.namespace || undefined)
     endpointsList.value = data || []
     if (showSuccess) {
-      ElMessage.success('刷新成功')
+      Message.success('刷新成功')
     }
   } catch (error) {
-    ElMessage.error('获取 Endpoints 列表失败')
+    Message.error('获取 Endpoints 列表失败')
   } finally {
     loading.value = false
   }
@@ -262,21 +256,21 @@ const handleEditYAML = async (endpoint: EndpointsInfo) => {
     yamlContent.value = yaml
     yamlDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('获取 YAML 失败')
+    Message.error('获取 YAML 失败')
   }
 }
 
 const handleDelete = async (endpoint: EndpointsInfo) => {
   if (!props.clusterId) return
   try {
-    await ElMessageBox.confirm(`确定要删除 Endpoint ${endpoint.name} 吗？`, '删除确认', { type: 'error' })
+    await confirmModal(`确定要删除 Endpoint ${endpoint.name} 吗？`, '删除确认', { type: 'error' })
     await deleteEndpoint(props.clusterId, endpoint.namespace, endpoint.name)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     emit('refresh')
     await loadEndpoints()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      Message.error('删除失败')
     }
   }
 }
@@ -307,7 +301,7 @@ const handleSaveYAML = async () => {
         jsonData.kind = 'Endpoints'
       }
     } catch (e) {
-      ElMessage.error('YAML 格式错误，请检查缩进和语法')
+      Message.error('YAML 格式错误，请检查缩进和语法')
       saving.value = false
       return
     }
@@ -318,12 +312,12 @@ const handleSaveYAML = async () => {
       selectedEndpoint.value.name,
       jsonData
     )
-    ElMessage.success('保存成功')
+    Message.success('保存成功')
     yamlDialogVisible.value = false
     emit('refresh')
     await loadEndpoints()
   } catch (error) {
-    ElMessage.error('保存失败')
+    Message.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -386,12 +380,12 @@ const handleSaveCreateYAML = async () => {
       namespace,
       jsonData
     )
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createYamlDialogVisible.value = false
     emit('refresh')
     await loadEndpoints()
   } catch (error) {
-    ElMessage.error('创建失败')
+    Message.error('创建失败')
   } finally {
     creating.value = false
   }
@@ -440,19 +434,6 @@ defineExpose({
   width: 100%;
 }
 
-/* 黑色按钮样式 */
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
 
 .search-bar {
   display: flex;
@@ -485,7 +466,7 @@ defineExpose({
 }
 
 .search-icon {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .table-wrapper {
@@ -503,15 +484,15 @@ defineExpose({
 .name-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 18px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
 }
 
 .name-text {
@@ -531,7 +512,7 @@ defineExpose({
 }
 
 .header-icon-blue {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .namespace-text {
@@ -562,12 +543,12 @@ defineExpose({
 }
 
 .action-btn {
-  color: #d4af37;
+  color: #165dff;
   transition: all 0.3s;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 .action-btn.danger {
@@ -597,10 +578,10 @@ defineExpose({
 /* YAML 编辑弹窗 */
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #1e1e1e;
 }
 
 .yaml-line-numbers {
@@ -624,8 +605,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
   border: none;
   outline: none;
   padding: 16px;
@@ -644,7 +625,7 @@ defineExpose({
   outline: none;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 0;
   background-color: #1a1a1a;
 }

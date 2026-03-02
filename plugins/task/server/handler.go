@@ -34,9 +34,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	agentserver "github.com/ydcloud-dy/opshub/internal/server/agent"
+	pb "github.com/ydcloud-dy/opshub/pkg/agentproto"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 	"github.com/ydcloud-dy/opshub/plugins/task/model"
 	"gorm.io/gorm"
@@ -45,14 +48,15 @@ import (
 type Handler struct {
 	db            *gorm.DB
 	encryptionKey []byte
+	agentHub      *agentserver.AgentHub
 }
 
-func NewHandler(db *gorm.DB) *Handler {
-	// 使用与凭证仓库相同的加密密钥
+func NewHandler(db *gorm.DB, agentHub *agentserver.AgentHub) *Handler {
 	encryptionKey := []byte("opshub-enc-key-32-bytes-long!!!!")
 	return &Handler{
 		db:            db,
 		encryptionKey: encryptionKey,
+		agentHub:      agentHub,
 	}
 }
 
@@ -507,10 +511,11 @@ func (h *Handler) DeleteAnsibleTask(c *gin.Context) {
 
 // ExecuteTaskRequest 执行任务请求
 type ExecuteTaskRequest struct {
-	HostIDs     []uint `json:"hostIds" binding:"required"`
-	ScriptType  string `json:"scriptType" binding:"required"` // Shell, Python
-	Content     string `json:"content" binding:"required"`
-	Name        string `json:"name"`
+	HostIDs       []uint `json:"hostIds" binding:"required"`
+	ScriptType    string `json:"scriptType" binding:"required"` // Shell, Python
+	Content       string `json:"content" binding:"required"`
+	Name          string `json:"name"`
+	ExecutionMode string `json:"executionMode"` // ssh, agent, auto
 }
 
 // ExecuteTaskResponse 执行任务响应
@@ -592,7 +597,7 @@ func (h *Handler) ExecuteTask(c *gin.Context) {
 	allSuccess := true
 
 	for _, hostID := range req.HostIDs {
-		result := h.executeOnHost(ctx, hostID, req.ScriptType, req.Content)
+		result := h.executeOnHost(ctx, hostID, req.ScriptType, req.Content, req.ExecutionMode)
 		results = append(results, result)
 		if result.Status != "success" {
 			allSuccess = false
@@ -957,7 +962,7 @@ func (h *Handler) checkCommandSafety(content string) error {
 }
 
 // executeOnHost 在单个主机上执行任务
-func (h *Handler) executeOnHost(ctx context.Context, hostID uint, scriptType, content string) HostExecutionResult {
+func (h *Handler) executeOnHost(ctx context.Context, hostID uint, scriptType, content, executionMode string) HostExecutionResult {
 	result := HostExecutionResult{
 		HostID: hostID,
 		Status: "failed",
@@ -972,6 +977,87 @@ func (h *Handler) executeOnHost(ctx context.Context, hostID uint, scriptType, co
 
 	result.HostName = host.Name
 	result.HostIP = host.IP
+
+	// 判断是否使用Agent执行
+	useAgent := false
+	if h.agentHub != nil {
+		switch executionMode {
+		case "agent":
+			useAgent = h.agentHub.IsOnline(hostID)
+			if !useAgent {
+				result.Error = "Agent不在线，无法通过Agent执行"
+				return result
+			}
+		case "auto":
+			useAgent = h.agentHub.IsOnline(hostID)
+		// "ssh" 或其他: useAgent = false
+		}
+	}
+
+	if useAgent {
+		return h.executeOnHostViaAgent(hostID, scriptType, content, result)
+	}
+	return h.executeOnHostViaSSH(ctx, &host, scriptType, content, result)
+}
+
+// executeOnHostViaAgent 通过Agent执行命令
+func (h *Handler) executeOnHostViaAgent(hostID uint, scriptType, content string, result HostExecutionResult) HostExecutionResult {
+	as, ok := h.agentHub.GetByHostID(hostID)
+	if !ok {
+		result.Error = "Agent不在线"
+		return result
+	}
+
+	// 构造命令
+	var cmd string
+	if scriptType == "Python" {
+		cmd = fmt.Sprintf("python3 -c %s", shellescape(content))
+	} else {
+		cmd = content
+	}
+
+	requestID := uuid.New().String()
+	as.Send(&pb.ServerMessage{
+		Payload: &pb.ServerMessage_CmdRequest{
+			CmdRequest: &pb.CommandRequest{
+				RequestId: requestID,
+				Command:   cmd,
+				Timeout:   60,
+			},
+		},
+	})
+
+	// 等待响应
+	resp, err := h.agentHub.WaitResponse(as, requestID, 70*time.Second)
+	if err != nil {
+		result.Error = fmt.Sprintf("Agent执行超时或断开: %v", err)
+		return result
+	}
+
+	cmdResult, ok := resp.(*pb.CommandResult)
+	if !ok {
+		result.Error = "Agent返回了非预期的响应类型"
+		return result
+	}
+
+	result.Output = cmdResult.Stdout
+	if cmdResult.Stderr != "" {
+		if result.Output != "" {
+			result.Output += "\n"
+		}
+		result.Output += cmdResult.Stderr
+	}
+
+	if cmdResult.ExitCode == 0 {
+		result.Status = "success"
+	} else {
+		result.Error = fmt.Sprintf("退出码: %d", cmdResult.ExitCode)
+	}
+	return result
+}
+
+// executeOnHostViaSSH 通过SSH执行命令
+func (h *Handler) executeOnHostViaSSH(ctx context.Context, host *assetbiz.Host, scriptType, content string, result HostExecutionResult) HostExecutionResult {
 
 	// 获取凭证
 	if host.CredentialID == 0 {
@@ -992,7 +1078,7 @@ func (h *Handler) executeOnHost(ctx context.Context, hostID uint, scriptType, co
 	}
 
 	// 建立SSH连接
-	sshClient, err := h.createSSHClient(&host, &credential)
+	sshClient, err := h.createSSHClient(host, &credential)
 	if err != nil {
 		result.Error = fmt.Sprintf("SSH连接失败: %v", err)
 		return result
@@ -1565,6 +1651,11 @@ func (h *Handler) DistributeFiles(c *gin.Context) {
 		return
 	}
 
+	distributionMode := c.PostForm("distributionMode")
+	if distributionMode == "" {
+		distributionMode = "auto"
+	}
+
 	var hostIDs []uint
 	if err := json.Unmarshal([]byte(hostIdsStr), &hostIDs); err != nil {
 		response.ErrorCode(c, http.StatusBadRequest, "主机ID格式错误")
@@ -1620,7 +1711,7 @@ func (h *Handler) DistributeFiles(c *gin.Context) {
 	allSuccess := true
 
 	for _, hostID := range hostIDs {
-		result := h.distributeToHost(ctx, hostID, files, targetPath)
+		result := h.distributeToHost(ctx, hostID, files, targetPath, distributionMode)
 		results = append(results, result)
 		if result.Status != "success" {
 			allSuccess = false
@@ -1644,7 +1735,7 @@ func (h *Handler) DistributeFiles(c *gin.Context) {
 }
 
 // distributeToHost 分发文件到单个主机
-func (h *Handler) distributeToHost(ctx context.Context, hostID uint, files []*multipart.FileHeader, targetPath string) FileDistributionResult {
+func (h *Handler) distributeToHost(ctx context.Context, hostID uint, files []*multipart.FileHeader, targetPath string, distributionMode string) FileDistributionResult {
 	result := FileDistributionResult{
 		HostID: hostID,
 		Status: "failed",
@@ -1659,6 +1750,85 @@ func (h *Handler) distributeToHost(ctx context.Context, hostID uint, files []*mu
 
 	result.HostName = host.Name
 	result.HostIP = host.IP
+
+	// 判断是否使用Agent
+	useAgent := false
+	if h.agentHub != nil {
+		switch distributionMode {
+		case "agent":
+			useAgent = h.agentHub.IsOnline(hostID)
+			if !useAgent {
+				result.Error = "Agent不在线，无法通过Agent分发"
+				return result
+			}
+		case "auto":
+			useAgent = h.agentHub.IsOnline(hostID)
+		}
+	}
+
+	if useAgent {
+		return h.distributeToHostViaAgent(hostID, files, targetPath, result)
+	}
+	return h.distributeToHostViaSSH(ctx, &host, files, targetPath, result)
+}
+
+// distributeToHostViaAgent 通过Agent分发文件
+func (h *Handler) distributeToHostViaAgent(hostID uint, files []*multipart.FileHeader, targetPath string, result FileDistributionResult) FileDistributionResult {
+	as, ok := h.agentHub.GetByHostID(hostID)
+	if !ok {
+		result.Error = "Agent不在线"
+		return result
+	}
+
+	for _, fileHeader := range files {
+		srcFile, err := fileHeader.Open()
+		if err != nil {
+			result.Error = fmt.Sprintf("打开文件 %s 失败: %v", fileHeader.Filename, err)
+			return result
+		}
+		data, err := io.ReadAll(srcFile)
+		srcFile.Close()
+		if err != nil {
+			result.Error = fmt.Sprintf("读取文件 %s 失败: %v", fileHeader.Filename, err)
+			return result
+		}
+
+		requestID := uuid.New().String()
+		as.Send(&pb.ServerMessage{
+			Payload: &pb.ServerMessage_FileRequest{
+				FileRequest: &pb.FileRequest{
+					RequestId: requestID,
+					Action:    "upload",
+					Path:      targetPath,
+					Filename:  fileHeader.Filename,
+					Data:      data,
+				},
+			},
+		})
+
+		resp, err := h.agentHub.WaitResponse(as, requestID, 60*time.Second)
+		if err != nil {
+			result.Error = fmt.Sprintf("Agent上传文件 %s 超时: %v", fileHeader.Filename, err)
+			return result
+		}
+
+		fileResp, ok := resp.(*pb.FileChunk)
+		if !ok {
+			result.Error = fmt.Sprintf("Agent返回非预期响应类型")
+			return result
+		}
+		if fileResp.Error != "" {
+			result.Error = fmt.Sprintf("Agent上传文件 %s 失败: %s", fileHeader.Filename, fileResp.Error)
+			return result
+		}
+	}
+
+	result.Status = "success"
+	return result
+}
+
+// distributeToHostViaSSH 通过SSH/SFTP分发文件
+func (h *Handler) distributeToHostViaSSH(ctx context.Context, host *assetbiz.Host, files []*multipart.FileHeader, targetPath string, result FileDistributionResult) FileDistributionResult {
 
 	// 获取凭证
 	if host.CredentialID == 0 {
@@ -1679,7 +1849,7 @@ func (h *Handler) distributeToHost(ctx context.Context, hostID uint, files []*mu
 	}
 
 	// 建立SSH连接
-	sshClient, err := h.createSSHClient(&host, &credential)
+	sshClient, err := h.createSSHClient(host, &credential)
 	if err != nil {
 		result.Error = fmt.Sprintf("SSH连接失败: %v", err)
 		return result

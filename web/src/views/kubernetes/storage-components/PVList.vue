@@ -2,89 +2,67 @@
   <div class="pv-list">
     <div class="search-bar">
       <div class="search-bar-left">
-        <el-input v-model="searchName" placeholder="搜索 PV 名称..." clearable class="search-input" @input="handleSearch">
+        <a-input v-model="searchName" placeholder="搜索 PV 名称..." allow-clear class="search-input" @input="handleSearch">
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
       </div>
 
       <div class="search-bar-right">
-        <el-button v-permission="'k8s-pv:create'" class="black-button" @click="handleCreateYAML">
-          <el-icon><Document /></el-icon> YAML创建
-        </el-button>
+        <a-button v-permission="'k8s-pv:create'" type="primary" @click="handleCreateYAML">
+          <icon-file /> YAML创建
+        </a-button>
 
-        <el-button class="black-button" @click="loadPVs">
-          <el-icon><Refresh /></el-icon> 刷新
-        </el-button>
+        <a-button type="primary" @click="loadPVs">
+          <icon-refresh /> 刷新
+        </a-button>
       </div>
     </div>
 
     <div class="table-wrapper">
-      <el-table :data="filteredPVs" v-loading="loading" class="modern-table">
-        <el-table-column label="名称" prop="name" min-width="280" fixed>
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Folder /></el-icon>
-              名称
-            </span>
-          </template>
-          <template #default="{ row }">
+      <a-table :data="filteredPVs" :loading="loading" class="modern-table" :columns="tableColumns">
+          <template #name="{ record }">
             <div class="name-cell">
-              <el-icon class="name-icon"><Folder /></el-icon>
-              <div class="name-text">{{ row.name }}</div>
+              <icon-folder />
+              <div class="name-text">{{ record.name }}</div>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="状态" prop="status" width="120">
-          <template #default="{ row }">
-            <el-tag :type="getStatusTagType(row.status)" size="small">{{ row.status }}</el-tag>
+          <template #status="{ record }">
+            <a-tag :type="getStatusTagType(record.status)" size="small">{{ record.status }}</a-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="容量" prop="capacity" width="120" />
-        <el-table-column label="访问模式" width="140">
-          <template #default="{ row }">
-            <div v-for="mode in row.accessModes" :key="mode" class="access-mode-item">
+          <template #accessModes="{ record }">
+            <div v-for="mode in record.accessModes" :key="mode" class="access-mode-item">
               {{ formatAccessMode(mode) }}
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="回收策略" prop="reclaimPolicy" width="140">
-          <template #default="{ row }">
-            {{ formatReclaimPolicy(row.reclaimPolicy) }}
+          <template #reclaimPolicy="{ record }">
+            {{ formatReclaimPolicy(record.reclaimPolicy) }}
           </template>
-        </el-table-column>
-        <el-table-column label="声明" prop="claim" min-width="180">
-          <template #default="{ row }">
-            {{ row.claim || '-' }}
+          <template #claim="{ record }">
+            {{ record.claim || '-' }}
           </template>
-        </el-table-column>
-        <el-table-column label="存储类" prop="storageClass" width="150">
-          <template #default="{ row }">
-            {{ row.storageClass || '-' }}
+          <template #storageClass="{ record }">
+            {{ record.storageClass || '-' }}
           </template>
-        </el-table-column>
-        <el-table-column label="存活时间" prop="age" width="100" />
-        <el-table-column label="操作" width="160" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <div class="action-buttons">
-              <el-tooltip content="编辑 YAML" placement="top">
-                <el-button v-permission="'k8s-pv:update'" link class="action-btn" @click="handleEditYAML(row)">
-                  <el-icon :size="18"><Document /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'k8s-pv:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <a-tooltip content="编辑 YAML" placement="top">
+                <a-button v-permission="'k8s-pv:update'" type="text" class="action-btn" @click="handleEditYAML(record)">
+                  <icon-file />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="删除" placement="top">
+                <a-button v-permission="'k8s-pv:delete'" type="text" class="action-btn danger" @click="handleDelete(record)">
+                  <icon-delete />
+                </a-button>
+              </a-tooltip>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
     </div>
 
-    <el-dialog v-model="yamlDialogVisible" :title="`PV YAML - ${selectedPV?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="yamlDialogVisible" :title="`PV YAML - ${selectedPV?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -100,14 +78,14 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveYAML" :loading="saving">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="saving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- YAML 创建弹窗 -->
-    <el-dialog v-model="createYamlDialogVisible" title="YAML 创建 PV" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="createYamlDialogVisible" title="YAML 创建 PV" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in createYamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -123,18 +101,30 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="createYamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</el-button>
+          <a-button @click="createYamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 280 },
+  { title: '状态', dataIndex: 'status', slotName: 'status', width: 120 },
+  { title: '容量', dataIndex: 'capacity', width: 120 },
+  { title: '访问模式', slotName: 'accessModes', width: 140 },
+  { title: '回收策略', dataIndex: 'reclaimPolicy', slotName: 'reclaimPolicy', width: 140 },
+  { title: '声明', dataIndex: 'claim', slotName: 'claim', width: 180 },
+  { title: '存储类', dataIndex: 'storageClass', slotName: 'storageClass', width: 150 },
+  { title: '存活时间', dataIndex: 'age', width: 100 },
+  { title: '操作', slotName: 'actions', width: 160, fixed: 'right', align: 'center' }
+]
+
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Document, Delete, Refresh, Folder } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { load, dump } from 'js-yaml'
 import {
   getPersistentVolumes,
@@ -192,10 +182,10 @@ const loadPVs = async (showSuccess = false) => {
     const data = await getPersistentVolumes(props.clusterId)
     pvList.value = data || []
     if (showSuccess) {
-      ElMessage.success('刷新成功')
+      Message.success('刷新成功')
     }
   } catch (error) {
-    ElMessage.error('获取 PV 列表失败')
+    Message.error('获取 PV 列表失败')
   } finally {
     loading.value = false
   }
@@ -270,7 +260,7 @@ const handleEditYAML = async (pv: PVInfo) => {
     yamlContent.value = yaml
     yamlDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('获取 YAML 失败')
+    Message.error('获取 YAML 失败')
   }
 }
 
@@ -304,7 +294,7 @@ const handleSaveYAML = async () => {
         jsonData.kind = 'PersistentVolume'
       }
     } catch (e) {
-      ElMessage.error('YAML 格式错误，请检查缩进和语法')
+      Message.error('YAML 格式错误，请检查缩进和语法')
       saving.value = false
       return
     }
@@ -314,12 +304,12 @@ const handleSaveYAML = async () => {
       selectedPV.value.name,
       jsonData
     )
-    ElMessage.success('保存成功')
+    Message.success('保存成功')
     yamlDialogVisible.value = false
     emit('refresh')
     await loadPVs()
   } catch (error) {
-    ElMessage.error('保存失败')
+    Message.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -357,12 +347,12 @@ const handleSaveCreateYAML = async () => {
       props.clusterId,
       jsonData
     )
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createYamlDialogVisible.value = false
     emit('refresh')
     await loadPVs()
   } catch (error) {
-    ElMessage.error('创建失败')
+    Message.error('创建失败')
   } finally {
     creating.value = false
   }
@@ -383,14 +373,14 @@ const handleCreateYamlScroll = (e: Event) => {
 const handleDelete = async (pv: PVInfo) => {
   if (!props.clusterId) return
   try {
-    await ElMessageBox.confirm(`确定要删除 PV ${pv.name} 吗？`, '删除确认', { type: 'error' })
+    await confirmModal(`确定要删除 PV ${pv.name} 吗？`, '删除确认', { type: 'error' })
     await deletePersistentVolume(props.clusterId, pv.name)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     emit('refresh')
     await loadPVs()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      Message.error('删除失败')
     }
   }
 }
@@ -430,19 +420,6 @@ defineExpose({
   width: 100%;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
 .search-bar {
   display: flex;
   justify-content: space-between;
@@ -470,10 +447,6 @@ defineExpose({
   width: 280px;
 }
 
-.search-icon {
-  color: #d4af37;
-}
-
 .table-wrapper {
   background: #fff;
   border-radius: 8px;
@@ -489,15 +462,15 @@ defineExpose({
 .name-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 18px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
+  border: none;
 }
 
 .name-text {
@@ -517,15 +490,15 @@ defineExpose({
 }
 
 .header-icon-blue {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .access-mode-item {
   font-size: 12px;
   padding: 2px 6px;
-  background: #f0f0f0;
+  background: #e8f3ff;
   border-radius: 3px;
-  color: #606266;
+  color: #165dff;
   margin-bottom: 4px;
   display: inline-block;
 }
@@ -538,12 +511,17 @@ defineExpose({
 }
 
 .action-btn {
-  color: #d4af37;
+  color: #165dff;
   transition: all 0.3s;
+  padding: 0;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 .action-btn.danger {
@@ -556,15 +534,15 @@ defineExpose({
 
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #fafafa;
 }
 
 .yaml-line-numbers {
-  background-color: #0d0d0d;
-  color: #666;
+  background-color: #f2f3f5;
+  color: #86909c;
   padding: 16px 8px;
   text-align: right;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
@@ -573,7 +551,7 @@ defineExpose({
   user-select: none;
   overflow: hidden;
   min-width: 40px;
-  border-right: 1px solid #333;
+  border-right: 1px solid #e5e6eb;
 }
 
 .line-number {
@@ -583,8 +561,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #fafafa;
+  color: #1d2129;
   border: none;
   outline: none;
   padding: 16px;
@@ -603,9 +581,9 @@ defineExpose({
   outline: none;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
-  padding: 0;
-  background-color: #1a1a1a;
+.yaml-dialog :deep(.arco-dialog__body) {
+  background-color: #fafafa;
+  padding: 24px;
 }
 
 .dialog-footer {

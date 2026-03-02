@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><FolderOpened /></el-icon>
+          <icon-folder />
         </div>
         <div>
           <h2 class="page-title">存储管理</h2>
@@ -12,26 +12,26 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-select
+        <a-select
           v-model="selectedClusterId"
           placeholder="选择集群"
           class="cluster-select"
           @change="handleClusterChange"
         >
           <template #prefix>
-            <el-icon class="search-icon"><Platform /></el-icon>
+            <icon-apps />
           </template>
-          <el-option
+          <a-option
             v-for="cluster in clusterList"
             :key="cluster.id"
             :label="cluster.alias || cluster.name"
             :value="cluster.id"
           />
-        </el-select>
-        <el-button class="black-button" @click="loadCurrentResources">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-select>
+        <a-button type="primary" @click="loadCurrentResources">
+          <icon-refresh />
           刷新
-        </el-button>
+        </a-button>
       </div>
     </div>
 
@@ -43,9 +43,7 @@
         :class="['type-tab', { active: activeTab === type.value }]"
         @click="handleTabChange(type.value)"
       >
-        <el-icon class="type-icon">
           <component :is="type.icon" />
-        </el-icon>
         <span class="type-label">{{ type.label }}</span>
         <span v-if="type.count !== undefined" class="type-count">({{ type.count }})</span>
       </div>
@@ -85,9 +83,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Refresh, FolderOpened, Platform, Coin, Folder, Box } from '@element-plus/icons-vue'
 import { getClusterList, type Cluster } from '@/api/kubernetes'
-import axios from 'axios'
+import {
+  IconCommon,
+  IconFolder,
+  IconStorage
+} from '@arco-design/web-vue/es/icon'
 import PVCList from './storage-components/PVCList.vue'
 import PVList from './storage-components/PVList.vue'
 import StorageClassList from './storage-components/StorageClassList.vue'
@@ -101,9 +102,9 @@ interface StorageType {
 }
 
 const storageTypes = ref<StorageType[]>([
-  { label: 'PersistentVolumeClaims', value: 'pvcs', icon: Coin, count: 0 },
-  { label: 'PersistentVolumes', value: 'pvs', icon: Folder, count: 0 },
-  { label: 'StorageClasses', value: 'storageclasses', icon: Box, count: 0 },
+  { label: 'PersistentVolumeClaims', value: 'pvcs', icon: IconCommon, count: 0 },
+  { label: 'PersistentVolumes', value: 'pvs', icon: IconFolder, count: 0 },
+  { label: 'StorageClasses', value: 'storageclasses', icon: IconStorage, count: 0 },
 ])
 
 const clusterList = ref<Cluster[]>([])
@@ -185,7 +186,6 @@ onMounted(async () => {
   background-color: transparent;
 }
 
-/* 页面头部 */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -206,20 +206,15 @@ onMounted(async () => {
 .page-title-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
-}
-
-.page-title-icon .el-icon {
-  font-size: 22px;
-  color: #d4af37;
+  border: none;
 }
 
 .page-title {
@@ -247,25 +242,6 @@ onMounted(async () => {
   width: 280px;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-/* 存储类型标签栏 */
 .storage-types-bar {
   display: flex;
   gap: 8px;
@@ -282,8 +258,8 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: #1a1a1a;
-  color: #fff;
+  background: #f7f8fa;
+  color: #4e5969;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -292,18 +268,15 @@ onMounted(async () => {
 }
 
 .type-tab:hover {
-  background: #2a2a2a;
+  background: #e8f3ff;
+  color: #165dff;
 }
 
 .type-tab.active {
-  background: #d4af37;
-  color: #000;
-  border: 1px solid #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
-}
-
-.type-icon {
-  font-size: 16px;
+  background: #165dff;
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.3);
 }
 
 .type-label {
@@ -316,12 +289,7 @@ onMounted(async () => {
   margin-left: 2px;
 }
 
-/* 内容区域 */
 .content-wrapper {
   background: transparent;
-}
-
-.cluster-select :deep(.el-input__wrapper) {
-  border-radius: 8px;
 }
 </style>

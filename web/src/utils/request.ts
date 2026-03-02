@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 
 const request = axios.create({
   baseURL: '/',
@@ -53,7 +53,7 @@ request.interceptors.response.use(
         // 避免重复跳转
         if (!isRedirecting) {
           isRedirecting = true
-          ElMessage.error('登录已过期，请重新登录')
+          Message.error('登录已过期，请重新登录')
           localStorage.removeItem('token')
           // 延迟跳转，让用户看到提示
           setTimeout(() => {
@@ -70,7 +70,7 @@ request.interceptors.response.use(
       // 只在非登录接口的情况下自动显示错误消息
       // 登录接口和验证码接口的错误由调用方处理,避免重复提示
       if (!url.includes('/login') && !url.includes('/captcha')) {
-        ElMessage.error(res.message || '请求失败')
+        Message.error(res.message || '请求失败')
       }
       // 返回完整的响应对象，让调用方可以访问code和message
       return Promise.reject({
@@ -91,7 +91,7 @@ request.interceptors.response.use(
       // 只在非登录请求时自动跳转到登录页
       if (!url.includes('/login') && !isRedirecting) {
         isRedirecting = true
-        ElMessage.error('登录已过期，请重新登录')
+        Message.error('登录已过期，请重新登录')
         localStorage.removeItem('token')
         setTimeout(() => {
           window.location.href = '/login'
@@ -107,10 +107,10 @@ request.interceptors.response.use(
     // 403 - 权限不足，只显示错误消息，不跳转
     if (status === 403) {
       const errorMsg = error.response?.data?.message || '权限不足'
-      ElMessage.error({
-        message: errorMsg,
+      Message.error({
+        content: errorMsg,
         duration: 5000,
-        showClose: true
+        closable: true
       })
       return Promise.reject(error)
     }
@@ -118,7 +118,7 @@ request.interceptors.response.use(
     // 其他错误 - 只对非登录接口显示错误消息
     if (!url.includes('/login')) {
       const errorMsg = error.response?.data?.message || error.message || '网络错误'
-      ElMessage.error(errorMsg)
+      Message.error(errorMsg)
     }
     return Promise.reject(error)
   }

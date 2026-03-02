@@ -2,17 +2,17 @@
   <div class="node-selector-wrapper">
     <!-- 调度类型选择 -->
     <div class="scheduling-type-content">
-      <el-radio-group v-model="localSchedulingType" class="scheduling-type-radio" @change="handleSchedulingTypeChange">
-        <el-radio value="any" class="scheduling-radio-item">
+      <a-radio-group v-model="localSchedulingType" class="scheduling-type-radio" @change="handleSchedulingTypeChange">
+        <a-radio value="any" class="scheduling-radio-item">
           <span class="radio-label">任意可用节点</span>
-        </el-radio>
-        <el-radio value="specified" class="scheduling-radio-item">
+        </a-radio>
+        <a-radio value="specified" class="scheduling-radio-item">
           <span class="radio-label">指定节点</span>
-        </el-radio>
-        <el-radio value="match" class="scheduling-radio-item">
+        </a-radio>
+        <a-radio value="match" class="scheduling-radio-item">
           <span class="radio-label">调度规则匹配</span>
-        </el-radio>
-      </el-radio-group>
+        </a-radio>
+      </a-radio-group>
       <div class="scheduling-type-tip">
         当前选择: {{ getSchedulingTypeLabel(localSchedulingType) }} | 规则数量: {{ formData.matchRules?.length || 0 }}
       </div>
@@ -23,20 +23,20 @@
       <div class="form-grid-row">
         <div class="form-grid-item">
           <label class="form-grid-label">节点名称</label>
-          <el-select
+          <a-select
             v-model="localSpecifiedNode"
             placeholder="请选择节点"
             class="grid-input"
             filterable
             @change="handleSpecifiedNodeChange"
           >
-            <el-option
+            <a-option
               v-for="node in nodeList"
               :key="node.name"
               :label="node.name"
               :value="node.name"
             />
-          </el-select>
+          </a-select>
         </div>
       </div>
     </div>
@@ -45,21 +45,21 @@
     <div v-if="localSchedulingType === 'match'" class="match-rules-section">
       <div class="match-rules-header">
         <span>根据节点标签匹配调度规则</span>
-        <el-button type="primary" :icon="Plus" size="small" @click="emit('addMatchRule')">添加规则</el-button>
+        <a-button type="primary" size="small" @click="emit('addMatchRule')">添加规则</a-button>
       </div>
       <div class="match-rules-list">
         <div v-for="(rule, index) in formData.matchRules" :key="'rule-'+index" class="match-rule-item">
           <div class="rule-row">
             <div class="form-grid-item">
               <label class="form-grid-label">键</label>
-              <el-select
+              <a-select
                 v-model="rule.key"
                 placeholder="选择或输入键"
                 class="grid-input"
                 filterable
                 allow-create
               >
-                <el-option
+                <a-option
                   v-for="label in commonNodeLabels"
                   :key="label.key"
                   :label="label.key"
@@ -70,25 +70,25 @@
                     <span class="label-separator">:</span>
                     <span class="label-value">{{ label.value }}</span>
                   </span>
-                </el-option>
-              </el-select>
+                </a-option>
+              </a-select>
             </div>
             <div class="form-grid-item">
               <label class="form-grid-label">操作符</label>
-              <el-select v-model="rule.operator" placeholder="选择操作符" class="grid-input">
-                <el-option label="等于" value="In" />
-                <el-option label="不等于" value="NotIn" />
-                <el-option label="存在" value="Exists" />
-                <el-option label="不存在" value="DoesNotExist" />
-                <el-option label="大于" value="Gt" />
-                <el-option label="小于" value="Lt" />
-              </el-select>
+              <a-select v-model="rule.operator" placeholder="选择操作符" class="grid-input">
+                <a-option label="等于" value="In" />
+                <a-option label="不等于" value="NotIn" />
+                <a-option label="存在" value="Exists" />
+                <a-option label="不存在" value="DoesNotExist" />
+                <a-option label="大于" value="Gt" />
+                <a-option label="小于" value="Lt" />
+              </a-select>
             </div>
           </div>
           <div class="rule-row" v-if="rule.operator !== 'Exists' && rule.operator !== 'DoesNotExist'">
             <div class="form-grid-item">
               <label class="form-grid-label">值</label>
-              <el-input
+              <a-input
                 v-model="rule.value"
                 placeholder="请输入值"
                 class="grid-input"
@@ -96,17 +96,16 @@
             </div>
           </div>
           <div class="rule-actions">
-            <el-button type="danger" :icon="Delete" size="small" @click="emit('removeMatchRule', index)">删除</el-button>
+            <a-button status="danger" size="small" @click="emit('removeMatchRule', index)">删除</a-button>
           </div>
         </div>
-        <el-empty v-if="formData.matchRules.length === 0" description="暂无匹配规则" :image-size="80" />
+        <a-empty v-if="formData.matchRules.length === 0" description="暂无匹配规则" :image-size="80" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Plus, Delete } from '@element-plus/icons-vue'
 import { ref, watch, nextTick } from 'vue'
 
 interface MatchRule {
@@ -211,12 +210,12 @@ const getSchedulingTypeLabel = (type: string) => {
 }
 
 .scheduling-radio-item:hover {
-  border-color: #409eff;
+  border-color: #165dff;
   background: #ecf5ff;
 }
 
 .scheduling-radio-item.is-checked {
-  border-color: #409eff;
+  border-color: #165dff;
   background: #ecf5ff;
 }
 
@@ -270,7 +269,7 @@ const getSchedulingTypeLabel = (type: string) => {
 }
 
 .match-rule-item:hover {
-  border-color: #409eff;
+  border-color: #165dff;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
 }
 

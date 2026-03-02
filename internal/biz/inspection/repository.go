@@ -43,3 +43,13 @@ type PushgatewayConfigRepo interface {
 	GetByID(ctx context.Context, id uint) (*PushgatewayConfig, error)
 	List(ctx context.Context) ([]*PushgatewayConfig, error)
 }
+
+// ProbeVariableRepo defines the data access interface for ProbeVariable.
+type ProbeVariableRepo interface {
+	Create(ctx context.Context, v *ProbeVariable) error
+	Update(ctx context.Context, v *ProbeVariable) error
+	Delete(ctx context.Context, id uint) error
+	GetByID(ctx context.Context, id uint) (*ProbeVariable, error)
+	List(ctx context.Context, page, pageSize int, keyword, varType, groupIDs string) ([]*ProbeVariable, int64, error)
+	GetByNames(ctx context.Context, names []string, allowedGroupIDs []uint) ([]*ProbeVariable, error)
+}

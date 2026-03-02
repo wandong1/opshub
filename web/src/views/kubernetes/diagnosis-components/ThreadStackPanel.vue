@@ -1,11 +1,11 @@
 <template>
   <div class="thread-stack-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
     <div v-else class="panel-content">
@@ -13,7 +13,7 @@
       <div class="toolbar">
         <div class="input-group">
           <span class="input-label">线程ID</span>
-          <el-input
+          <a-input
             v-model="threadId"
             placeholder="输入线程ID"
             style="width: 120px"
@@ -22,19 +22,19 @@
             @keyup.enter="getThreadStackData"
           />
         </div>
-        <el-button type="primary" size="small" @click="getThreadStackData" :loading="loading" :disabled="!threadId">
-          <el-icon><Search /></el-icon> 查看堆栈
-        </el-button>
-        <el-divider direction="vertical" />
-        <el-button size="small" @click="loadThreadList" :loading="loadingThreads">
-          <el-icon><List /></el-icon> 加载线程列表
-        </el-button>
-        <el-button size="small" @click="getBlockedThreads" :loading="loadingBlocked">
-          <el-icon><Warning /></el-icon> 阻塞线程
-        </el-button>
-        <el-button size="small" @click="getBusyThreads" :loading="loadingBusy">
-          <el-icon><Cpu /></el-icon> 繁忙线程
-        </el-button>
+        <a-button type="primary" size="small" @click="getThreadStackData" :loading="loading" :disabled="!threadId">
+          <icon-search /> 查看堆栈
+        </a-button>
+        <a-divider direction="vertical" />
+        <a-button size="small" @click="loadThreadList" :loading="loadingThreads">
+          <icon-list /> 加载线程列表
+        </a-button>
+        <a-button size="small" @click="getBlockedThreads" :loading="loadingBlocked">
+          <icon-exclamation-circle /> 阻塞线程
+        </a-button>
+        <a-button size="small" @click="getBusyThreads" :loading="loadingBusy">
+          <icon-thunderbolt /> 繁忙线程
+        </a-button>
       </div>
 
       <div class="main-content">
@@ -42,7 +42,7 @@
         <div class="thread-list-section" v-if="threads.length > 0">
           <div class="section-header">
             <span>线程列表</span>
-            <el-input
+            <a-input
               v-model="searchText"
               placeholder="搜索线程"
               size="small"
@@ -50,9 +50,9 @@
               style="width: 150px"
             >
               <template #prefix>
-                <el-icon><Search /></el-icon>
+                <icon-search />
               </template>
-            </el-input>
+            </a-input>
           </div>
           <div class="thread-list">
             <div
@@ -64,9 +64,9 @@
             >
               <span class="thread-id">{{ thread.id }}</span>
               <span class="thread-name" :title="thread.name">{{ thread.name }}</span>
-              <el-tag :type="getStateType(thread.state)" size="small" effect="plain">
+              <a-tag :type="getStateType(thread.state)" size="small">
                 {{ formatState(thread.state) }}
-              </el-tag>
+              </a-tag>
             </div>
           </div>
         </div>
@@ -77,19 +77,19 @@
             <span>堆栈信息</span>
             <span class="thread-info" v-if="currentThread">
               线程 #{{ currentThread.id }} - {{ currentThread.name }}
-              <el-tag :type="getStateType(currentThread.state)" size="small" style="margin-left: 8px">
+              <a-tag :type="getStateType(currentThread.state)" size="small" style="margin-left: 8px">
                 {{ currentThread.state }}
-              </el-tag>
+              </a-tag>
             </span>
           </div>
-          <div class="stack-output" v-if="stackOutput" v-loading="loading">
+          <div class="stack-output" v-if="stackOutput" :loading="loading">
             <pre>{{ cleanStackOutput }}</pre>
           </div>
-          <el-empty v-else-if="!loading" description="请输入线程ID或从左侧列表选择线程查看堆栈信息">
+          <a-empty v-else-if="!loading" description="请输入线程ID或从左侧列表选择线程查看堆栈信息">
             <template #image>
-              <el-icon :size="60" color="#c0c4cc"><Document /></el-icon>
+              <icon-file />
             </template>
-          </el-empty>
+          </a-empty>
         </div>
       </div>
     </div>
@@ -98,8 +98,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Search, List, Warning, Cpu, Document } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getThreadList, getThreadStack } from '@/api/arthas'
 
 const props = defineProps<{
@@ -264,12 +263,12 @@ const loadThreadList = async () => {
     threads.value = parseThreadListOutput(output)
 
     if (threads.value.length === 0) {
-      ElMessage.warning('未获取到线程列表')
+      Message.warning('未获取到线程列表')
     } else {
-      ElMessage.success(`获取到 ${threads.value.length} 个线程`)
+      Message.success(`获取到 ${threads.value.length} 个线程`)
     }
   } catch (error: any) {
-    ElMessage.error('获取线程列表失败: ' + (error.message || '未知错误'))
+    Message.error('获取线程列表失败: ' + (error.message || '未知错误'))
   } finally {
     loadingThreads.value = false
   }
@@ -282,7 +281,7 @@ const getThreadStackData = async () => {
   }
 
   if (!threadId.value) {
-    ElMessage.warning('请输入线程ID')
+    Message.warning('请输入线程ID')
     return
   }
 
@@ -304,7 +303,7 @@ const getThreadStackData = async () => {
       currentThread.value = threads.value.find(t => t.id === threadId.value) || null
     }
   } catch (error: any) {
-    ElMessage.error('获取线程堆栈失败: ' + (error.message || '未知错误'))
+    Message.error('获取线程堆栈失败: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
@@ -331,7 +330,7 @@ const getBlockedThreads = async () => {
     currentThread.value = null
     threadId.value = ''
   } catch (error: any) {
-    ElMessage.error('获取阻塞线程失败: ' + (error.message || '未知错误'))
+    Message.error('获取阻塞线程失败: ' + (error.message || '未知错误'))
   } finally {
     loadingBlocked.value = false
   }
@@ -358,7 +357,7 @@ const getBusyThreads = async () => {
     currentThread.value = null
     threadId.value = ''
   } catch (error: any) {
-    ElMessage.error('获取繁忙线程失败: ' + (error.message || '未知错误'))
+    Message.error('获取繁忙线程失败: ' + (error.message || '未知错误'))
   } finally {
     loadingBusy.value = false
   }
@@ -533,7 +532,7 @@ watch(() => props.attached, (newVal) => {
 }
 
 /* 空状态 */
-.stack-section :deep(.el-empty) {
+.stack-section :deep(.arco-empty) {
   padding: 60px 0;
 }
 

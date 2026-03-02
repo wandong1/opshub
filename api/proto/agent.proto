@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package agentproto;
+
+option go_package = "github.com/ydcloud-dy/opshub/pkg/agentproto";
+
+service AgentHub {
+  rpc Connect(stream AgentMessage) returns (stream ServerMessage);
+}
+
+// Agent → Server
+message AgentMessage {
+  oneof payload {
+    RegisterRequest register = 1;
+    HeartbeatRequest heartbeat = 2;
+    TerminalOutput term_output = 3;
+    FileChunk file_chunk = 4;
+    CommandResult cmd_result = 5;
+    FileListResult file_list = 6;
+  }
+}
+
+// Server → Agent
+message ServerMessage {
+  oneof payload {
+    RegisterResponse register_ack = 1;
+    HeartbeatResponse heartbeat_ack = 2;
+    TerminalOpen term_open = 3;
+    TerminalInput term_input = 4;
+    TerminalResize term_resize = 5;
+    TerminalClose term_close = 6;
+    FileRequest file_request = 7;
+    CommandRequest cmd_request = 8;
+  }
+}
+
+// ========== 注册 ==========
+message RegisterRequest {
+  string agent_id = 1;
+  string hostname = 2;
+  string os = 3;
+  string arch = 4;
+  string version = 5;
+  repeated string ips = 6;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+  int32 heartbeat_interval = 3;
+}
+
+// ========== 心跳 ==========
+message HeartbeatRequest {
+  string agent_id = 1;
+  double cpu_usage = 2;
+  double memory_usage = 3;
+  double disk_usage = 4;
+  int64 uptime_seconds = 5;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+}
+
+// ========== 终端 ==========
+message TerminalOpen {
+  string session_id = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+}
+
+message TerminalInput {
+  string session_id = 1;
+  bytes data = 2;
+}
+
+message TerminalOutput {
+  string session_id = 1;
+  bytes data = 2;
+}
+
+message TerminalResize {
+  string session_id = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+}
+
+message TerminalClose {
+  string session_id = 1;
+}
+// ========== 文件操作 ==========
+message FileRequest {
+  string request_id = 1;
+  string action = 2; // list, upload, download, delete
+  string path = 3;
+  bytes data = 4;
+  string filename = 5;
+}
+
+message FileChunk {
+  string request_id = 1;
+  bytes data = 2;
+  bool eof = 3;
+  string error = 4;
+}
+
+message FileListResult {
+  string request_id = 1;
+  repeated FileInfo files = 2;
+  string error = 3;
+}
+
+message FileInfo {
+  string name = 1;
+  int64 size = 2;
+  string mode = 3;
+  int64 mod_time = 4;
+  bool is_dir = 5;
+}
+
+// ========== 命令执行 ==========
+message CommandRequest {
+  string request_id = 1;
+  string command = 2;
+  int32 timeout = 3;
+}
+
+message CommandResult {
+  string request_id = 1;
+  int32 exit_code = 2;
+  string stdout = 3;
+  string stderr = 4;
+  string error = 5;
+}

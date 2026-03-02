@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><Coin /></el-icon>
+          <icon-storage :size="36" />
         </div>
         <div>
           <h2 class="page-title">中间件管理</h2>
@@ -12,10 +12,10 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button v-permission="'middlewares:create'" type="primary" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+        <a-button v-permission="'middlewares:create'" type="primary" @click="handleAdd">
+          <template #icon><icon-plus /></template>
           新增中间件
-        </el-button>
+        </a-button>
       </div>
     </div>
 
@@ -25,25 +25,23 @@
       <div class="left-panel">
         <div class="panel-header">
           <div class="panel-title">
-            <el-icon class="panel-icon"><Collection /></el-icon>
+            <icon-folder class="panel-icon" />
             <span>业务分组</span>
           </div>
         </div>
         <div class="panel-body">
-          <el-input v-model="groupSearchKeyword" placeholder="搜索分组..." clearable size="small" class="group-search">
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
-          <div class="tree-container" v-loading="groupLoading">
-            <el-tree
+          <a-input v-model="groupSearchKeyword" placeholder="搜索分组..." allow-clear size="small" class="group-search">
+            <template #prefix><icon-search /></template>
+          </a-input>
+          <a-spin :loading="groupLoading" class="tree-container">
+            <a-tree
               ref="groupTreeRef"
               :data="sidebarGroupTree"
-              :props="{ label: 'name', children: 'children' }"
+              :field-names="{ key: 'id', title: 'name', children: 'children' }"
               :default-expand-all="true"
-              :highlight-current="true"
-              node-key="id"
-              @node-click="handleGroupClick"
+              @select="handleGroupSelect"
             />
-          </div>
+          </a-spin>
         </div>
       </div>
 
@@ -51,181 +49,173 @@
       <div class="right-panel">
         <!-- 搜索和筛选 -->
         <div class="filter-bar">
-          <el-input v-model="searchKeyword" placeholder="搜索名称/地址..." clearable style="width: 240px" @keyup.enter="handleSearch" @clear="handleSearch">
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
-          <el-select v-model="filterType" placeholder="类型筛选" clearable style="width: 150px" @change="handleSearch">
-            <el-option label="MySQL" value="mysql" />
-            <el-option label="Redis" value="redis" />
-            <el-option label="ClickHouse" value="clickhouse" />
-            <el-option label="MongoDB" value="mongodb" />
-            <el-option label="Kafka" value="kafka" />
-            <el-option label="Milvus" value="milvus" />
-          </el-select>
-          <el-select v-model="filterStatus" placeholder="状态筛选" clearable style="width: 120px" @change="handleSearch">
-            <el-option label="在线" :value="1" />
-            <el-option label="离线" :value="0" />
-            <el-option label="未知" :value="-1" />
-          </el-select>
+          <a-input v-model="searchKeyword" placeholder="搜索名称/地址..." allow-clear style="width: 240px" @keyup.enter="handleSearch" @clear="handleSearch">
+            <template #prefix><icon-search /></template>
+          </a-input>
+          <a-select v-model="filterType" placeholder="类型筛选" allow-clear allow-search style="width: 150px" @change="handleSearch">
+            <a-option label="MySQL" value="mysql" />
+            <a-option label="Redis" value="redis" />
+            <a-option label="ClickHouse" value="clickhouse" />
+            <a-option label="MongoDB" value="mongodb" />
+            <a-option label="Kafka" value="kafka" />
+            <a-option label="Milvus" value="milvus" />
+          </a-select>
+          <a-select v-model="filterStatus" placeholder="状态筛选" allow-clear style="width: 120px" @change="handleSearch">
+            <a-option label="在线" :value="1" />
+            <a-option label="离线" :value="0" />
+            <a-option label="未知" :value="-1" />
+          </a-select>
           <div style="flex: 1"></div>
-          <el-button v-permission="'middlewares:batch-delete'" :disabled="!selectedIds.length" type="danger" plain @click="handleBatchDelete">
+          <a-button v-permission="'middlewares:batch-delete'" :disabled="!selectedIds.length" status="danger" @click="handleBatchDelete">
             批量删除
-          </el-button>
+          </a-button>
         </div>
 
         <!-- 表格 -->
-        <el-table :data="tableData" v-loading="tableLoading" @selection-change="handleSelectionChange" style="width: 100%">
-          <el-table-column type="selection" width="50" />
-          <el-table-column prop="name" label="名称" min-width="140" />
-          <el-table-column prop="typeText" label="类型" width="120">
-            <template #default="{ row }">
-              <el-tag :type="getTypeTagColor(row.type)" size="small">{{ row.typeText }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="连接地址" min-width="180">
-            <template #default="{ row }">{{ row.host }}:{{ row.port }}</template>
-          </el-table-column>
-          <el-table-column prop="groupName" label="业务分组" width="120" />
-          <el-table-column prop="hostName" label="关联主机" width="120" show-overflow-tooltip />
-          <el-table-column prop="statusText" label="状态" width="80">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 1 ? 'success' : row.status === 0 ? 'danger' : 'info'" size="small">{{ row.statusText }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="version" label="版本" width="100" />
-          <el-table-column label="操作" width="260" fixed="right">
-            <template #default="{ row }">
-              <el-button v-permission="'middlewares:update'" link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-              <el-button v-permission="'middlewares:connect'" link type="success" size="small" @click="handleTestConnection(row)">测试</el-button>
-              <el-button v-permission="'middlewares:execute'" link type="warning" size="small" @click="handleExecute(row)">操作</el-button>
-              <el-button v-permission="'middlewares:delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <!-- 分页 -->
-        <div class="pagination-container">
-          <el-pagination
-            v-model:current-page="pagination.page"
-            v-model:page-size="pagination.pageSize"
-            :total="pagination.total"
-            :page-sizes="[10, 20, 50]"
-            layout="total, sizes, prev, pager, next"
-            @size-change="loadList"
-            @current-change="loadList"
-          />
-        </div>
+        <a-table :data="tableData" :loading="tableLoading" :bordered="{ cell: true }" stripe row-key="id" :row-selection="{ type: 'checkbox', showCheckedAll: true }" @selection-change="handleSelectionChange" style="width: 100%" :pagination="{ current: pagination.page, pageSize: pagination.pageSize, total: pagination.total, pageSizeOptions: [10, 20, 50], showTotal: true, showPageSize: true }" @page-change="handlePageChange" @page-size-change="handlePageSizeChange">
+          <template #columns>
+            <a-table-column title="名称" data-index="name" :min-width="140" />
+            <a-table-column title="类型" data-index="typeText" :width="120">
+              <template #cell="{ record }">
+                <a-tag :color="getTypeTagColor(record.type)" size="small">{{ record.typeText }}</a-tag>
+              </template>
+            </a-table-column>
+            <a-table-column title="连接地址" :min-width="180">
+              <template #cell="{ record }">{{ record.host }}:{{ record.port }}</template>
+            </a-table-column>
+            <a-table-column title="业务分组" data-index="groupName" :width="120" />
+            <a-table-column title="关联主机" data-index="hostName" :width="120" :tooltip="true" />
+            <a-table-column title="状态" data-index="statusText" :width="80">
+              <template #cell="{ record }">
+                <a-tag :color="record.status === 1 ? 'green' : record.status === 0 ? 'red' : 'gray'" size="small">{{ record.statusText }}</a-tag>
+              </template>
+            </a-table-column>
+            <a-table-column title="版本" data-index="version" :width="100" />
+            <a-table-column title="操作" :width="260" fixed="right">
+              <template #cell="{ record }">
+                <a-button v-permission="'middlewares:update'" type="text" size="small" @click="handleEdit(record)">编辑</a-button>
+                <a-button v-permission="'middlewares:connect'" type="text" status="success" size="small" @click="handleTestConnection(record)">测试</a-button>
+                <a-button v-permission="'middlewares:execute'" type="text" status="warning" size="small" @click="handleExecute(record)">操作</a-button>
+                <a-button v-permission="'middlewares:delete'" type="text" status="danger" size="small" @click="handleDelete(record)">删除</a-button>
+              </template>
+            </a-table-column>
+          </template>
+        </a-table>
       </div>
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
-      <el-form ref="formRef" :model="formData" :rules="formRules" label-width="100px">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="formData.name" placeholder="请输入中间件名称" />
-        </el-form-item>
-        <el-form-item label="类型" prop="type">
-          <el-select v-model="formData.type" placeholder="请选择类型" style="width: 100%" @change="handleTypeChange">
-            <el-option label="MySQL" value="mysql" />
-            <el-option label="Redis" value="redis" />
-            <el-option label="ClickHouse" value="clickhouse" />
-            <el-option label="MongoDB" value="mongodb" />
-            <el-option label="Kafka" value="kafka" />
-            <el-option label="Milvus" value="milvus" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="业务分组" prop="groupId">
-          <el-tree-select v-model="formData.groupId" :data="groupTreeOptions" :props="{ label: 'name', children: 'children', value: 'id' }" placeholder="请选择分组" style="width: 100%" check-strictly />
-        </el-form-item>
-        <el-form-item label="关联主机">
-          <el-select v-model="formData.hostIds" multiple filterable placeholder="请选择关联主机（可多选）" style="width: 100%">
-            <el-option v-for="h in hostOptions" :key="h.id" :label="`${h.name} (${h.ip || h.host})`" :value="h.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="连接地址" prop="host">
-          <el-input v-model="formData.host" placeholder="请输入连接地址" />
-        </el-form-item>
-        <el-form-item label="端口" prop="port">
-          <el-input-number v-model="formData.port" :min="1" :max="65535" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="用户名">
-          <el-input v-model="formData.username" placeholder="请输入用户名" />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input v-model="formData.password" type="password" placeholder="请输入密码" show-password />
-        </el-form-item>
+    <a-modal v-model:visible="dialogVisible" :title="dialogTitle" :width="600" unmount-on-close>
+      <a-form ref="formRef" :model="formData" :rules="formRules" auto-label-width layout="horizontal">
+        <a-form-item label="名称" field="name">
+          <a-input v-model="formData.name" placeholder="请输入中间件名称" />
+        </a-form-item>
+        <a-form-item label="类型" field="type">
+          <a-select v-model="formData.type" placeholder="请选择类型" allow-clear allow-search style="width: 100%" @change="handleTypeChange">
+            <a-option label="MySQL" value="mysql" />
+            <a-option label="Redis" value="redis" />
+            <a-option label="ClickHouse" value="clickhouse" />
+            <a-option label="MongoDB" value="mongodb" />
+            <a-option label="Kafka" value="kafka" />
+            <a-option label="Milvus" value="milvus" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="业务分组" field="groupId">
+          <a-tree-select v-model="formData.groupId" :data="groupTreeOptions" :field-names="{ key: 'id', title: 'name', children: 'children' }" placeholder="请选择分组" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="关联主机">
+          <a-select v-model="formData.hostIds" multiple allow-search placeholder="请选择关联主机（可多选）" style="width: 100%">
+            <a-option v-for="h in hostOptions" :key="h.id" :label="`${h.name} (${h.ip || h.host})`" :value="h.id" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="连接地址" field="host">
+          <a-input v-model="formData.host" placeholder="请输入连接地址" />
+        </a-form-item>
+        <a-form-item label="端口" field="port">
+          <a-input-number v-model="formData.port" :min="1" :max="65535" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="用户名">
+          <a-input v-model="formData.username" placeholder="请输入用户名" />
+        </a-form-item>
+        <a-form-item label="密码">
+          <a-input-password v-model="formData.password" placeholder="请输入密码" />
+        </a-form-item>
         <!-- Kafka 认证配置 -->
         <template v-if="formData.type === 'kafka'">
-          <el-form-item label="认证模式">
-            <el-select v-model="kafkaParams.authMode" style="width: 100%" @change="handleKafkaAuthChange">
-              <el-option label="免密" value="none" />
-              <el-option label="SASL/PLAIN" value="sasl_plain" />
-              <el-option label="SASL/SCRAM-256" value="sasl_scram256" />
-              <el-option label="SASL/SCRAM-512" value="sasl_scram512" />
-              <el-option label="Kerberos" value="kerberos" />
-            </el-select>
-          </el-form-item>
+          <a-form-item label="认证模式">
+            <a-select v-model="kafkaParams.authMode" style="width: 100%" @change="handleKafkaAuthChange">
+              <a-option label="免密" value="none" />
+              <a-option label="SASL/PLAIN" value="sasl_plain" />
+              <a-option label="SASL/SCRAM-256" value="sasl_scram256" />
+              <a-option label="SASL/SCRAM-512" value="sasl_scram512" />
+              <a-option label="Kerberos" value="kerberos" />
+            </a-select>
+          </a-form-item>
           <template v-if="kafkaParams.authMode === 'kerberos'">
-            <el-form-item label="Service Name">
-              <el-input v-model="kafkaParams.kerberosServiceName" placeholder="默认 kafka" />
-            </el-form-item>
-            <el-form-item label="Realm">
-              <el-input v-model="kafkaParams.kerberosRealm" placeholder="Kerberos Realm" />
-            </el-form-item>
-            <el-form-item label="Principal">
-              <el-input v-model="kafkaParams.kerberosPrincipal" placeholder="Kerberos Principal（或复用用户名）" />
-            </el-form-item>
-            <el-form-item label="Keytab">
-              <el-radio-group v-model="keytabMode" size="small" style="margin-bottom: 8px">
-                <el-radio-button value="data">粘贴内容</el-radio-button>
-                <el-radio-button value="path">指定路径</el-radio-button>
-              </el-radio-group>
-              <el-input v-if="keytabMode === 'path'" v-model="kafkaParams.kerberosKeytab" placeholder="/path/to/keytab" />
+            <a-form-item label="Service Name">
+              <a-input v-model="kafkaParams.kerberosServiceName" placeholder="默认 kafka" />
+            </a-form-item>
+            <a-form-item label="Realm">
+              <a-input v-model="kafkaParams.kerberosRealm" placeholder="Kerberos Realm" />
+            </a-form-item>
+            <a-form-item label="Principal">
+              <a-input v-model="kafkaParams.kerberosPrincipal" placeholder="Kerberos Principal（或复用用户名）" />
+            </a-form-item>
+            <a-form-item label="Keytab">
+              <a-radio-group v-model="keytabMode" size="small" type="button" style="margin-bottom: 8px">
+                <a-radio value="data">粘贴内容</a-radio>
+                <a-radio value="path">指定路径</a-radio>
+              </a-radio-group>
+              <a-input v-if="keytabMode === 'path'" v-model="kafkaParams.kerberosKeytab" placeholder="/path/to/keytab" />
               <div v-else>
-                <el-input v-model="kafkaParams.kerberosKeytabData" type="textarea" :rows="2" placeholder="Base64 编码的 keytab 内容" />
-                <el-upload :auto-upload="false" :show-file-list="false" :on-change="handleKeytabUpload" style="margin-top: 4px">
-                  <el-button size="small">上传 keytab 文件</el-button>
-                </el-upload>
+                <a-textarea v-model="kafkaParams.kerberosKeytabData" :auto-size="{ minRows: 2 }" placeholder="Base64 编码的 keytab 内容" />
+                <a-upload :auto-upload="false" :show-file-list="false" @change="handleKeytabUpload" style="margin-top: 4px">
+                  <template #upload-button>
+                    <a-button size="small">上传 keytab 文件</a-button>
+                  </template>
+                </a-upload>
               </div>
-            </el-form-item>
-            <el-form-item label="krb5.conf">
-              <el-radio-group v-model="krb5Mode" size="small" style="margin-bottom: 8px">
-                <el-radio-button value="data">粘贴内容</el-radio-button>
-                <el-radio-button value="path">指定路径</el-radio-button>
-              </el-radio-group>
-              <el-input v-if="krb5Mode === 'path'" v-model="kafkaParams.kerberosKrb5Conf" placeholder="/etc/krb5.conf" />
+            </a-form-item>
+            <a-form-item label="krb5.conf">
+              <a-radio-group v-model="krb5Mode" size="small" type="button" style="margin-bottom: 8px">
+                <a-radio value="data">粘贴内容</a-radio>
+                <a-radio value="path">指定路径</a-radio>
+              </a-radio-group>
+              <a-input v-if="krb5Mode === 'path'" v-model="kafkaParams.kerberosKrb5Conf" placeholder="/etc/krb5.conf" />
               <div v-else>
-                <el-input v-model="kafkaParams.kerberosKrb5Data" type="textarea" :rows="3" placeholder="krb5.conf 文本内容" />
-                <el-upload :auto-upload="false" :show-file-list="false" :on-change="handleKrb5Upload" style="margin-top: 4px">
-                  <el-button size="small">上传 krb5.conf</el-button>
-                </el-upload>
+                <a-textarea v-model="kafkaParams.kerberosKrb5Data" :auto-size="{ minRows: 3 }" placeholder="krb5.conf 文本内容" />
+                <a-upload :auto-upload="false" :show-file-list="false" @change="handleKrb5Upload" style="margin-top: 4px">
+                  <template #upload-button>
+                    <a-button size="small">上传 krb5.conf</a-button>
+                  </template>
+                </a-upload>
               </div>
-            </el-form-item>
+            </a-form-item>
           </template>
-          <el-form-item label="TLS">
-            <el-switch v-model="kafkaParams.useTLS" />
-          </el-form-item>
-          <el-form-item>
-            <el-alert type="info" :closable="false" show-icon>
+          <a-form-item label="TLS">
+            <a-switch v-model="kafkaParams.useTLS" />
+          </a-form-item>
+          <a-form-item>
+            <a-alert type="info" :closable="false">
               连接地址支持逗号分隔的多 Broker 地址，如 broker1:9092,broker2:9092
-            </el-alert>
-          </el-form-item>
+            </a-alert>
+          </a-form-item>
         </template>
-        <el-form-item label="默认数据库">
-          <el-input v-model="formData.databaseName" placeholder="请输入默认数据库名" />
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-input v-model="formData.tags" placeholder="多个标签用逗号分隔" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="formData.description" type="textarea" :rows="2" placeholder="请输入备注" />
-        </el-form-item>
-      </el-form>
+        <a-form-item label="默认数据库">
+          <a-input v-model="formData.databaseName" placeholder="请输入默认数据库名" />
+        </a-form-item>
+        <a-form-item label="标签">
+          <a-input v-model="formData.tags" placeholder="多个标签用逗号分隔" />
+        </a-form-item>
+        <a-form-item label="备注">
+          <a-textarea v-model="formData.description" :auto-size="{ minRows: 2 }" placeholder="请输入备注" />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitLoading">确定</el-button>
+        <a-button @click="dialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="handleSubmit" :loading="submitLoading">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- SQL 控制台 -->
     <SqlConsole v-model:visible="consoleVisible" :middleware="currentMiddleware" />
@@ -249,8 +239,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Collection, Coin } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import { IconPlus, IconSearch, IconFolder, IconStorage } from '@arco-design/web-vue/es/icon'
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
 import {
@@ -301,10 +291,10 @@ const formData = reactive({
   connectionParams: '', tags: '', description: ''
 })
 const formRules = {
-  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择类型', trigger: 'change' }],
-  host: [{ required: true, message: '请输入连接地址', trigger: 'blur' }],
-  port: [{ required: true, message: '请输入端口', trigger: 'blur' }],
+  name: [{ required: true, message: '请输入名称' }],
+  type: [{ required: true, message: '请选择类型' }],
+  host: [{ required: true, message: '请输入连接地址' }],
+  port: [{ required: true, message: '请输入端口' }],
 }
 
 // SQL 控制台
@@ -335,7 +325,9 @@ const handleKafkaAuthChange = () => {
   // Reset kerberos fields when switching auth mode
 }
 
-const handleKeytabUpload = (file: any) => {
+const handleKeytabUpload = (_fileList: any[], fileItem: any) => {
+  const file = fileItem.file
+  if (!file) return
   const reader = new FileReader()
   reader.onload = (e) => {
     const result = e.target?.result as ArrayBuffer
@@ -344,15 +336,17 @@ const handleKeytabUpload = (file: any) => {
     bytes.forEach(b => binary += String.fromCharCode(b))
     kafkaParams.kerberosKeytabData = btoa(binary)
   }
-  reader.readAsArrayBuffer(file.raw)
+  reader.readAsArrayBuffer(file)
 }
 
-const handleKrb5Upload = (file: any) => {
+const handleKrb5Upload = (_fileList: any[], fileItem: any) => {
+  const file = fileItem.file
+  if (!file) return
   const reader = new FileReader()
   reader.onload = (e) => {
     kafkaParams.kerberosKrb5Data = e.target?.result as string
   }
-  reader.readAsText(file.raw)
+  reader.readAsText(file)
 }
 
 const loadGroupTree = async () => {
@@ -395,19 +389,32 @@ const handleSearch = () => {
   loadList()
 }
 
-const handleGroupClick = (data: any) => {
-  selectedGroupId.value = data.id === 0 ? undefined : data.id
+const handleGroupSelect = (selectedKeys: (string | number)[], data: { node?: any }) => {
+  const node = data.node
+  const id = node?.id ?? (selectedKeys.length > 0 ? selectedKeys[0] : undefined)
+  selectedGroupId.value = id === 0 ? undefined : id
   pagination.page = 1
   loadList()
 }
 
-const handleSelectionChange = (rows: any[]) => {
-  selectedIds.value = rows.map((r: any) => r.id)
+const handleSelectionChange = (rowKeys: (string | number)[]) => {
+  selectedIds.value = rowKeys.map((k) => Number(k))
+}
+
+const handlePageChange = (page: number) => {
+  pagination.page = page
+  loadList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.page = 1
+  loadList()
 }
 
 const getTypeTagColor = (type: string) => {
-  const map: Record<string, string> = { mysql: '', redis: 'danger', clickhouse: 'warning', mongodb: 'success', kafka: 'info', milvus: '' }
-  return map[type] || ''
+  const map: Record<string, string> = { mysql: 'blue', redis: 'red', clickhouse: 'orangered', mongodb: 'green', kafka: 'gray', milvus: 'blue' }
+  return map[type] || 'blue'
 }
 
 const handleTypeChange = (type: string) => {
@@ -447,8 +454,8 @@ const handleEdit = (row: any) => {
 }
 
 const handleSubmit = async () => {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  const errors = await formRef.value?.validate()
+  if (errors) return
   submitLoading.value = true
   try {
     const data: any = { ...formData, hostId: formData.hostIds.length > 0 ? formData.hostIds[0] : 0 }
@@ -459,47 +466,57 @@ const handleSubmit = async () => {
     }
     if (formData.id) {
       await updateMiddleware(formData.id, data)
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     } else {
       await createMiddleware(data)
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     }
     dialogVisible.value = false
     loadList()
   } catch (e: any) {
-    ElMessage.error(e.message || '操作失败')
+    Message.error(e.message || '操作失败')
   } finally {
     submitLoading.value = false
   }
 }
 
 const handleDelete = (row: any) => {
-  ElMessageBox.confirm(`确定删除中间件「${row.name}」？`, '提示', { type: 'warning' }).then(async () => {
-    await deleteMiddleware(row.id)
-    ElMessage.success('删除成功')
-    loadList()
-  }).catch(() => {})
+  Modal.warning({
+    title: '提示',
+    content: `确定删除中间件「${row.name}」？`,
+    hideCancel: false,
+    onOk: async () => {
+      await deleteMiddleware(row.id)
+      Message.success('删除成功')
+      loadList()
+    }
+  })
 }
 
 const handleBatchDelete = () => {
-  ElMessageBox.confirm(`确定删除选中的 ${selectedIds.value.length} 个中间件？`, '提示', { type: 'warning' }).then(async () => {
-    await batchDeleteMiddlewares(selectedIds.value)
-    ElMessage.success('批量删除成功')
-    loadList()
-  }).catch(() => {})
+  Modal.warning({
+    title: '提示',
+    content: `确定删除选中的 ${selectedIds.value.length} 个中间件？`,
+    hideCancel: false,
+    onOk: async () => {
+      await batchDeleteMiddlewares(selectedIds.value)
+      Message.success('批量删除成功')
+      loadList()
+    }
+  })
 }
 
 const handleTestConnection = async (row: any) => {
   try {
     const res = await testMiddlewareConnection(row.id)
     if (res?.success) {
-      ElMessage.success(`连接成功，版本: ${res.version || '未知'}，延迟: ${res.latency}ms`)
+      Message.success(`连接成功，版本: ${res.version || '未知'}，延迟: ${res.latency}ms`)
     } else {
-      ElMessage.error(res?.message || '连接失败')
+      Message.error(res?.message || '连接失败')
     }
     loadList()
   } catch (e: any) {
-    ElMessage.error(e.message || '测试连接失败')
+    Message.error(e.message || '测试连接失败')
   }
 }
 
@@ -546,10 +563,10 @@ onMounted(() => {
   gap: 12px;
 }
 .page-title-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--ops-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -560,11 +577,12 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: var(--ops-text-primary);
 }
 .page-subtitle {
   margin: 2px 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
 }
 .main-content {
   flex: 1;
@@ -617,10 +635,5 @@ onMounted(() => {
   gap: 10px;
   margin-bottom: 16px;
   align-items: center;
-}
-.pagination-container {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
 }
 </style>

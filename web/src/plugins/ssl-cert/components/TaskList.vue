@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><List /></el-icon>
+          <icon-list :size="20" />
         </div>
         <div>
           <h2 class="page-title">任务记录</h2>
@@ -12,155 +12,149 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button @click="loadData">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        <a-button @click="loadData">
+          <template #icon><icon-refresh /></template>
           刷新
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 搜索栏 -->
     <div class="search-bar">
       <div class="search-inputs">
-        <el-select
+        <a-select
           v-model="searchForm.task_type"
           placeholder="任务类型"
-          clearable
+          allow-clear
           class="search-input"
           @change="loadData"
         >
-          <el-option label="签发证书" value="issue" />
-          <el-option label="续期证书" value="renew" />
-          <el-option label="部署证书" value="deploy" />
-        </el-select>
+          <a-option value="issue">签发证书</a-option>
+          <a-option value="renew">续期证书</a-option>
+          <a-option value="deploy">部署证书</a-option>
+        </a-select>
 
-        <el-select
+        <a-select
           v-model="searchForm.status"
           placeholder="任务状态"
-          clearable
+          allow-clear
           class="search-input"
           @change="loadData"
         >
-          <el-option label="待执行" value="pending" />
-          <el-option label="执行中" value="running" />
-          <el-option label="成功" value="success" />
-          <el-option label="失败" value="failed" />
-        </el-select>
+          <a-option value="pending">待执行</a-option>
+          <a-option value="running">执行中</a-option>
+          <a-option value="success">成功</a-option>
+          <a-option value="failed">失败</a-option>
+        </a-select>
 
-        <el-select
+        <a-select
           v-model="searchForm.trigger_type"
           placeholder="触发方式"
-          clearable
+          allow-clear
           class="search-input"
           @change="loadData"
         >
-          <el-option label="自动" value="auto" />
-          <el-option label="手动" value="manual" />
-        </el-select>
+          <a-option value="auto">自动</a-option>
+          <a-option value="manual">手动</a-option>
+        </a-select>
       </div>
 
       <div class="search-actions">
-        <el-button class="reset-btn" @click="handleReset">
-          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
+        <a-button @click="handleReset">
+          <template #icon><icon-refresh /></template>
           重置
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 表格容器 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="tableData"
-        v-loading="loading"
-        class="modern-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :loading="loading"
+        :bordered="{ cell: true }"
+        stripe
+        :pagination="{ current: pagination.page, pageSize: pagination.pageSize, total: pagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50, 100] }"
+        @page-change="(p: number) => { pagination.page = p; loadData() }"
+        @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadData() }"
       >
-        <el-table-column label="ID" prop="id" width="80" />
+        <template #columns>
+          <a-table-column title="ID" data-index="id" :width="80" />
 
-        <el-table-column label="关联证书" min-width="180">
-          <template #default="{ row }">
-            <span v-if="row.certificate">{{ row.certificate.name }} ({{ row.certificate.domain }})</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="关联证书" :min-width="180">
+            <template #cell="{ record }">
+              <span v-if="record.certificate">{{ record.certificate.name }} ({{ record.certificate.domain }})</span>
+              <span v-else>-</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="任务类型" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.task_type === 'issue'" type="primary">签发证书</el-tag>
-            <el-tag v-else-if="row.task_type === 'renew'" type="warning">续期证书</el-tag>
-            <el-tag v-else type="success">部署证书</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="任务类型" :width="120" align="center">
+            <template #cell="{ record }">
+              <a-tag v-if="record.task_type === 'issue'" color="arcoblue">签发证书</a-tag>
+              <a-tag v-else-if="record.task_type === 'renew'" color="orangered">续期证书</a-tag>
+              <a-tag v-else color="green">部署证书</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.status === 'pending'" type="info">待执行</el-tag>
-            <el-tag v-else-if="row.status === 'running'" type="warning" class="running-tag">
-              <el-icon class="is-loading" style="margin-right: 4px;"><Loading /></el-icon>
-              <span>执行中</span>
-            </el-tag>
-            <el-tag v-else-if="row.status === 'success'" type="success">成功</el-tag>
-            <el-tag v-else type="danger">失败</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="状态" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-tag v-if="record.status === 'pending'" color="gray">待执行</a-tag>
+              <a-tag v-else-if="record.status === 'running'" color="orangered" class="running-tag">
+                <icon-loading spin style="margin-right: 4px;" />
+                <span>执行中</span>
+              </a-tag>
+              <a-tag v-else-if="record.status === 'success'" color="green">成功</a-tag>
+              <a-tag v-else color="red">失败</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="触发方式" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.trigger_type === 'auto'" size="small">自动</el-tag>
-            <el-tag v-else size="small" type="info">手动</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="触发方式" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-tag v-if="record.trigger_type === 'auto'" size="small">自动</a-tag>
+              <a-tag v-else size="small" color="gray">手动</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="开始时间" width="150">
-          <template #default="{ row }">
-            <span>{{ formatDateTime(row.started_at) || '-' }}</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="开始时间" :width="150">
+            <template #cell="{ record }">
+              <span>{{ formatDateTime(record.started_at) || '-' }}</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="结束时间" width="150">
-          <template #default="{ row }">
-            <span>{{ formatDateTime(row.finished_at) || '-' }}</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="结束时间" :width="150">
+            <template #cell="{ record }">
+              <span>{{ formatDateTime(record.finished_at) || '-' }}</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="错误信息" min-width="300" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.error_message" class="error-text">{{ row.error_message }}</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+          <a-table-column title="错误信息" :min-width="300" ellipsis tooltip>
+            <template #cell="{ record }">
+              <span v-if="record.error_message" class="error-text">{{ record.error_message }}</span>
+              <span v-else>-</span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="操作" width="80" fixed="right" align="center">
-          <template #default="{ row }">
-            <el-tooltip content="查看详情" placement="top">
-              <el-button link class="action-btn action-view" @click="handleView(row)">
-                <el-icon><View /></el-icon>
-              </el-button>
-            </el-tooltip>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="loadData"
-          @current-change="loadData"
-        />
-      </div>
+          <a-table-column title="操作" :width="80" fixed="right" align="center">
+            <template #cell="{ record }">
+              <a-tooltip content="查看详情" position="top">
+                <a-button type="text" class="action-btn action-view" @click="handleView(record)">
+                  <template #icon><icon-eye /></template>
+                </a-button>
+              </a-tooltip>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
     </div>
 
     <!-- 详情对话框 -->
-    <el-dialog
-      v-model="detailDialogVisible"
+    <a-modal
+      v-model:visible="detailDialogVisible"
       title="任务详情"
-      width="640px"
-      class="beauty-dialog"
+      :width="640"
+      unmount-on-close
+      :mask-closable="false"
+      :footer="false"
     >
       <div v-if="currentTask" class="detail-content">
         <div class="detail-status-bar" :class="{
@@ -169,10 +163,10 @@
           'status-running': currentTask.status === 'running',
           'status-pending': currentTask.status === 'pending'
         }">
-          <el-tag v-if="currentTask.status === 'pending'" type="info" effect="dark" size="large">待执行</el-tag>
-          <el-tag v-else-if="currentTask.status === 'running'" type="warning" effect="dark" size="large">执行中</el-tag>
-          <el-tag v-else-if="currentTask.status === 'success'" type="success" effect="dark" size="large">成功</el-tag>
-          <el-tag v-else type="danger" effect="dark" size="large">失败</el-tag>
+          <a-tag v-if="currentTask.status === 'pending'" color="gray" size="large">待执行</a-tag>
+          <a-tag v-else-if="currentTask.status === 'running'" color="orangered" size="large">执行中</a-tag>
+          <a-tag v-else-if="currentTask.status === 'success'" color="green" size="large">成功</a-tag>
+          <a-tag v-else color="red" size="large">失败</a-tag>
           <span class="detail-task-type">{{ getTaskTypeName(currentTask.task_type) }}</span>
           <span class="detail-task-id">#{{ currentTask.id }}</span>
         </div>
@@ -223,14 +217,14 @@
           </div>
         </div>
       </div>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Refresh, RefreshLeft, List, View, Loading } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
+import { IconRefresh, IconList, IconEye, IconLoading } from '@arco-design/web-vue/es/icon'
 import { getTasks, getTask } from '../api/ssl-cert'
 
 const loading = ref(false)
@@ -331,301 +325,75 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.task-list-container {
-  padding: 0;
-  background-color: transparent;
-}
+.task-list-container { padding: 0; background-color: transparent; }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 12px; padding: 16px 20px; background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px); box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
+.page-title-group { display: flex; align-items: flex-start; gap: 16px; }
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #d4af37;
-  font-size: 22px;
-  flex-shrink: 0;
-  border: 1px solid #d4af37;
+  width: 36px; height: 36px; background: var(--ops-primary, #165dff);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 18px; flex-shrink: 0;
 }
-
-.page-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 13px;
-  color: #909399;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
+.page-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--ops-text-primary, #1d2129); }
+.page-subtitle { margin: 4px 0 0 0; font-size: 13px; color: var(--ops-text-tertiary, #86909c); }
+.header-actions { display: flex; gap: 12px; }
 
 .search-bar {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  margin-bottom: 12px; padding: 12px 16px; background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px); box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  display: flex; justify-content: space-between; align-items: center;
 }
-
-.search-inputs {
-  display: flex;
-  gap: 12px;
-}
-
-.search-input {
-  width: 160px;
-}
-
-.search-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.reset-btn {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #606266;
-}
+.search-inputs { display: flex; gap: 12px; }
+.search-input { width: 160px; }
+.search-actions { display: flex; gap: 10px; }
 
 .table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
+  background: #fff; border-radius: var(--ops-border-radius-md, 8px);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04); overflow: hidden; padding: 16px;
 }
-
-.ellipsis {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
-  display: inline-block;
-}
-
-.error-text {
-  color: #f56c6c;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.action-view:hover {
-  background-color: #e8f4ff;
-  color: #409eff;
-  transform: scale(1.1);
-}
-
-.pagination-wrapper {
-  padding: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.running-tag {
-  display: inline-flex;
-  align-items: center;
-}
-
-/* 弹窗美化 */
-:deep(.beauty-dialog) {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-:deep(.beauty-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  margin-right: 0;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafbfc;
-}
-
-:deep(.beauty-dialog .el-dialog__title) {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-:deep(.beauty-dialog .el-dialog__headerbtn) {
-  top: 20px;
-  right: 20px;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-:deep(.beauty-dialog .el-dialog__headerbtn:hover) {
-  background: #f0f0f0;
-}
-
-:deep(.beauty-dialog .el-dialog__body) {
-  padding: 24px;
-  max-height: 65vh;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-:deep(.beauty-dialog .el-dialog__body::-webkit-scrollbar) {
-  display: none;
-}
-
-:deep(.beauty-dialog .el-dialog__footer) {
-  padding: 16px 24px 20px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafbfc;
-}
+.error-text { color: var(--ops-danger, #f53f3f); }
+.action-btn { width: 32px; height: 32px; border-radius: 6px; transition: all 0.2s ease; }
+.action-view:hover { background-color: var(--ops-primary-bg, #e8f0ff); color: var(--ops-primary, #165dff); transform: scale(1.1); }
+.running-tag { display: inline-flex; align-items: center; }
 
 /* 详情弹窗 */
-.detail-content {
-  padding: 0;
-}
-
+.detail-content { padding: 0; }
 .detail-status-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e8ecf0;
+  display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+  padding: 16px; background: var(--ops-content-bg, #f7f8fa);
+  border-radius: 10px; border: 1px solid var(--ops-border-color, #e5e6eb);
 }
-
-.detail-task-type {
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.detail-task-id {
-  font-size: 14px;
-  color: #909399;
-  font-family: 'Monaco', 'Menlo', monospace;
-  margin-left: auto;
-}
-
-.detail-info {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.detail-info-section {
-  background: #fff;
-  border: 1px solid #e8ecf0;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
+.detail-task-type { font-size: 18px; font-weight: 600; color: var(--ops-text-primary, #1d2129); }
+.detail-task-id { font-size: 14px; color: var(--ops-text-tertiary, #86909c); font-family: 'Monaco', 'Menlo', monospace; margin-left: auto; }
+.detail-info { display: flex; flex-direction: column; gap: 16px; }
+.detail-info-section { background: #fff; border: 1px solid var(--ops-border-color, #e5e6eb); border-radius: 10px; overflow: hidden; }
 .detail-section-title {
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #909399;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e8ecf0;
+  padding: 10px 16px; font-size: 13px; font-weight: 600;
+  color: var(--ops-text-tertiary, #86909c); text-transform: uppercase;
+  letter-spacing: 0.5px; background: var(--ops-content-bg, #f7f8fa);
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
 }
-
-.error-section-title {
-  color: #f56c6c;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0;
-}
-
+.error-section-title { color: var(--ops-danger, #f53f3f); }
+.detail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
 .detail-grid .info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f5f5f5;
-  border-right: 1px solid #f5f5f5;
+  display: flex; flex-direction: column; gap: 4px; padding: 12px 16px;
+  border-bottom: 1px solid #f2f3f5; border-right: 1px solid #f2f3f5;
 }
-
-.detail-grid .info-item:nth-child(2n) {
-  border-right: none;
-}
-
+.detail-grid .info-item:nth-child(2n) { border-right: none; }
 .detail-grid .info-item:last-child,
-.detail-grid .info-item:nth-last-child(2):nth-child(odd) {
-  border-bottom: none;
-}
-
-.info-label {
-  color: #909399;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.info-value {
-  color: #303133;
-  font-size: 14px;
-  word-break: break-all;
-  font-weight: 500;
-}
-
-.error-block {
-  padding: 14px 16px;
-  font-size: 13px;
-  color: #f56c6c;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-}
-
-.result-block {
-  padding: 0;
-}
-
+.detail-grid .info-item:nth-last-child(2):nth-child(odd) { border-bottom: none; }
+.info-label { color: var(--ops-text-tertiary, #86909c); font-size: 12px; font-weight: 500; }
+.info-value { color: var(--ops-text-primary, #1d2129); font-size: 14px; word-break: break-all; font-weight: 500; }
+.error-block { padding: 14px 16px; font-size: 13px; color: var(--ops-danger, #f53f3f); white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+.result-block { padding: 0; }
 .result-json {
-  background: #f8fafc;
-  padding: 14px 16px;
-  font-size: 12px;
-  overflow-x: auto;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-family: 'Monaco', 'Menlo', monospace;
-  line-height: 1.6;
-  color: #606266;
+  background: var(--ops-content-bg, #f7f8fa); padding: 14px 16px; font-size: 12px;
+  overflow-x: auto; margin: 0; white-space: pre-wrap; word-break: break-all;
+  font-family: 'Monaco', 'Menlo', monospace; line-height: 1.6;
+  color: var(--ops-text-secondary, #4e5969);
 }
 </style>

@@ -1,92 +1,88 @@
 <template>
-  <el-drawer
-    :model-value="visible"
+  <a-drawer
+    :visible="visible"
     :title="'ClickHouse 控制台 - ' + (middleware?.name || '')"
-    direction="rtl"
-    size="100%"
-    :destroy-on-close="true"
+    placement="right"
+    :width="'100%'"
+    unmount-on-close
     class="clickhouse-console-drawer"
-    @close="emit('update:visible', false)"
+    @cancel="emit('update:visible', false)"
   >
     <!-- 工具栏 -->
-    <template #header>
+    <template #title>
       <div class="console-header">
         <div class="header-left">
-          <el-icon style="font-size: 18px; color: #e6a23c;"><Monitor /></el-icon>
+          <IconDesktop style="font-size: 18px; color: #e6a23c;" />
           <span class="header-title">ClickHouse 控制台 - {{ middleware?.name }}</span>
         </div>
         <div class="header-actions">
-          <el-select v-model="currentDatabase" placeholder="选择数据库" size="small" style="width: 180px" @change="handleDatabaseChange">
-            <el-option v-for="db in databases" :key="db" :label="db" :value="db" />
-          </el-select>
-          <el-button type="primary" size="small" @click="executeSQL" :loading="executing">
-            <el-icon style="margin-right: 4px;"><CaretRight /></el-icon>执行
-          </el-button>
-          <el-select v-model="queryLimit" size="small" style="width: 110px">
-            <el-option :value="100" label="Limit 100" />
-            <el-option :value="200" label="Limit 200" />
-            <el-option :value="500" label="Limit 500" />
-            <el-option :value="1000" label="Limit 1000" />
-            <el-option :value="0" label="No Limit" />
-          </el-select>
-          <el-button size="small" @click="formatSQL">格式化</el-button>
-          <el-popover placement="bottom" :width="360" trigger="click">
-            <template #reference>
-              <el-button size="small">历史</el-button>
-            </template>
-            <div class="history-panel">
-              <div v-if="!queryHistory.length" class="history-empty">暂无查询历史</div>
-              <div v-for="(item, idx) in queryHistory" :key="idx" class="history-item" @click="applyHistory(item.sql)">
-                <div class="history-sql">{{ item.sql.substring(0, 80) }}{{ item.sql.length > 80 ? '...' : '' }}</div>
-                <div class="history-time">{{ item.time }}</div>
+          <a-select v-model="currentDatabase" placeholder="选择数据库" size="small" style="width: 180px" @change="handleDatabaseChange">
+            <a-option v-for="db in databases" :key="db" :label="db" :value="db" />
+          </a-select>
+          <a-button type="primary" size="small" @click="executeSQL" :loading="executing">
+            <template #icon><IconPlayArrow /></template>执行
+          </a-button>
+          <a-select v-model="queryLimit" size="small" style="width: 110px">
+            <a-option :value="100" label="Limit 100" />
+            <a-option :value="200" label="Limit 200" />
+            <a-option :value="500" label="Limit 500" />
+            <a-option :value="1000" label="Limit 1000" />
+            <a-option :value="0" label="No Limit" />
+          </a-select>
+          <a-button size="small" @click="formatSQL">格式化</a-button>
+          <a-popover position="bottom" trigger="click">
+            <a-button size="small">历史</a-button>
+            <template #content>
+              <div class="history-panel">
+                <div v-if="!queryHistory.length" class="history-empty">暂无查询历史</div>
+                <div v-for="(item, idx) in queryHistory" :key="idx" class="history-item" @click="applyHistory(item.sql)">
+                  <div class="history-sql">{{ item.sql.substring(0, 80) }}{{ item.sql.length > 80 ? '...' : '' }}</div>
+                  <div class="history-time">{{ item.time }}</div>
+                </div>
               </div>
-            </div>
-          </el-popover>
-          <el-button size="small" @click="exportCSV" :disabled="!currentTabResult?.columns?.length">导出 CSV</el-button>
+            </template>
+          </a-popover>
+          <a-button size="small" @click="exportCSV" :disabled="!currentTabResult?.columns?.length">导出 CSV</a-button>
         </div>
       </div>
     </template>
-<!-- SPLIT_CH_BODY -->
 
     <!-- 主体布局 -->
     <div class="console-body">
       <!-- 左侧数据库树 -->
       <div class="sidebar" :style="{ width: sidebarWidth + 'px' }">
         <div class="sidebar-header">
-          <el-icon><Coin /></el-icon>
+          <IconStorage />
           <span>数据库</span>
           <div style="flex:1"></div>
-          <el-tooltip content="新建数据库" placement="top">
-            <el-icon class="sidebar-action" @click="showCreateDbDialog"><Plus /></el-icon>
-          </el-tooltip>
-          <el-tooltip content="刷新" placement="top">
-            <el-icon class="sidebar-action" @click="loadDatabases"><Refresh /></el-icon>
-          </el-tooltip>
+          <a-tooltip content="新建数据库" position="top">
+            <IconPlus class="sidebar-action" @click="showCreateDbDialog" />
+          </a-tooltip>
+          <a-tooltip content="刷新" position="top">
+            <IconRefresh class="sidebar-action" @click="loadDatabases" />
+          </a-tooltip>
         </div>
-        <div class="sidebar-tree" v-loading="treeLoading">
-          <el-tree
+        <a-spin :loading="treeLoading" class="sidebar-tree">
+          <a-tree
             ref="treeRef"
             :data="treeData"
-            :props="treeProps"
-            lazy
-            :load="loadTreeNode"
-            node-key="id"
-            @node-click="handleTreeNodeClick"
-            @node-dblclick="handleTreeNodeDblClick"
+            :field-names="{ key: 'id', title: 'label', children: 'children', isLeaf: 'isLeaf' }"
+            :load-more="loadTreeNode"
+            @select="handleTreeSelect"
           >
-            <template #default="{ node, data }">
-              <span class="tree-node" @contextmenu.prevent="handleTreeContextMenu($event, data)">
-                <el-icon v-if="data.type === 'database'" style="color: #e6a23c;"><Coin /></el-icon>
-                <el-icon v-else-if="data.type === 'table'" style="color: #67c23a;"><Grid /></el-icon>
-                <el-icon v-else style="color: #909399;"><Document /></el-icon>
-                <el-tooltip :content="node.label" placement="right" :show-after="500" :disabled="node.label.length < 20">
-                  <span class="tree-node-label">{{ node.label }}</span>
-                </el-tooltip>
-                <span v-if="data.type === 'column'" class="column-type">{{ data.colType }}</span>
+            <template #title="nodeData">
+              <span class="tree-node" @contextmenu.prevent="handleTreeContextMenu($event, nodeData)" @dblclick="handleTreeNodeDblClick(nodeData)">
+                <IconStorage v-if="nodeData.type === 'database'" style="color: #e6a23c;" />
+                <IconApps v-else-if="nodeData.type === 'table'" style="color: #67c23a;" />
+                <IconFile v-else style="color: #909399;" />
+                <a-tooltip :content="nodeData.label" position="right" :mouse-enter-delay="500">
+                  <span class="tree-node-label">{{ nodeData.label }}</span>
+                </a-tooltip>
+                <span v-if="nodeData.type === 'column'" class="column-type">{{ nodeData.colType }}</span>
               </span>
             </template>
-          </el-tree>
-        </div>
+          </a-tree>
+        </a-spin>
       </div>
 
       <div class="resize-handle" @mousedown="startResize"></div>
@@ -113,10 +109,10 @@
               @keyup.escape="cancelRenameTab"
               @click.stop
             />
-            <el-icon v-if="queryTabs.length > 1" class="query-tab-close" @click.stop="closeQueryTab(tab.id)"><Close /></el-icon>
+            <IconClose v-if="queryTabs.length > 1" class="query-tab-close" @click.stop="closeQueryTab(tab.id)" />
           </div>
           <div class="query-tab-add" @click="addQueryTab">
-            <el-icon><Plus /></el-icon>
+            <IconPlus />
           </div>
         </div>
 
@@ -134,29 +130,35 @@
         <!-- 结果面板 -->
         <div class="result-area">
           <div class="result-content" ref="resultContentRef" v-if="currentTabResult">
-            <el-table
+            <a-table
               v-if="currentTabResult.columns && currentTabResult.columns.length"
               :data="paginatedRows"
-              :max-height="tableMaxHeight"
+              :scroll="{ y: tableMaxHeight }"
               size="small"
-              border
+              :bordered="{ cell: true }"
               stripe
+              :pagination="false"
               style="width: 100%"
             >
-              <el-table-column type="index" label="#" width="55" fixed />
-              <el-table-column
-                v-for="col in currentTabResult.columns"
-                :key="col"
-                :prop="col"
-                :label="col"
-                min-width="140"
-                show-overflow-tooltip
-                sortable
-              />
-            </el-table>
+              <template #columns>
+                <a-table-column title="#" :width="55" fixed="left">
+                  <template #cell="{ rowIndex }">{{ (currentPage - 1) * pageSize + rowIndex + 1 }}</template>
+                </a-table-column>
+                <a-table-column
+                  v-for="col in currentTabResult.columns"
+                  :key="col"
+                  :data-index="col"
+                  :title="col"
+                  :width="140"
+                  :sortable="{ sortDirections: ['ascend', 'descend'] }"
+                  ellipsis
+                  tooltip
+                />
+              </template>
+            </a-table>
             <pre v-else-if="currentTabResult.rawResult !== undefined" class="raw-result">{{ JSON.stringify(currentTabResult.rawResult, null, 2) }}</pre>
             <div v-else-if="currentTabResult.message" class="result-message">
-              <el-icon style="color: #67c23a; font-size: 16px;"><CircleCheck /></el-icon>
+              <IconCheckCircle style="color: #67c23a; font-size: 16px;" />
               <span>{{ currentTabResult.message }}</span>
             </div>
           </div>
@@ -169,14 +171,15 @@
             <span v-if="currentTabResult?.duration">耗时 {{ currentTabResult.duration }}ms</span>
             <span v-if="currentDatabase">数据库: {{ currentDatabase }}</span>
             <div style="flex:1"></div>
-            <el-pagination
+            <a-pagination
               v-if="allResultRows.length > pageSize"
-              v-model:current-page="currentPage"
+              v-model:current="currentPage"
               v-model:page-size="pageSize"
-              :page-sizes="[50, 100, 200, 500]"
+              :page-size-options="[50, 100, 200, 500]"
               :total="allResultRows.length"
               size="small"
-              layout="sizes, prev, pager, next"
+              show-page-size
+              :show-total="false"
             />
           </div>
         </div>
@@ -225,38 +228,40 @@
     </div>
 
     <!-- 修改表名弹窗 -->
-    <el-dialog v-model="renameTableDialog.visible" title="修改表名" width="400px" destroy-on-close append-to-body>
-      <el-form label-width="80px">
-        <el-form-item label="新表名">
-          <el-input v-model="renameTableDialog.newName" placeholder="请输入新表名" />
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="renameTableDialog.visible" title="修改表名" :width="400" unmount-on-close :mask-closable="false">
+      <a-form auto-label-width>
+        <a-form-item label="新表名" field="newName">
+          <a-input v-model="renameTableDialog.newName" placeholder="请输入新表名" allow-clear />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="renameTableDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="confirmRenameTable" :loading="renameTableDialog.loading">确定</el-button>
+        <a-button @click="renameTableDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="confirmRenameTable" :loading="renameTableDialog.loading">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 创建数据库弹窗 -->
-    <el-dialog v-model="createDbDialog.visible" title="新建数据库" width="400px" destroy-on-close append-to-body>
-      <el-form label-width="80px">
-        <el-form-item label="数据库名">
-          <el-input v-model="createDbDialog.name" placeholder="请输入数据库名" />
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="createDbDialog.visible" title="新建数据库" :width="400" unmount-on-close :mask-closable="false">
+      <a-form auto-label-width>
+        <a-form-item label="数据库名" field="name">
+          <a-input v-model="createDbDialog.name" placeholder="请输入数据库名" allow-clear />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="createDbDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="confirmCreateDb" :loading="createDbDialog.loading">创建</el-button>
+        <a-button @click="createDbDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="confirmCreateDb" :loading="createDbDialog.loading">创建</a-button>
       </template>
-    </el-dialog>
-  </el-drawer>
+    </a-modal>
+  </a-drawer>
 </template>
-<!-- SPLIT_CH_SCRIPT -->
 
 <script setup lang="ts">
-import { ref, computed, watch, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Monitor, CaretRight, Coin, Grid, Document, CircleCheck, Plus, Refresh, Close } from '@element-plus/icons-vue'
+import { ref, computed, watch, reactive, onMounted, onBeforeUnmount, nextTick, h, resolveComponent } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import {
+  IconDesktop, IconPlayArrow, IconStorage, IconApps, IconFile,
+  IconCheckCircle, IconPlus, IconRefresh, IconClose
+} from '@arco-design/web-vue/es/icon'
 import { Codemirror } from 'vue-codemirror'
 import { sql } from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
@@ -301,6 +306,7 @@ const saveQueryTabs = () => {
     localStorage.setItem(key, JSON.stringify(data))
   } catch {}
 }
+
 
 const loadQueryTabs = () => {
   const key = getStorageKey()
@@ -351,6 +357,7 @@ const addQueryTab = () => {
   activeQueryTab.value = tab.id
   saveQueryTabs()
 }
+
 
 const closeQueryTab = (id: string) => {
   if (queryTabs.value.length <= 1) return
@@ -404,6 +411,7 @@ const ctxMenu = reactive({
   dbName: '', tableName: '', colName: ''
 })
 
+
 const handleTreeContextMenu = (e: MouseEvent, data: any) => {
   ctxMenu.visible = true
   ctxMenu.x = e.clientX
@@ -455,6 +463,7 @@ const ctxDML = async (type: string) => {
       return "''"
     }
 
+
     let sqlStr = ''
     switch (type) {
       case 'select':
@@ -473,7 +482,7 @@ const ctxDML = async (type: string) => {
     addQueryTab()
     if (currentTab.value) currentTab.value.content = sqlStr
   } catch (e: any) {
-    ElMessage.error('获取列信息失败: ' + (e.message || ''))
+    Message.error('获取列信息失败: ' + (e.message || ''))
   }
 }
 
@@ -497,102 +506,128 @@ const ctxRenameTable = () => {
 
 const confirmRenameTable = async () => {
   const newName = renameTableDialog.newName.trim()
-  if (!newName) return ElMessage.warning('请输入新表名')
+  if (!newName) return Message.warning('请输入新表名')
   renameTableDialog.loading = true
   try {
     await executeMiddleware(props.middleware.id, {
       command: `RENAME TABLE \`${ctxMenu.dbName}\`.\`${ctxMenu.tableName}\` TO \`${ctxMenu.dbName}\`.\`${newName}\``,
       database: ctxMenu.dbName
     })
-    ElMessage.success('重命名成功')
+    Message.success('重命名成功')
     renameTableDialog.visible = false
     loadDatabases()
   } catch (e: any) {
-    ElMessage.error(e.message || '重命名失败')
+    Message.error(e.message || '重命名失败')
   } finally {
     renameTableDialog.loading = false
   }
 }
+
 
 const ctxCopyName = () => {
   let name = ''
   if (ctxMenu.nodeType === 'table') name = ctxMenu.tableName
   else if (ctxMenu.nodeType === 'database') name = ctxMenu.dbName
   else if (ctxMenu.nodeType === 'column') name = ctxMenu.colName
-  navigator.clipboard.writeText(name).then(() => ElMessage.success('已复制'))
+  navigator.clipboard.writeText(name).then(() => Message.success('已复制'))
   closeCtxMenu()
 }
 
 const ctxDropTable = () => {
   closeCtxMenu()
-  ElMessageBox.confirm(
-    `确定要删除表 ${ctxMenu.dbName}.${ctxMenu.tableName} 吗？此操作不可恢复！`,
-    '删除表',
-    { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
-  ).then(async () => {
-    try {
-      await executeMiddleware(props.middleware.id, {
-        command: `DROP TABLE \`${ctxMenu.dbName}\`.\`${ctxMenu.tableName}\``,
-        database: ctxMenu.dbName
-      })
-      ElMessage.success('删除成功')
-      loadDatabases()
-    } catch (e: any) {
-      ElMessage.error(e.message || '删除失败')
+  Modal.warning({
+    title: '删除表',
+    content: `确定要删除表 ${ctxMenu.dbName}.${ctxMenu.tableName} 吗？此操作不可恢复！`,
+    hideCancel: false,
+    okText: '删除',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await executeMiddleware(props.middleware.id, {
+          command: `DROP TABLE \`${ctxMenu.dbName}\`.\`${ctxMenu.tableName}\``,
+          database: ctxMenu.dbName
+        })
+        Message.success('删除成功')
+        loadDatabases()
+      } catch (e: any) {
+        Message.error(e.message || '删除失败')
+      }
     }
-  }).catch(() => {})
+  })
 }
 
 const ctxTruncateTable = () => {
   closeCtxMenu()
-  ElMessageBox.confirm(
-    `确定要清空表 ${ctxMenu.dbName}.${ctxMenu.tableName} 的所有数据吗？此操作不可恢复！`,
-    '清空表',
-    { confirmButtonText: '清空', cancelButtonText: '取消', type: 'warning' }
-  ).then(async () => {
-    try {
-      await executeMiddleware(props.middleware.id, {
-        command: `TRUNCATE TABLE \`${ctxMenu.dbName}\`.\`${ctxMenu.tableName}\``,
-        database: ctxMenu.dbName
-      })
-      ElMessage.success('清空成功')
-    } catch (e: any) {
-      ElMessage.error(e.message || '清空失败')
+  Modal.warning({
+    title: '清空表',
+    content: `确定要清空表 ${ctxMenu.dbName}.${ctxMenu.tableName} 的所有数据吗？此操作不可恢复！`,
+    hideCancel: false,
+    okText: '清空',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await executeMiddleware(props.middleware.id, {
+          command: `TRUNCATE TABLE \`${ctxMenu.dbName}\`.\`${ctxMenu.tableName}\``,
+          database: ctxMenu.dbName
+        })
+        Message.success('清空成功')
+      } catch (e: any) {
+        Message.error(e.message || '清空失败')
+      }
     }
-  }).catch(() => {})
+  })
 }
+
 
 const ctxCopyBackupTable = () => {
   closeCtxMenu()
   const db = ctxMenu.dbName
   const table = ctxMenu.tableName
   const backupName = `${table}_bak_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`
-  ElMessageBox.prompt('请输入备份表名', '复制备份表', {
-    confirmButtonText: '创建',
-    cancelButtonText: '取消',
-    inputValue: backupName,
-    inputPattern: /^[a-zA-Z_]\w*$/,
-    inputErrorMessage: '表名格式不正确'
-  }).then(async ({ value }) => {
-    try {
-      executing.value = true
-      await executeMiddleware(props.middleware.id, {
-        command: `CREATE TABLE \`${db}\`.\`${value}\` AS \`${db}\`.\`${table}\``,
-        database: db
-      })
-      await executeMiddleware(props.middleware.id, {
-        command: `INSERT INTO \`${db}\`.\`${value}\` SELECT * FROM \`${db}\`.\`${table}\``,
-        database: db
-      })
-      ElMessage.success(`备份表 ${value} 创建成功`)
-      loadDatabases()
-    } catch (e: any) {
-      ElMessage.error(e.message || '备份失败')
-    } finally {
-      executing.value = false
+  // Use a simple prompt approach - set content in a new tab
+  const inputValue = ref(backupName)
+  Modal.open({
+    title: '复制备份表',
+    content: () => {
+      return h('div', [
+        h('p', '请输入备份表名'),
+        h(resolveComponent('a-input') as any, {
+          modelValue: inputValue.value,
+          'onUpdate:modelValue': (v: string) => { inputValue.value = v },
+          placeholder: '备份表名'
+        })
+      ])
+    },
+    hideCancel: false,
+    okText: '创建',
+    cancelText: '取消',
+    onOk: async () => {
+      const value = inputValue.value
+      if (!value || !/^[a-zA-Z_]\w*$/.test(value)) {
+        Message.error('表名格式不正确')
+        return false
+      }
+      try {
+        executing.value = true
+        await executeMiddleware(props.middleware.id, {
+          command: `CREATE TABLE \`${db}\`.\`${value}\` AS \`${db}\`.\`${table}\``,
+          database: db
+        })
+        await executeMiddleware(props.middleware.id, {
+          command: `INSERT INTO \`${db}\`.\`${value}\` SELECT * FROM \`${db}\`.\`${table}\``,
+          database: db
+        })
+        Message.success(`备份表 ${value} 创建成功`)
+        loadDatabases()
+      } catch (e: any) {
+        Message.error(e.message || '备份失败')
+      } finally {
+        executing.value = false
+      }
     }
-  }).catch(() => {})
+  })
 }
+
 
 const ctxExportTable = async (mode: 'all' | 'structure') => {
   closeCtxMenu()
@@ -636,13 +671,14 @@ const ctxExportTable = async (mode: 'all' | 'structure') => {
     a.download = `${db}_${table}_${mode === 'all' ? 'full' : 'structure'}.sql`
     a.click()
     URL.revokeObjectURL(url)
-    ElMessage.success('导出成功')
+    Message.success('导出成功')
   } catch (e: any) {
-    ElMessage.error(e.message || '导出失败')
+    Message.error(e.message || '导出失败')
   } finally {
     executing.value = false
   }
 }
+
 
 // --- Core state ---
 const currentDatabase = ref('')
@@ -691,8 +727,8 @@ interface QueryHistory { sql: string; time: string }
 const queryHistory = ref<QueryHistory[]>([])
 const HISTORY_KEY = 'clickhouse_console_history'
 
-const treeProps = { label: 'label', children: 'children', isLeaf: 'isLeaf' }
 const editorExtensions = computed(() => [sql(), oneDark])
+
 
 const allResultRows = computed(() => {
   const result = currentTabResult.value
@@ -719,15 +755,15 @@ const showCreateDbDialog = () => {
 }
 
 const confirmCreateDb = async () => {
-  if (!createDbDialog.name.trim()) return ElMessage.warning('请输入数据库名')
+  if (!createDbDialog.name.trim()) return Message.warning('请输入数据库名')
   createDbDialog.loading = true
   try {
     await createClickHouseDatabase(props.middleware.id, createDbDialog.name.trim())
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createDbDialog.visible = false
     loadDatabases()
   } catch (e: any) {
-    ElMessage.error(e.message || '创建失败')
+    Message.error(e.message || '创建失败')
   } finally {
     createDbDialog.loading = false
   }
@@ -748,6 +784,7 @@ const saveHistory = (sqlStr: string) => {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(queryHistory.value)) } catch {}
 }
 
+
 const applyHistory = (sqlStr: string) => {
   if (currentTab.value) currentTab.value.content = sqlStr
 }
@@ -759,7 +796,7 @@ const loadDatabases = async () => {
     const res: any = await getClickHouseDatabases(props.middleware.id)
     databases.value = res || []
     treeData.value = databases.value.map(db => ({
-      id: `db_${db}`, label: db, type: 'database', dbName: db, isLeaf: false
+      id: `db_${db}`, label: db, type: 'database', dbName: db, isLeaf: false, children: []
     }))
     if (props.middleware.databaseName && databases.value.includes(props.middleware.databaseName)) {
       currentDatabase.value = props.middleware.databaseName
@@ -767,36 +804,37 @@ const loadDatabases = async () => {
       currentDatabase.value = databases.value[0]!
     }
   } catch (e: any) {
-    ElMessage.error('获取数据库列表失败: ' + (e.message || ''))
+    Message.error('获取数据库列表失败: ' + (e.message || ''))
   } finally {
     treeLoading.value = false
   }
 }
 
-const loadTreeNode = async (node: any, resolve: (data: any[]) => void) => {
-  if (node.level === 0) { resolve(treeData.value); return }
-  const data = node.data
-  if (data.type === 'database') {
+const loadTreeNode = async (nodeData: any) => {
+  if (nodeData.type === 'database') {
     try {
-      const res: any = await getClickHouseTables(props.middleware.id, data.dbName)
-      resolve((res || []).map((t: string) => ({
-        id: `table_${data.dbName}_${t}`, label: t, type: 'table',
-        dbName: data.dbName, tableName: t, isLeaf: false
-      })))
-    } catch { resolve([]) }
-  } else if (data.type === 'table') {
+      const res: any = await getClickHouseTables(props.middleware.id, nodeData.dbName)
+      nodeData.children = (res || []).map((t: string) => ({
+        id: `table_${nodeData.dbName}_${t}`, label: t, type: 'table',
+        dbName: nodeData.dbName, tableName: t, isLeaf: false, children: []
+      }))
+    } catch { nodeData.children = [] }
+  } else if (nodeData.type === 'table') {
     try {
-      const res: any = await getClickHouseColumns(props.middleware.id, data.dbName, data.tableName)
-      resolve((res || []).map((c: any) => ({
-        id: `col_${data.dbName}_${data.tableName}_${c.name}`,
+      const res: any = await getClickHouseColumns(props.middleware.id, nodeData.dbName, nodeData.tableName)
+      nodeData.children = (res || []).map((c: any) => ({
+        id: `col_${nodeData.dbName}_${nodeData.tableName}_${c.name}`,
         label: c.name, type: 'column', colType: c.type, isLeaf: true
-      })))
-    } catch { resolve([]) }
-  } else { resolve([]) }
+      }))
+    } catch { nodeData.children = [] }
+  }
 }
 
+
 const handleDatabaseChange = (db: string) => { currentDatabase.value = db }
-const handleTreeNodeClick = (data: any) => { if (data.type === 'database') currentDatabase.value = data.dbName }
+const handleTreeSelect = (keys: string[], data: { node?: any }) => {
+  if (data.node?.type === 'database') currentDatabase.value = data.node.dbName
+}
 const handleTreeNodeDblClick = (data: any) => {
   if (data.type === 'table') {
     const query = `SELECT * FROM \`${data.dbName}\`.\`${data.tableName}\` LIMIT 100`
@@ -857,14 +895,15 @@ const splitSQL = (text: string): string[] => {
   return stmts
 }
 
+
 const executeSQL = async () => {
   const tab = currentTab.value
   if (!tab) return
   const raw = tab.content.trim()
-  if (!raw) return ElMessage.warning('请输入 SQL 语句')
+  if (!raw) return Message.warning('请输入 SQL 语句')
 
   const stmts = splitSQL(raw)
-  if (!stmts.length) return ElMessage.warning('请输入 SQL 语句')
+  if (!stmts.length) return Message.warning('请输入 SQL 语句')
 
   executing.value = true
   let lastResult: any = null
@@ -890,7 +929,7 @@ const executeSQL = async () => {
           if (!lastResult) lastResult = res
         }
       } catch (e: any) {
-        ElMessage.error(`第 ${idx + 1} 条语句执行失败: ${e.message || '未知错误'}`)
+        Message.error(`第 ${idx + 1} 条语句执行失败: ${e.message || '未知错误'}`)
         errorOccurred = true
         break
       }
@@ -910,18 +949,19 @@ const executeSQL = async () => {
     currentPage.value = 1
     saveQueryTabs()
     if (!errorOccurred && stmts.length > 1) {
-      ElMessage.success(`成功执行 ${stmts.length} 条语句`)
+      Message.success(`成功执行 ${stmts.length} 条语句`)
     }
   } finally {
     executing.value = false
   }
 }
 
+
 const formatSQL = () => {
   if (!currentTab.value?.content.trim()) return
   try {
     currentTab.value.content = formatSqlFn(currentTab.value.content, { language: 'sql' })
-  } catch { ElMessage.warning('格式化失败') }
+  } catch { Message.warning('格式化失败') }
 }
 
 const handleEditorKeydown = (e: KeyboardEvent) => {
@@ -958,7 +998,6 @@ watch(() => props.visible, (val) => {
   }
 })
 </script>
-<!-- SPLIT_CH_STYLE -->
 
 <style scoped>
 .console-header {
@@ -988,7 +1027,7 @@ watch(() => props.visible, (val) => {
 }
 .sidebar {
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   flex-direction: column;
   background: #fafafa;
@@ -997,7 +1036,7 @@ watch(() => props.visible, (val) => {
   padding: 10px 12px;
   font-weight: 600;
   font-size: 13px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1005,14 +1044,15 @@ watch(() => props.visible, (val) => {
 .sidebar-action {
   cursor: pointer;
   font-size: 14px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   padding: 2px;
   border-radius: 3px;
   transition: all 0.15s;
 }
+
 .sidebar-action:hover {
-  color: #409eff;
-  background: #ecf5ff;
+  color: var(--ops-primary, #165dff);
+  background: #e8f3ff;
 }
 .sidebar-tree {
   flex: 1;
@@ -1034,14 +1074,14 @@ watch(() => props.visible, (val) => {
 }
 .column-type {
   margin-left: 6px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   font-size: 11px;
 }
 .query-tabs-bar {
   display: flex;
   align-items: center;
   background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   padding: 0 4px;
   height: 34px;
   flex-shrink: 0;
@@ -1057,7 +1097,7 @@ watch(() => props.visible, (val) => {
   cursor: pointer;
   border-radius: 4px 4px 0 0;
   background: #e8eaed;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   border-bottom: none;
   white-space: nowrap;
   max-width: 160px;
@@ -1065,18 +1105,19 @@ watch(() => props.visible, (val) => {
   position: relative;
   top: 1px;
 }
+
 .query-tab.active {
   background: #fff;
-  border-color: #e4e7ed;
+  border-color: var(--ops-border-color, #e5e6eb);
   font-weight: 600;
 }
-.query-tab:hover { background: #ecf5ff; }
+.query-tab:hover { background: #e8f3ff; }
 .query-tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .query-tab-rename-input {
-  border: 1px solid #409eff;
+  border: 1px solid var(--ops-primary, #165dff);
   border-radius: 2px;
   padding: 0 4px;
   font-size: 12px;
@@ -1085,14 +1126,14 @@ watch(() => props.visible, (val) => {
 }
 .query-tab-close {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   cursor: pointer;
   border-radius: 50%;
   padding: 1px;
 }
 .query-tab-close:hover {
-  color: #f56c6c;
-  background: #fef0f0;
+  color: #f53f3f;
+  background: #ffece8;
 }
 .query-tab-add {
   display: flex;
@@ -1102,13 +1143,13 @@ watch(() => props.visible, (val) => {
   height: 24px;
   cursor: pointer;
   border-radius: 4px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   font-size: 14px;
   transition: all 0.15s;
 }
 .query-tab-add:hover {
-  color: #409eff;
-  background: #ecf5ff;
+  color: var(--ops-primary, #165dff);
+  background: #e8f3ff;
 }
 .main-area {
   flex: 1;
@@ -1118,9 +1159,10 @@ watch(() => props.visible, (val) => {
   overflow: hidden;
 }
 .editor-area {
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   flex-shrink: 0;
 }
+
 .result-area {
   flex: 1;
   display: flex;
@@ -1138,7 +1180,7 @@ watch(() => props.visible, (val) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   font-size: 14px;
 }
 .result-message {
@@ -1146,7 +1188,7 @@ watch(() => props.visible, (val) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #67c23a;
+  color: #00b42a;
   font-size: 14px;
 }
 .raw-result {
@@ -1162,9 +1204,9 @@ watch(() => props.visible, (val) => {
   flex-shrink: 0;
   padding: 4px 12px;
   background: #f5f7fa;
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid var(--ops-border-color, #e5e6eb);
   font-size: 12px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -1173,9 +1215,10 @@ watch(() => props.visible, (val) => {
   max-height: 300px;
   overflow: auto;
 }
+
 .history-empty {
   text-align: center;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   padding: 20px;
   font-size: 13px;
 }
@@ -1190,13 +1233,13 @@ watch(() => props.visible, (val) => {
 }
 .history-sql {
   font-size: 12px;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   font-family: monospace;
   word-break: break-all;
 }
 .history-time {
   font-size: 11px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   margin-top: 4px;
 }
 .resize-handle {
@@ -1206,12 +1249,12 @@ watch(() => props.visible, (val) => {
   flex-shrink: 0;
   transition: background 0.2s;
 }
-.resize-handle:hover { background: #409eff; }
+.resize-handle:hover { background: var(--ops-primary, #165dff); }
 .context-menu {
   position: fixed;
   z-index: 9999;
   background: #fff;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   border-radius: 4px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.12);
   padding: 4px 0;
@@ -1223,19 +1266,19 @@ watch(() => props.visible, (val) => {
   cursor: pointer;
   position: relative;
 }
-.ctx-item:hover { background: #ecf5ff; color: #409eff; }
-.ctx-danger { color: #f56c6c; }
-.ctx-danger:hover { background: #fef0f0; color: #f56c6c; }
-.ctx-divider { height: 1px; background: #ebeef5; margin: 4px 0; }
+.ctx-item:hover { background: #e8f3ff; color: var(--ops-primary, #165dff); }
+.ctx-danger { color: #f53f3f; }
+.ctx-danger:hover { background: #ffece8; color: #f53f3f; }
+.ctx-divider { height: 1px; background: var(--ops-border-color, #e5e6eb); margin: 4px 0; }
 .ctx-has-sub { padding-right: 24px; }
-.ctx-has-sub::after { content: '▸'; position: absolute; right: 8px; }
+.ctx-has-sub::after { content: '\25B8'; position: absolute; right: 8px; }
 .ctx-submenu {
   display: none;
   position: absolute;
   left: 100%;
   top: 0;
   background: #fff;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   border-radius: 4px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.12);
   padding: 4px 0;

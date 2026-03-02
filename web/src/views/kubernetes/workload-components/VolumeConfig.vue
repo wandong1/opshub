@@ -3,23 +3,23 @@
     <div class="panel-header">
       <span class="panel-icon">💾</span>
       <span class="panel-title">数据卷</span>
-      <el-button link type="primary" @click="emit('addVolume')" :icon="Plus" size="small">添加</el-button>
+      <a-button type="primary" @click="emit('addVolume')" size="small">添加</a-button>
     </div>
     <div class="panel-content">
       <div class="volume-list">
         <div v-for="(volume, index) in volumes" :key="'volume-'+index" class="volume-item">
           <div class="volume-row" @click="toggleExpand(index)">
             <div class="volume-info">
-              <el-icon class="expand-icon" :class="{ expanded: expandedIndex === index }">
+              <span class="expand-icon" :class="{ expanded: expandedIndex === index }">
                 <ArrowRight />
-              </el-icon>
+              </span>
               <span class="volume-name-type">{{ volume.name || '未命名' }} ({{ getTypeLabel(volume.type) }})</span>
             </div>
-            <el-button
+            <a-button
               link
               type="danger"
               @click.stop="emit('removeVolume', index)"
-              :icon="Delete"
+             
               size="small"
             />
           </div>
@@ -27,31 +27,31 @@
             <div class="volume-detail-form">
               <div class="form-row">
                 <label>名称</label>
-                <el-input v-model="volume.name" placeholder="volume-name" size="small" @input="updateVolume(index)" />
+                <a-input v-model="volume.name" placeholder="volume-name" size="small" @input="updateVolume(index)" />
               </div>
               <div class="form-row">
                 <label>类型</label>
-                <el-select v-model="volume.type" placeholder="选择类型" size="small" style="width: 100%;" @change="handleTypeChange(index)">
-                  <el-option label="EmptyDir" value="emptyDir" />
-                  <el-option label="HostPath" value="hostPath" />
-                  <el-option label="NFS" value="nfs" />
-                  <el-option label="ConfigMap" value="configMap" />
-                  <el-option label="Secret" value="secret" />
-                  <el-option label="PVC" value="persistentVolumeClaim" />
-                </el-select>
+                <a-select v-model="volume.type" placeholder="选择类型" size="small" style="width: 100%;" @change="handleTypeChange(index)">
+                  <a-option label="EmptyDir" value="emptyDir" />
+                  <a-option label="HostPath" value="hostPath" />
+                  <a-option label="NFS" value="nfs" />
+                  <a-option label="ConfigMap" value="configMap" />
+                  <a-option label="Secret" value="secret" />
+                  <a-option label="PVC" value="persistentVolumeClaim" />
+                </a-select>
               </div>
 
               <!-- EmptyDir 配置 -->
               <template v-if="volume.type === 'emptyDir'">
                 <div class="form-row">
                   <label>存储介质</label>
-                  <el-select v-model="volume.medium" placeholder="默认使用节点磁盘" size="small" style="width: 100%;" @change="updateVolume(index)" clearable>
-                    <el-option label="Memory（内存）" value="Memory" />
-                  </el-select>
+                  <a-select v-model="volume.medium" placeholder="默认使用节点磁盘" size="small" style="width: 100%;" @change="updateVolume(index)" allow-clear>
+                    <a-option label="Memory（内存）" value="Memory" />
+                  </a-select>
                 </div>
                 <div class="form-row" v-if="volume.medium === 'Memory'">
                   <label>大小限制</label>
-                  <el-input v-model="volume.sizeLimit" placeholder="如: 1Gi, 100Mi" size="small" @input="updateVolume(index)" />
+                  <a-input v-model="volume.sizeLimit" placeholder="如: 1Gi, 100Mi" size="small" @input="updateVolume(index)" />
                 </div>
               </template>
 
@@ -59,19 +59,19 @@
               <template v-if="volume.type === 'hostPath'">
                 <div class="form-row">
                   <label>主机路径</label>
-                  <el-input v-model="volume.hostPath!.path" placeholder="/host/path" size="small" @input="updateVolume(index)" />
+                  <a-input v-model="volume.hostPath!.path" placeholder="/host/path" size="small" @input="updateVolume(index)" />
                 </div>
                 <div class="form-row">
                   <label>路径类型</label>
-                  <el-select v-model="volume.hostPath!.type" placeholder="默认（自动创建）" size="small" style="width: 100%;" @change="updateVolume(index)" clearable>
-                    <el-option label="DirectoryOrCreate" value="DirectoryOrCreate" />
-                    <el-option label="Directory" value="Directory" />
-                    <el-option label="FileOrCreate" value="FileOrCreate" />
-                    <el-option label="File" value="File" />
-                    <el-option label="Socket" value="Socket" />
-                    <el-option label="CharDevice" value="CharDevice" />
-                    <el-option label="BlockDevice" value="BlockDevice" />
-                  </el-select>
+                  <a-select v-model="volume.hostPath!.type" placeholder="默认（自动创建）" size="small" style="width: 100%;" @change="updateVolume(index)" allow-clear>
+                    <a-option label="DirectoryOrCreate" value="DirectoryOrCreate" />
+                    <a-option label="Directory" value="Directory" />
+                    <a-option label="FileOrCreate" value="FileOrCreate" />
+                    <a-option label="File" value="File" />
+                    <a-option label="Socket" value="Socket" />
+                    <a-option label="CharDevice" value="CharDevice" />
+                    <a-option label="BlockDevice" value="BlockDevice" />
+                  </a-select>
                 </div>
               </template>
 
@@ -79,15 +79,15 @@
               <template v-if="volume.type === 'nfs'">
                 <div class="form-row">
                   <label>服务器地址</label>
-                  <el-input v-model="volume.nfs!.server" placeholder="192.168.1.100" size="small" @input="updateVolume(index)" />
+                  <a-input v-model="volume.nfs!.server" placeholder="192.168.1.100" size="small" @input="updateVolume(index)" />
                 </div>
                 <div class="form-row">
                   <label>共享路径</label>
-                  <el-input v-model="volume.nfs!.path" placeholder="/exports/data" size="small" @input="updateVolume(index)" />
+                  <a-input v-model="volume.nfs!.path" placeholder="/exports/data" size="small" @input="updateVolume(index)" />
                 </div>
                 <div class="form-row">
                   <label>只读</label>
-                  <el-switch v-model="volume.nfs!.readOnly" @change="updateVolume(index)" />
+                  <a-switch v-model="volume.nfs!.readOnly" @change="updateVolume(index)" />
                 </div>
               </template>
 
@@ -96,10 +96,10 @@
                 <div class="form-row">
                   <label>
                     ConfigMap 名称
-                    <el-button link type="primary" @click="emit('refreshConfigMaps')" :icon="Refresh" size="small" circle />
+                    <a-button type="text" @click="emit('refreshConfigMaps')" size="small" circle />
                   </label>
                   <div class="select-with-refresh">
-                    <el-select
+                    <a-select
                       v-model="volume.configMap!.name"
                       filterable
                       placeholder="选择 ConfigMap"
@@ -107,31 +107,31 @@
                       style="flex: 1;"
                       @change="updateVolume(index)"
                     >
-                      <el-option
+                      <a-option
                         v-for="cm in configMaps"
                         :key="cm.name"
                         :label="cm.name"
                         :value="cm.name"
                       />
-                    </el-select>
+                    </a-select>
                   </div>
                 </div>
                 <div class="form-row">
                   <label>默认权限</label>
-                  <el-input-number v-model="volume.configMap!.defaultMode" :min="0" :max="511" size="small" style="width: 100%;" @change="updateVolume(index)" />
+                  <a-input-number v-model="volume.configMap!.defaultMode" :min="0" :max="511" size="small" style="width: 100%;" @change="updateVolume(index)" />
                 </div>
                 <div class="form-row">
                   <label>
                     键值映射
-                    <el-button link type="primary" @click="addConfigMapItem(volume)" :icon="Plus" size="small">添加</el-button>
+                    <a-button type="text" @click="addConfigMapItem(volume)" size="small">添加</a-button>
                   </label>
                   <div class="items-list">
                     <div v-for="(item, idx) in volume.configMap!.items" :key="'cm-item-'+idx" class="item-row">
-                      <el-input v-model="item.key" placeholder="key" size="small" style="flex: 1;" @input="updateVolume(index)" />
+                      <a-input v-model="item.key" placeholder="key" size="small" style="flex: 1;" @input="updateVolume(index)" />
                       <span class="arrow">→</span>
-                      <el-input v-model="item.path" placeholder="path" size="small" style="flex: 1;" @input="updateVolume(index)" />
-                      <el-input-number v-model="item.mode" :min="0" :max="511" placeholder="mode" size="small" style="width: 100px;" @change="updateVolume(index)" />
-                      <el-button link type="danger" @click="removeConfigMapItem(volume, idx)" :icon="Delete" size="small" />
+                      <a-input v-model="item.path" placeholder="path" size="small" style="flex: 1;" @input="updateVolume(index)" />
+                      <a-input-number v-model="item.mode" :min="0" :max="511" placeholder="mode" size="small" style="width: 100px;" @change="updateVolume(index)" />
+                      <a-button type="text" status="danger" @click="removeConfigMapItem(volume, idx)" size="small" />
                     </div>
                     <div v-if="!volume.configMap!.items || volume.configMap!.items.length === 0" class="empty-items">使用全部键值</div>
                   </div>
@@ -143,10 +143,10 @@
                 <div class="form-row">
                   <label>
                     Secret 名称
-                    <el-button link type="primary" @click="emit('refreshSecrets')" :icon="Refresh" size="small" circle />
+                    <a-button type="text" @click="emit('refreshSecrets')" size="small" circle />
                   </label>
                   <div class="select-with-refresh">
-                    <el-select
+                    <a-select
                       v-model="volume.secret!.secretName"
                       filterable
                       placeholder="选择 Secret"
@@ -154,31 +154,31 @@
                       style="flex: 1;"
                       @change="updateVolume(index)"
                     >
-                      <el-option
+                      <a-option
                         v-for="sec in secrets"
                         :key="sec.name"
                         :label="sec.name"
                         :value="sec.name"
                       />
-                    </el-select>
+                    </a-select>
                   </div>
                 </div>
                 <div class="form-row">
                   <label>默认权限</label>
-                  <el-input-number v-model="volume.secret!.defaultMode" :min="0" :max="511" size="small" style="width: 100%;" @change="updateVolume(index)" />
+                  <a-input-number v-model="volume.secret!.defaultMode" :min="0" :max="511" size="small" style="width: 100%;" @change="updateVolume(index)" />
                 </div>
                 <div class="form-row">
                   <label>
                     键值映射
-                    <el-button link type="primary" @click="addSecretItem(volume)" :icon="Plus" size="small">添加</el-button>
+                    <a-button type="text" @click="addSecretItem(volume)" size="small">添加</a-button>
                   </label>
                   <div class="items-list">
                     <div v-for="(item, idx) in volume.secret!.items" :key="'sec-item-'+idx" class="item-row">
-                      <el-input v-model="item.key" placeholder="key" size="small" style="flex: 1;" @input="updateVolume(index)" />
+                      <a-input v-model="item.key" placeholder="key" size="small" style="flex: 1;" @input="updateVolume(index)" />
                       <span class="arrow">→</span>
-                      <el-input v-model="item.path" placeholder="path" size="small" style="flex: 1;" @input="updateVolume(index)" />
-                      <el-input-number v-model="item.mode" :min="0" :max="511" placeholder="mode" size="small" style="width: 100px;" @change="updateVolume(index)" />
-                      <el-button link type="danger" @click="removeSecretItem(volume, idx)" :icon="Delete" size="small" />
+                      <a-input v-model="item.path" placeholder="path" size="small" style="flex: 1;" @input="updateVolume(index)" />
+                      <a-input-number v-model="item.mode" :min="0" :max="511" placeholder="mode" size="small" style="width: 100px;" @change="updateVolume(index)" />
+                      <a-button type="text" status="danger" @click="removeSecretItem(volume, idx)" size="small" />
                     </div>
                     <div v-if="!volume.secret!.items || volume.secret!.items.length === 0" class="empty-items">使用全部键值</div>
                   </div>
@@ -190,10 +190,10 @@
                 <div class="form-row">
                   <label>
                     声明名称
-                    <el-button link type="primary" @click="emit('refreshPVCs')" :icon="Refresh" size="small" circle />
+                    <a-button type="text" @click="emit('refreshPVCs')" size="small" circle />
                   </label>
                   <div class="select-with-refresh">
-                    <el-select
+                    <a-select
                       v-model="volume.persistentVolumeClaim!.claimName"
                       filterable
                       placeholder="选择 PVC"
@@ -201,25 +201,25 @@
                       style="flex: 1;"
                       @change="updateVolume(index)"
                     >
-                      <el-option
+                      <a-option
                         v-for="pvc in pvcs"
                         :key="pvc.name"
                         :label="pvc.name"
                         :value="pvc.name"
                       />
-                    </el-select>
+                    </a-select>
                   </div>
                 </div>
                 <div class="form-row">
                   <label>只读</label>
-                  <el-switch v-model="volume.persistentVolumeClaim!.readOnly" @change="updateVolume(index)" />
+                  <a-switch v-model="volume.persistentVolumeClaim!.readOnly" @change="updateVolume(index)" />
                 </div>
               </template>
             </div>
           </div>
         </div>
         <div v-if="volumes.length === 0" class="empty-tip">
-          <el-empty description="暂无数据卷" :image-size="60" />
+          <a-empty description="暂无数据卷" :image-size="60" />
         </div>
       </div>
     </div>
@@ -228,7 +228,6 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Plus, Delete, ArrowRight, Refresh } from '@element-plus/icons-vue'
 
 interface ConfigMapItem {
   key: string
@@ -430,14 +429,14 @@ const removeSecretItem = (volume: Volume, idx: number) => {
   letter-spacing: 0.3px;
 }
 
-.panel-header .el-button {
+.panel-header .arco-btn {
   background: #ffffff;
   border: 1px solid #d4af37;
   color: #d4af37;
   font-weight: 500;
 }
 
-.panel-header .el-button:hover {
+.panel-header .arco-btn:hover {
   background: #fafafa;
   border-color: #c9a227;
   box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
@@ -533,7 +532,7 @@ const removeSecretItem = (volume: Volume, idx: number) => {
   align-items: center;
 }
 
-.form-row :deep(.el-input__wrapper) {
+.form-row :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -541,17 +540,17 @@ const removeSecretItem = (volume: Volume, idx: number) => {
   transition: all 0.3s ease;
 }
 
-.form-row :deep(.el-input__wrapper:hover) {
+.form-row :deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.form-row :deep(.el-input__wrapper.is-focus) {
+.form-row :deep(.arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
 }
 
-.form-row :deep(.el-select .el-input__wrapper) {
+.form-row :deep(.arco-select .arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -595,8 +594,8 @@ const removeSecretItem = (volume: Volume, idx: number) => {
   border: 1px dashed #e0e0e0;
 }
 
-.form-row :deep(.el-switch) {
-  --el-switch-on-color: #d4af37;
+.form-row :deep(.arco-switch.arco-switch-checked) {
+  background-color: #d4af37;
 }
 
 .empty-tip {

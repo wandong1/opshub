@@ -189,6 +189,33 @@ services:
       retries: 5
     networks:
       - opshub-network
+  
+  prom_skyeye:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: prom_skyeye
+    restart: always
+    networks:
+      - opshub-network
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - ./docker-compose-config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./docker-compose-config/config/web-config.yml:/etc/prometheus/web-config.yml
+      - ./docker-compose-config/conf.d:/etc/prometheus/conf.d
+      - ./prom_data:/prometheus/data
+    command: --config.file=/etc/prometheus/prometheus.yml --web.config.file=/etc/prometheus/web-config.yml --web.enable-lifecycle --web.enable-remote-write-receiver --storage.tsdb.retention.time=30d
+    security_opt:
+      - seccomp=unconfined
+    privileged: true
+    user: "root:root"
+
+  pushgateway_skyeye:
+    image: ${PUSHGATEWAY_IMAGE}
+    container_name: pushgateway_skyeye
+    restart: always
+    ports:
+      - "19091:9091"
+    networks:
+      - opshub-network
 
         #  backend:
         #    image: dyclouds/opshub-api:latest

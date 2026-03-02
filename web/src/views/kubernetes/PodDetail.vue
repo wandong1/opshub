@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <a-modal
     v-model="dialogVisible"
     :title="`Pod 详情: ${podData?.metadata?.name || ''}`"
     width="1200px"
@@ -7,7 +7,7 @@
     @close="handleClose"
   >
     <div v-if="loading" class="loading-container">
-      <el-icon class="is-loading"><Loading /></el-icon>
+      <icon-loading />
       <span>加载中...</span>
     </div>
 
@@ -31,9 +31,9 @@
             </div>
             <div class="info-item">
               <label>状态</label>
-              <el-tag :type="getStatusType(podData.status?.phase)" size="small">
+              <a-tag :color="getStatusType(podData.status?.phase)" size="small">
                 {{ podData.status?.phase }}
-              </el-tag>
+              </a-tag>
             </div>
             <div class="info-item">
               <label>创建时间</label>
@@ -61,14 +61,14 @@
           <div class="tags-section" v-if="hasLabels">
             <label>标签</label>
             <div class="tags-container">
-              <el-tag
+              <a-tag
                 v-for="(value, key) in podData.metadata?.labels"
                 :key="key"
                 size="small"
                 class="tag-item"
               >
                 {{ key }}: {{ value }}
-              </el-tag>
+              </a-tag>
             </div>
           </div>
 
@@ -82,9 +82,9 @@
                 class="annotation-item"
               >
                 <span class="annotation-key">{{ key }}:</span>
-                <el-tooltip :content="value" placement="top" effect="light" :show-after="500">
+                <a-tooltip :content="value" placement="top" effect="light" :show-after="500">
                   <span class="annotation-value truncated">{{ value }}</span>
-                </el-tooltip>
+                </a-tooltip>
               </div>
             </div>
           </div>
@@ -96,29 +96,22 @@
             <span class="section-icon">🔍</span>
             <span class="section-title">条件</span>
           </div>
-          <el-table :data="podData.status.conditions" size="small" class="conditions-table">
-            <el-table-column prop="type" label="类型" width="140" />
-            <el-table-column label="状态" width="90" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.status === 'True' ? 'success' : 'danger'" size="small">
-                  {{ row.status || 'Unknown' }}
-                </el-tag>
+          <a-table :data="podData.status.conditions" size="small" class="conditions-table" :columns="tableColumns2">
+          <template #status="{ record }">
+                <a-tag :type="record.status === 'True' ? 'success' : 'danger'" size="small">
+                  {{ record.status || 'Unknown' }}
+                </a-tag>
               </template>
-            </el-table-column>
-            <el-table-column prop="lastTransitionTime" label="更新时间" width="140">
-              <template #default="{ row }">
-                {{ formatAge(row.lastTransitionTime) }}
+          <template #lastTransitionTime="{ record }">
+                {{ formatAge(record.lastTransitionTime) }}
               </template>
-            </el-table-column>
-            <el-table-column prop="reason" label="内容" width="130" />
-            <el-table-column prop="message" label="消息" show-overflow-tooltip />
-          </el-table>
+        </a-table>
         </div>
 
         <!-- Tab 内容 -->
-        <el-tabs v-model="activeTab" class="detail-tabs">
+        <a-tabs v-model:active-key="activeTab" class="detail-tabs">
           <!-- 容器 -->
-          <el-tab-pane label="容器" name="containers">
+          <a-tab-pane title="容器" key="containers">
             <div v-if="podData.spec?.containers && podData.spec.containers.length > 0" class="containers-list">
               <div
                 v-for="(container, index) in podData.spec.containers"
@@ -127,7 +120,7 @@
               >
                 <div class="container-header">
                   <div class="container-name">{{ container.name }}</div>
-                  <el-tag size="small" type="info" effect="plain">{{ container.image }}</el-tag>
+                  <a-tag size="small" color="gray">{{ container.image }}</a-tag>
                 </div>
 
                 <div class="container-grid">
@@ -183,12 +176,12 @@
                     <div class="section-label">运行状态</div>
                     <div class="info-row">
                       <label>状态:</label>
-                      <el-tag
+                      <a-tag
                         :type="getContainerStateType(podData.status.containerStatuses[index].state)"
                         size="small"
                       >
                         {{ getContainerState(podData.status.containerStatuses[index]) }}
-                      </el-tag>
+                      </a-tag>
                     </div>
                     <div class="info-row">
                       <label>重启次数:</label>
@@ -202,11 +195,11 @@
                 </div>
               </div>
             </div>
-            <el-empty v-else description="暂无容器" />
-          </el-tab-pane>
+            <a-empty v-else description="暂无容器" />
+          </a-tab-pane>
 
           <!-- 初始化容器 -->
-          <el-tab-pane label="初始化容器" name="initContainers">
+          <a-tab-pane title="初始化容器" key="initContainers">
             <div v-if="podData.spec?.initContainers && podData.spec.initContainers.length > 0" class="containers-list">
               <div
                 v-for="(container, index) in podData.spec.initContainers"
@@ -215,7 +208,7 @@
               >
                 <div class="container-header">
                   <div class="container-name">{{ container.name }}</div>
-                  <el-tag size="small" type="info" effect="plain">{{ container.image }}</el-tag>
+                  <a-tag size="small" color="gray">{{ container.image }}</a-tag>
                 </div>
 
                 <div class="container-grid">
@@ -239,12 +232,12 @@
                     <div class="section-label">运行状态</div>
                     <div class="info-row">
                       <label>状态:</label>
-                      <el-tag
+                      <a-tag
                         :type="getContainerStateType(podData.status.initContainerStatuses[index].state)"
                         size="small"
                       >
                         {{ getContainerState(podData.status.initContainerStatuses[index]) }}
-                      </el-tag>
+                      </a-tag>
                     </div>
                     <div class="info-row">
                       <label>重启次数:</label>
@@ -254,14 +247,14 @@
                 </div>
               </div>
             </div>
-            <el-empty v-else description="暂无初始化容器" />
-          </el-tab-pane>
+            <a-empty v-else description="暂无初始化容器" />
+          </a-tab-pane>
 
           <!-- 事件 -->
-          <el-tab-pane label="事件" name="events">
+          <a-tab-pane title="事件" key="events">
             <div v-if="events.length > 0">
-              <el-timeline>
-                <el-timeline-item
+              <a-timeline>
+                <a-timeline-item
                   v-for="(event, index) in events"
                   :key="index"
                   :timestamp="formatAge(event.lastTimestamp)"
@@ -269,9 +262,9 @@
                 >
                   <div class="event-item">
                     <div class="event-header">
-                      <el-tag :type="getEventType(event.type)" size="small">
+                      <a-tag :type="getEventType(event.type)" size="small">
                         {{ event.type }}
-                      </el-tag>
+                      </a-tag>
                       <span class="event-reason">{{ event.reason }}</span>
                     </div>
                     <div class="event-message">{{ event.message }}</div>
@@ -280,36 +273,31 @@
                       <span v-if="event.count && event.count > 0">次数: {{ event.count }}</span>
                     </div>
                   </div>
-                </el-timeline-item>
-              </el-timeline>
+                </a-timeline-item>
+              </a-timeline>
             </div>
-            <el-empty v-else description="暂无事件" />
-          </el-tab-pane>
+            <a-empty v-else description="暂无事件" />
+          </a-tab-pane>
 
           <!-- 存储 -->
-          <el-tab-pane label="存储" name="volumes">
+          <a-tab-pane title="存储" key="volumes">
             <div v-if="podData.spec?.volumes && podData.spec.volumes.length > 0">
-              <el-table :data="podData.spec.volumes" size="small" class="volumes-table">
-                <el-table-column prop="name" label="名称" width="140" />
-                <el-table-column label="类型" width="100">
-                  <template #default="{ row }">
-                    <el-tag size="small" effect="plain">
-                      {{ getVolumeType(row) }}
-                    </el-tag>
+              <a-table :data="podData.spec.volumes" size="small" class="volumes-table" :columns="tableColumns">
+          <template #type="{ record }">
+                    <a-tag size="small">
+                      {{ getVolumeType(record) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column label="配置" show-overflow-tooltip>
-                  <template #default="{ row }">
-                    {{ getVolumeConfig(row) }}
+          <template #col_8515="{ record }">
+                    {{ getVolumeConfig(record) }}
                   </template>
-                </el-table-column>
-              </el-table>
+        </a-table>
             </div>
-            <el-empty v-else description="暂无存储卷" />
-          </el-tab-pane>
+            <a-empty v-else description="暂无存储卷" />
+          </a-tab-pane>
 
           <!-- 创建者 -->
-          <el-tab-pane label="创建者" name="owner">
+          <a-tab-pane title="创建者" key="owner">
             <div v-if="podData.metadata?.ownerReferences && podData.metadata.ownerReferences.length > 0" class="owner-list">
               <div
                 v-for="(owner, index) in podData.metadata.ownerReferences"
@@ -318,7 +306,7 @@
               >
                 <div class="info-row">
                   <label>类型:</label>
-                  <el-tag size="small" type="info">{{ owner.kind }}</el-tag>
+                  <a-tag size="small" color="gray">{{ owner.kind }}</a-tag>
                 </div>
                 <div class="info-row">
                   <label>名称:</label>
@@ -326,26 +314,39 @@
                 </div>
                 <div class="info-row">
                   <label>控制器:</label>
-                  <el-tag :type="owner.controller ? 'success' : 'info'" size="small">
+                  <a-tag :type="owner.controller ? 'success' : 'info'" size="small">
                     {{ owner.controller ? '是' : '否' }}
-                  </el-tag>
+                  </a-tag>
                 </div>
               </div>
             </div>
-            <el-empty v-else description="无创建者信息" />
-          </el-tab-pane>
-        </el-tabs>
+            <a-empty v-else description="无创建者信息" />
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </div>
 
-    <el-empty v-else description="暂无数据" />
-  </el-dialog>
+    <a-empty v-else description="暂无数据" />
+  </a-modal>
 </template>
 
 <script setup lang="ts">
+const tableColumns2 = [
+  { title: '类型', dataIndex: 'type', width: 140 },
+  { title: '状态', slotName: 'status', width: 90, align: 'center' },
+  { title: '更新时间', dataIndex: 'lastTransitionTime', slotName: 'lastTransitionTime', width: 140 },
+  { title: '内容', dataIndex: 'reason', width: 130 },
+  { title: '消息', dataIndex: 'message', ellipsis: true, tooltip: true }
+]
+
+const tableColumns = [
+  { title: '名称', dataIndex: 'name', width: 140 },
+  { title: '类型', slotName: 'type', width: 100 },
+  { title: '配置', slotName: 'col_8515', ellipsis: true, tooltip: true }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import axios from 'axios'
 import { formatAge } from '@/utils/format'
 
@@ -516,7 +517,7 @@ const loadPodDetail = async () => {
     // 后端现在返回标准格式 {code: 0, message: "success", data: pod}
     podData.value = response.data.data
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取 Pod 详情失败')
+    Message.error(error.response?.data?.message || '获取 Pod 详情失败')
   } finally {
     loading.value = false
   }
@@ -703,15 +704,15 @@ watch(() => props.visible, (newVal) => {
   overflow: hidden;
 }
 
-.conditions-table :deep(.el-table__header) {
+.conditions-table :deep(.arco-table__header) {
   background: #fafafa;
 }
 
-.conditions-table :deep(.el-table__body tr:hover) {
+.conditions-table :deep(.arco-table__body tr:hover) {
   background: #f9f9f9;
 }
 
-.conditions-table :deep(.el-table__body td) {
+.conditions-table :deep(.arco-table__body td) {
   padding: 8px 0;
 }
 
@@ -719,13 +720,13 @@ watch(() => props.visible, (newVal) => {
   margin-top: 20px;
 }
 
-.detail-tabs :deep(.el-tabs__header) {
+.detail-tabs :deep(.arco-tabs__header) {
   background: #fafafa;
   border-radius: 8px 8px 0 0;
   padding: 0 16px;
 }
 
-.detail-tabs :deep(.el-tabs__content) {
+.detail-tabs :deep(.arco-tabs__content) {
   padding: 20px 0;
 }
 
@@ -862,7 +863,7 @@ watch(() => props.visible, (newVal) => {
   overflow: hidden;
 }
 
-.volumes-table :deep(.el-table__header) {
+.volumes-table :deep(.arco-table__header) {
   background: #fafafa;
 }
 

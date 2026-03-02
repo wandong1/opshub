@@ -14,7 +14,7 @@
           </div>
           <div class="form-item-row">
             <label class="form-label">使用主机网络</label>
-            <el-switch
+            <a-switch
               v-model="formData.hostNetwork"
               active-text="开启"
               inactive-text="关闭"
@@ -30,12 +30,12 @@
           </div>
           <div class="form-item-row">
             <label class="form-label">DNS 策略</label>
-            <el-select v-model="formData.dnsPolicy" placeholder="选择 DNS 策略" style="width: 300px;">
-              <el-option label="ClusterFirst" value="ClusterFirst" />
-              <el-option label="Default" value="Default" />
-              <el-option label="ClusterFirstWithHostNet" value="ClusterFirstWithHostNet" />
-              <el-option label="None" value="None" />
-            </el-select>
+            <a-select v-model="formData.dnsPolicy" placeholder="选择 DNS 策略" style="width: 300px;">
+              <a-option label="ClusterFirst" value="ClusterFirst" />
+              <a-option label="Default" value="Default" />
+              <a-option label="ClusterFirstWithHostNet" value="ClusterFirstWithHostNet" />
+              <a-option label="None" value="None" />
+            </a-select>
           </div>
         </div>
 
@@ -46,12 +46,12 @@
           </div>
           <div class="form-item-row">
             <label class="form-label">主机名</label>
-            <el-input v-model="formData.hostname" placeholder="可选，指定 Pod 的主机名" style="width: 300px;" />
+            <a-input v-model="formData.hostname" placeholder="可选，指定 Pod 的主机名" style="width: 300px;" />
             <span class="form-hint">不指定则默认为 pod 名</span>
           </div>
           <div class="form-item-row">
             <label class="form-label">子域名</label>
-            <el-input v-model="formData.subdomain" placeholder="可选，指定 Pod 的子域名" style="width: 300px;" />
+            <a-input v-model="formData.subdomain" placeholder="可选，指定 Pod 的子域名" style="width: 300px;" />
             <span class="form-hint">完整主机名为：hostname.subdomain</span>
           </div>
         </div>
@@ -66,11 +66,11 @@
             <div class="dns-inputs-wrapper">
               <template v-if="formData.dnsConfig">
                 <div v-for="(ns, index) in formData.dnsConfig.nameservers" :key="'ns-'+index" class="dns-input-item">
-                  <el-input v-model="formData.dnsConfig.nameservers[index]" placeholder="如: 8.8.8.8" size="small" style="width: 200px;" />
-                  <el-button type="danger" link @click="emit('removeDNSNameserver', index)" :icon="Delete" size="small">删除</el-button>
+                  <a-input v-model="formData.dnsConfig.nameservers[index]" placeholder="如: 8.8.8.8" size="small" style="width: 200px;" />
+                  <a-button status="danger" type="text" @click="emit('removeDNSNameserver', index)" size="small">删除</a-button>
                 </div>
               </template>
-              <el-button type="primary" link @click="emit('addDNSNameserver')" :icon="Plus" size="small">添加服务器</el-button>
+              <a-button type="text" @click="emit('addDNSNameserver')" size="small">添加服务器</a-button>
             </div>
             <span class="form-hint">DNS 服务器 IP 地址列表</span>
           </div>
@@ -79,11 +79,11 @@
             <div class="dns-inputs-wrapper">
               <template v-if="formData.dnsConfig">
                 <div v-for="(search, index) in formData.dnsConfig.searches" :key="'search-'+index" class="dns-input-item">
-                  <el-input v-model="formData.dnsConfig.searches[index]" placeholder="如: default.svc.cluster.local" size="small" style="width: 250px;" />
-                  <el-button type="danger" link @click="emit('removeDNSSearch', index)" :icon="Delete" size="small">删除</el-button>
+                  <a-input v-model="formData.dnsConfig.searches[index]" placeholder="如: default.svc.cluster.local" size="small" style="width: 250px;" />
+                  <a-button status="danger" type="text" @click="emit('removeDNSSearch', index)" size="small">删除</a-button>
                 </div>
               </template>
-              <el-button type="primary" link @click="emit('addDNSSearch')" :icon="Plus" size="small">添加搜索域</el-button>
+              <a-button type="text" @click="emit('addDNSSearch')" size="small">添加搜索域</a-button>
             </div>
             <span class="form-hint">DNS 搜索域列表</span>
           </div>
@@ -92,13 +92,13 @@
             <div class="dns-options-wrapper">
               <template v-if="formData.dnsConfig">
                 <div v-for="(opt, index) in formData.dnsConfig.options" :key="'opt-'+index" class="dns-option-item">
-                  <el-input v-model="opt.name" placeholder="选项名，如: ndots" size="small" style="width: 150px;" />
+                  <a-input v-model="opt.name" placeholder="选项名，如: ndots" size="small" style="width: 150px;" />
                   <span class="option-separator">:</span>
-                  <el-input v-model="opt.value" placeholder="值，如: 5" size="small" style="width: 120px;" />
-                  <el-button type="danger" link @click="emit('removeDNSOption', index)" :icon="Delete" size="small">删除</el-button>
+                  <a-input v-model="opt.value" placeholder="值，如: 5" size="small" style="width: 120px;" />
+                  <a-button status="danger" type="text" @click="emit('removeDNSOption', index)" size="small">删除</a-button>
                 </div>
               </template>
-              <el-button type="primary" link @click="emit('addDNSOption')" :icon="Plus" size="small">添加选项</el-button>
+              <a-button type="text" @click="emit('addDNSOption')" size="small">添加选项</a-button>
             </div>
             <span class="form-hint">自定义 DNS 选项</span>
           </div>
@@ -110,7 +110,6 @@
 </template>
 
 <script setup lang="ts">
-import { Plus, Delete } from '@element-plus/icons-vue'
 
 interface DNSConfig {
   nameservers: string[]

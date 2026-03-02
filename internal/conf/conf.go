@@ -32,6 +32,16 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Log      LogConfig      `mapstructure:"log"`
+	Agent    AgentConfig    `mapstructure:"agent"`
+}
+
+// AgentConfig Agent配置
+type AgentConfig struct {
+	Enabled          bool   `mapstructure:"enabled"`
+	CertDir          string `mapstructure:"cert_dir"`
+	BinaryDir        string `mapstructure:"binary_dir"`
+	HeartbeatTimeout int    `mapstructure:"heartbeat_timeout"`
+	DeployPath       string `mapstructure:"deploy_path"`
 }
 
 // ServerConfig 服务器配置

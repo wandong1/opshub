@@ -2,14 +2,14 @@
   <div class="scaling-strategy-wrapper">
     <div class="strategy-section">
       <label class="section-label">更新策略</label>
-      <el-radio-group v-model="localFormData.strategyType" @change="handleUpdate" class="strategy-radio">
-        <el-radio value="RollingUpdate" class="strategy-radio-item">
+      <a-radio-group v-model="localFormData.strategyType" @change="handleUpdate" class="strategy-radio">
+        <a-radio value="RollingUpdate" class="strategy-radio-item">
           <span class="radio-label">滚动升级 (RollingUpdate)</span>
-        </el-radio>
-        <el-radio value="Recreate" class="strategy-radio-item">
+        </a-radio>
+        <a-radio value="Recreate" class="strategy-radio-item">
           <span class="radio-label">重新创建 (Recreate)</span>
-        </el-radio>
-      </el-radio-group>
+        </a-radio>
+      </a-radio-group>
     </div>
 
     <!-- 滚动升级配置 -->
@@ -17,7 +17,7 @@
       <div class="form-grid-row">
         <div class="form-grid-item">
           <label class="form-grid-label">最大激增 Pod 数</label>
-          <el-input
+          <a-input
             v-model="localFormData.maxSurge"
             placeholder="例如: 3 或 25%"
             class="grid-input"
@@ -27,7 +27,7 @@
         </div>
         <div class="form-grid-item">
           <label class="form-grid-label">最大不可用 Pod 数</label>
-          <el-input
+          <a-input
             v-model="localFormData.maxUnavailable"
             placeholder="例如: 1 或 25%"
             class="grid-input"
@@ -43,7 +43,7 @@
       <div class="form-grid-row">
         <div class="form-grid-item">
           <label class="form-grid-label">最小就绪时间(秒)</label>
-          <el-input-number
+          <a-input-number
             v-model="localFormData.minReadySeconds"
             :min="0"
             :max="3600"
@@ -55,7 +55,7 @@
         </div>
         <div class="form-grid-item">
           <label class="form-grid-label">进度截止时间(秒)</label>
-          <el-input-number
+          <a-input-number
             v-model="localFormData.progressDeadlineSeconds"
             :min="60"
             :max="3600"
@@ -69,7 +69,7 @@
       <div class="form-grid-row">
         <div class="form-grid-item">
           <label class="form-grid-label">修订历史限制</label>
-          <el-input-number
+          <a-input-number
             v-model="localFormData.revisionHistoryLimit"
             :min="0"
             :max="100"
@@ -81,7 +81,7 @@
         </div>
         <div class="form-grid-item">
           <label class="form-grid-label">超时时间(秒)</label>
-          <el-input-number
+          <a-input-number
             v-model="localFormData.timeoutSeconds"
             :min="1"
             :max="3600"
@@ -167,7 +167,7 @@ watch(() => props.formData, (newVal) => {
   gap: 16px;
 }
 
-.strategy-radio :deep(.el-radio-group) {
+.strategy-radio :deep(.arco-radio-group) {
   display: flex;
   gap: 16px;
 }
@@ -184,29 +184,29 @@ watch(() => props.formData, (newVal) => {
 }
 
 .strategy-radio-item:hover {
-  border-color: #409eff;
+  border-color: #165dff;
   background: #ecf5ff;
 }
 
 .strategy-radio-item.is-checked {
-  border-color: #409eff;
+  border-color: #165dff;
   background: #ecf5ff;
 }
 
-.strategy-radio-item :deep(.el-radio__label) {
+.strategy-radio-item :deep(.arco-radio__label) {
   padding-left: 8px;
 }
 
-.strategy-radio-item :deep(.el-radio__input) {
+.strategy-radio-item :deep(.arco-radio__input) {
   transform: scale(1.15);
 }
 
-.strategy-radio-item :deep(.el-radio__input.is-checked .el-radio__inner) {
-  background: #409eff;
-  border-color: #409eff;
+.strategy-radio-item :deep(.arco-radio-button.arco-radio-button-checked) {
+  background: #165dff;
+  border-color: #165dff;
 }
 
-.strategy-radio-item :deep(.el-radio__inner) {
+.strategy-radio-item :deep(.arco-radio__inner) {
   border-color: #dcdfe6;
   transition: all 0.3s;
 }
@@ -250,7 +250,7 @@ watch(() => props.formData, (newVal) => {
   width: 100%;
 }
 
-.grid-input :deep(.el-input__wrapper) {
+.grid-input :deep(.arco-input__wrapper) {
   border-radius: 6px;
   border: 1px solid #e4e7ed;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -259,17 +259,17 @@ watch(() => props.formData, (newVal) => {
   padding: 8px 15px;
 }
 
-.grid-input :deep(.el-input__wrapper:hover) {
-  border-color: #409eff;
+.grid-input :deep(.arco-input__wrapper:hover) {
+  border-color: #165dff;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.2);
 }
 
-.grid-input :deep(.el-input__wrapper.is-focus) {
-  border-color: #409eff;
+.grid-input :deep(.arco-input__wrapper.is-focus) {
+  border-color: #165dff;
   box-shadow: 0 2px 12px rgba(64, 158, 255, 0.3);
 }
 
-.grid-input :deep(.el-input__inner) {
+.grid-input :deep(.arco-input__inner) {
   font-size: 14px;
   color: #303133;
 }

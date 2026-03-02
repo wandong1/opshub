@@ -1,0 +1,453 @@
+groups:
+- name: 严重告警
+  rules:
+  - alert: 算法接口-成功率低于50%-最近10分钟
+    expr: ((sum by (calleeEndpoint) (rate(web_server_qps_total{retCode="200",calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[10m]))
+      * 100.0) / sum by (calleeEndpoint) (rate(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[10m]))
+      unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[8h]))
+      < 200 unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[8h]
+      offset 1d)) < 200) <50
+    for: 0s
+    labels:
+      severity: critical
+      status: 严重告警
+      type: 算法接口
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟成功率为{{ $value }}
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-成功率低告警
+  - alert: KubeletDown
+    expr: absent(up{job="kubelet"} == 1)
+    for: 15m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{$labels.instance}} KubeletDown'
+      summary: '{{$labels.instance}} KubeletDown'
+  - alert: KubeAPIDown
+    expr: absent(up{job="apiserver"} == 1)
+    for: 15m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{$labels.instance}} KubeAPIDown'
+      summary: '{{$labels.instance}} KubeAPIDown'
+  - alert: kafka集群节点Down
+    expr: count(kafka_server_replicamanager_leadercount) < 3
+    for: 1m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.instance }} kafka健康检查失败！'
+      summary: '{{$labels.instance}} kafka集群宕机！'
+  - alert: MongoDBDown
+    expr: mongodb_up != 1
+    for: 1m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: MongoDB instance {{ $labels.instance }} is down.
+      summary: MongoDB is down
+  - alert: Redis状态Down
+    expr: redis_up != 1
+    for: 10s
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.instance }} Redis状态检查失败！'
+      summary: '{{$labels.instance}} Redis宕机！'
+  - alert: Mysql状态Down
+    expr: mysql_up != 1
+    for: 10s
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.instance }} Mysql状态检查失败！'
+      summary: '{{$labels.instance}} Mysql宕机！'
+  - alert: MysqlTooManyConnections > 95%
+    expr: max_over_time(mysql_global_status_threads_connected[1m]) / mysql_global_variables_max_connections
+      * 100 > 95
+    for: 2m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: |-
+        More than 95% of MySQL connections are in use on {{ $labels.instance }}
+          VALUE = {{ $value }}
+          LABELS = {{ $labels }}
+      summary: MySQL too many connections (> 95%) (instance {{ $labels.instance }})
+  - alert: 磁盘容量使用爆满
+    expr: 100-(node_filesystem_free_bytes{fstype=~"ext4|xfs"}/node_filesystem_size_bytes
+      {fstype=~"ext4|xfs"}*100) > 99
+    for: 1m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{$labels.mountpoint }} 磁盘分区使用大于99%(目前使用:{{$value}}%)'
+      summary: '{{$labels.mountpoint}} 磁盘分区使用率过高！'
+  - alert: CPU使用 > 99%
+    expr: 100-(avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) by(instance)* 100)
+      > 99
+    for: 2m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{$labels.mountpoint }} CPU使用大于99%(目前使用:{{$value}}%)'
+      summary: '{{$labels.mountpoint}} CPU使用率过高！'
+  - alert: 服务状态Down
+    expr: up{job!="ai-demo"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{$labels.instance}}{{$labels.job}}:服务延时超过5分钟'
+      summary: '{{$labels.instance}} {{$labels.job}}:服务宕机'
+  - alert: 生产业务接口拨测校验不通过
+    expr: http_request_expect_result{instance!~"^testing_.*"} != 1
+    for: 30s
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: |-
+        流程名称：{{$labels.flow_name}}
+        步骤名称：{{$labels.request_name}}
+        请求方法：{{$labels.method}}
+        请求地址：{{$labels.uri}}
+        请求状态码：{{$labels.status}}
+        校验结果：{{$value}}
+      summary: 生产业务接口拨测校验不通过
+  - alert: 生产业务接口拨测耗时告警
+    expr: http_request_duration_seconds{instance!~"^testing_.*"}>3000
+    for: 2m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: |-
+        流程名称：{{$labels.flow_name}}
+        步骤名称：{{$labels.request_name}}
+        请求方法：{{$labels.method}}
+        请求地址：{{$labels.uri}}
+        请求状态码：{{$labels.status}}
+        请求耗时：{{$value}} ms
+      summary: 生产业务接口拨测耗时大于3秒
+  - alert: 接口拨测成功率
+    expr: "(\n  sum by (request_name) ( \n    sum_over_time( (http_request_expect_result{instance!~\"^testing_.*\",request_name=~\".*\"}
+      == 1)[30m:] )\n  )\n  /\n  sum by (request_name) ( \n    count_over_time( http_request_expect_result{instance!~\"^testing_.*\",request_name=~\".*\"}[30m:]
+      )\n  )\n) * 100 < 98"
+    for: 0m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: |-
+        接口名称：{{$labels.request_name}}
+        当前拨测成功率：{{$value}}
+      summary: 生产业务接口拨测30分钟内成功率小于98
+  - alert: 算法接口-成功率低于98%-最近10分钟
+    expr: ((sum by (calleeEndpoint) (rate(web_server_qps_total{retCode="200",calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[10m]))
+      * 100.0) / sum by (calleeEndpoint) (rate(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[10m]))
+      unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[8h]))
+      < 200 unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[8h]
+      offset 1d)) < 200) <98
+    for: 0m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟成功率为{{ $value }}
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-成功率低告警
+  - alert: http拨测请求延迟翻倍并且超过1秒
+    expr: |-
+      (
+              avg_over_time(http_request_duration_seconds{instance!~"^testing_.*"}[5m])
+              /
+              avg_over_time(http_request_duration_seconds{instance!~"^testing_.*"}[5m] offset 5m)
+            ) > 1.5 and (
+      avg_over_time(http_request_duration_seconds{instance!~"^testing_.*"}[5m]) > 1000
+      )
+    for: 0m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: |-
+        流程名称：{{$labels.flow_name}}
+        步骤名称：{{$labels.request_name}}
+        请求方法：{{$labels.method}}
+        请求地址：{{$labels.uri}}
+        请求状态码：{{$labels.status}}
+      summary: HTTP请求延迟翻倍 (步骤名称：{{$labels.request_name}})
+  - alert: nginx请求成功率低于98%
+    expr: (1-sum(increase(nginx_vts_server_requests_total{code=~"4..|5.."}[5m])) /
+      sum(increase(nginx_vts_server_requests_total{code!="total"}[5m])))* 100 < 98
+    for: 2m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: 2分钟内nginx平均请求成功率【5m】低于98%
+      summary: nginx请求成功率低于98%
+  - alert: 视频流告警回调往用户未推送成功的堆积数量
+    expr: send_task_stacking_nums > 1000
+    for: 5m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: 视频流告警回调往用户未推送成功的堆积数量
+      summary: '{{ $labels.send_url }} 存在{{$value}} 条告警任务推送堆积'
+  - alert: 平台维度视频流core任务状态异常率大于75%
+    expr: count(aicore_task_status{node_type!="37"} != 1 and aicore_task_status{node_type!="37"}
+      !=7 and aicore_task_status{node_type!="37"} !=5) by (job) * 100/ count(aicore_task_status{node_type!="37"}
+      !=7 and aicore_task_status{node_type!="37"} !=5) by (job)  > 75
+    for: 15m
+    labels:
+      severity: major
+      status: 严重告警
+    annotations:
+      description: '{{$labels.job}} 平台维度视频流core任务状态异常率超过阈值，请尽快排查处理！'
+      summary: 平台维度视频流接入任务异常率：{{ $value }}%
+  - alert: 算法服务副本健康状态异常率超过50%
+    expr: count(aicore_service_status != 1) by (service_name,node_type,algorithm_list,type)
+      / count(aicore_service_status) by (service_name,node_type,algorithm_list,type)
+      > 0.5
+    for: 10m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: 算法服务副本异常率超过50%
+      summary: 算法类型：{{$labels.type}} 算法名称：{{ $labels.algorithm_list }} 服务副本数异常率超过50%
+  - alert: etcd空间容量使用率
+    expr: (last_over_time(etcd_mvcc_db_total_size_in_bytes{job=~".*etcd.*"}[5m]) /
+      last_over_time(etcd_server_quota_backend_bytes{job=~".*etcd.*"}[5m])) * 100
+      > 90
+    for: 5m
+    labels:
+      severity: major
+      status: 严重告警
+    annotations:
+      description: etcd {{ $labels.instance}} 空间容量使用率为{{ $value }}
+      summary: etcd空间容量使用率超过阈值
+- name: 一般告警
+  rules:
+  - alert: 算法接口-成功率低于95%-最近10分钟
+    expr: ((sum by (calleeEndpoint) (rate(web_server_qps_total{retCode="200",calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      * 100.0) / sum by (calleeEndpoint) (rate(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[8h]))
+      < 200 unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[8h]
+      offset 1d)) < 200) < 95
+    for: 0s
+    labels:
+      severity: 一般告警
+      status: 一般告警
+      type: 算法接口
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟成功率为{{ $value }}
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-成功率低告警
+  - alert: 算法接口-Lantency大于6秒-最近10分钟
+    expr: sum by (calleeEndpoint) (increase(web_server_latency_sum{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      / sum by (calleeEndpoint) (increase(web_server_latency_count{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      >6000
+    for: 30s
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟Latency大于6秒
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-Latency过高告警
+  - alert: IO > 95%
+    expr: 100-(avg(irate(node_disk_io_time_seconds_total[1m])) by(instance)* 100)
+      < 5
+    for: 5m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: '{{$labels.mountpoint }} 流入磁盘IO大于95%(目前使用:{{$value}})'
+      summary: '{{$labels.mountpoint}} 流入磁盘IO使用率过高！'
+  - alert: 内存使用 > 98%
+    expr: (node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Cached_bytes
+      - node_memory_Buffers_bytes ) / node_memory_MemTotal_bytes * 100 > 98
+    for: 2m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: '{{$labels.mountpoint }} 内存使用大于98%(目前使用:{{$value}}%)'
+      summary: '{{$labels.mountpoint}} 内存使用率过高！'
+  - alert: GPU解码率超过90%阈值
+    expr: DCGM_FI_DEV_DEC_UTIL > 90
+    for: 5m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: '{{ $labels.instance }}|{{ $labels.pod }}|{{ $labels.container
+        }}GPU解码率超过90%阈值'
+      summary: '{{ $labels.pod }} 当前GPU解码率：{{ $value }}% '
+  - alert: GPU计算利用率超过99%阈值
+    expr: DCGM_FI_DEV_GPU_UTIL > 99
+    for: 5m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: '{{ $labels.instance }}|{{ $labels.pod }}|{{ $labels.container
+        }}GPU计算利用率超过99%阈值'
+      summary: '{{ $labels.pod }} 当前GPU计算利用率：{{ $value }}% '
+  - alert: GPU显存占用率超过99.9%阈值
+    expr: DCGM_FI_DEV_FB_USED/ (DCGM_FI_DEV_FB_FREE+ DCGM_FI_DEV_FB_USED) *100 > 99.9
+    for: 5m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: '{{ $labels.instance }}|{{ $labels.pod }}|{{ $labels.container
+        }}GPU显存占用率超过99.9%阈值'
+      summary: '{{ $labels.pod }} 当前GPU显存占用率：{{ $value }}% '
+  - alert: AI平台节点GPU卡数异常
+    expr: count by(instance)(DCGM_FI_DEV_GPU_TEMP) < 2
+    for: 10m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      summary: AI平台节点GPU卡数异常
+  - alert: 磁盘水位大于70%告警
+    expr: 100-(node_filesystem_free_bytes{fstype=~"ext4|xfs"}/node_filesystem_size_bytes
+      {fstype=~"ext4|xfs"}*100) > 85
+    for: 5m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: '{{$labels.mountpoint }} 磁盘分区使用大于85%(目前使用:{{$value}}%)'
+      summary: '{{$labels.mountpoint}} 磁盘分区使用率过高！'
+  - alert: 自动化巡检项异常检查
+    expr: |-
+      inspection_check_result{
+        instance=~"^inspections_.*",
+        instance!~".*临时任务",
+        job="inspections"
+      } != 1
+    for: 2m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: |-
+        巡检分类：{{$labels.inspectionclass}}
+        巡检项：{{$labels.inspectiontask}}
+        巡检执行节点：{{$labels.host}}
+        巡检检查结果：{{$value}}
+      summary: 自动化巡检项异常
+  - alert: 检查KubePodCrashLooping
+    expr: max_over_time(kube_pod_container_status_waiting_reason{job="kube-state-metrics",reason="CrashLoopBackOff"}[5m])
+      >= 1
+    for: 0m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: 检查KubePodCrashLooping
+      summary: 检查KubePodCrashLooping
+  - alert: 检查KubePodNotReady
+    expr: sum by(namespace, pod) (max by(namespace, pod) (kube_pod_status_phase{job="kube-state-metrics",phase=~"Pending|Unknown"})
+      * on(namespace, pod) group_left(owner_kind) topk by(namespace, pod) (1, max
+      by(namespace, pod, owner_kind) (kube_pod_owner{owner_kind!="Job"}))) > 0
+    for: 0m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: |-
+        命名空间：{{$labels.namespace}}
+        pod名称：{{$labels.pod}}
+      summary: KubePodNotReady
+  - alert: KubeDeploymentGenerationMismatch
+    expr: kube_deployment_status_observed_generation{job="kube-state-metrics"} !=
+      kube_deployment_metadata_generation{job="kube-state-metrics"}
+    for: 0m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: |
+        deployment名称：{{$labels.deployment}}
+        pod名称：{{$labels.pod}}
+      summary: deployment部署失败，生成资源数与定义资源不匹配
+  - alert: pod容器cpu利用率告警
+    expr: sum (rate (container_cpu_usage_seconds_total{image!=""}[5m])) by (container,pod)
+      / sum(kube_pod_container_resource_limits{resource="cpu"} ) by (container,pod)*100
+      >85
+    for: 30s
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: |-
+        pod名称：{{$labels.pod}}
+        容器名称：{{$labels.container}}
+        当前利用率：{{$value}} %
+      summary: pod容器cpu利用率告警
+  - alert: pod容器内存利用率告警
+    expr: sum (container_memory_working_set_bytes{image!=""}) by (container,pod) /sum(kube_pod_container_resource_limits{resource="memory"}
+      ) by (container,pod) * 100 >95
+    for: 30s
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: |-
+        pod名称：{{$labels.pod}}
+        容器名称：{{$labels.container}}
+        当前利用率：{{$value}} %
+      summary: pod容器内存利用率告警
+  - alert: Mysql主从同步状态检查失败
+    expr: mysql_slave_status_slave_io_running != 1 or mysql_slave_status_slave_sql_running
+      != 1
+    for: 1m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: '{{ $labels.instance }} Mysql主从状态检查失败！'
+      summary: '{{$labels.instance}} Mysql 备库{{$labels.__name__}}中断！'
+  - alert: etcd空间利用率
+    expr: (last_over_time(etcd_mvcc_db_total_size_in_bytes{job=~".*etcd.*"}[5m]) /
+      last_over_time(etcd_server_quota_backend_bytes{job=~".*etcd.*"}[5m])) * 100
+      >70
+    for: 5m
+    labels:
+      severity: ""
+      status: ""
+    annotations:
+      description: 'etcd空间利用率超过阈值 70%，当前利用率 {{ $value }}% '
+      summary: etcd空间利用率超过阈值
+- name: 紧急告警
+  rules:
+  - alert: 算法接口成功率低于20%
+    expr: ((sum by (calleeEndpoint) (rate(web_server_qps_total{retCode="200",calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[10m]))
+      * 100.0) / sum by (calleeEndpoint) (rate(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[10m]))
+      unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[8h]))
+      < 200 unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aip.*/aipassweb-api/openapi/openApi/v.*"}[8h]
+      offset 1d)) < 200) <20
+    for: 0s
+    labels:
+      severity: critical
+      status: 紧急告警
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟成功率为{{ $value }}
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-成功率低告警

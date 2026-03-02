@@ -99,20 +99,22 @@ func (h *TerminalAuditHandler) ListTerminalSessions(c *gin.Context) {
 	list := make([]*assetbiz.TerminalSessionInfo, 0, len(sessions))
 	for _, session := range sessions {
 		info := &assetbiz.TerminalSessionInfo{
-			ID:            session.ID,
-			HostID:        session.HostID,
-			HostName:      session.HostName,
-			HostIP:        session.HostIP,
-			UserID:        session.UserID,
-			Username:      session.Username,
-			Duration:      session.Duration,
-			DurationText:  formatDuration(session.Duration),
-			FileSize:      session.FileSize,
-			FileSizeText:  formatFileSize(session.FileSize),
-			Status:        session.Status,
-			StatusText:    getStatusText(session.Status),
-			CreatedAt:     session.CreatedAt,
-			CreatedAtText: session.CreatedAt.Format("2006-01-02 15:04:05"),
+			ID:                 session.ID,
+			HostID:             session.HostID,
+			HostName:           session.HostName,
+			HostIP:             session.HostIP,
+			UserID:             session.UserID,
+			Username:           session.Username,
+			Duration:           session.Duration,
+			DurationText:       formatDuration(session.Duration),
+			FileSize:           session.FileSize,
+			FileSizeText:       formatFileSize(session.FileSize),
+			Status:             session.Status,
+			StatusText:         getStatusText(session.Status),
+			ConnectionType:     session.ConnectionType,
+			ConnectionTypeText: getConnectionTypeText(session.ConnectionType),
+			CreatedAt:          session.CreatedAt,
+			CreatedAtText:      session.CreatedAt.Format("2006-01-02 15:04:05"),
 		}
 		list = append(list, info)
 	}
@@ -248,4 +250,16 @@ func getStatusText(status string) string {
 		return text
 	}
 	return status
+}
+
+// getConnectionTypeText 获取连接类型文本
+func getConnectionTypeText(connType string) string {
+	switch connType {
+	case "agent":
+		return "Agent"
+	case "ssh":
+		return "SSH"
+	default:
+		return "SSH"
+	}
 }

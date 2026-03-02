@@ -21,12 +21,13 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
+	agentserver "github.com/ydcloud-dy/opshub/internal/server/agent"
 	"github.com/ydcloud-dy/opshub/plugins/task/model"
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) {
-	handler := NewHandler(db)
+func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, agentHub *agentserver.AgentHub) {
+	handler := NewHandler(db, agentHub)
 
 	// 任务插件路由组 - 使用 /task 前缀
 	taskGroup := router.Group("/task")

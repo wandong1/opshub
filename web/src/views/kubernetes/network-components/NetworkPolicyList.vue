@@ -2,87 +2,69 @@
   <div class="networkpolicy-list">
     <div class="search-bar">
       <div class="search-bar-left">
-        <el-input v-model="searchName" placeholder="搜索 NetworkPolicy 名称..." clearable class="search-input" @input="handleSearch">
+        <a-input v-model="searchName" placeholder="搜索 NetworkPolicy 名称..." allow-clear class="search-input" @input="handleSearch">
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
 
-        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-          <el-option label="全部" value="" />
-          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-        </el-select>
+        <a-select v-model="filterNamespace" placeholder="命名空间" allow-clear @change="handleSearch" class="filter-select">
+          <a-option label="全部" value="" />
+          <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </a-select>
       </div>
 
       <div class="search-bar-right">
-        <el-button v-permission="'k8s-networkpolicies:create'" class="black-button" @click="handleCreateYAML">
-          <el-icon><Document /></el-icon> YAML创建
-        </el-button>
+        <a-button v-permission="'k8s-networkpolicies:create'" type="primary" @click="handleCreateYAML">
+          <icon-file /> YAML创建
+        </a-button>
       </div>
     </div>
 
     <div class="table-wrapper">
-      <el-table :data="filteredPolicies" v-loading="loading" class="modern-table" size="default">
-        <el-table-column label="名称" prop="name" min-width="180" fixed>
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Lock /></el-icon>
-              名称
-            </span>
-          </template>
-          <template #default="{ row }">
+      <a-table :data="filteredPolicies" :loading="loading" class="modern-table" size="default" :columns="tableColumns">
+          <template #name="{ record }">
             <div class="name-cell">
-              <el-icon class="name-icon"><Lock /></el-icon>
-              <div class="name-text">{{ row.name }}</div>
+              <icon-lock />
+              <div class="name-text">{{ record.name }}</div>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="命名空间" prop="namespace" width="140" />
-        <el-table-column label="Pod 选择器" min-width="200">
-          <template #default="{ row }">
-            <div v-if="Object.keys(row.podSelector).length" class="selector-display">
-              <span v-for="(value, key) in row.podSelector" :key="key" class="selector-item">
+          <template #col_4153="{ record }">
+            <div v-if="Object.keys(record.podSelector).length" class="selector-display">
+              <span v-for="(value, key) in record.podSelector" :key="key" class="selector-item">
                 {{ key }}: {{ value }}
               </span>
             </div>
             <div v-else>-</div>
           </template>
-        </el-table-column>
-        <el-table-column label="入站规则" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.ingress.length > 0 ? 'warning' : 'info'" size="small">
-              {{ row.ingress.length }}
-            </el-tag>
+          <template #col_2792="{ record }">
+            <a-tag :type="record.ingress.length > 0 ? 'warning' : 'info'" size="small">
+              {{ record.ingress.length }}
+            </a-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="出站规则" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.egress.length > 0 ? 'danger' : 'info'" size="small">
-              {{ row.egress.length }}
-            </el-tag>
+          <template #col_8377="{ record }">
+            <a-tag :type="record.egress.length > 0 ? 'danger' : 'info'" size="small">
+              {{ record.egress.length }}
+            </a-tag>
           </template>
-        </el-table-column>
-        <el-table-column label="存活时间" prop="age" width="120" />
-        <el-table-column label="操作" width="120" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <div class="action-buttons">
-              <el-tooltip content="编辑 YAML" placement="top">
-                <el-button v-permission="'k8s-networkpolicies:update'" link class="action-btn" @click="handleEditYAML(row)">
-                  <el-icon :size="18"><Document /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'k8s-networkpolicies:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <a-tooltip content="编辑 YAML" placement="top">
+                <a-button v-permission="'k8s-networkpolicies:update'" type="text" class="action-btn" @click="handleEditYAML(record)">
+                  <icon-file />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="删除" placement="top">
+                <a-button v-permission="'k8s-networkpolicies:delete'" type="text" class="action-btn danger" @click="handleDelete(record)">
+                  <icon-delete />
+                </a-button>
+              </a-tooltip>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
     </div>
 
-    <el-dialog v-model="yamlDialogVisible" :title="`NetworkPolicy YAML - ${selectedPolicy?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="yamlDialogVisible" :title="`NetworkPolicy YAML - ${selectedPolicy?.name}`" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -98,14 +80,14 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveYAML" :loading="saving">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="saving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- YAML 创建弹窗 -->
-    <el-dialog v-model="createYamlDialogVisible" title="YAML 创建 NetworkPolicy" width="900px" :lock-scroll="false" class="yaml-dialog">
+    <a-modal v-model:visible="createYamlDialogVisible" title="YAML 创建 NetworkPolicy" width="900px" :lock-scroll="false" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in createYamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -121,18 +103,28 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="createYamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</el-button>
+          <a-button @click="createYamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveCreateYAML" :loading="creating">创建</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 180 },
+  { title: '命名空间', dataIndex: 'namespace', width: 140 },
+  { title: 'Pod 选择器', slotName: 'col_4153', width: 200 },
+  { title: '入站规则', slotName: 'col_2792', width: 100, align: 'center' },
+  { title: '出站规则', slotName: 'col_8377', width: 100, align: 'center' },
+  { title: '存活时间', dataIndex: 'age', width: 120 },
+  { title: '操作', slotName: 'actions', width: 120, fixed: 'right', align: 'center' }
+]
+
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Lock, Document, Delete } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getNetworkPolicies, getNetworkPolicyYAML, updateNetworkPolicyYAML, createNetworkPolicyYAML, createNetworkPolicy, deleteNetworkPolicy, getNamespaces, type NetworkPolicyDetailInfo } from '@/api/kubernetes'
 import { load, dump } from 'js-yaml'
 
@@ -190,10 +182,10 @@ const loadPolicies = async (showSuccess = false) => {
     const data = await getNetworkPolicies(props.clusterId, props.namespace || undefined)
     policyList.value = data || []
     if (showSuccess) {
-      ElMessage.success('刷新成功')
+      Message.success('刷新成功')
     }
   } catch (error) {
-    ElMessage.error('获取 NetworkPolicy 列表失败')
+    Message.error('获取 NetworkPolicy 列表失败')
   } finally {
     loading.value = false
   }
@@ -251,7 +243,7 @@ const handleEditYAML = async (policy: NetworkPolicyDetailInfo) => {
     yamlContent.value = yaml
     yamlDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('获取 YAML 失败')
+    Message.error('获取 YAML 失败')
   }
 }
 
@@ -291,7 +283,7 @@ const handleSaveYAML = async () => {
         jsonData.kind = 'NetworkPolicy'
       }
     } catch (e) {
-      ElMessage.error('YAML 格式错误，请检查缩进和语法')
+      Message.error('YAML 格式错误，请检查缩进和语法')
       saving.value = false
       return
     }
@@ -302,12 +294,12 @@ const handleSaveYAML = async () => {
       selectedPolicy.value.name,
       jsonData
     )
-    ElMessage.success('保存成功')
+    Message.success('保存成功')
     yamlDialogVisible.value = false
     emit('refresh')
     await loadPolicies()
   } catch (error) {
-    ElMessage.error('保存失败')
+    Message.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -328,14 +320,14 @@ const handleYamlScroll = (e: Event) => {
 const handleDelete = async (policy: NetworkPolicyDetailInfo) => {
   if (!props.clusterId) return
   try {
-    await ElMessageBox.confirm(`确定要删除 NetworkPolicy ${policy.name} 吗？`, '删除确认', { type: 'error' })
+    await confirmModal(`确定要删除 NetworkPolicy ${policy.name} 吗？`, '删除确认', { type: 'error' })
     await deleteNetworkPolicy(props.clusterId, policy.namespace, policy.name)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     emit('refresh')
     await loadPolicies()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      Message.error('删除失败')
     }
   }
 }
@@ -362,7 +354,7 @@ const handleSaveCreateYAML = async () => {
     const name = jsonData.metadata.name
 
     if (!name) {
-      ElMessage.error('YAML 中缺少 metadata.name 字段')
+      Message.error('YAML 中缺少 metadata.name 字段')
       return
     }
 
@@ -443,12 +435,12 @@ const handleSaveCreateYAML = async () => {
     }
 
     await createNetworkPolicy(props.clusterId, namespace, createData)
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createYamlDialogVisible.value = false
     emit('refresh')
     await loadPolicies()
   } catch (error) {
-    ElMessage.error('创建失败: ' + (error as any).message)
+    Message.error('创建失败: ' + (error as any).message)
   } finally {
     creating.value = false
   }
@@ -497,19 +489,6 @@ defineExpose({
   width: 100%;
 }
 
-/* 黑色按钮样式 */
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
 
 .search-bar {
   display: flex;
@@ -542,7 +521,7 @@ defineExpose({
 }
 
 .search-icon {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .table-wrapper {
@@ -560,15 +539,15 @@ defineExpose({
 .name-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 18px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
 }
 
 .name-text {
@@ -588,7 +567,7 @@ defineExpose({
 }
 
 .header-icon-blue {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .selector-display {
@@ -614,12 +593,12 @@ defineExpose({
 }
 
 .action-btn {
-  color: #d4af37;
+  color: #165dff;
   transition: all 0.3s;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 .action-btn.danger {
@@ -633,10 +612,10 @@ defineExpose({
 /* YAML 编辑弹窗 */
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #1e1e1e;
 }
 
 .yaml-line-numbers {
@@ -660,8 +639,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
   border: none;
   outline: none;
   padding: 16px;
@@ -680,7 +659,7 @@ defineExpose({
   outline: none;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 0;
   background-color: #1a1a1a;
 }

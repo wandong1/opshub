@@ -1,19 +1,19 @@
 <template>
   <div class="jvm-info-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
-    <div v-else class="panel-content" v-loading="loading">
+    <div v-else class="panel-content" :loading="loading">
       <!-- 工具栏 -->
       <div class="toolbar">
-        <el-button type="primary" size="small" @click="loadJvmInfo" :loading="loading">
-          <el-icon><Refresh /></el-icon> 刷新
-        </el-button>
+        <a-button type="primary" size="small" @click="loadJvmInfo" :loading="loading">
+          <icon-refresh /> 刷新
+        </a-button>
       </div>
 
       <!-- JVM 信息卡片 -->
@@ -21,7 +21,7 @@
         <!-- RUNTIME -->
         <div class="info-card" v-if="jvmInfo.RUNTIME">
           <div class="card-header">
-            <el-icon><Timer /></el-icon>
+            <icon-clock-circle />
             <span>RUNTIME</span>
           </div>
           <div class="card-body">
@@ -35,7 +35,7 @@
         <!-- CLASS-LOADING -->
         <div class="info-card" v-if="jvmInfo['CLASS-LOADING']">
           <div class="card-header">
-            <el-icon><Files /></el-icon>
+            <icon-storage />
             <span>CLASS-LOADING</span>
           </div>
           <div class="card-body">
@@ -49,7 +49,7 @@
         <!-- COMPILATION -->
         <div class="info-card" v-if="jvmInfo.COMPILATION">
           <div class="card-header">
-            <el-icon><Cpu /></el-icon>
+            <icon-thunderbolt />
             <span>COMPILATION</span>
           </div>
           <div class="card-body">
@@ -63,7 +63,7 @@
         <!-- THREAD -->
         <div class="info-card" v-if="jvmInfo.THREAD">
           <div class="card-header">
-            <el-icon><Operation /></el-icon>
+            <icon-settings />
             <span>THREAD</span>
           </div>
           <div class="card-body">
@@ -77,7 +77,7 @@
         <!-- GARBAGE-COLLECTORS -->
         <div class="info-card wide" v-if="jvmInfo['GARBAGE-COLLECTORS']">
           <div class="card-header">
-            <el-icon><Delete /></el-icon>
+            <icon-delete />
             <span>GARBAGE-COLLECTORS</span>
           </div>
           <div class="card-body">
@@ -91,7 +91,7 @@
         <!-- MEMORY-MANAGERS -->
         <div class="info-card wide" v-if="jvmInfo['MEMORY-MANAGERS']">
           <div class="card-header">
-            <el-icon><Coin /></el-icon>
+            <icon-common />
             <span>MEMORY-MANAGERS</span>
           </div>
           <div class="card-body">
@@ -105,7 +105,7 @@
         <!-- MEMORY -->
         <div class="info-card wide" v-if="jvmInfo.MEMORY">
           <div class="card-header">
-            <el-icon><Histogram /></el-icon>
+            <icon-bar-chart />
             <span>MEMORY</span>
           </div>
           <div class="card-body">
@@ -119,7 +119,7 @@
         <!-- OPERATING-SYSTEM -->
         <div class="info-card wide" v-if="jvmInfo['OPERATING-SYSTEM']">
           <div class="card-header">
-            <el-icon><Monitor /></el-icon>
+            <icon-desktop />
             <span>OPERATING-SYSTEM</span>
           </div>
           <div class="card-body">
@@ -133,7 +133,7 @@
         <!-- FILE-DESCRIPTOR -->
         <div class="info-card" v-if="jvmInfo['FILE-DESCRIPTOR']">
           <div class="card-header">
-            <el-icon><Document /></el-icon>
+            <icon-file />
             <span>FILE-DESCRIPTOR</span>
           </div>
           <div class="card-body">
@@ -145,24 +145,23 @@
         </div>
       </div>
 
-      <el-empty v-else-if="!loading" description="暂无JVM信息" />
+      <a-empty v-else-if="!loading" description="暂无JVM信息" />
 
       <!-- 原始输出（可折叠） -->
-      <el-collapse v-if="rawOutput" class="raw-output-collapse">
-        <el-collapse-item title="原始输出" name="raw">
+      <a-collapse v-if="rawOutput" class="raw-output-collapse">
+        <a-collapse-item title="原始输出" name="raw">
           <div class="output-content">
             <pre>{{ rawOutput }}</pre>
           </div>
-        </el-collapse-item>
-      </el-collapse>
+        </a-collapse-item>
+      </a-collapse>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Refresh, Timer, Files, Cpu, Operation, Delete, Coin, Histogram, Monitor, Document } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getJvmInfo } from '@/api/arthas'
 
 const props = defineProps<{
@@ -279,7 +278,7 @@ const loadJvmInfo = async () => {
     if (Object.keys(jvmInfo.value).length === 0 && output) {
     }
   } catch (error: any) {
-    ElMessage.error('获取JVM信息失败: ' + (error.message || '未知错误'))
+    Message.error('获取JVM信息失败: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
@@ -349,7 +348,7 @@ watch(() => props.attached, (newVal) => {
   font-weight: 600;
 }
 
-.card-header :deep(.el-icon) {
+.card-header :deep(.arco-icon) {
   font-size: 18px;
   color: #409eff;
 }

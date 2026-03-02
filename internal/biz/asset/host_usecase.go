@@ -42,11 +42,18 @@ import (
 	"github.com/ydcloud-dy/opshub/pkg/utils"
 )
 
+// AgentCommandFactory Agent命令执行工厂接口（避免biz层直接依赖server层）
+type AgentCommandFactory interface {
+	IsOnline(hostID uint) bool
+	NewExecutor(hostID uint) (collector.CommandExecutor, error)
+}
+
 type HostUseCase struct {
-	hostRepo       HostRepo
-	credentialRepo CredentialRepo
-	groupRepo      AssetGroupRepo
-	cloudRepo      CloudAccountRepo
+	hostRepo        HostRepo
+	credentialRepo  CredentialRepo
+	groupRepo       AssetGroupRepo
+	cloudRepo       CloudAccountRepo
+	agentCmdFactory AgentCommandFactory
 }
 
 func NewHostUseCase(hostRepo HostRepo, credentialRepo CredentialRepo, groupRepo AssetGroupRepo, cloudRepo CloudAccountRepo) *HostUseCase {
@@ -56,6 +63,11 @@ func NewHostUseCase(hostRepo HostRepo, credentialRepo CredentialRepo, groupRepo 
 		groupRepo:      groupRepo,
 		cloudRepo:      cloudRepo,
 	}
+}
+
+// SetAgentCommandFactory 设置Agent命令执行工厂
+func (uc *HostUseCase) SetAgentCommandFactory(factory AgentCommandFactory) {
+	uc.agentCmdFactory = factory
 }
 
 // Create 创建主机
@@ -249,6 +261,10 @@ func (uc *HostUseCase) toInfoVO(host *Host) *HostInfoVO {
 		DiskUsage:        host.DiskUsage,
 		Uptime:           host.Uptime,
 		Hostname:         host.Hostname,
+		// Agent相关
+		AgentID:          host.AgentID,
+		AgentStatus:      host.AgentStatus,
+		ConnectionMode:   host.ConnectionMode,
 	}
 }
 
@@ -259,29 +275,37 @@ func (uc *HostUseCase) CollectHostInfo(ctx context.Context, hostID uint) error {
 		return fmt.Errorf("获取主机信息失败: %w", err)
 	}
 
-	// 如果没有配置凭证，无法连接
-	if host.CredentialID == 0 {
-		return fmt.Errorf("主机未配置凭证")
+	var c *collector.Collector
+
+	// 优先使用Agent采集
+	if uc.agentCmdFactory != nil && uc.agentCmdFactory.IsOnline(hostID) {
+		executor, err := uc.agentCmdFactory.NewExecutor(hostID)
+		if err == nil {
+			c = collector.NewCollectorWithExecutor(executor)
+		}
 	}
 
-	// 获取凭证（解密后的）
-	credential, err := uc.credentialRepo.GetByIDDecrypted(ctx, host.CredentialID)
-	if err != nil {
-		return fmt.Errorf("获取凭证失败: %w", err)
-	}
+	// Agent不可用时回退到SSH
+	if c == nil {
+		if host.CredentialID == 0 {
+			return fmt.Errorf("主机未配置凭证，且Agent不在线")
+		}
 
-	// 创建SSH客户端
-	sshClient, err := uc.createSSHClient(host, credential)
-	if err != nil {
-		// 连接失败，更新主机状态为离线
-		host.Status = 0
-		uc.hostRepo.Update(ctx, host)
-		return fmt.Errorf("创建SSH连接失败: %w", err)
-	}
-	defer sshClient.Close()
+		credential, err := uc.credentialRepo.GetByIDDecrypted(ctx, host.CredentialID)
+		if err != nil {
+			return fmt.Errorf("获取凭证失败: %w", err)
+		}
 
-	// 创建采集器
-	c := collector.NewCollector(sshClient)
+		sshClient, err := uc.createSSHClient(host, credential)
+		if err != nil {
+			host.Status = 0
+			uc.hostRepo.Update(ctx, host)
+			return fmt.Errorf("创建SSH连接失败: %w", err)
+		}
+		defer sshClient.Close()
+
+		c = collector.NewCollector(sshClient)
+	}
 
 	// 采集所有信息
 	info, err := c.CollectAll()
@@ -450,6 +474,11 @@ func (uc *HostUseCase) toCredentialVO(credential *Credential) *CredentialVO {
 // GetCredentialRepo 获取凭证Repo（用于终端功能）
 func (uc *HostUseCase) GetCredentialRepo() CredentialRepo {
 	return uc.credentialRepo
+}
+
+// GetHostRepo 获取主机Repo（用于Agent自动注册）
+func (uc *HostUseCase) GetHostRepo() HostRepo {
+	return uc.hostRepo
 }
 
 // GetByIDDecrypted 根据ID获取凭证（解密后的，用于编辑时回显）

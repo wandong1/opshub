@@ -4,99 +4,89 @@
     <div class="terminal-sidebar">
       <div class="sidebar-header">
         <div class="sidebar-title">
-          <el-icon><Collection /></el-icon>
+          <icon-apps :size="18" style="color: #4ec9b0" />
           <span>资产分组</span>
           <span class="host-count">({{ allHosts.length }})</span>
         </div>
         <div class="search-box">
-          <el-input
+          <a-input
             v-model="searchKeyword"
             placeholder="搜索主机..."
-            clearable
+            allow-clear
             size="small"
             class="search-input"
           >
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <icon-search />
             </template>
-          </el-input>
+          </a-input>
         </div>
       </div>
 
       <div class="sidebar-content">
-        <el-tree
+        <a-tree
           ref="treeRef"
           :data="filteredTreeData"
-          :props="treeProps"
+          :field-names="{ key: 'id', title: 'label', children: 'children' }"
           :default-expand-all="false"
-          :expand-on-click-node="false"
-          :highlight-current="true"
-          node-key="id"
+          :block-node="true"
           class="terminal-tree"
         >
-          <template #default="{ node, data }">
-            <div class="tree-node" @dblclick="handleNodeDblClick(data, node, $event)">
+          <template #title="nodeData">
+            <div class="tree-node" @dblclick="handleNodeDblClick(nodeData, $event)">
               <span class="node-icon">
-                <el-icon v-if="data.type === 'group'"><Folder /></el-icon>
-                <svg v-else class="host-svg-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
-                </svg>
+                <icon-folder v-if="nodeData.type === 'group'" :size="16" style="color: #858585" />
+                <icon-desktop v-else :size="16" style="color: #4ec9b0" />
               </span>
-              <span class="node-label">{{ node.label }}</span>
-              <span v-if="data.type === 'group'" class="node-count">({{ data.hostCount || 0 }})</span>
-              <span v-if="data.type === 'host'" class="node-status" :class="getStatusClass(data.status)"></span>
+              <span class="node-label">{{ nodeData.label }}</span>
+              <span v-if="nodeData.type === 'group'" class="node-count">({{ nodeData.hostCount || 0 }})</span>
+              <span v-if="nodeData.type === 'host'" class="node-status" :class="getStatusClass(nodeData.status)"></span>
             </div>
           </template>
-        </el-tree>
+        </a-tree>
       </div>
     </div>
-
     <!-- 右侧终端区域 -->
     <div class="terminal-main">
       <div class="tabs-container">
-        <el-tabs
-          v-model="activeTab"
-          type="card"
+        <a-tabs
+          v-model:active-key="activeTab"
+          type="card-gutter"
           class="terminal-tabs"
-          @tab-remove="handleTabRemove"
+          editable
+          :show-add-button="false"
+          @delete="handleTabRemove"
         >
-          <el-tab-pane
+          <a-tab-pane
             v-for="tab in terminalTabs"
             :key="tab.id"
-            :name="tab.id"
             :closable="terminalTabs.length > 1"
           >
-            <template #label>
+            <template #title>
               <span class="tab-label">
-                <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
-                </svg>
+                <icon-desktop class="tab-icon" :size="14" />
                 <span class="tab-name">{{ tab.label }}</span>
                 <div v-if="tab.connected" class="status-dot online"></div>
                 <div v-else-if="tab.connecting" class="status-dot connecting"></div>
                 <div v-else class="status-dot offline"></div>
               </span>
             </template>
-            <template #default>
-              <div class="tab-content">
-                <div v-if="tab.host" class="terminal-connected">
-                  <div class="terminal-body">
-                    <div :ref="el => terminalRefs[tab.id] = el" class="xterm-container"></div>
-                  </div>
-                </div>
-                <div v-else class="terminal-empty">
-                  <div class="empty-icon">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
-                    </svg>
-                  </div>
-                  <div class="empty-text">双击主机打开终端</div>
-                  <div class="empty-hint">在左侧资产分组中选择主机</div>
+            <div class="tab-content">
+              <div v-if="tab.host" class="terminal-connected">
+                <div class="terminal-body">
+                  <div :ref="el => terminalRefs[tab.id] = el" class="xterm-container"></div>
                 </div>
               </div>
-            </template>
-          </el-tab-pane>
-        </el-tabs>
+              <div v-else class="terminal-empty">
+                <div class="empty-icon">
+                  <icon-desktop :size="64" />
+                </div>
+                <div class="empty-text">双击主机打开终端</div>
+                <div class="empty-hint">在左侧资产分组中选择主机</div>
+              </div>
+            </div>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </div>
   </div>
@@ -104,12 +94,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
-import { Collection, Search, Monitor, Folder } from '@element-plus/icons-vue'
+import { IconSearch, IconFolder, IconApps, IconDesktop } from '@arco-design/web-vue/es/icon'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
 import { getHostList } from '@/api/host'
 import { getGroupTree } from '@/api/assetGroup'
+import { getAgentStatuses } from '@/api/agent'
 
 const treeRef = ref()
 const searchKeyword = ref('')
@@ -139,13 +130,6 @@ const terminalTabs = ref<TerminalTab[]>([
   }
 ])
 
-// 树形配置
-const treeProps = {
-  children: 'children',
-  label: 'label',
-  value: 'id'
-}
-
 // 加载分组树
 const groupTree = ref<any[]>([])
 const allHosts = ref<any[]>([])
@@ -162,6 +146,25 @@ const loadAllHosts = async () => {
   try {
     const res = await getHostList({ page: 1, pageSize: 10000 })
     allHosts.value = res.list || []
+    // 获取Agent实时状态并合并
+    try {
+      const statuses = await getAgentStatuses()
+      if (Array.isArray(statuses)) {
+        const statusMap: Record<number, any> = {}
+        for (const s of statuses) {
+          statusMap[s.hostId] = s
+        }
+        for (const host of allHosts.value) {
+          const agentInfo = statusMap[host.id]
+          if (agentInfo) {
+            host.agentStatus = agentInfo.status
+            host.connectionMode = 'agent'
+          }
+        }
+      }
+    } catch (e) {
+      // Agent状态获取失败不影响主机列表
+    }
   } catch (error) {
     allHosts.value = []
   }
@@ -177,6 +180,7 @@ const treeData = computed(() => {
     return groups.map((group: any) => {
       const node: any = {
         ...group,
+        id: `group-${group.id}`,
         type: 'group',
         label: group.name,
         children: group.children ? buildTree(group.children) : []
@@ -187,6 +191,8 @@ const treeData = computed(() => {
       if (groupHosts.length > 0) {
         const hostNodes = groupHosts.map((host: any) => ({
           ...host,
+          id: `host-${host.id}`,
+          hostId: host.id,
           type: 'host',
           label: host.name
         }))
@@ -242,36 +248,37 @@ const getStatusClass = (status: number) => {
 }
 
 // 双击节点
-const handleNodeDblClick = (data: any, node: any, event: Event) => {
+const handleNodeDblClick = (data: any, event: Event) => {
   event.preventDefault()
   event.stopPropagation()
 
-  if (data.type === 'host' || (data.ip && data.port)) {
+  if (data.type === 'host' && (data.ip || data.hostId)) {
     openTerminal(data)
-  } else {
   }
 }
 
 // 打开新的终端标签页
 const openTerminal = async (host: any) => {
+  // 使用原始主机ID（hostId）用于API调用，label用于显示
+  const realHostId = host.hostId || host.id
+  const hostName = host.label || host.name
 
   const tabId = Date.now().toString()
 
   // 计算相同主机名的标签数量，用于生成唯一的标签名称
-  const sameHostTabs = terminalTabs.value.filter(t => t.host && t.host.name === host.name)
-  let label = host.name
+  const sameHostTabs = terminalTabs.value.filter(t => t.host && (t.host.label || t.host.name) === hostName)
+  let label = hostName
   if (sameHostTabs.length > 0) {
-    label = `${host.name} (${sameHostTabs.length + 1})`
+    label = `${hostName} (${sameHostTabs.length + 1})`
   }
 
   const newTab: TerminalTab = {
     id: tabId,
     label: label,
-    host: host,
+    host: { ...host, id: realHostId },
     connected: false,
     connecting: true
   }
-
 
   // 直接添加新标签页，每次双击都打开新标签
   terminalTabs.value.push(newTab)
@@ -279,17 +286,26 @@ const openTerminal = async (host: any) => {
   // 切换到新标签页
   activeTab.value = tabId
 
-
   await nextTick()
-  initTerminal(tabId, host)
+  // 传入修正后的 host 对象（包含数字 id），而非原始树节点（id 为 "host-xxx" 字符串）
+  initTerminal(tabId, newTab.host)
 }
 
 // 初始化终端
 const initTerminal = async (tabId: string, host: any) => {
   await nextTick()
 
-  const el = terminalRefs.value[tabId]
+  // 等待 ref 绑定完成（Arco tabs 可能延迟渲染 pane 内容）
+  let el = terminalRefs.value[tabId]
+  let refAttempts = 0
+  while (!el && refAttempts < 30) {
+    await new Promise(resolve => setTimeout(resolve, 100))
+    await nextTick()
+    el = terminalRefs.value[tabId]
+    refAttempts++
+  }
   if (!el) {
+    console.error('[Terminal] 无法获取终端容器元素, tabId:', tabId)
     return
   }
 
@@ -301,9 +317,9 @@ const initTerminal = async (tabId: string, host: any) => {
   }
 
   if (el.clientWidth === 0 || el.clientHeight === 0) {
+    console.error('[Terminal] 容器尺寸为0, tabId:', tabId, 'width:', el.clientWidth, 'height:', el.clientHeight)
     return
   }
-
 
   // 创建新终端
   const term = new Terminal({
@@ -342,12 +358,9 @@ const initTerminal = async (tabId: string, host: any) => {
   terminals.value[tabId] = term
   fitAddons.value[tabId] = fitAddon
 
-  // 打印容器信息
-
   // 等待DOM完全渲染后再获取准确的终端尺寸
   await nextTick()
   await new Promise(resolve => setTimeout(resolve, 300))
-
 
   // 适配终端大小
   try {
@@ -372,7 +385,6 @@ const initTerminal = async (tabId: string, host: any) => {
     dims.rows = 30
   }
 
-
   term.writeln('\x1b[1;32m正在连接...\x1b[0m')
 
   // 连接SSH - 直接连接到后端服务器（不通过 Vite 代理）
@@ -383,9 +395,15 @@ const initTerminal = async (tabId: string, host: any) => {
   const backendHost = window.location.hostname
   const backendPort = isDev ? ':9876' : (window.location.port ? ':' + window.location.port : '')
   // 将终端尺寸作为参数传递
-  const wsUrl = `${protocol}//${backendHost}${backendPort}/api/v1/asset/terminal/${host.id}?token=${token}&cols=${dims.cols}&rows=${dims.rows}`
+  // 根据主机连接模式选择终端端点
+  const isAgent = host.connectionMode === 'agent' && host.agentStatus !== 'none'
+  const terminalPath = isAgent
+    ? `/api/v1/agents/${host.id}/terminal`
+    : `/api/v1/asset/terminal/${host.id}`
+  const wsUrl = `${protocol}//${backendHost}${backendPort}${terminalPath}?token=${token}&cols=${dims.cols}&rows=${dims.rows}`
 
-
+  let hasConnected = false
+  let fallbackAttempted = false
   const ws = new WebSocket(wsUrl)
 
   // 处理终端输入 - 发送到 WebSocket
@@ -396,11 +414,11 @@ const initTerminal = async (tabId: string, host: any) => {
         ws.send(data)
       } catch (e) {
       }
-    } else {
     }
   })
 
   ws.onopen = () => {
+    hasConnected = true
     const tab = terminalTabs.value.find(t => t.id === tabId)
     if (tab) {
       tab.connecting = false
@@ -432,19 +450,53 @@ const initTerminal = async (tabId: string, host: any) => {
   }
 
   ws.onerror = (error) => {
+    console.error('[Terminal] WebSocket错误, tabId:', tabId, error)
+    if (isAgent && !hasConnected && !fallbackAttempted) {
+      // Agent连接失败，回退到SSH
+      fallbackAttempted = true
+      if (term) {
+        term.writeln('\x1b[1;33m⚠ Agent连接失败，正在回退到SSH...\x1b[0m')
+      }
+      const sshPath = `/api/v1/asset/terminal/${host.id}`
+      const sshWsUrl = `${protocol}//${backendHost}${backendPort}${sshPath}?token=${token}&cols=${dims.cols}&rows=${dims.rows}`
+      connectSSHFallback(sshWsUrl, term, tabId, host, fitAddon)
+      return
+    }
+    const tab = terminalTabs.value.find(t => t.id === tabId)
+    if (tab) {
+      tab.connecting = false
+      tab.connected = false
+    }
     if (term) {
-      term.writeln('\x1b[1;31m✗ 连接错误\x1b[0m')
+      term.writeln('\x1b[1;31m✗ 连接错误 - WebSocket连接失败，请检查后端服务是否运行\x1b[0m')
     }
   }
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
+    console.log('[Terminal] WebSocket关闭, tabId:', tabId, 'code:', event.code, 'reason:', event.reason)
+    if (isAgent && !hasConnected && !fallbackAttempted) {
+      // Agent连接失败，回退到SSH
+      fallbackAttempted = true
+      if (term) {
+        term.writeln('\x1b[1;33m⚠ Agent连接失败，正在回退到SSH...\x1b[0m')
+      }
+      const sshPath = `/api/v1/asset/terminal/${host.id}`
+      const sshWsUrl = `${protocol}//${backendHost}${backendPort}${sshPath}?token=${token}&cols=${dims.cols}&rows=${dims.rows}`
+      connectSSHFallback(sshWsUrl, term, tabId, host, fitAddon)
+      return
+    }
     const tab = terminalTabs.value.find(t => t.id === tabId)
     if (tab) {
       tab.connected = false
+      tab.connecting = false
     }
 
     if (term) {
-      term.writeln('\r\n\x1b[1;33m⟳ 连接已关闭\x1b[0m')
+      if (event.code === 1006) {
+        term.writeln('\r\n\x1b[1;31m✗ 连接异常关闭 - 可能是权限不足或后端服务不可用\x1b[0m')
+      } else {
+        term.writeln('\r\n\x1b[1;33m⟳ 连接已关闭\x1b[0m')
+      }
     }
   }
 
@@ -498,6 +550,71 @@ const initTerminal = async (tabId: string, host: any) => {
   }
 }
 
+// SSH回退连接
+const connectSSHFallback = (sshWsUrl: string, term: Terminal, tabId: string, host: any, fitAddon: FitAddon) => {
+  const sshWs = new WebSocket(sshWsUrl)
+
+  term.onData(data => {
+    if (sshWs.readyState === WebSocket.OPEN) {
+      try { sshWs.send(data) } catch (e) {}
+    }
+  })
+
+  sshWs.onopen = () => {
+    const tab = terminalTabs.value.find(t => t.id === tabId)
+    if (tab) {
+      tab.connecting = false
+      tab.connected = true
+    }
+    term.writeln('\x1b[1;32m✓ SSH连接成功\x1b[0m')
+    term.writeln(`\x1b[90m已通过SSH连接到: ${host.name} (${host.ip}:${host.port})\x1b[0m`)
+    term.writeln('')
+  }
+
+  sshWs.onmessage = async (event) => {
+    if (event.data instanceof Blob) {
+      const arrayBuffer = await event.data.arrayBuffer()
+      term.write(new Uint8Array(arrayBuffer))
+    } else if (event.data instanceof ArrayBuffer) {
+      term.write(new Uint8Array(event.data))
+    } else {
+      term.write(event.data)
+    }
+  }
+
+  sshWs.onerror = () => {
+    const tab = terminalTabs.value.find(t => t.id === tabId)
+    if (tab) { tab.connecting = false; tab.connected = false }
+    term.writeln('\x1b[1;31m✗ SSH回退连接也失败了\x1b[0m')
+  }
+
+  sshWs.onclose = (event) => {
+    const tab = terminalTabs.value.find(t => t.id === tabId)
+    if (tab) { tab.connected = false; tab.connecting = false }
+    if (event.code === 1006) {
+      term.writeln('\r\n\x1b[1;31m✗ 连接异常关闭\x1b[0m')
+    } else {
+      term.writeln('\r\n\x1b[1;33m⟳ 连接已关闭\x1b[0m')
+    }
+  }
+
+  wss.value[tabId] = sshWs
+
+  // 绑定resize
+  const handleResize = () => {
+    if (fitAddon && term && sshWs.readyState === WebSocket.OPEN) {
+      try {
+        fitAddon.fit()
+        sshWs.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+      } catch (e) {}
+    }
+  }
+  let resizeTimer: ReturnType<typeof setTimeout>
+  const debouncedResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(handleResize, 100) }
+  window.addEventListener('resize', debouncedResize)
+  resizeCleanups.value[tabId] = () => { window.removeEventListener('resize', debouncedResize); clearTimeout(resizeTimer) }
+}
+
 // 关闭指定标签
 const closeTerminal = (tabId: string) => {
   const tab = terminalTabs.value.find(t => t.id === tabId)
@@ -543,8 +660,8 @@ const closeTerminal = (tabId: string) => {
 }
 
 // 处理标签关闭
-const handleTabRemove = (tabId: string) => {
-  closeTerminal(tabId)
+const handleTabRemove = (tabId: string | number) => {
+  closeTerminal(String(tabId))
 }
 
 // 初始化
@@ -600,7 +717,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .terminal-page {
   display: flex;
-  height: 100vh;
+  height: 100%;
   background: #1e1e1e;
 }
 
@@ -629,11 +746,6 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 
-.sidebar-title .el-icon {
-  font-size: 18px;
-  color: #4ec9b0;
-}
-
 .host-count {
   margin-left: auto;
   font-size: 12px;
@@ -649,30 +761,29 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.search-input :deep(.el-input__wrapper) {
+.search-input :deep(.arco-input-wrapper) {
   background: #3c3c3c;
   border: 1px solid #4e4e4e;
-  box-shadow: none;
   border-radius: 6px;
 }
 
-.search-input :deep(.el-input__wrapper:hover) {
+.search-input :deep(.arco-input-wrapper:hover) {
   border-color: #5e5e5e;
 }
 
-.search-input :deep(.el-input__wrapper.is-focus) {
+.search-input :deep(.arco-input-wrapper.arco-input-focus) {
   border-color: #4ec9b0;
 }
 
-.search-input :deep(.el-input__inner) {
+.search-input :deep(.arco-input) {
   color: #cccccc;
 }
 
-.search-input :deep(.el-input__inner::placeholder) {
+.search-input :deep(.arco-input::placeholder) {
   color: #858585;
 }
 
-.search-input :deep(.el-input__prefix) {
+.search-input :deep(.arco-input-prefix) {
   color: #858585;
 }
 
@@ -705,20 +816,23 @@ onBeforeUnmount(() => {
   color: #cccccc;
 }
 
-.terminal-tree :deep(.el-tree-node__content) {
-  height: auto;
-  padding: 4px 0;
+.terminal-tree :deep(.arco-tree-node) {
+  padding: 2px 0;
   background: transparent;
   border-radius: 4px;
   transition: background-color 0.2s ease;
 }
 
-.terminal-tree :deep(.el-tree-node__content:hover) {
+.terminal-tree :deep(.arco-tree-node:hover) {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.terminal-tree :deep(.is-current > .el-tree-node__content) {
+.terminal-tree :deep(.arco-tree-node-selected) {
   background: rgba(78, 201, 176, 0.1);
+}
+
+.terminal-tree :deep(.arco-tree-node-switcher) {
+  color: #858585;
 }
 
 .tree-node {
@@ -736,10 +850,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.node-icon .el-icon {
-  color: #858585;
 }
 
 .host-svg-icon {
@@ -806,22 +916,13 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.terminal-tabs :deep(.el-tabs__header) {
+.terminal-tabs :deep(.arco-tabs-nav) {
   background: #2d2d30;
   border-bottom: 1px solid #3c3c3c;
-  margin: 0;
-  padding: 0 8px;
+  padding: 8px 8px 0;
 }
 
-.terminal-tabs :deep(.el-tabs__nav-wrap) {
-  padding: 8px 0 0;
-}
-
-.terminal-tabs :deep(.el-tabs__nav) {
-  border: none;
-}
-
-.terminal-tabs :deep(.el-tabs__item) {
+.terminal-tabs :deep(.arco-tabs-tab) {
   color: #cccccc;
   border: 1px solid #3c3c3c;
   border-bottom: none;
@@ -835,32 +936,49 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.terminal-tabs :deep(.el-tabs__item:hover) {
+.terminal-tabs :deep(.arco-tabs-tab:hover) {
   background: #4e4e4e;
 }
 
-.terminal-tabs :deep(.el-tabs__item.is-active) {
+.terminal-tabs :deep(.arco-tabs-tab-active) {
   color: #cccccc;
   background: #1e1e1e;
   border-color: #3c3c3c;
   border-bottom: 1px solid #1e1e1e;
 }
 
-.terminal-tabs :deep(.el-tabs__active-bar) {
+.terminal-tabs :deep(.arco-tabs-nav-ink) {
   display: none;
 }
 
-.terminal-tabs :deep(.el-tabs__content) {
+.terminal-tabs :deep(.arco-tabs-content) {
   flex: 1;
   overflow: hidden;
   padding: 0;
   height: 100%;
 }
 
-.terminal-tabs :deep(.el-tab-pane) {
+.terminal-tabs :deep(.arco-tabs-content-list) {
+  height: 100%;
+}
+
+.terminal-tabs :deep(.arco-tabs-content-item) {
+  height: 100%;
+}
+
+.terminal-tabs :deep(.arco-tabs-pane) {
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.terminal-tabs :deep(.arco-tabs-tab-close-btn) {
+  color: #858585;
+  transition: color 0.2s ease;
+}
+
+.terminal-tabs :deep(.arco-tabs-tab-close-btn:hover) {
+  color: #cccccc;
 }
 
 .tab-label {
@@ -976,15 +1094,5 @@ onBeforeUnmount(() => {
 .empty-hint {
   font-size: 12px;
   color: #606060;
-}
-
-/* 关闭按钮样式 */
-.terminal-tabs :deep(.el-icon-close) {
-  color: #858585;
-  transition: color 0.2s ease;
-}
-
-.terminal-tabs :deep(.el-icon-close:hover) {
-  color: #cccccc;
 }
 </style>

@@ -3,336 +3,319 @@
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
       <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Lock /></el-icon>
-        </div>
+        <div class="page-title-icon"><icon-lock /></div>
         <div>
-          <h2 class="page-title">权限配置</h2>
-          <p class="page-subtitle">配置角色对资产分组和主机的访问权限</p>
+          <h2 class="page-title">资产权限</h2>
+          <p class="page-subtitle">管理资产分组和主机的访问权限</p>
         </div>
       </div>
-      <div class="header-actions">
-        <el-button v-permission="'asset-perms:create'" class="black-button" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
-          添加权限
-        </el-button>
-      </div>
+      <a-button v-permission="'asset-perms:create'" type="primary" @click="handleAdd">
+        <template #icon><icon-plus /></template>
+        添加权限
+      </a-button>
     </div>
 
     <!-- 搜索栏 -->
-    <div class="search-bar">
-      <div class="search-inputs">
-        <el-input
-          v-model="searchForm.roleName"
-          placeholder="搜索角色名称..."
-          clearable
-          class="search-input"
-          @input="handleSearch"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
+    <div class="filter-bar">
+      <a-input
+        v-model="searchForm.roleName"
+        placeholder="搜索角色名称..."
+        allow-clear
+        style="width: 280px;"
+        @input="handleSearch"
+      >
+        <template #prefix><icon-search /></template>
+      </a-input>
 
-        <el-input
-          v-model="searchForm.groupName"
-          placeholder="搜索资产分组..."
-          clearable
-          class="search-input"
-          @input="handleSearch"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
-      </div>
+      <a-input
+        v-model="searchForm.groupName"
+        placeholder="搜索资产分组..."
+        allow-clear
+        style="width: 280px;"
+        @input="handleSearch"
+      >
+        <template #prefix><icon-search /></template>
+      </a-input>
 
-      <div class="search-actions">
-        <el-button class="reset-btn" @click="handleReset">
-          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
-          重置
-        </el-button>
-      </div>
+      <a-button @click="handleReset">
+        <template #icon><icon-refresh /></template>
+        重置
+      </a-button>
     </div>
 
-    <!-- 表格和分页容器 -->
+    <!-- 表格 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="filteredPermissions"
-        v-loading="loading"
-        class="modern-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :loading="loading"
+        :bordered="{ cell: true }"
+        stripe
+        :pagination="{ current: page, pageSize: pageSize, total: total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50, 100] }"
+        @page-change="handlePageChange"
+        @page-size-change="handleSizeChange"
       >
-        <el-table-column prop="id" label="ID" width="80" align="center" />
+        <template #columns>
+          <a-table-column title="ID" :width="80" align="center" data-index="id" />
 
-        <el-table-column label="角色" min-width="150">
-          <template #default="{ row }">
-            <el-tag type="primary">{{ row.roleName }}</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="角色" :min-width="150">
+            <template #cell="{ record }">
+              <a-tag color="arcoblue">{{ record.roleName }}</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="资产分组" min-width="180">
-          <template #default="{ row }">
-            <el-tag type="success">{{ row.assetGroupName }}</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="资产分组" :min-width="180">
+            <template #cell="{ record }">
+              <a-tag color="green">{{ record.assetGroupName }}</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="主机" min-width="200">
-          <template #default="{ row }">
-            <el-tag v-if="!row.hostId" type="info">全部主机</el-tag>
-            <div v-else>
-              <div>{{ row.hostName }}</div>
-              <div class="host-ip">{{ row.hostIp }}</div>
-            </div>
-          </template>
-        </el-table-column>
+          <a-table-column title="主机" :min-width="200">
+            <template #cell="{ record }">
+              <a-tag v-if="!record.hostId" color="gray">全部主机</a-tag>
+              <div v-else>
+                <div>{{ record.hostName }}</div>
+                <div class="host-ip">{{ record.hostIp }}</div>
+              </div>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="操作权限" min-width="200">
-          <template #default="{ row }">
-            <div class="permission-tags">
-              <el-tag v-if="(row.permissions & 1) > 0" size="small" type="success">查看</el-tag>
-              <el-tag v-if="(row.permissions & 2) > 0" size="small" type="primary">编辑</el-tag>
-              <el-tag v-if="(row.permissions & 4) > 0" size="small" type="danger">删除</el-tag>
-              <el-tag v-if="(row.permissions & 8) > 0" size="small" type="warning">终端</el-tag>
-              <el-tag v-if="(row.permissions & 16) > 0" size="small" type="info">文件</el-tag>
-              <el-tag v-if="(row.permissions & 32) > 0" size="small">采集</el-tag>
-            </div>
-          </template>
-        </el-table-column>
+          <a-table-column title="操作权限" :min-width="200">
+            <template #cell="{ record }">
+              <div class="permission-tags">
+                <a-tag v-if="(record.permissions & 1) > 0" size="small" color="green">查看</a-tag>
+                <a-tag v-if="(record.permissions & 2) > 0" size="small" color="arcoblue">编辑</a-tag>
+                <a-tag v-if="(record.permissions & 4) > 0" size="small" color="red">删除</a-tag>
+                <a-tag v-if="(record.permissions & 8) > 0" size="small" color="orangered">终端</a-tag>
+                <a-tag v-if="(record.permissions & 16) > 0" size="small" color="gray">文件</a-tag>
+                <a-tag v-if="(record.permissions & 32) > 0" size="small">采集</a-tag>
+              </div>
+            </template>
+          </a-table-column>
 
-        <el-table-column prop="createdAt" label="创建时间" min-width="180">
-          <template #default="{ row }">
-            {{ formatTime(row.createdAt) }}
-          </template>
-        </el-table-column>
+          <a-table-column title="创建时间" :min-width="180" data-index="createdAt">
+            <template #cell="{ record }">
+              {{ formatTime(record.createdAt) }}
+            </template>
+          </a-table-column>
 
-        <el-table-column label="操作" width="120" align="center" fixed="right">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="编辑" placement="top">
-                <el-button
-                  v-permission="'asset-perms:update'"
-                  link
-                  class="action-btn action-edit"
-                  @click="handleEditClick(row)"
-                >
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button
-                  v-permission="'asset-perms:delete'"
-                  link
-                  class="action-btn action-delete"
-                  @click="handleDeleteClick(row)"
-                >
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handlePageChange"
-        />
-      </div>
+          <a-table-column title="操作" :width="120" align="center" fixed="right">
+            <template #cell="{ record }">
+              <div class="action-buttons">
+                <a-tooltip content="编辑" position="top">
+                  <a-button
+                    v-permission="'asset-perms:update'"
+                    type="text"
+                    class="action-btn action-edit"
+                    @click="handleEditClick(record)"
+                  >
+                    <template #icon><icon-edit /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="删除" position="top">
+                  <a-button
+                    v-permission="'asset-perms:delete'"
+                    type="text"
+                    class="action-btn action-delete"
+                    @click="handleDeleteClick(record)"
+                  >
+                    <template #icon><icon-delete /></template>
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
     </div>
 
     <!-- 添加权限对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       title="添加权限"
-      width="50%"
-      class="permission-dialog responsive-dialog"
-      :close-on-click-modal="false"
+      :width="600"
+      unmount-on-close
+      :mask-closable="false"
       @close="handleDialogClose"
     >
-      <el-form
+      <a-form
         ref="formRef"
         :model="formData"
         :rules="formRules"
-        label-width="100px"
+        auto-label-width
+        layout="horizontal"
       >
-        <el-form-item label="角色" prop="roleId">
-          <el-select
+        <a-form-item label="角色" field="roleId">
+          <a-select
             v-model="formData.roleId"
             placeholder="请选择角色"
-            style="width: 100%"
-            clearable
-            filterable
+            allow-clear
+            :allow-search="true"
           >
-            <el-option
+            <a-option
               v-for="role in roleList"
               :key="role.id"
               :label="role.name"
               :value="role.id"
             />
-          </el-select>
-        </el-form-item>
+          </a-select>
+        </a-form-item>
 
-        <el-form-item label="资产分组" prop="assetGroupId">
-          <el-tree-select
+        <a-form-item label="资产分组" field="assetGroupId">
+          <a-tree-select
             v-model="formData.assetGroupId"
             :data="groupTreeData"
-            check-strictly
-            :render-after-expand="false"
+            :field-names="{ key: 'id', title: 'name', children: 'children' }"
+            :tree-check-strictly="true"
             placeholder="请选择资产分组"
-            style="width: 100%"
             @change="handleGroupChange"
           />
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item label="主机">
-          <el-radio-group v-model="hostSelectionType" @change="handleHostTypeChange">
-            <el-radio value="all">全部主机</el-radio>
-            <el-radio value="specific">指定主机</el-radio>
-          </el-radio-group>
-        </el-form-item>
+        <a-form-item label="主机">
+          <a-radio-group v-model="hostSelectionType" @change="handleHostTypeChange">
+            <a-radio :value="'all'">全部主机</a-radio>
+            <a-radio :value="'specific'">指定主机</a-radio>
+          </a-radio-group>
+        </a-form-item>
 
-        <el-form-item v-if="hostSelectionType === 'specific'" label="选择主机" prop="hostIds">
-          <el-select
+        <a-form-item v-if="hostSelectionType === 'specific'" label="选择主机" field="hostIds">
+          <a-select
             v-model="formData.hostIds"
-            multiple
+            :multiple="true"
             placeholder="请选择主机"
-            style="width: 100%"
             :loading="loadingHosts"
           >
-            <el-option
+            <a-option
               v-for="host in hostList"
               :key="host.id"
               :label="`${host.name} (${host.ip})`"
               :value="host.id"
             />
-          </el-select>
-        </el-form-item>
+          </a-select>
+        </a-form-item>
 
-        <el-form-item label="操作权限">
-          <el-checkbox-group v-model="selectedPermissions">
-            <el-checkbox :value="1">查看 - 查看主机详情</el-checkbox>
-            <el-checkbox :value="2">编辑 - 创建、修改主机配置</el-checkbox>
-            <el-checkbox :value="4">删除 - 删除主机</el-checkbox>
-            <el-checkbox :value="8">终端 - SSH连接主机</el-checkbox>
-            <el-checkbox :value="16">文件 - 文件上传、下载、删除</el-checkbox>
-            <el-checkbox :value="32">采集 - 采集主机系统信息</el-checkbox>
-          </el-checkbox-group>
+        <a-form-item label="操作权限">
+          <a-checkbox-group v-model="selectedPermissions">
+            <a-checkbox :value="1">查看 - 查看主机详情</a-checkbox>
+            <a-checkbox :value="2">编辑 - 创建、修改主机配置</a-checkbox>
+            <a-checkbox :value="4">删除 - 删除主机</a-checkbox>
+            <a-checkbox :value="8">终端 - SSH连接主机</a-checkbox>
+            <a-checkbox :value="16">文件 - 文件上传、下载、删除</a-checkbox>
+            <a-checkbox :value="32">采集 - 采集主机系统信息</a-checkbox>
+          </a-checkbox-group>
           <div class="permission-tip">默认仅授予查看权限，请根据需要勾选其他操作权限</div>
-        </el-form-item>
-      </el-form>
+        </a-form-item>
+      </a-form>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleSubmit" :loading="submitting">确定</el-button>
+          <a-button @click="dialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSubmit" :loading="submitting">确定</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 编辑权限对话框 -->
-    <el-dialog
-      v-model="editDialogVisible"
+    <a-modal
+      v-model:visible="editDialogVisible"
       title="编辑权限"
-      width="50%"
-      class="permission-dialog responsive-dialog"
-      :close-on-click-modal="false"
+      :width="600"
+      unmount-on-close
+      :mask-closable="false"
       @close="handleEditDialogClose"
     >
-      <el-form
+      <a-form
         ref="editFormRef"
         :model="editFormData"
         :rules="formRules"
-        label-width="100px"
+        auto-label-width
+        layout="horizontal"
       >
-        <el-form-item label="角色" prop="roleId">
-          <el-select
+        <a-form-item label="角色" field="roleId">
+          <a-select
             v-model="editFormData.roleId"
             placeholder="请选择角色"
-            style="width: 100%"
-            clearable
-            filterable
+            allow-clear
+            :allow-search="true"
             disabled
           >
-            <el-option
+            <a-option
               v-for="role in roleList"
               :key="role.id"
               :label="role.name"
               :value="role.id"
             />
-          </el-select>
-        </el-form-item>
+          </a-select>
+        </a-form-item>
 
-        <el-form-item label="资产分组" prop="assetGroupId">
-          <el-tree-select
+        <a-form-item label="资产分组" field="assetGroupId">
+          <a-tree-select
             v-model="editFormData.assetGroupId"
             :data="groupTreeData"
-            check-strictly
-            :render-after-expand="false"
+            :field-names="{ key: 'id', title: 'name', children: 'children' }"
+            :tree-check-strictly="true"
             placeholder="请选择资产分组"
-            style="width: 100%"
             disabled
           />
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item label="主机">
-          <el-radio-group v-model="editHostSelectionType" @change="handleEditHostTypeChange">
-            <el-radio value="all">全部主机</el-radio>
-            <el-radio value="specific">指定主机</el-radio>
-          </el-radio-group>
-        </el-form-item>
+        <a-form-item label="主机">
+          <a-radio-group v-model="editHostSelectionType" @change="handleEditHostTypeChange">
+            <a-radio :value="'all'">全部主机</a-radio>
+            <a-radio :value="'specific'">指定主机</a-radio>
+          </a-radio-group>
+        </a-form-item>
 
-        <el-form-item v-if="editHostSelectionType === 'specific'" label="选择主机" prop="hostIds">
-          <el-select
+        <a-form-item v-if="editHostSelectionType === 'specific'" label="选择主机" field="hostIds">
+          <a-select
             v-model="editFormData.hostIds"
-            multiple
+            :multiple="true"
             placeholder="请选择主机"
-            style="width: 100%"
             :loading="editLoadingHosts"
           >
-            <el-option
+            <a-option
               v-for="host in editHostList"
               :key="host.id"
               :label="`${host.name} (${host.ip})`"
               :value="host.id"
             />
-          </el-select>
-        </el-form-item>
+          </a-select>
+        </a-form-item>
 
-        <el-form-item label="操作权限">
-          <el-checkbox-group v-model="editFormData.permissions">
-            <el-checkbox :value="1">查看 - 查看主机详情</el-checkbox>
-            <el-checkbox :value="2">编辑 - 创建、修改主机配置</el-checkbox>
-            <el-checkbox :value="4">删除 - 删除主机</el-checkbox>
-            <el-checkbox :value="8">终端 - SSH连接主机</el-checkbox>
-            <el-checkbox :value="16">文件 - 文件上传、下载、删除</el-checkbox>
-            <el-checkbox :value="32">采集 - 采集主机系统信息</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-      </el-form>
+        <a-form-item label="操作权限">
+          <a-checkbox-group v-model="editFormData.permissions">
+            <a-checkbox :value="1">查看 - 查看主机详情</a-checkbox>
+            <a-checkbox :value="2">编辑 - 创建、修改主机配置</a-checkbox>
+            <a-checkbox :value="4">删除 - 删除主机</a-checkbox>
+            <a-checkbox :value="8">终端 - SSH连接主机</a-checkbox>
+            <a-checkbox :value="16">文件 - 文件上传、下载、删除</a-checkbox>
+            <a-checkbox :value="32">采集 - 采集主机系统信息</a-checkbox>
+          </a-checkbox-group>
+        </a-form-item>
+      </a-form>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="editDialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleEditSubmit" :loading="editSubmitting">确定</el-button>
+          <a-button @click="editDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleEditSubmit" :loading="editSubmitting">确定</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Search, RefreshLeft, Lock, Edit } from '@element-plus/icons-vue'
-import type { FormInstance, FormRules } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
+import type { FormInstance } from '@arco-design/web-vue'
+import {
+  IconPlus,
+  IconDelete,
+  IconSearch,
+  IconRefresh,
+  IconLock,
+  IconEdit
+} from '@arco-design/web-vue/es/icon'
 import {
   getAssetPermissions,
   createAssetPermission,
@@ -412,9 +395,9 @@ const filteredPermissions = computed(() => {
 })
 
 // 表单验证规则
-const formRules: FormRules = {
-  roleId: [{ required: true, message: '请选择角色', trigger: 'change' }],
-  assetGroupId: [{ required: true, message: '请选择资产分组', trigger: 'change' }]
+const formRules = {
+  roleId: [{ required: true, message: '请选择角色' }],
+  assetGroupId: [{ required: true, message: '请选择资产分组' }]
 }
 
 // 加载权限列表
@@ -428,7 +411,7 @@ const loadPermissions = async () => {
     permissions.value = response.list || []
     total.value = response.total || 0
   } catch (error: any) {
-    ElMessage.error('加载权限列表失败: ' + (error.message || '未知错误'))
+    Message.error('加载权限列表失败: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
@@ -445,7 +428,7 @@ const loadRoles = async () => {
       code: item.code
     }))
   } catch (error: any) {
-    ElMessage.error('加载角色列表失败: ' + (error.message || '未知错误'))
+    Message.error('加载角色列表失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -455,15 +438,15 @@ const loadAssetGroupTree = async () => {
     const data = await getGroupTree()
     groupTreeData.value = convertTreeData(data || [])
   } catch (error: any) {
-    ElMessage.error('加载资产分组失败: ' + (error.message || '未知错误'))
+    Message.error('加载资产分组失败: ' + (error.message || '未知错误'))
   }
 }
 
 // 转换树形数据格式
 const convertTreeData = (nodes: any[]): any[] => {
   return nodes.map((node: any) => ({
-    value: node.id,
-    label: node.name,
+    id: node.id,
+    name: node.name,
     children: node.children ? convertTreeData(node.children) : undefined
   }))
 }
@@ -481,7 +464,7 @@ const loadHosts = async (groupId?: number) => {
       ip: item.ip
     }))
   } catch (error: any) {
-    ElMessage.error('加载主机列表失败: ' + (error.message || '未知错误'))
+    Message.error('加载主机列表失败: ' + (error.message || '未知错误'))
   } finally {
     loadingHosts.value = false
   }
@@ -527,23 +510,24 @@ const handleAdd = () => {
 
 // 删除权限
 const handleDeleteClick = (row: any) => {
-  ElMessageBox.confirm('确定删除此权限吗？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    await handleDelete(row.id)
-  }).catch(() => {})
+  Modal.warning({
+    title: '提示',
+    content: '确定删除此权限吗？',
+    hideCancel: false,
+    onOk: async () => {
+      await handleDelete(row.id)
+    }
+  })
 }
 
 const handleDelete = async (id: number) => {
   deletingId.value = id
   try {
     await deleteAssetPermission(id)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     loadPermissions()
   } catch (error: any) {
-    ElMessage.error('删除失败: ' + (error.message || '未知错误'))
+    Message.error('删除失败: ' + (error.message || '未知错误'))
   } finally {
     deletingId.value = 0
   }
@@ -578,7 +562,7 @@ const handleEditClick = async (row: any) => {
 
     editDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error('加载权限详情失败: ' + (error.message || '未知错误'))
+    Message.error('加载权限详情失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -595,7 +579,7 @@ const loadEditHosts = async (groupId?: number) => {
       ip: item.ip
     }))
   } catch (error: any) {
-    ElMessage.error('加载主机列表失败: ' + (error.message || '未知错误'))
+    Message.error('加载主机列表失败: ' + (error.message || '未知错误'))
   } finally {
     editLoadingHosts.value = false
   }
@@ -637,23 +621,25 @@ const handleEditSubmit = async () => {
       hostIds: editHostSelectionType.value === 'all' ? [] : editFormData.hostIds,
       permissions: permissions
     })
-    ElMessage.success('更新成功')
+    Message.success('更新成功')
     editDialogVisible.value = false
     loadPermissions()
   } catch (error: any) {
-    ElMessage.error('更新失败: ' + (error.message || '未知错误'))
+    Message.error('更新失败: ' + (error.message || '未知错误'))
   } finally {
     editSubmitting.value = false
   }
 }
 
 // 分页变化
-const handleSizeChange = () => {
+const handleSizeChange = (newPageSize: number) => {
+  pageSize.value = newPageSize
   page.value = 1
   loadPermissions()
 }
 
-const handlePageChange = () => {
+const handlePageChange = (newPage: number) => {
+  page.value = newPage
   loadPermissions()
 }
 
@@ -678,29 +664,28 @@ const handleDialogClose = () => {
 const handleSubmit = async () => {
   if (!formRef.value) return
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+  const errors = await formRef.value.validate()
+  if (errors) return
 
-    submitting.value = true
-    try {
-      // 计算权限位掩码
-      const permissions = selectedPermissions.value.reduce((acc, val) => acc | val, 0)
+  submitting.value = true
+  try {
+    // 计算权限位掩码
+    const permissions = selectedPermissions.value.reduce((acc, val) => acc | val, 0)
 
-      await createAssetPermission({
-        roleId: formData.roleId!,
-        assetGroupId: formData.assetGroupId!,
-        hostIds: hostSelectionType.value === 'all' ? [] : formData.hostIds,
-        permissions: permissions
-      })
-      ElMessage.success('添加成功')
-      dialogVisible.value = false
-      loadPermissions()
-    } catch (error: any) {
-      ElMessage.error('添加失败: ' + (error.message || '未知错误'))
-    } finally {
-      submitting.value = false
-    }
-  })
+    await createAssetPermission({
+      roleId: formData.roleId!,
+      assetGroupId: formData.assetGroupId!,
+      hostIds: hostSelectionType.value === 'all' ? [] : formData.hostIds,
+      permissions: permissions
+    })
+    Message.success('添加成功')
+    dialogVisible.value = false
+    loadPermissions()
+  } catch (error: any) {
+    Message.error('添加失败: ' + (error.message || '未知错误'))
+  } finally {
+    submitting.value = false
+  }
 }
 
 // 格式化时间
@@ -741,99 +726,43 @@ onMounted(() => {
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  background: var(--ops-primary);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
-  font-size: 22px;
+  color: #fff;
+  font-size: 18px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
   line-height: 1.4;
 }
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
 /* 搜索栏 */
-.search-bar {
-  margin-bottom: 12px;
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
   padding: 12px 16px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.search-inputs {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-}
-
-.search-input {
-  width: 280px;
-}
-
-.search-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.reset-btn {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #606266;
-}
-
-.reset-btn:hover {
-  background: #e6e8eb;
-  border-color: #c0c4cc;
-}
-
-.search-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.search-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
-}
-
-.search-icon {
-  color: #d4af37;
 }
 
 /* 表格容器 */
@@ -842,22 +771,6 @@ onMounted(() => {
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   overflow: hidden;
-}
-
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
 }
 
 /* 操作按钮 */
@@ -877,10 +790,6 @@ onMounted(() => {
   transition: all 0.2s ease;
 }
 
-.action-btn :deep(.el-icon) {
-  font-size: 16px;
-}
-
 .action-btn:hover {
   transform: scale(1.1);
 }
@@ -895,34 +804,10 @@ onMounted(() => {
   color: #f56c6c;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-/* 分页 */
-.pagination-container {
-  padding: 12px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
-  border-radius: 0 0 12px 12px;
-  display: flex;
-  justify-content: flex-end;
-}
-
 /* 主机IP样式 */
 .host-ip {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
   font-family: 'Consolas', 'Monaco', monospace;
   margin-top: 4px;
 }
@@ -932,55 +817,6 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-}
-
-:deep(.permission-dialog) {
-  border-radius: 12px;
-}
-
-:deep(.permission-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.permission-dialog .el-dialog__body) {
-  padding: 24px;
-}
-
-:deep(.permission-dialog .el-dialog__footer) {
-  padding: 16px 24px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 标签样式 */
-:deep(.el-tag) {
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-weight: 500;
-}
-
-/* 响应式对话框 */
-:deep(.responsive-dialog) {
-  max-width: 900px;
-  min-width: 500px;
-}
-
-@media (max-width: 768px) {
-  :deep(.responsive-dialog .el-dialog) {
-    width: 95% !important;
-    max-width: none;
-    min-width: auto;
-  }
-
-  .search-input {
-    width: auto;
-    flex: 1;
-    min-width: 200px;
-  }
-
-  .search-inputs {
-    flex-direction: column;
-  }
 }
 
 /* 权限标签样式 */
@@ -993,7 +829,13 @@ onMounted(() => {
 /* 权限表单提示 */
 .permission-tip {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
   margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .filter-bar {
+    flex-wrap: wrap;
+  }
 }
 </style>

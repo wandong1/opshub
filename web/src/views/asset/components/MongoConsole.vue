@@ -1,24 +1,24 @@
 <template>
-  <el-drawer
-    :model-value="visible"
+  <a-drawer
+    :visible="visible"
     :title="'MongoDB 控制台 - ' + (middleware?.name || '')"
-    direction="rtl"
-    size="100%"
-    :destroy-on-close="true"
+    placement="right"
+    :width="'100%'"
+    unmount-on-close
     class="mongo-console-drawer"
-    @close="emit('update:visible', false)"
+    @cancel="emit('update:visible', false)"
   >
-    <template #header>
+    <template #title>
       <div class="console-header">
         <div class="header-left">
-          <el-icon style="font-size: 18px; color: #67c23a;"><Connection /></el-icon>
+          <icon-link style="font-size: 18px; color: #00b42a;" />
           <span class="header-title">MongoDB 控制台 - {{ middleware?.name }}</span>
         </div>
         <div class="header-actions">
-          <el-select v-model="currentDatabase" placeholder="选择数据库" size="small" style="width: 180px" @change="handleDatabaseChange">
-            <el-option v-for="db in databases" :key="db" :label="db" :value="db" />
-          </el-select>
-          <el-button size="small" @click="activeRightTab = 'info'">服务器状态</el-button>
+          <a-select v-model="currentDatabase" placeholder="选择数据库" size="small" style="width: 180px" allow-search @change="handleDatabaseChange">
+            <a-option v-for="db in databases" :key="db" :label="db" :value="db" />
+          </a-select>
+          <a-button size="small" @click="activeRightTab = 'info'">服务器状态</a-button>
         </div>
       </div>
     </template>
@@ -27,37 +27,37 @@
       <!-- 左侧栏 -->
       <div class="sidebar">
         <div class="sidebar-header">
-          <el-icon><Coin /></el-icon>
+          <icon-storage />
           <span>集合列表</span>
           <div style="flex:1"></div>
-          <el-tooltip content="新建集合" placement="top">
-            <el-icon class="sidebar-action" @click="showCreateCollDialog"><Plus /></el-icon>
-          </el-tooltip>
-          <el-tooltip content="刷新" placement="top">
-            <el-icon class="sidebar-action" @click="refreshCollections"><Refresh /></el-icon>
-          </el-tooltip>
+          <a-tooltip content="新建集合" position="top">
+            <icon-plus class="sidebar-action" @click="showCreateCollDialog" />
+          </a-tooltip>
+          <a-tooltip content="刷新" position="top">
+            <icon-refresh class="sidebar-action" @click="refreshCollections" />
+          </a-tooltip>
         </div>
-        <div class="collection-list" v-loading="collectionsLoading">
-          <div
-            v-for="col in collections"
-            :key="col"
-            class="collection-item"
-            :class="{ active: currentCollection === col }"
-            @click="handleSelectCollection(col)"
-          >
-            <el-icon style="color: #67c23a;"><Document /></el-icon>
-            <span class="collection-name">{{ col }}</span>
+        <a-spin :loading="collectionsLoading" style="width: 100%;">
+          <div class="collection-list">
+            <div
+              v-for="col in collections"
+              :key="col"
+              class="collection-item"
+              :class="{ active: currentCollection === col }"
+              @click="handleSelectCollection(col)"
+            >
+              <icon-file style="color: #00b42a;" />
+              <span class="collection-name">{{ col }}</span>
+            </div>
+            <div v-if="!collections.length && !collectionsLoading" class="collection-empty">暂无集合</div>
           </div>
-          <div v-if="!collections.length && !collectionsLoading" class="collection-empty">暂无集合</div>
-        </div>
+        </a-spin>
       </div>
-<!-- SPLIT_MONGO_MAIN -->
-
       <!-- 右侧主区域 -->
       <div class="main-area">
-        <el-tabs v-model="activeRightTab" type="border-card">
+        <a-tabs v-model:active-key="activeRightTab" type="card-gutter">
           <!-- 文档查询 Tab -->
-          <el-tab-pane label="文档查询" name="query">
+          <a-tab-pane key="query" title="文档查询">
             <div v-if="!currentCollection" class="empty-tip">请从左侧选择一个集合</div>
             <div v-else class="query-panel">
               <!-- 查询子 Tab 栏 -->
@@ -80,52 +80,54 @@
                     @keyup.escape="cancelRenameTab"
                     @click.stop
                   />
-                  <el-icon v-if="queryTabs.length > 1" class="query-tab-close" @click.stop="closeQueryTab(tab.id)"><Close /></el-icon>
+                  <icon-close v-if="queryTabs.length > 1" class="query-tab-close" @click.stop="closeQueryTab(tab.id)" />
                 </div>
                 <div class="query-tab-add" @click="addQueryTab">
-                  <el-icon><Plus /></el-icon>
+                  <icon-plus />
                 </div>
               </div>
 
               <div class="query-controls">
                 <div class="query-row">
                   <span class="query-label">Filter:</span>
-                  <el-input v-model="currentTabFilter" placeholder='{"name": "test"}' size="small" style="flex:1" />
+                  <a-input v-model="currentTabFilter" placeholder='{"name": "test"}' size="small" style="flex:1" />
                 </div>
                 <div class="query-row">
                   <span class="query-label">Sort:</span>
-                  <el-input v-model="currentTabSort" placeholder='{"_id": -1}' size="small" style="width: 200px" />
+                  <a-input v-model="currentTabSort" placeholder='{"_id": -1}' size="small" style="width: 200px" />
                   <span class="query-label" style="margin-left:12px;">Limit:</span>
-                  <el-input-number v-model="currentTabLimit" :min="1" :max="1000" size="small" style="width: 120px" />
+                  <a-input-number v-model="currentTabLimit" :min="1" :max="1000" size="small" style="width: 120px" />
                   <span class="query-label" style="margin-left:12px;">Skip:</span>
-                  <el-input-number v-model="currentTabSkip" :min="0" size="small" style="width: 120px" />
+                  <a-input-number v-model="currentTabSkip" :min="0" size="small" style="width: 120px" />
                 </div>
                 <div class="query-actions">
-                  <el-button type="primary" size="small" @click="executeQuery" :loading="queryLoading">查询</el-button>
-                  <el-button type="success" size="small" @click="showInsertDialog">插入文档</el-button>
-                  <el-button type="danger" size="small" @click="showDeleteDialog">删除文档</el-button>
+                  <a-button type="primary" size="small" @click="executeQuery" :loading="queryLoading">查询</a-button>
+                  <a-button status="success" size="small" @click="showInsertDialog">插入文档</a-button>
+                  <a-button status="danger" size="small" @click="showDeleteDialog">删除文档</a-button>
                   <div style="flex:1"></div>
                   <span v-if="currentTabTotal >= 0" class="query-total">共 {{ currentTabTotal }} 条</span>
                 </div>
               </div>
-              <div class="query-results" v-loading="queryLoading">
-                <div v-if="!currentTabResults.length && !queryLoading" class="empty-tip">执行查询以查看结果</div>
-                <div v-for="(doc, idx) in currentTabResults" :key="idx" class="doc-item">
-                  <div class="doc-header">
-                    <span class="doc-index">#{{ (currentTab?.skip || 0) + idx + 1 }}</span>
-                    <span v-if="doc._id" class="doc-id">_id: {{ doc._id }}</span>
-                    <div style="flex:1"></div>
-                    <el-button link type="primary" size="small" @click="showEditDialog(doc)">编辑</el-button>
-                    <el-button link type="danger" size="small" @click="handleDeleteOne(doc)">删除</el-button>
+              <a-spin :loading="queryLoading" style="flex: 1; overflow: auto;">
+                <div class="query-results">
+                  <div v-if="!currentTabResults.length && !queryLoading" class="empty-tip">执行查询以查看结果</div>
+                  <div v-for="(doc, idx) in currentTabResults" :key="idx" class="doc-item">
+                    <div class="doc-header">
+                      <span class="doc-index">#{{ (currentTab?.skip || 0) + idx + 1 }}</span>
+                      <span v-if="doc._id" class="doc-id">_id: {{ doc._id }}</span>
+                      <div style="flex:1"></div>
+                      <a-button type="text" size="small" @click="showEditDialog(doc)">编辑</a-button>
+                      <a-button type="text" status="danger" size="small" @click="handleDeleteOne(doc)">删除</a-button>
+                    </div>
+                    <pre class="doc-json">{{ formatJson(doc) }}</pre>
                   </div>
-                  <pre class="doc-json">{{ formatJson(doc) }}</pre>
                 </div>
-              </div>
+              </a-spin>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
           <!-- 命令行 Tab -->
-          <el-tab-pane label="命令行" name="cli">
+          <a-tab-pane key="cli" title="命令行">
             <div class="cli-container">
               <div class="cli-output" ref="cliOutputRef">
                 <div v-for="(item, idx) in cliHistory" :key="idx" class="cli-line">
@@ -135,7 +137,7 @@
               </div>
               <div class="cli-input-row">
                 <span class="cli-prompt">{{ middleware?.host }}:{{ middleware?.port }}&gt;</span>
-                <el-input
+                <a-input
                   v-model="cliCommand"
                   placeholder='输入 JSON 命令'
                   size="small"
@@ -145,91 +147,94 @@
                 />
               </div>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
           <!-- 服务器信息 Tab -->
-          <el-tab-pane label="服务器信息" name="info">
-            <div v-loading="infoLoading" class="info-container">
-              <div class="info-actions">
-                <el-button size="small" @click="loadServerStats"><el-icon><Refresh /></el-icon> 刷新</el-button>
+          <a-tab-pane key="info" title="服务器信息">
+            <a-spin :loading="infoLoading" style="width: 100%;">
+              <div class="info-container">
+                <div class="info-actions">
+                  <a-button size="small" @click="loadServerStats"><icon-refresh /> 刷新</a-button>
+                </div>
+                <div v-if="serverStats" class="info-sections">
+                  <a-descriptions title="基本信息" :column="2" bordered size="small" style="margin-bottom:16px;">
+                    <a-descriptions-item label="主机">{{ serverStats.host || '-' }}</a-descriptions-item>
+                    <a-descriptions-item label="版本">{{ serverStats.version || '-' }}</a-descriptions-item>
+                    <a-descriptions-item label="进程">{{ serverStats.process || '-' }}</a-descriptions-item>
+                    <a-descriptions-item label="PID">{{ serverStats.pid || '-' }}</a-descriptions-item>
+                    <a-descriptions-item label="运行时间">{{ formatUptime(serverStats.uptime) }}</a-descriptions-item>
+                    <a-descriptions-item label="当前连接数">{{ serverStats.connections?.current || '-' }}</a-descriptions-item>
+                  </a-descriptions>
+                  <a-descriptions v-if="serverStats.mem" title="内存" :column="2" bordered size="small" style="margin-bottom:16px;">
+                    <a-descriptions-item label="常驻内存">{{ serverStats.mem?.resident || '-' }} MB</a-descriptions-item>
+                    <a-descriptions-item label="虚拟内存">{{ serverStats.mem?.virtual || '-' }} MB</a-descriptions-item>
+                  </a-descriptions>
+                  <a-descriptions v-if="serverStats.opcounters" title="操作计数" :column="3" bordered size="small" style="margin-bottom:16px;">
+                    <a-descriptions-item label="insert">{{ serverStats.opcounters?.insert || 0 }}</a-descriptions-item>
+                    <a-descriptions-item label="query">{{ serverStats.opcounters?.query || 0 }}</a-descriptions-item>
+                    <a-descriptions-item label="update">{{ serverStats.opcounters?.update || 0 }}</a-descriptions-item>
+                    <a-descriptions-item label="delete">{{ serverStats.opcounters?.delete || 0 }}</a-descriptions-item>
+                    <a-descriptions-item label="getmore">{{ serverStats.opcounters?.getmore || 0 }}</a-descriptions-item>
+                    <a-descriptions-item label="command">{{ serverStats.opcounters?.command || 0 }}</a-descriptions-item>
+                  </a-descriptions>
+                </div>
+                <div v-else-if="!infoLoading" class="empty-tip">点击刷新加载服务器信息</div>
               </div>
-              <div v-if="serverStats" class="info-sections">
-                <el-descriptions title="基本信息" :column="2" border size="small" style="margin-bottom:16px;">
-                  <el-descriptions-item label="主机">{{ serverStats.host || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="版本">{{ serverStats.version || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="进程">{{ serverStats.process || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="PID">{{ serverStats.pid || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="运行时间">{{ formatUptime(serverStats.uptime) }}</el-descriptions-item>
-                  <el-descriptions-item label="当前连接数">{{ serverStats.connections?.current || '-' }}</el-descriptions-item>
-                </el-descriptions>
-                <el-descriptions v-if="serverStats.mem" title="内存" :column="2" border size="small" style="margin-bottom:16px;">
-                  <el-descriptions-item label="常驻内存">{{ serverStats.mem?.resident || '-' }} MB</el-descriptions-item>
-                  <el-descriptions-item label="虚拟内存">{{ serverStats.mem?.virtual || '-' }} MB</el-descriptions-item>
-                </el-descriptions>
-                <el-descriptions v-if="serverStats.opcounters" title="操作计数" :column="3" border size="small" style="margin-bottom:16px;">
-                  <el-descriptions-item label="insert">{{ serverStats.opcounters?.insert || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="query">{{ serverStats.opcounters?.query || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="update">{{ serverStats.opcounters?.update || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="delete">{{ serverStats.opcounters?.delete || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="getmore">{{ serverStats.opcounters?.getmore || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="command">{{ serverStats.opcounters?.command || 0 }}</el-descriptions-item>
-                </el-descriptions>
-              </div>
-              <div v-else-if="!infoLoading" class="empty-tip">点击刷新加载服务器信息</div>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
+            </a-spin>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </div>
 
     <!-- 插入文档弹窗 -->
-    <el-dialog v-model="insertDialog.visible" title="插入文档" width="600px" destroy-on-close append-to-body>
-      <el-input v-model="insertDialog.json" type="textarea" :rows="12" placeholder='输入 JSON 文档，如 {"name": "test", "age": 18}' />
+    <a-modal v-model:visible="insertDialog.visible" title="插入文档" :width="600" unmount-on-close :mask-closable="false">
+      <a-textarea v-model="insertDialog.json" :auto-size="{ minRows: 12, maxRows: 12 }" placeholder='输入 JSON 文档，如 {"name": "test", "age": 18}' />
       <template #footer>
-        <el-button @click="insertDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="confirmInsert" :loading="insertDialog.loading">插入</el-button>
+        <a-button @click="insertDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="confirmInsert" :loading="insertDialog.loading">插入</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 编辑文档弹窗 -->
-    <el-dialog v-model="editDialog.visible" title="编辑文档" width="600px" destroy-on-close append-to-body>
-      <el-input v-model="editDialog.json" type="textarea" :rows="12" />
+    <a-modal v-model:visible="editDialog.visible" title="编辑文档" :width="600" unmount-on-close :mask-closable="false">
+      <a-textarea v-model="editDialog.json" :auto-size="{ minRows: 12, maxRows: 12 }" />
       <template #footer>
-        <el-button @click="editDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="confirmEdit" :loading="editDialog.loading">保存</el-button>
+        <a-button @click="editDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="confirmEdit" :loading="editDialog.loading">保存</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 删除文档弹窗 -->
-    <el-dialog v-model="deleteDialog.visible" title="删除文档" width="500px" destroy-on-close append-to-body>
+    <a-modal v-model:visible="deleteDialog.visible" title="删除文档" :width="500" unmount-on-close :mask-closable="false">
       <p style="margin-bottom:8px;">输入过滤条件（JSON），匹配的文档将被删除：</p>
-      <el-input v-model="deleteDialog.filter" type="textarea" :rows="4" placeholder='如 {"name": "test"}' />
+      <a-textarea v-model="deleteDialog.filter" :auto-size="{ minRows: 4, maxRows: 4 }" placeholder='如 {"name": "test"}' />
       <template #footer>
-        <el-button @click="deleteDialog.visible = false">取消</el-button>
-        <el-button type="danger" @click="confirmDelete" :loading="deleteDialog.loading">删除</el-button>
+        <a-button @click="deleteDialog.visible = false">取消</a-button>
+        <a-button type="primary" status="danger" @click="confirmDelete" :loading="deleteDialog.loading">删除</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 创建集合弹窗 -->
-    <el-dialog v-model="createCollDialog.visible" title="新建集合" width="400px" destroy-on-close append-to-body>
-      <el-form label-width="80px">
-        <el-form-item label="集合名">
-          <el-input v-model="createCollDialog.name" placeholder="请输入集合名" />
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="createCollDialog.visible" title="新建集合" :width="400" unmount-on-close :mask-closable="false">
+      <a-form auto-label-width>
+        <a-form-item label="集合名" field="name">
+          <a-input v-model="createCollDialog.name" placeholder="请输入集合名" />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="createCollDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="confirmCreateColl" :loading="createCollDialog.loading">创建</el-button>
+        <a-button @click="createCollDialog.visible = false">取消</a-button>
+        <a-button type="primary" @click="confirmCreateColl" :loading="createCollDialog.loading">创建</a-button>
       </template>
-    </el-dialog>
-  </el-drawer>
+    </a-modal>
+  </a-drawer>
 </template>
-<!-- SPLIT_MONGO_SCRIPT -->
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, reactive } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Refresh, Coin, Document, Plus, Close } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import {
+  IconLink, IconRefresh, IconStorage, IconFile, IconPlus, IconClose
+} from '@arco-design/web-vue/es/icon'
 import {
   getMongoDatabases, getMongoCollections, queryMongoDocuments,
   mongoInsertDocument, mongoUpdateDocuments, mongoDeleteDocuments,
@@ -414,22 +419,22 @@ const parseJson = (str: string): any => {
 
 // Create collection
 const showCreateCollDialog = () => {
-  if (!currentDatabase.value) return ElMessage.warning('请先选择数据库')
+  if (!currentDatabase.value) return Message.warning('请先选择数据库')
   createCollDialog.name = ''
   createCollDialog.loading = false
   createCollDialog.visible = true
 }
 
 const confirmCreateColl = async () => {
-  if (!createCollDialog.name.trim()) return ElMessage.warning('请输入集合名')
+  if (!createCollDialog.name.trim()) return Message.warning('请输入集合名')
   createCollDialog.loading = true
   try {
     await createMongoCollection(props.middleware.id, currentDatabase.value, createCollDialog.name.trim())
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createCollDialog.visible = false
     loadCollections()
   } catch (e: any) {
-    ElMessage.error(e.message || '创建失败')
+    Message.error(e.message || '创建失败')
   } finally {
     createCollDialog.loading = false
   }
@@ -448,7 +453,7 @@ const loadDatabases = async () => {
     }
     if (currentDatabase.value) loadCollections()
   } catch (e: any) {
-    ElMessage.error('获取数据库列表失败: ' + (e.message || ''))
+    Message.error('获取数据库列表失败: ' + (e.message || ''))
   }
 }
 
@@ -462,7 +467,7 @@ const loadCollections = async () => {
       currentCollection.value = ''
     }
   } catch (e: any) {
-    ElMessage.error('获取集合列表失败: ' + (e.message || ''))
+    Message.error('获取集合列表失败: ' + (e.message || ''))
   } finally {
     collectionsLoading.value = false
   }
@@ -485,7 +490,7 @@ const handleSelectCollection = (col: string) => {
 const executeQuery = async () => {
   const tab = currentTab.value
   if (!tab) return
-  if (!currentCollection.value) return ElMessage.warning('请选择集合')
+  if (!currentCollection.value) return Message.warning('请选择集合')
   queryLoading.value = true
   try {
     const filter = parseJson(tab.filter || '{}')
@@ -499,14 +504,14 @@ const executeQuery = async () => {
     tab.total = res?.total ?? -1
     saveQueryTabs()
   } catch (e: any) {
-    ElMessage.error(e.message || '查询失败')
+    Message.error(e.message || '查询失败')
   } finally {
     queryLoading.value = false
   }
 }
 
 const showInsertDialog = () => {
-  if (!currentCollection.value) return ElMessage.warning('请选择集合')
+  if (!currentCollection.value) return Message.warning('请选择集合')
   insertDialog.json = '{\n  \n}'
   insertDialog.loading = false
   insertDialog.visible = true
@@ -521,11 +526,11 @@ const confirmInsert = async () => {
       collection: currentCollection.value,
       document: doc
     })
-    ElMessage.success('插入成功')
+    Message.success('插入成功')
     insertDialog.visible = false
     executeQuery()
   } catch (e: any) {
-    ElMessage.error(e.message || '插入失败')
+    Message.error(e.message || '插入失败')
   } finally {
     insertDialog.loading = false
   }
@@ -550,33 +555,38 @@ const confirmEdit = async () => {
       filter: { _id: editDialog.originalDoc._id },
       update: { $set: newDoc }
     })
-    ElMessage.success('更新成功')
+    Message.success('更新成功')
     editDialog.visible = false
     executeQuery()
   } catch (e: any) {
-    ElMessage.error(e.message || '更新失败')
+    Message.error(e.message || '更新失败')
   } finally {
     editDialog.loading = false
   }
 }
 
 const handleDeleteOne = (doc: any) => {
-  if (!doc._id) return ElMessage.warning('文档缺少 _id 字段')
-  ElMessageBox.confirm('确定删除该文档？', '提示', { type: 'warning' }).then(async () => {
-    try {
-      await mongoDeleteDocuments(props.middleware.id, {
-        database: currentDatabase.value,
-        collection: currentCollection.value,
-        filter: { _id: doc._id }
-      })
-      ElMessage.success('删除成功')
-      executeQuery()
-    } catch (e: any) { ElMessage.error(e.message || '删除失败') }
-  }).catch(() => {})
+  if (!doc._id) return Message.warning('文档缺少 _id 字段')
+  Modal.warning({
+    title: '提示',
+    content: '确定删除该文档？',
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await mongoDeleteDocuments(props.middleware.id, {
+          database: currentDatabase.value,
+          collection: currentCollection.value,
+          filter: { _id: doc._id }
+        })
+        Message.success('删除成功')
+        executeQuery()
+      } catch (e: any) { Message.error(e.message || '删除失败') }
+    }
+  })
 }
 
 const showDeleteDialog = () => {
-  if (!currentCollection.value) return ElMessage.warning('请选择集合')
+  if (!currentCollection.value) return Message.warning('请选择集合')
   deleteDialog.filter = '{}'
   deleteDialog.loading = false
   deleteDialog.visible = true
@@ -587,7 +597,7 @@ const confirmDelete = async () => {
   try {
     const filter = parseJson(deleteDialog.filter)
     if (!Object.keys(filter).length) {
-      ElMessage.warning('不允许空条件删除')
+      Message.warning('不允许空条件删除')
       deleteDialog.loading = false
       return
     }
@@ -596,11 +606,11 @@ const confirmDelete = async () => {
       collection: currentCollection.value,
       filter
     })
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     deleteDialog.visible = false
     executeQuery()
   } catch (e: any) {
-    ElMessage.error(e.message || '删除失败')
+    Message.error(e.message || '删除失败')
   } finally {
     deleteDialog.loading = false
   }
@@ -652,7 +662,7 @@ const loadServerStats = async () => {
     const res: any = await getMongoStats(props.middleware.id)
     serverStats.value = res || {}
   } catch (e: any) {
-    ElMessage.error('获取服务器状态失败: ' + (e.message || ''))
+    Message.error('获取服务器状态失败: ' + (e.message || ''))
   } finally {
     infoLoading.value = false
   }
@@ -674,7 +684,6 @@ watch(() => props.visible, (val) => {
   }
 })
 </script>
-<!-- SPLIT_MONGO_STYLE -->
 
 <style scoped>
 .console-header {
@@ -705,7 +714,7 @@ watch(() => props.visible, (val) => {
 .sidebar {
   width: 240px;
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   flex-direction: column;
   background: #fafafa;
@@ -714,7 +723,7 @@ watch(() => props.visible, (val) => {
   padding: 10px 12px;
   font-weight: 600;
   font-size: 13px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -722,14 +731,14 @@ watch(() => props.visible, (val) => {
 .sidebar-action {
   cursor: pointer;
   font-size: 14px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   padding: 2px;
   border-radius: 3px;
   transition: all 0.15s;
 }
 .sidebar-action:hover {
-  color: #409eff;
-  background: #ecf5ff;
+  color: var(--ops-primary, #165dff);
+  background: #e8f3ff;
 }
 .collection-list {
   flex: 1;
@@ -745,8 +754,8 @@ watch(() => props.visible, (val) => {
   gap: 6px;
   transition: background 0.15s;
 }
-.collection-item:hover { background: #ecf5ff; }
-.collection-item.active { background: #d9ecff; }
+.collection-item:hover { background: #e8f3ff; }
+.collection-item.active { background: #bedaff; }
 .collection-name {
   flex: 1;
   overflow: hidden;
@@ -755,7 +764,7 @@ watch(() => props.visible, (val) => {
 }
 .collection-empty {
   text-align: center;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   padding: 30px;
   font-size: 13px;
 }
@@ -764,17 +773,17 @@ watch(() => props.visible, (val) => {
   min-width: 0;
   overflow: hidden;
 }
-.main-area :deep(.el-tabs) {
+.main-area :deep(.arco-tabs) {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
-.main-area :deep(.el-tabs__content) {
+.main-area :deep(.arco-tabs-content) {
   flex: 1;
   overflow: auto;
   padding: 12px;
 }
-.main-area :deep(.el-tab-pane) {
+.main-area :deep(.arco-tabs-content-item) {
   height: 100%;
 }
 .empty-tip {
@@ -782,15 +791,15 @@ watch(() => props.visible, (val) => {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   font-size: 14px;
 }
 /* Query Tabs */
 .query-tabs-bar {
   display: flex;
   align-items: center;
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
+  background: #f2f3f5;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   border-radius: 4px;
   padding: 0 4px;
   height: 32px;
@@ -816,13 +825,13 @@ watch(() => props.visible, (val) => {
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   font-weight: 600;
 }
-.query-tab:hover { background: #ecf5ff; }
+.query-tab:hover { background: #e8f3ff; }
 .query-tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .query-tab-rename-input {
-  border: 1px solid #409eff;
+  border: 1px solid var(--ops-primary, #165dff);
   border-radius: 2px;
   padding: 0 4px;
   font-size: 12px;
@@ -831,14 +840,14 @@ watch(() => props.visible, (val) => {
 }
 .query-tab-close {
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   cursor: pointer;
   border-radius: 50%;
   padding: 1px;
 }
 .query-tab-close:hover {
-  color: #f56c6c;
-  background: #fef0f0;
+  color: #f53f3f;
+  background: #ffece8;
 }
 .query-tab-add {
   display: flex;
@@ -848,13 +857,13 @@ watch(() => props.visible, (val) => {
   height: 22px;
   cursor: pointer;
   border-radius: 3px;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   font-size: 13px;
   transition: all 0.15s;
 }
 .query-tab-add:hover {
-  color: #409eff;
-  background: #ecf5ff;
+  color: var(--ops-primary, #165dff);
+  background: #e8f3ff;
 }
 /* Query panel */
 .query-panel {
@@ -868,7 +877,7 @@ watch(() => props.visible, (val) => {
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   margin-bottom: 12px;
 }
 .query-row {
@@ -879,7 +888,7 @@ watch(() => props.visible, (val) => {
 .query-label {
   font-size: 13px;
   font-weight: 600;
-  color: #606266;
+  color: var(--ops-text-secondary, #4e5969);
   white-space: nowrap;
   min-width: 45px;
 }
@@ -890,14 +899,14 @@ watch(() => props.visible, (val) => {
 }
 .query-total {
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
 }
 .query-results {
   flex: 1;
   overflow: auto;
 }
 .doc-item {
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
   border-radius: 4px;
   margin-bottom: 8px;
   overflow: hidden;
@@ -907,16 +916,16 @@ watch(() => props.visible, (val) => {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  background: #f2f3f5;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   font-size: 12px;
 }
 .doc-index {
   font-weight: 600;
-  color: #409eff;
+  color: var(--ops-primary, #165dff);
 }
 .doc-id {
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   font-family: monospace;
 }
 .doc-json {
@@ -957,7 +966,7 @@ watch(() => props.visible, (val) => {
   font-family: inherit;
   font-size: inherit;
 }
-.cli-result.cli-error { color: #f56c6c; }
+.cli-result.cli-error { color: #f53f3f; }
 .cli-input-row {
   display: flex;
   align-items: center;
@@ -967,16 +976,16 @@ watch(() => props.visible, (val) => {
   gap: 8px;
 }
 .cli-prompt {
-  color: #67c23a;
+  color: #00b42a;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 13px;
   white-space: nowrap;
 }
-.cli-input-row :deep(.el-input__wrapper) {
+.cli-input-row :deep(.arco-input-wrapper) {
   background: transparent;
-  box-shadow: none;
+  border: none;
 }
-.cli-input-row :deep(.el-input__inner) {
+.cli-input-row :deep(.arco-input) {
   color: #d4d4d4;
   font-family: 'Consolas', 'Monaco', monospace;
 }

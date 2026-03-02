@@ -175,6 +175,18 @@ func (r *hostRepo) CountByCredentialID(ctx context.Context, credentialID uint) (
 	return count, err
 }
 
+// GetAll 获取所有主机（仅健康检查需要的字段）
+func (r *hostRepo) GetAll(ctx context.Context) ([]*asset.Host, error) {
+	var hosts []*asset.Host
+	err := r.db.WithContext(ctx).
+		Select("id, ip, port, ssh_user, credential_id, status, connection_mode, agent_id").
+		Find(&hosts).Error
+	if err != nil {
+		return nil, err
+	}
+	return hosts, nil
+}
+
 // credentialRepo 凭证仓库
 type credentialRepo struct {
 	db           *gorm.DB

@@ -1,11 +1,11 @@
 <template>
   <div class="method-trace-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
     <div v-else class="panel-content">
@@ -14,7 +14,7 @@
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">类名</span>
-            <el-input
+            <a-input
               v-model="classPattern"
               placeholder="类名表达式 (如: com.example.service.*)"
               style="width: 300px"
@@ -23,13 +23,13 @@
               :disabled="tracing"
             >
               <template #prefix>
-                <el-icon><Folder /></el-icon>
+                <icon-folder />
               </template>
-            </el-input>
+            </a-input>
           </div>
           <div class="input-group">
             <span class="input-label">方法名</span>
-            <el-input
+            <a-input
               v-model="methodPattern"
               placeholder="方法名 (如: doSomething)"
               style="width: 200px"
@@ -38,15 +38,15 @@
               :disabled="tracing"
             >
               <template #prefix>
-                <el-icon><Promotion /></el-icon>
+                <icon-send />
               </template>
-            </el-input>
+            </a-input>
           </div>
         </div>
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">条件表达式</span>
-            <el-input
+            <a-input
               v-model="condition"
               placeholder="OGNL 条件表达式 (可选, 如: params[0]>100)"
               style="width: 300px"
@@ -55,13 +55,13 @@
               :disabled="tracing"
             >
               <template #prefix>
-                <el-icon><Filter /></el-icon>
+                <icon-filter />
               </template>
-            </el-input>
+            </a-input>
           </div>
           <div class="input-group">
             <span class="input-label">最大调用次数</span>
-            <el-input-number
+            <a-input-number
               v-model="maxCount"
               :min="1"
               :max="1000"
@@ -70,36 +70,36 @@
               style="width: 120px"
             />
           </div>
-          <el-checkbox v-model="skipJDKMethod" :disabled="tracing">
+          <a-checkbox v-model="skipJDKMethod" :disabled="tracing">
             跳过JDK方法
-          </el-checkbox>
+          </a-checkbox>
         </div>
         <div class="toolbar-row actions">
-          <el-button
+          <a-button
             type="primary"
             @click="startTrace"
             :loading="starting"
             :disabled="tracing || !classPattern || !methodPattern"
           >
-            <el-icon><VideoPlay /></el-icon>
+            <icon-play-arrow />
             {{ starting ? '启动中...' : '开始追踪' }}
-          </el-button>
-          <el-button
+          </a-button>
+          <a-button
             @click="stopTrace"
             :disabled="!tracing"
             type="danger"
           >
-            <el-icon><VideoPause /></el-icon> 停止追踪
-          </el-button>
-          <el-button @click="clearOutput">
-            <el-icon><Delete /></el-icon> 清空输出
-          </el-button>
-          <el-divider direction="vertical" />
-          <el-tag v-if="tracing" type="success" effect="dark">
-            <el-icon class="is-loading"><Loading /></el-icon>
+            <icon-pause-circle /> 停止追踪
+          </a-button>
+          <a-button @click="clearOutput">
+            <icon-delete /> 清空输出
+          </a-button>
+          <a-divider direction="vertical" />
+          <a-tag v-if="tracing" color="green">
+            <icon-loading />
             追踪中...
-          </el-tag>
-          <el-tag v-else type="info">未追踪</el-tag>
+          </a-tag>
+          <a-tag v-else color="gray">未追踪</a-tag>
           <span class="trace-count" v-if="traceCount > 0">
             已捕获: {{ traceCount }} 次调用
           </span>
@@ -107,8 +107,8 @@
       </div>
 
       <!-- 使用说明 -->
-      <el-collapse v-model="showHelp" class="help-collapse">
-        <el-collapse-item title="使用说明" name="help">
+      <a-collapse v-model="showHelp" class="help-collapse">
+        <a-collapse-item title="使用说明" name="help">
           <div class="help-content">
             <p><strong>trace 命令</strong> 可以追踪方法的调用路径和耗时，帮助分析性能问题。</p>
             <ul>
@@ -119,24 +119,24 @@
             </ul>
             <p class="tip">提示: 追踪高频方法时建议设置条件表达式或减少最大调用次数，避免影响应用性能。</p>
           </div>
-        </el-collapse-item>
-      </el-collapse>
+        </a-collapse-item>
+      </a-collapse>
 
       <!-- 追踪输出 -->
       <div class="output-section">
         <div class="section-header">
           <span>追踪输出</span>
           <span class="output-info">
-            <el-tag size="small" type="info">{{ outputLineCount }} 行</el-tag>
+            <a-tag size="small" color="gray">{{ outputLineCount }} 行</a-tag>
           </span>
         </div>
         <div class="trace-output" ref="outputRef">
           <div v-if="!rawOutput && !tracing" class="empty-output">
-            <el-empty description="等待追踪结果...">
+            <a-empty description="等待追踪结果...">
               <template #image>
-                <el-icon :size="40" color="#c0c4cc"><Search /></el-icon>
+                <icon-search />
               </template>
-            </el-empty>
+            </a-empty>
           </div>
           <pre v-else>{{ cleanOutput }}</pre>
         </div>
@@ -147,8 +147,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, VideoPlay, VideoPause, Delete, Folder, Promotion, Filter, Search, Loading } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { createArthasWebSocket, executeArthasCommand, type ArthasWSMessage } from '@/api/arthas'
 
 const props = defineProps<{
@@ -216,12 +215,12 @@ const buildTraceCommand = (): string => {
 // 开始追踪
 const startTrace = async () => {
   if (!classPattern.value || !methodPattern.value) {
-    ElMessage.warning('请输入类名和方法名')
+    Message.warning('请输入类名和方法名')
     return
   }
 
   if (!props.clusterId || !props.namespace || !props.pod || !props.container) {
-    ElMessage.warning('请先选择 Pod 和容器')
+    Message.warning('请先选择 Pod 和容器')
     return
   }
 
@@ -251,7 +250,7 @@ const startTrace = async () => {
       ws?.send(JSON.stringify(msg))
       tracing.value = true
       starting.value = false
-      ElMessage.success('开始追踪')
+      Message.success('开始追踪')
     }
 
     ws.onmessage = (event) => {
@@ -271,7 +270,7 @@ const startTrace = async () => {
           scrollToBottom()
         } else if (data.type === 'error') {
           rawOutput.value += `\n[ERROR] ${data.content}\n`
-          ElMessage.error(data.content)
+          Message.error(data.content)
         } else if (data.type === 'info') {
           rawOutput.value += `[INFO] ${data.content}\n`
         }
@@ -285,7 +284,7 @@ const startTrace = async () => {
       rawOutput.value += '\n[ERROR] WebSocket 连接错误\n'
       tracing.value = false
       starting.value = false
-      ElMessage.error('WebSocket 连接失败')
+      Message.error('WebSocket 连接失败')
     }
 
     ws.onclose = () => {
@@ -295,7 +294,7 @@ const startTrace = async () => {
     }
 
   } catch (error: any) {
-    ElMessage.error('启动追踪失败: ' + (error.message || '未知错误'))
+    Message.error('启动追踪失败: ' + (error.message || '未知错误'))
     starting.value = false
   }
 }
@@ -312,7 +311,7 @@ const stopTrace = () => {
   }
   tracing.value = false
   rawOutput.value += '\n[INFO] 用户停止追踪\n'
-  ElMessage.info('已停止追踪')
+  Message.info('已停止追踪')
 }
 
 // 清空输出
@@ -416,7 +415,7 @@ watch(() => props.attached, (newVal) => {
   border-radius: 6px;
 }
 
-.help-collapse :deep(.el-collapse-item__header) {
+.help-collapse :deep(.arco-collapse-item__header) {
   padding: 0 16px;
   font-size: 13px;
   color: #606266;
@@ -534,7 +533,7 @@ watch(() => props.attached, (newVal) => {
     width: 100%;
   }
 
-  .input-group :deep(.el-input) {
+  .input-group :deep(.arco-input) {
     width: 100% !important;
   }
 }

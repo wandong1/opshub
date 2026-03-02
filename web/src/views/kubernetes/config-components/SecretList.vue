@@ -3,7 +3,7 @@
     <!-- 搜索和筛选 -->
     <div class="search-bar">
       <div class="search-bar-left">
-        <el-input
+        <a-input
           v-model="searchName"
           placeholder="搜索 Secret 名称..."
           clearable
@@ -11,108 +11,89 @@
           @input="handleSearch"
         >
           <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
 
-        <el-select v-model="filterType" placeholder="类型" clearable @change="handleSearch" class="filter-select">
-          <el-option label="全部" value="" />
-          <el-option label="Opaque" value="Opaque" />
-          <el-option label="kubernetes.io/tls" value="kubernetes.io/tls" />
-          <el-option label="kubernetes.io/dockerconfigjson" value="kubernetes.io/dockerconfigjson" />
-          <el-option label="kubernetes.io/service-account-token" value="kubernetes.io/service-account-token" />
-        </el-select>
+        <a-select v-model="filterType" placeholder="类型" allow-clear @change="handleSearch" class="filter-select">
+          <a-option label="全部" value="" />
+          <a-option label="Opaque" value="Opaque" />
+          <a-option label="kubernetes.io/tls" value="kubernetes.io/tls" />
+          <a-option label="kubernetes.io/dockerconfigjson" value="kubernetes.io/dockerconfigjson" />
+          <a-option label="kubernetes.io/service-account-token" value="kubernetes.io/service-account-token" />
+        </a-select>
 
-        <el-select v-model="filterNamespace" placeholder="命名空间" clearable @change="handleSearch" class="filter-select">
-          <el-option label="全部" value="" />
-          <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-        </el-select>
+        <a-select v-model="filterNamespace" placeholder="命名空间" allow-clear @change="handleSearch" class="filter-select">
+          <a-option label="全部" value="" />
+          <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+        </a-select>
       </div>
 
       <div class="search-bar-right">
-        <el-button v-permission="'k8s-secrets:create'" type="primary" class="black-button" @click="handleCreateYAML">
-          <el-icon style="margin-right: 4px;"><Document /></el-icon>
+        <a-button v-permission="'k8s-secrets:create'" type="primary" @click="handleCreateYAML">
+          <icon-file />
           YAML创建
-        </el-button>
+        </a-button>
 
-        <el-button v-permission="'k8s-secrets:create'" type="primary" class="black-button" @click="handleCreateForm">
-          <el-icon style="margin-right: 4px;"><Plus /></el-icon>
+        <a-button v-permission="'k8s-secrets:create'" type="primary" @click="handleCreateForm">
+          <icon-plus />
           表单创建
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- Secret 列表 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="paginatedSecrets"
-        v-loading="loading"
+        :loading="loading"
         class="modern-table"
         size="default"
-      >
-        <el-table-column label="名称" prop="name" min-width="200" fixed>
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Lock /></el-icon>
-              名称
-            </span>
-          </template>
-          <template #default="{ row }">
+       :columns="tableColumns4">
+          <template #name="{ record }">
             <div class="name-cell">
               <div class="name-icon-wrapper">
-                <el-icon class="name-icon" :size="18"><Lock /></el-icon>
+                <icon-lock />
               </div>
               <div class="name-content">
-                <div class="name-text">{{ row.name }}</div>
-                <div class="namespace-text">{{ row.namespace }}</div>
+                <div class="name-text">{{ record.name }}</div>
+                <div class="namespace-text">{{ record.namespace }}</div>
               </div>
             </div>
           </template>
-        </el-table-column>
-
-        <el-table-column label="类型" prop="type" width="200">
-          <template #default="{ row }">
-            <el-tag :type="getTypeTagType(row.type)" size="small">{{ row.type }}</el-tag>
+          <template #type="{ record }">
+            <a-tag :type="getTypeTagType(record.type)" size="small">{{ record.type }}</a-tag>
           </template>
-        </el-table-column>
-
-        <el-table-column label="数据项" prop="dataCount" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag type="info" size="small">{{ row.dataCount }}</el-tag>
+          <template #dataCount="{ record }">
+            <a-tag color="gray" size="small">{{ record.dataCount }}</a-tag>
           </template>
-        </el-table-column>
-
-        <el-table-column label="存活时间" prop="age" width="140" />
-
-        <el-table-column label="操作" width="160" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <div class="action-buttons">
-              <el-tooltip content="编辑 YAML" placement="top">
-                <el-button v-permission="'k8s-secrets:update'" link class="action-btn" @click="handleEditYAML(row)">
-                  <el-icon :size="18"><Document /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="编辑" placement="top">
-                <el-button v-permission="'k8s-secrets:update'" link class="action-btn" @click="handleEditForm(row)">
-                  <el-icon :size="18"><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'k8s-secrets:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <a-tooltip content="编辑 YAML" placement="top">
+                <a-button v-permission="'k8s-secrets:update'" type="text" class="action-btn" @click="handleEditYAML(record)">
+                  <icon-file />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="编辑" placement="top">
+                <a-button v-permission="'k8s-secrets:update'" type="text" class="action-btn" @click="handleEditForm(record)">
+                  <icon-edit />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip content="删除" placement="top">
+                <a-button v-permission="'k8s-secrets:delete'" type="text" class="action-btn danger" @click="handleDelete(record)">
+                  <icon-delete />
+                </a-button>
+              </a-tooltip>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
+        <a-pagination
+          v-model:current="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredSecrets.length"
           layout="total, sizes, prev, pager, next"
         />
@@ -120,7 +101,7 @@
     </div>
 
     <!-- YAML 弹窗 -->
-    <el-dialog v-model="yamlDialogVisible" :title="yamlDialogTitle" width="900px" class="yaml-dialog">
+    <a-modal v-model:visible="yamlDialogVisible" :title="yamlDialogTitle" width="900px" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -136,42 +117,42 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="handleSaveYAML" :loading="saving" class="black-button">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">关闭</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="saving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 表单创建弹窗 -->
-    <el-dialog v-model="formDialogVisible" :title="formDialogTitle" width="1200px" class="form-dialog">
-      <el-form :model="formData" label-width="100px" class="secret-form">
+    <a-modal v-model:visible="formDialogVisible" :title="formDialogTitle" width="1200px" class="form-dialog">
+      <a-form :model="formData" label-width="100px" class="secret-form">
         <div class="form-row">
-          <el-form-item label="名称" required>
-            <el-input v-model="formData.name" placeholder="请输入 Secret 名称" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="命名空间" required>
-            <el-select v-model="formData.namespace" placeholder="请选择命名空间" style="width: 100%;">
-              <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="类型" required>
-            <el-select v-model="formData.type" placeholder="请选择类型" style="width: 100%;">
-              <el-option label="Opaque" value="Opaque" />
-              <el-option label="kubernetes.io/tls" value="kubernetes.io/tls" />
-              <el-option label="kubernetes.io/dockerconfigjson" value="kubernetes.io/dockerconfigjson" />
-              <el-option label="kubernetes.io/service-account-token" value="kubernetes.io/service-account-token" />
-            </el-select>
-          </el-form-item>
+          <a-form-item label="名称" required>
+            <a-input v-model="formData.name" placeholder="请输入 Secret 名称" style="width: 100%;" />
+          </a-form-item>
+          <a-form-item label="命名空间" required>
+            <a-select v-model="formData.namespace" placeholder="请选择命名空间" style="width: 100%;">
+              <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+            </a-select>
+          </a-form-item>
+          <a-form-item label="类型" required>
+            <a-select v-model="formData.type" placeholder="请选择类型" style="width: 100%;">
+              <a-option label="Opaque" value="Opaque" />
+              <a-option label="kubernetes.io/tls" value="kubernetes.io/tls" />
+              <a-option label="kubernetes.io/dockerconfigjson" value="kubernetes.io/dockerconfigjson" />
+              <a-option label="kubernetes.io/service-account-token" value="kubernetes.io/service-account-token" />
+            </a-select>
+          </a-form-item>
         </div>
 
         <!-- 标签页 -->
-        <el-tabs v-model="activeTab" class="form-tabs">
+        <a-tabs v-model:active-key="activeTab" class="form-tabs">
           <!-- 数据标签页 -->
-          <el-tab-pane label="数据" name="data">
+          <a-tab-pane title="数据" key="data">
             <div class="tab-content">
               <div class="data-section">
                 <!-- TLS 类型提示 -->
-                <el-alert
+                <a-alert
                   v-if="formData.type === 'kubernetes.io/tls'"
                   type="info"
                   :closable="false"
@@ -181,110 +162,92 @@
                   <template #title>
                     TLS Secret 需要上传证书文件（.crt/.pem）和私钥文件（.key），系统将自动命名为 tls.crt 和 tls.key
                   </template>
-                </el-alert>
+                </a-alert>
                 <div class="section-header">
                   <span class="section-title">Data</span>
                   <div class="section-actions">
-                    <el-button size="small" type="primary" @click="addDataRow">
-                      <el-icon><Plus /></el-icon> 添加数据
-                    </el-button>
-                    <el-button size="small" @click="handleUploadFile">
-                      <el-icon><Upload /></el-icon> 上传文件
-                    </el-button>
+                    <a-button size="small" type="primary" @click="addDataRow">
+                      <icon-plus /> 添加数据
+                    </a-button>
+                    <a-button size="small" @click="handleUploadFile">
+                      <icon-upload /> 上传文件
+                    </a-button>
                   </div>
                 </div>
-                <el-table :data="formData.data" border class="form-table">
-                  <el-table-column label="Key" width="200">
-                    <template #default="{ row }">
-                      <el-input v-model="row.key" placeholder="请输入 Key" />
+                <a-table :data="formData.data" border class="form-table" :columns="tableColumns3">
+          <template #col_Key="{ record }">
+                      <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
-                  </el-table-column>
-                  <el-table-column label="Value">
-                    <template #default="{ row }">
-                      <el-input v-model="row.value" type="textarea" :rows="2" placeholder="请输入 Value (Base64编码)" />
+          <template #col_Value="{ record }">
+                      <a-textarea v-model="record.value" :rows="2" placeholder="请输入 Value (Base64编码)" />
                     </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="80">
-                    <template #default="{ $index }">
-                      <el-button link type="danger" @click="removeDataRow($index)">
-                        <el-icon><Delete /></el-icon>
-                      </el-button>
+          <template #actions="{ rowIndex }">
+                      <a-button type="text" status="danger" @click="removeDataRow(rowIndex)">
+                        <icon-delete />
+                      </a-button>
                     </template>
-                  </el-table-column>
-                </el-table>
+        </a-table>
               </div>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
           <!-- 标签/注解标签页 -->
-          <el-tab-pane label="标签/注解" name="metadata">
+          <a-tab-pane title="标签/注解" key="metadata">
             <div class="tab-content">
               <div class="metadata-section">
                 <div class="metadata-header">
                   <span class="metadata-title">标签</span>
-                  <el-button size="small" @click="addLabelRow">
-                    <el-icon><Plus /></el-icon> 添加
-                  </el-button>
+                  <a-button size="small" @click="addLabelRow">
+                    <icon-plus /> 添加
+                  </a-button>
                 </div>
-                <el-table :data="formData.labels" border class="form-table">
-                  <el-table-column label="Key" width="200">
-                    <template #default="{ row }">
-                      <el-input v-model="row.key" placeholder="请输入 Key" />
+                <a-table :data="formData.labels" border class="form-table" :columns="tableColumns2">
+          <template #col_Key="{ record }">
+                      <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
-                  </el-table-column>
-                  <el-table-column label="Value">
-                    <template #default="{ row }">
-                      <el-input v-model="row.value" placeholder="请输入 Value" />
+          <template #col_Value="{ record }">
+                      <a-input v-model="record.value" placeholder="请输入 Value" />
                     </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="80">
-                    <template #default="{ $index }">
-                      <el-button link type="danger" @click="removeLabelRow($index)">
-                        <el-icon><Delete /></el-icon>
-                      </el-button>
+          <template #actions="{ rowIndex }">
+                      <a-button type="text" status="danger" @click="removeLabelRow(rowIndex)">
+                        <icon-delete />
+                      </a-button>
                     </template>
-                  </el-table-column>
-                </el-table>
+        </a-table>
               </div>
 
               <div class="metadata-section">
                 <div class="metadata-header">
                   <span class="metadata-title">注解</span>
-                  <el-button size="small" @click="addAnnotationRow">
-                    <el-icon><Plus /></el-icon> 添加
-                  </el-button>
+                  <a-button size="small" @click="addAnnotationRow">
+                    <icon-plus /> 添加
+                  </a-button>
                 </div>
-                <el-table :data="formData.annotations" border class="form-table">
-                  <el-table-column label="Key" width="200">
-                    <template #default="{ row }">
-                      <el-input v-model="row.key" placeholder="请输入 Key" />
+                <a-table :data="formData.annotations" border class="form-table" :columns="tableColumns">
+          <template #col_Key="{ record }">
+                      <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
-                  </el-table-column>
-                  <el-table-column label="Value">
-                    <template #default="{ row }">
-                      <el-input v-model="row.value" placeholder="请输入 Value" />
+          <template #col_Value="{ record }">
+                      <a-input v-model="record.value" placeholder="请输入 Value" />
                     </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="80">
-                    <template #default="{ $index }">
-                      <el-button link type="danger" @click="removeAnnotationRow($index)">
-                        <el-icon><Delete /></el-icon>
-                      </el-button>
+          <template #actions="{ rowIndex }">
+                      <a-button type="text" status="danger" @click="removeAnnotationRow(rowIndex)">
+                        <icon-delete />
+                      </a-button>
                     </template>
-                  </el-table-column>
-                </el-table>
+        </a-table>
               </div>
             </div>
-          </el-tab-pane>
-        </el-tabs>
-      </el-form>
+          </a-tab-pane>
+        </a-tabs>
+      </a-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="formDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveForm" :loading="saving" class="black-button">{{ isEditMode ? '保存' : '创建' }}</el-button>
+          <a-button @click="formDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveForm" :loading="saving">{{ isEditMode ? '保存' : '创建' }}</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 隐藏的文件上传input -->
     <input
@@ -297,9 +260,35 @@
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns4 = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 200 },
+  { title: '类型', dataIndex: 'type', slotName: 'type', width: 200 },
+  { title: '数据项', dataIndex: 'dataCount', slotName: 'dataCount', width: 100, align: 'center' },
+  { title: '存活时间', dataIndex: 'age', width: 140 },
+  { title: '操作', slotName: 'actions', width: 160, fixed: 'right', align: 'center' }
+]
+
+const tableColumns3 = [
+  { title: 'Key', slotName: 'col_Key', width: 200 },
+  { title: 'Value', slotName: 'col_Value' },
+  { title: '操作', slotName: 'actions', width: 80 }
+]
+
+const tableColumns2 = [
+  { title: 'Key', slotName: 'col_Key', width: 200 },
+  { title: 'Value', slotName: 'col_Value' },
+  { title: '操作', slotName: 'actions', width: 80 }
+]
+
+const tableColumns = [
+  { title: 'Key', slotName: 'col_Key', width: 200 },
+  { title: 'Value', slotName: 'col_Value' },
+  { title: '操作', slotName: 'actions', width: 80 }
+]
+
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Lock, Document, Delete, Plus, Upload, Edit } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getNamespaces } from '@/api/kubernetes'
 import axios from 'axios'
 import * as yaml from 'js-yaml'
@@ -509,7 +498,7 @@ const handleEditForm = async (row: SecretInfo) => {
 
 
     if (!secret || !secret.metadata) {
-      ElMessage.error('获取Secret数据失败')
+      Message.error('获取Secret数据失败')
       return
     }
 
@@ -527,7 +516,7 @@ const handleEditForm = async (row: SecretInfo) => {
     isEditMode.value = true
     formDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error(`获取详情失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取详情失败: ${error.response?.data?.message || error.message}`)
   }
 }
 
@@ -557,7 +546,7 @@ const handleEditYAML = async (row: SecretInfo) => {
       yamlDialogVisible.value = true
     }
   } catch (error: any) {
-    ElMessage.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
   }
 }
 
@@ -570,7 +559,7 @@ const handleSaveYAML = async () => {
     // 从 YAML 中解析对象
     const yamlObj: any = yaml.load(yamlContent.value)
     if (!yamlObj || !yamlObj.metadata || !yamlObj.metadata.name) {
-      ElMessage.error('YAML 中缺少必要的 metadata.name 字段')
+      Message.error('YAML 中缺少必要的 metadata.name 字段')
       return
     }
     const name = yamlObj.metadata.name
@@ -586,7 +575,7 @@ const handleSaveYAML = async () => {
           headers: { Authorization: `Bearer ${token}` }
         }
       )
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     } else {
       // 编辑模式 - 发送 JSON 对象
       if (!selectedSecret.value) return
@@ -598,14 +587,14 @@ const handleSaveYAML = async () => {
           headers: { Authorization: `Bearer ${token}` }
         }
       )
-      ElMessage.success('保存成功')
+      Message.success('保存成功')
     }
 
     yamlDialogVisible.value = false
     await loadSecrets()
     emit('refresh')
   } catch (error: any) {
-    ElMessage.error(`保存失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`保存失败: ${error.response?.data?.message || error.message}`)
   } finally {
     saving.value = false
   }
@@ -614,11 +603,11 @@ const handleSaveYAML = async () => {
 // 保存表单
 const handleSaveForm = async () => {
   if (!formData.value.name) {
-    ElMessage.error('请输入名称')
+    Message.error('请输入名称')
     return
   }
   if (!formData.value.namespace) {
-    ElMessage.error('请选择命名空间')
+    Message.error('请选择命名空间')
     return
   }
 
@@ -627,7 +616,7 @@ const handleSaveForm = async () => {
     const hasCrt = formData.value.data.some(d => d.key === 'tls.crt' && d.value)
     const hasKey = formData.value.data.some(d => d.key === 'tls.key' && d.value)
     if (!hasCrt || !hasKey) {
-      ElMessage.error('TLS Secret 必须包含 tls.crt（证书）和 tls.key（私钥）')
+      Message.error('TLS Secret 必须包含 tls.crt（证书）和 tls.key（私钥）')
       return
     }
   }
@@ -695,7 +684,7 @@ const handleSaveForm = async () => {
           headers: { Authorization: `Bearer ${token}` }
         }
       )
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     } else {
       // 创建模式：使用 POST 请求
       await axios.post(
@@ -706,14 +695,14 @@ const handleSaveForm = async () => {
           headers: { Authorization: `Bearer ${token}` }
         }
       )
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     }
 
     formDialogVisible.value = false
     await loadSecrets()
     emit('refresh')
   } catch (error: any) {
-    ElMessage.error(`保存失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`保存失败: ${error.response?.data?.message || error.message}`)
   } finally {
     saving.value = false
   }
@@ -722,7 +711,7 @@ const handleSaveForm = async () => {
 // 删除 Secret
 const handleDelete = async (row: SecretInfo) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除 Secret ${row.name} 吗？此操作不可恢复！`,
       '删除 Secret 确认',
       {
@@ -741,12 +730,12 @@ const handleDelete = async (row: SecretInfo) => {
       }
     )
 
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     await loadSecrets()
     emit('refresh')
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`删除失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`删除失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -803,7 +792,7 @@ const handleFileChange = (event: Event) => {
             const existingCrtIndex = formData.value.data.findIndex(d => d.key === 'tls.crt')
             if (existingCrtIndex !== -1) {
               formData.value.data[existingCrtIndex].value = base64Content
-              ElMessage.success('证书文件已更新 (tls.crt)')
+              Message.success('证书文件已更新 (tls.crt)')
               return
             }
           } else if (ext.endsWith('.key')) {
@@ -813,19 +802,19 @@ const handleFileChange = (event: Event) => {
             const existingKeyIndex = formData.value.data.findIndex(d => d.key === 'tls.key')
             if (existingKeyIndex !== -1) {
               formData.value.data[existingKeyIndex].value = base64Content
-              ElMessage.success('私钥文件已更新 (tls.key)')
+              Message.success('私钥文件已更新 (tls.key)')
               return
             }
           } else {
             // 无法识别的扩展名，提示用户
-            ElMessage.warning('TLS Secret 需要上传 .crt/.pem 证书文件和 .key 私钥文件')
+            Message.warning('TLS Secret 需要上传 .crt/.pem 证书文件和 .key 私钥文件')
           }
         }
 
         formData.value.data.push({ key: keyName, value: base64Content })
-        ElMessage.success(`文件上传成功 (${keyName})`)
+        Message.success(`文件上传成功 (${keyName})`)
       } catch (error) {
-        ElMessage.error('文件编码失败')
+        Message.error('文件编码失败')
       }
     }
     reader.readAsText(file)
@@ -929,10 +918,6 @@ defineExpose({
   width: 200px;
 }
 
-.search-icon {
-  color: #d4af37;
-}
-
 /* 表格容器 */
 .table-wrapper {
   background: #fff;
@@ -945,20 +930,20 @@ defineExpose({
   width: 100%;
 }
 
-.modern-table :deep(.el-table__body-wrapper) {
+.modern-table :deep(.arco-table__body-wrapper) {
   border-radius: 0 0 12px 12px;
 }
 
-.modern-table :deep(.el-table__row) {
+.modern-table :deep(.arco-table__row) {
   transition: background-color 0.2s ease;
   height: 56px !important;
 }
 
-.modern-table :deep(.el-table__row td) {
+.modern-table :deep(.arco-table__row td) {
   height: 56px !important;
 }
 
-.modern-table :deep(.el-table__row:hover) {
+.modern-table :deep(.arco-table__row:hover) {
   background-color: #f8fafc !important;
 }
 
@@ -973,16 +958,16 @@ defineExpose({
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d4af37;
+  border: none;
   flex-shrink: 0;
 }
 
 .name-icon {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .name-content {
@@ -1008,7 +993,7 @@ defineExpose({
 }
 
 .header-icon-blue {
-  color: #d4af37;
+  color: #165dff;
 }
 
 .namespace-text {
@@ -1024,12 +1009,13 @@ defineExpose({
 }
 
 .action-btn {
-  color: #d4af37;
-  padding: 4px;
+  color: #165dff;
+  padding: 0;
+  font-size: 16px;
 }
 
 .action-btn:hover {
-  color: #bfa13f;
+  color: #4080ff;
 }
 
 .action-btn.danger {
@@ -1050,35 +1036,35 @@ defineExpose({
 }
 
 /* YAML 编辑弹窗 */
-.yaml-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__header) {
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
+  color: #165dff;
   border-radius: 8px 8px 0 0;
   padding: 20px 24px;
 }
 
-.yaml-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__title) {
+  color: #165dff;
   font-size: 16px;
   font-weight: 600;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 24px;
-  background-color: #1a1a1a;
+  background-color: #fafafa;
 }
 
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #fafafa;
 }
 
 .yaml-line-numbers {
-  background-color: #0d0d0d;
-  color: #666;
+  background-color: #f2f3f5;
+  color: #86909c;
   padding: 16px 8px;
   text-align: right;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
@@ -1087,7 +1073,7 @@ defineExpose({
   user-select: none;
   overflow: hidden;
   min-width: 40px;
-  border-right: 1px solid #333;
+  border-right: 1px solid #e5e6eb;
 }
 
 .line-number {
@@ -1097,8 +1083,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #fafafa;
+  color: #1d2129;
   border: none;
   outline: none;
   padding: 16px;
@@ -1118,7 +1104,7 @@ defineExpose({
 }
 
 /* 表单弹窗 */
-.form-dialog :deep(.el-dialog__body) {
+.form-dialog :deep(.arco-dialog__body) {
   padding: 20px 24px;
   max-height: 600px;
   overflow-y: auto;
@@ -1134,7 +1120,7 @@ defineExpose({
   margin-bottom: 16px;
 }
 
-.form-row .el-form-item {
+.form-row .arco-form-item {
   flex: 1;
   margin-bottom: 0;
 }
@@ -1225,12 +1211,12 @@ defineExpose({
   width: 100%;
 }
 
-.form-table :deep(.el-input__inner) {
+.form-table :deep(.arco-input__inner) {
   border: none;
   padding: 0 4px;
 }
 
-.form-table :deep(.el-textarea__inner) {
+.form-table :deep(.arco-textarea__inner) {
   border: none;
   padding: 4px;
   resize: none;
@@ -1242,17 +1228,4 @@ defineExpose({
   gap: 12px;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
 </style>

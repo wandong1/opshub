@@ -1,14 +1,14 @@
 <template>
-  <div class="distribution-container">
+  <div class="page-container">
     <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><FolderOpened /></el-icon>
+    <div class="page-header-card">
+      <div class="page-header-inner">
+        <div class="page-icon">
+          <icon-folder />
         </div>
         <div>
-          <h2 class="page-title">文件分发</h2>
-          <p class="page-subtitle">上传文件并分发到多台主机指定目录</p>
+          <div class="page-title">文件分发</div>
+          <div class="page-desc">上传文件并分发到多台主机指定目录</div>
         </div>
       </div>
     </div>
@@ -16,122 +16,104 @@
     <div class="distribution-body">
       <div class="distribution-main">
         <!-- 上传文件 -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-title">上传文件</span>
-          </div>
-          <div class="section-content">
-            <el-upload
-              ref="uploadRef"
-              class="upload-area"
-              drag
-              multiple
-              :auto-upload="false"
-              :on-change="handleFileChange"
-              :file-list="fileList"
-              :show-file-list="false"
-            >
-              <div class="upload-content">
-                <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                <div class="upload-text">
-                  <p>拖拽文件到此处或点击上传</p>
-                  <p class="upload-hint">支持任意格式文件</p>
-                </div>
+        <a-card class="section-card" :bordered="false">
+          <template #title><span class="card-title">上传文件</span></template>
+          <a-upload
+            draggable
+            multiple
+            :auto-upload="false"
+            @change="handleFileChange"
+            :show-file-list="false"
+          >
+            <template #upload-button>
+              <div class="upload-area">
+                <icon-upload style="font-size: 40px; color: #c9cdd4" />
+                <div class="upload-text">拖拽文件到此处或点击上传</div>
+                <div class="upload-hint">支持任意格式文件</div>
               </div>
-            </el-upload>
+            </template>
+          </a-upload>
 
-            <div v-if="fileList.length > 0" class="file-list">
-              <div v-for="(file, index) in fileList" :key="index" class="file-item">
-                <el-icon class="file-icon"><Document /></el-icon>
-                <span class="file-name">{{ file.name }}</span>
-                <span class="file-size">{{ formatFileSize(file.size || 0) }}</span>
-                <el-button
-                  type="danger"
-                  size="small"
-                  link
-                  @click="removeFile(index)"
-                >
-                  <el-icon><Close /></el-icon>
-                </el-button>
-              </div>
-            </div>
-
-            <div v-else class="empty-state">
-              暂无上传文件
+          <div v-if="fileList.length > 0" class="file-list">
+            <div v-for="(file, index) in fileList" :key="index" class="file-item">
+              <icon-file style="font-size: 18px; color: var(--ops-primary, #165dff)" />
+              <span class="file-name">{{ file.name }}</span>
+              <span class="file-size">{{ formatFileSize(file.file?.size || 0) }}</span>
+              <a-button type="text" status="danger" size="mini" @click="removeFile(index)">
+                <template #icon><icon-close /></template>
+              </a-button>
             </div>
           </div>
-        </div>
+          <div v-else class="empty-state">暂无上传文件</div>
+        </a-card>
 
         <!-- 分发目标 -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-title">分发目标</span>
+        <a-card class="section-card" :bordered="false">
+          <template #title><span class="card-title">分发目标</span></template>
+          <div class="form-section">
+            <div class="section-label"><span class="required">*</span> 目标路径</div>
+            <a-input v-model="targetPath" placeholder="请输入目标路径，如 /tmp 或 /home/user" allow-clear />
           </div>
-          <div class="section-content">
-            <div class="form-item">
-              <label class="form-label">
-                <span class="required">*</span>
-                目标路径:
-              </label>
-              <el-input
-                v-model="targetPath"
-                placeholder="请输入目标路径，如 /tmp 或 /home/user"
-                clearable
-              />
+          <div class="form-section">
+            <div class="section-label"><span class="required">*</span> 目标主机</div>
+            <a-button @click="showHostDialog = true">
+              <template #icon><icon-plus /></template>
+              添加目标主机
+            </a-button>
+            <div v-if="selectedHosts.length > 0" class="tag-list">
+              <a-tag
+                v-for="host in selectedHosts"
+                :key="host.id"
+                closable
+                :color="host.agentStatus === 'online' ? 'green' : 'arcoblue'"
+                @close="removeHost(host.id)"
+              >
+                {{ host.name }} ({{ host.ip }})
+                <span v-if="host.agentStatus === 'online'" style="margin-left: 4px; font-size: 11px;">Agent</span>
+              </a-tag>
             </div>
+          </div>
+        </a-card>
 
-            <div class="form-item">
-              <label class="form-label">
-                <span class="required">*</span>
-                目标主机:
-              </label>
-              <el-button @click="showHostDialog = true">
-                <el-icon style="margin-right: 6px;"><Plus /></el-icon>
-                添加目标主机
-              </el-button>
-              <div v-if="selectedHosts.length > 0" class="selected-hosts">
-                <el-tag
-                  v-for="host in selectedHosts"
-                  :key="host.id"
-                  closable
-                  @close="removeHost(host.id)"
-                  style="margin: 8px 8px 0 0;"
-                >
-                  {{ host.name }} ({{ host.ip }})
-                </el-tag>
-              </div>
+        <!-- 分发方式 -->
+        <div class="form-section" style="margin-bottom: 16px;">
+          <div class="section-label">分发方式</div>
+          <div class="section-body">
+            <a-radio-group v-model="distributionMode" type="button">
+              <a-radio value="auto">自动选择（Agent在线优先）</a-radio>
+              <a-radio value="ssh">SSH</a-radio>
+              <a-radio value="agent">Agent</a-radio>
+            </a-radio-group>
+            <div v-if="selectedHosts.length > 0 && distributionMode === 'auto'" class="execution-hint">
+              <span style="color: #00b42a;">Agent在线: {{ selectedHosts.filter(h => h.agentStatus === 'online').length }}台</span>
+              <span style="margin-left: 12px; color: #86909c;">SSH回退: {{ selectedHosts.filter(h => h.agentStatus !== 'online').length }}台</span>
             </div>
           </div>
         </div>
 
-        <!-- 开始执行按钮 -->
-        <div class="execute-actions">
-          <el-button
+        <!-- 执行按钮 -->
+        <div class="execute-btn-wrap">
+          <a-button
             v-permission="'task-distribute:execute'"
+            type="primary"
             size="large"
             :loading="distributing"
-            :disabled="distributing"
             @click="handleDistribute"
-            class="execute-button"
           >
-            <el-icon style="margin-right: 6px;"><VideoPlay /></el-icon>
+            <template #icon><icon-play-arrow-fill /></template>
             {{ distributing ? '分发中...' : '开始执行' }}
-          </el-button>
+          </a-button>
         </div>
       </div>
 
       <!-- 分发记录 -->
       <div class="distribution-log">
         <div class="log-header">
-          <span>分发记录</span>
-          <el-button v-if="distributionLogs.length > 0" link size="small" @click="clearLogs">
-            清空
-          </el-button>
+          <span class="log-title">分发记录</span>
+          <a-link v-if="distributionLogs.length > 0" @click="clearLogs">清空</a-link>
         </div>
-        <div class="log-content">
-          <div v-if="distributionLogs.length === 0" class="empty-log">
-            暂无分发记录
-          </div>
+        <div class="log-terminal">
+          <div v-if="distributionLogs.length === 0" class="log-empty">暂无分发记录</div>
           <div v-else class="log-list">
             <div
               v-for="log in distributionLogs"
@@ -139,7 +121,12 @@
               class="log-item"
               :class="log.status"
             >
-              <div class="log-time">{{ log.time }}</div>
+              <div class="log-meta">
+                <span class="log-time">{{ log.time }}</span>
+                <a-tag :color="log.status === 'success' ? 'green' : log.status === 'error' ? 'red' : 'arcoblue'" size="small">
+                  {{ log.status === 'success' ? '成功' : log.status === 'error' ? '失败' : '信息' }}
+                </a-tag>
+              </div>
               <div class="log-message">{{ log.message }}</div>
             </div>
           </div>
@@ -148,230 +135,165 @@
     </div>
 
     <!-- 选择主机对话框 -->
-    <el-dialog
-      v-model="showHostDialog"
+    <a-modal
+      v-model:visible="showHostDialog"
       title="选择主机"
-      width="800px"
-      destroy-on-close
+      :width="800"
+      :unmount-on-close="true"
+      @ok="confirmHostSelection"
+      @cancel="showHostDialog = false"
     >
-      <el-input
+      <a-input
         v-model="hostSearchKeyword"
         placeholder="输入名称/IP搜索"
-        clearable
-        style="margin-bottom: 16px;"
+        allow-clear
+        style="margin-bottom: 12px"
       >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
-      <el-table
-        ref="hostTableRef"
+        <template #prefix><icon-search /></template>
+      </a-input>
+      <a-table
         :data="filteredHosts"
-        @selection-change="handleHostSelectionChange"
-        height="400px"
-        v-loading="hostsLoading"
+        :row-selection="{ type: 'checkbox', showCheckedAll: true }"
+        v-model:selectedKeys="tempSelectedHostIds"
+        row-key="id"
+        :loading="hostsLoading"
+        :scroll="{ y: 360 }"
+        :pagination="false"
       >
-        <el-table-column type="selection" width="55" />
-        <el-table-column label="主机名称" prop="name" />
-        <el-table-column label="IP地址" prop="ip">
-          <template #default="{ row }">
-            <el-tag size="small">{{ row.ip }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="备注信息" prop="description" />
-      </el-table>
-      <template #footer>
-        <el-button @click="showHostDialog = false">取消</el-button>
-        <el-button type="primary" @click="confirmHostSelection">确定</el-button>
-      </template>
-    </el-dialog>
+        <template #columns>
+          <a-table-column title="主机名称" data-index="name" />
+          <a-table-column title="IP地址" data-index="ip">
+            <template #cell="{ record }">
+              <a-tag size="small">{{ record.ip }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="备注信息" data-index="description" />
+        </template>
+      </a-table>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import {
-  UploadFilled,
-  Document,
-  Close,
-  Plus,
-  VideoPlay,
-  Search,
-  FolderOpened
-} from '@element-plus/icons-vue'
-import type { UploadUserFile } from 'element-plus'
+  IconFolder, IconUpload, IconFile, IconClose, IconPlus,
+  IconPlayArrowFill, IconSearch
+} from '@arco-design/web-vue/es/icon'
 import { getHostList } from '@/api/host'
+import { getAgentStatuses } from '@/api/agent'
 import { distributeFiles } from '@/api/task'
 
-// 文件列表
-const fileList = ref<UploadUserFile[]>([])
-const uploadRef = ref()
-
-// 目标路径
+const fileList = ref<any[]>([])
 const targetPath = ref('')
-
-// 选中的主机
 const selectedHosts = ref<any[]>([])
-
-// 分发状态
 const distributing = ref(false)
-
-// 分发日志
+const distributionMode = ref('auto')
 const distributionLogs = ref<any[]>([])
 
 // 主机对话框
 const showHostDialog = ref(false)
 const hostSearchKeyword = ref('')
-const tempSelectedHosts = ref<any[]>([])
+const tempSelectedHostIds = ref<(string | number)[]>([])
 const allHosts = ref<any[]>([])
 const hostsLoading = ref(false)
-const hostTableRef = ref()
 
-// 过滤后的主机列表
 const filteredHosts = computed(() => {
-  let hosts = allHosts.value
-
-  if (hostSearchKeyword.value) {
-    const keyword = hostSearchKeyword.value.toLowerCase()
-    hosts = hosts.filter(
-      (host) =>
-        host.name.toLowerCase().includes(keyword) ||
-        host.ip.includes(keyword)
-    )
-  }
-
-  return hosts
+  if (!hostSearchKeyword.value) return allHosts.value
+  const keyword = hostSearchKeyword.value.toLowerCase()
+  return allHosts.value.filter(
+    (host) => host.name.toLowerCase().includes(keyword) || host.ip.includes(keyword)
+  )
 })
 
-// 文件变化
-const handleFileChange = (file: any, files: UploadUserFile[]) => {
-  fileList.value = files
+const handleFileChange = (_fileList: any[], fileItem: any) => {
+  fileList.value = _fileList
 }
 
-// 移除文件
 const removeFile = (index: number) => {
   fileList.value.splice(index, 1)
 }
 
-// 格式化文件大小
 const formatFileSize = (size: number) => {
-  if (size < 1024) {
-    return size + ' B'
-  } else if (size < 1024 * 1024) {
-    return (size / 1024).toFixed(2) + ' KB'
-  } else if (size < 1024 * 1024 * 1024) {
-    return (size / (1024 * 1024)).toFixed(2) + ' MB'
-  } else {
-    return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
-  }
+  if (size < 1024) return size + ' B'
+  if (size < 1024 * 1024) return (size / 1024).toFixed(2) + ' KB'
+  if (size < 1024 * 1024 * 1024) return (size / (1024 * 1024)).toFixed(2) + ' MB'
+  return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
 }
 
-// 移除主机
 const removeHost = (id: number) => {
-  const index = selectedHosts.value.findIndex((h) => h.id === id)
-  if (index !== -1) {
-    selectedHosts.value.splice(index, 1)
-  }
+  selectedHosts.value = selectedHosts.value.filter(h => h.id !== id)
 }
 
-// 加载主机列表
 const loadHostList = async () => {
   hostsLoading.value = true
   try {
-    const params = {
-      page: 1,
-      pageSize: 1000,
-    }
-    const response = await getHostList(params)
-    if (Array.isArray(response)) {
-      allHosts.value = response
-    } else if (response.list && Array.isArray(response.list)) {
-      allHosts.value = response.list
-    } else if (response.data && Array.isArray(response.data)) {
-      allHosts.value = response.data
-    } else {
-      allHosts.value = []
-    }
-  } catch (error) {
-    ElMessage.error('加载主机列表失败')
-    allHosts.value = []
-  } finally {
-    hostsLoading.value = false
-  }
+    const response = await getHostList({ page: 1, pageSize: 1000 })
+    if (Array.isArray(response)) allHosts.value = response
+    else if (response.list) allHosts.value = response.list
+    else if (response.data) allHosts.value = response.data
+    else allHosts.value = []
+    // 获取Agent实时状态并合并
+    try {
+      const statuses = await getAgentStatuses()
+      if (Array.isArray(statuses)) {
+        const map: Record<number, any> = {}
+        for (const s of statuses) {
+          map[s.hostId] = s
+        }
+        for (const host of allHosts.value) {
+          const agentInfo = map[host.id]
+          if (agentInfo) {
+            host.agentStatus = agentInfo.status
+            host.connectionMode = 'agent'
+          }
+        }
+      }
+    } catch (e) {}
+  } catch { allHosts.value = [] }
+  finally { hostsLoading.value = false }
 }
 
-// 主机选择变化
-const handleHostSelectionChange = (selection: any[]) => {
-  tempSelectedHosts.value = selection
-}
-
-// 确认主机选择
 const confirmHostSelection = () => {
-  selectedHosts.value = [...tempSelectedHosts.value]
+  selectedHosts.value = allHosts.value.filter(h => tempSelectedHostIds.value.includes(h.id))
   showHostDialog.value = false
-  ElMessage.success(`已选择 ${selectedHosts.value.length} 台主机`)
+  Message.success(`已选择 ${selectedHosts.value.length} 台主机`)
 }
 
-// 添加日志
-const addLog = (message: string, status: string = 'info') => {
+const addLog = (message: string, status = 'info') => {
   const now = new Date()
-  const time = `${now.getHours().toString().padStart(2, '0')}:${now
-    .getMinutes()
-    .toString()
-    .padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
-  distributionLogs.value.unshift({
-    id: Date.now(),
-    time,
-    message,
-    status,
-  })
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+  distributionLogs.value.unshift({ id: Date.now(), time, message, status })
 }
 
-// 清空日志
-const clearLogs = () => {
-  distributionLogs.value = []
-}
+const clearLogs = () => { distributionLogs.value = [] }
 
-// 执行分发
 const handleDistribute = async () => {
-  if (fileList.value.length === 0) {
-    ElMessage.warning('请先上传文件')
-    return
-  }
-  if (!targetPath.value.trim()) {
-    ElMessage.warning('请输入目标路径')
-    return
-  }
-  if (selectedHosts.value.length === 0) {
-    ElMessage.warning('请选择目标主机')
-    return
-  }
+  if (fileList.value.length === 0) { Message.warning('请先上传文件'); return }
+  if (!targetPath.value.trim()) { Message.warning('请输入目标路径'); return }
+  if (selectedHosts.value.length === 0) { Message.warning('请选择目标主机'); return }
 
   distributing.value = true
-  const fileNames = fileList.value.map((f) => f.name).join(', ')
+  const fileNames = fileList.value.map(f => f.name).join(', ')
   addLog(`开始分发文件: ${fileNames}`, 'info')
   addLog(`目标路径: ${targetPath.value}`, 'info')
   addLog(`目标主机: ${selectedHosts.value.length} 台`, 'info')
 
   try {
-    // 构建FormData
     const formData = new FormData()
     fileList.value.forEach((file) => {
-      if (file.raw) {
-        formData.append('files', file.raw)
-      }
+      if (file.file) formData.append('files', file.file)
     })
     formData.append('targetPath', targetPath.value)
     formData.append('hostIds', JSON.stringify(selectedHosts.value.map(h => h.id)))
+    formData.append('distributionMode', distributionMode.value)
 
     const response = await distributeFiles(formData)
 
-    // 处理每个主机的分发结果
     if (response.results && Array.isArray(response.results)) {
       let successCount = 0
       let failCount = 0
-
       response.results.forEach((result: any) => {
         if (result.status === 'success') {
           successCount++
@@ -381,208 +303,136 @@ const handleDistribute = async () => {
           addLog(`${result.hostName}(${result.hostIp}): ${result.error || '分发失败'}`, 'error')
         }
       })
-
       if (failCount === 0) {
-        ElMessage.success(`文件分发完成，全部 ${successCount} 台主机成功`)
+        Message.success(`文件分发完成，全部 ${successCount} 台主机成功`)
         addLog(`分发完成，全部 ${successCount} 台主机成功`, 'success')
       } else {
-        ElMessage.warning(`分发完成，成功 ${successCount} 台，失败 ${failCount} 台`)
+        Message.warning(`分发完成，成功 ${successCount} 台，失败 ${failCount} 台`)
         addLog(`分发完成，成功 ${successCount} 台，失败 ${failCount} 台`, 'info')
       }
     } else {
       addLog('文件分发完成', 'success')
-      ElMessage.success('文件分发完成')
+      Message.success('文件分发完成')
     }
-
-    // 清空文件列表
     fileList.value = []
   } catch (error: any) {
-    const errMsg = error.message || error.msg || '分发失败'
+    const errMsg = error.message || '分发失败'
     addLog('文件分发失败: ' + errMsg, 'error')
-    ElMessage.error('文件分发失败: ' + errMsg)
+    Message.error('文件分发失败: ' + errMsg)
   } finally {
     distributing.value = false
   }
 }
 
-onMounted(() => {
-  loadHostList()
-})
+onMounted(() => { loadHostList() })
 </script>
 
 <style scoped lang="scss">
-.distribution-container {
-  padding: 0;
-  background-color: transparent;
+.page-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  height: 100%;
-}
-
-.page-header {
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
   gap: 16px;
 }
 
-.page-title-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border: 1px solid #d4af37;
+.page-header-card {
+  background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px);
+  padding: 20px 24px;
+}
+
+.page-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ops-primary, #165dff) 0%, #4080ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
 }
 
 .page-title {
-  margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
-  line-height: 28px;
+  color: var(--ops-text-primary, #1d2129);
+  line-height: 1.4;
 }
 
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 14px;
-  color: #909399;
-  line-height: 20px;
+.page-desc {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 2px;
 }
 
 .distribution-body {
-  flex: 1;
   display: flex;
-  gap: 12px;
-  overflow: hidden;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
 }
 
 .distribution-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-}
-
-.distribution-log {
-  width: 400px;
-  min-width: 400px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  gap: 16px;
 }
 
 .section-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 20px;
-}
+  border-radius: var(--ops-border-radius-md, 8px);
 
-.section-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-
-  .section-title {
-    margin-right: 8px;
+  .card-title {
+    font-weight: 600;
   }
 }
 
 .upload-area {
-  :deep(.el-upload) {
-    width: 100%;
-  }
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 0;
+  cursor: pointer;
+}
 
-  :deep(.el-upload-dragger) {
-    width: 100%;
-    padding: 40px;
-    border: 2px dashed #dcdfe6;
-    border-radius: 8px;
-    background: #fafafa;
-    transition: all 0.3s;
+.upload-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ops-text-primary, #1d2129);
+}
 
-    &:hover {
-      border-color: #409eff;
-      background: #f0f9ff;
-    }
-  }
-
-  .upload-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-
-    .upload-icon {
-      font-size: 48px;
-      color: #c0c4cc;
-    }
-
-    .upload-text {
-      text-align: center;
-
-      p {
-        margin: 0 0 4px 0;
-        font-size: 14px;
-        font-weight: 500;
-        color: #303133;
-      }
-
-      .upload-hint {
-        font-size: 12px;
-        color: #909399;
-      }
-    }
-  }
+.upload-hint {
+  font-size: 12px;
+  color: var(--ops-text-tertiary, #86909c);
 }
 
 .file-list {
-  margin-top: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 16px;
 }
 
 .file-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  background: #f5f7fa;
-  border-radius: 4px;
-
-  .file-icon {
-    font-size: 20px;
-    color: #409eff;
-  }
+  padding: 10px 12px;
+  background: var(--ops-bg-secondary, #f7f8fa);
+  border-radius: 6px;
 
   .file-name {
     flex: 1;
     font-size: 14px;
-    color: #303133;
+    color: var(--ops-text-primary, #1d2129);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -590,101 +440,94 @@ onMounted(() => {
 
   .file-size {
     font-size: 12px;
-    color: #909399;
+    color: var(--ops-text-tertiary, #86909c);
     flex-shrink: 0;
   }
 }
 
 .empty-state {
   text-align: center;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   padding: 40px 0;
 }
 
-.form-item {
-  margin-bottom: 16px;
+.form-section {
+  margin-bottom: 20px;
 
   &:last-child {
     margin-bottom: 0;
   }
+}
 
-  .form-label {
-    display: block;
-    margin-bottom: 8px;
-    font-size: 14px;
-    color: #606266;
+.section-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ops-text-primary, #1d2129);
+  margin-bottom: 10px;
 
-    .required {
-      color: #f56c6c;
-      margin-right: 4px;
-    }
-  }
-
-  .selected-hosts {
-    margin-top: 12px;
+  .required {
+    color: var(--ops-danger, #f53f3f);
+    margin-right: 4px;
   }
 }
 
-.execute-actions {
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.execution-hint {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.execute-btn-wrap {
   display: flex;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.execute-button {
-  background: #000;
-  border: none;
-  padding: 12px 40px;
-  font-size: 16px;
-  color: #fff;
-
-  &:hover {
-    background: #1a1a1a;
-    color: #fff;
-  }
-
-  &:focus {
-    background: #000;
-    color: #fff;
-  }
-
-  &:active {
-    background: #333;
-    color: #fff;
-  }
-
-  &.is-disabled {
-    background: #c0c4cc;
-    color: #fff;
-  }
+/* 分发记录侧栏 */
+.distribution-log {
+  width: 380px;
+  min-width: 380px;
+  background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .log-header {
   padding: 16px 20px;
-  background: #fafafa;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
   flex-shrink: 0;
+
+  .log-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ops-text-primary, #1d2129);
+  }
 }
 
-.log-content {
+.log-terminal {
   flex: 1;
-  padding: 16px;
+  padding: 12px;
   overflow-y: auto;
+  background: #1e1e1e;
+}
 
-  .empty-log {
-    text-align: center;
-    color: #909399;
-    padding: 40px 0;
-  }
+.log-empty {
+  text-align: center;
+  color: #666;
+  padding: 40px 0;
 }
 
 .log-list {
@@ -694,46 +537,33 @@ onMounted(() => {
 }
 
 .log-item {
-  padding: 12px;
-  border-radius: 4px;
-  border-left: 3px solid transparent;
+  background: #2a2a2a;
+  border-radius: 6px;
+  padding: 10px 12px;
+  border-left: 3px solid #555;
 
-  .log-time {
-    font-size: 12px;
-    color: #909399;
-    margin-bottom: 4px;
-    font-family: 'Courier New', monospace;
-  }
+  &.success { border-left-color: var(--ops-success, #00b42a); }
+  &.error { border-left-color: var(--ops-danger, #f53f3f); }
+  &.info { border-left-color: var(--ops-primary, #165dff); }
+}
 
-  .log-message {
-    font-size: 13px;
-    color: #606266;
-    word-break: break-all;
-  }
+.log-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
 
-  &.info {
-    background: #ecf5ff;
-    border-left-color: #409eff;
-  }
+.log-time {
+  color: #888;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+}
 
-  &.success {
-    background: #f0f9eb;
-    border-left-color: #67c23a;
-
-    .log-message {
-      color: #67c23a;
-      font-weight: 500;
-    }
-  }
-
-  &.error {
-    background: #fef0f0;
-    border-left-color: #f56c6c;
-
-    .log-message {
-      color: #f56c6c;
-      font-weight: 500;
-    }
-  }
+.log-message {
+  font-size: 13px;
+  color: #d4d4d4;
+  word-break: break-all;
+  line-height: 1.5;
 }
 </style>

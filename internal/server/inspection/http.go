@@ -18,10 +18,13 @@ import (
 
 // HTTPServer holds all inspection services and registers routes.
 type HTTPServer struct {
-	probeConfigService *svc.ProbeConfigService
-	probeTaskService   *svc.ProbeTaskService
-	pushgatewayService *svc.PushgatewayService
-	scheduler          *scheduler.Scheduler
+	probeConfigService   *svc.ProbeConfigService
+	probeTaskService     *svc.ProbeTaskService
+	pushgatewayService   *svc.PushgatewayService
+	probeVariableService *svc.ProbeVariableService
+	scheduler            *scheduler.Scheduler
+	executor             *biz.NetworkProbeExecutor
+	healthExecutor       *assetbiz.HostHealthExecutor
 }
 
 // NewHTTPServer creates the HTTPServer.
@@ -29,13 +32,42 @@ func NewHTTPServer(
 	probeConfigService *svc.ProbeConfigService,
 	probeTaskService *svc.ProbeTaskService,
 	pushgatewayService *svc.PushgatewayService,
+	probeVariableService *svc.ProbeVariableService,
 	sched *scheduler.Scheduler,
+	executor *biz.NetworkProbeExecutor,
+	healthExecutor *assetbiz.HostHealthExecutor,
 ) *HTTPServer {
 	return &HTTPServer{
-		probeConfigService: probeConfigService,
-		probeTaskService:   probeTaskService,
-		pushgatewayService: pushgatewayService,
-		scheduler:          sched,
+		probeConfigService:   probeConfigService,
+		probeTaskService:     probeTaskService,
+		pushgatewayService:   pushgatewayService,
+		probeVariableService: probeVariableService,
+		scheduler:            sched,
+		executor:             executor,
+		healthExecutor:       healthExecutor,
+	}
+}
+
+// SetAgentCommandFactory injects Agent capability into executor and service.
+func (s *HTTPServer) SetAgentCommandFactory(f biz.AgentCommandFactory) {
+	if s.executor != nil {
+		s.executor.SetAgentCommandFactory(f)
+	}
+	if s.probeConfigService != nil {
+		s.probeConfigService.SetAgentCommandFactory(f)
+	}
+	if s.healthExecutor != nil {
+		s.healthExecutor.SetAgentCommandFactory(assetbiz.AgentCommandFactory(f))
+	}
+}
+
+// SetVariableResolver injects variable resolver into executor and service.
+func (s *HTTPServer) SetVariableResolver(r *biz.VariableResolver) {
+	if s.executor != nil {
+		s.executor.SetVariableResolver(r)
+	}
+	if s.probeConfigService != nil {
+		s.probeConfigService.SetVariableResolver(r)
 	}
 }
 
@@ -47,6 +79,7 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		probes.GET("", s.probeConfigService.List)
 		probes.POST("", s.probeConfigService.Create)
+		probes.POST("/test", s.probeConfigService.TestProbe)
 		probes.GET("/:id", s.probeConfigService.Get)
 		probes.PUT("/:id", s.probeConfigService.Update)
 		probes.DELETE("/:id", s.probeConfigService.Delete)
@@ -74,6 +107,15 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 		pushgateways.DELETE("/:id", s.pushgatewayService.Delete)
 		pushgateways.POST("/:id/test", s.pushgatewayService.Test)
 	}
+
+	variables := inspection.Group("/variables")
+	{
+		variables.GET("", s.probeVariableService.List)
+		variables.POST("", s.probeVariableService.Create)
+		variables.GET("/:id", s.probeVariableService.Get)
+		variables.PUT("/:id", s.probeVariableService.Update)
+		variables.DELETE("/:id", s.probeVariableService.Delete)
+	}
 }
 
 // Scheduler returns the scheduler instance for lifecycle management.
@@ -92,7 +134,7 @@ func (p *taskProvider) GetEnabledTasks(ctx context.Context) ([]scheduler.Task, e
 	if err != nil {
 		return nil, err
 	}
-	result := make([]scheduler.Task, 0, len(tasks))
+	result := make([]scheduler.Task, 0, len(tasks)+1)
 	for _, t := range tasks {
 		payload, _ := json.Marshal(map[string]uint{"task_id": t.ID})
 		result = append(result, scheduler.Task{
@@ -104,17 +146,29 @@ func (p *taskProvider) GetEnabledTasks(ctx context.Context) ([]scheduler.Task, e
 			Enabled:  t.Status == 1,
 		})
 	}
+
+	// 内置系统任务：主机健康检查（每5分钟）
+	result = append(result, scheduler.Task{
+		ID:       999999,
+		Name:     "host_health_check",
+		Type:     "host_health_check",
+		CronExpr: "0 0/5 * * * ?",
+		Payload:  "{}",
+		Enabled:  true,
+	})
+
 	return result, nil
 }
 
 // NewInspectionServices is the factory function that assembles the full dependency chain.
 // Returns the HTTPServer and starts the scheduler.
-func NewInspectionServices(db *gorm.DB, redisClient *redis.Client) *HTTPServer {
+func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo assetbiz.HostRepo, credentialRepo assetbiz.CredentialRepo) *HTTPServer {
 	// Repos
 	configRepo := inspectiondata.NewProbeConfigRepo(db)
 	taskRepo := inspectiondata.NewProbeTaskRepo(db)
 	resultRepo := inspectiondata.NewProbeResultRepo(db)
 	pgwRepo := inspectiondata.NewPushgatewayConfigRepo(db)
+	variableRepo := inspectiondata.NewProbeVariableRepo(db)
 
 	// Run one-time data migration for category backfill and task config association
 	migrateData(db)
@@ -124,6 +178,7 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client) *HTTPServer {
 	taskUC := biz.NewProbeTaskUseCase(taskRepo, configRepo)
 	resultUC := biz.NewProbeResultUseCase(resultRepo)
 	pgwUC := biz.NewPushgatewayUseCase(pgwRepo)
+	variableUC := biz.NewProbeVariableUseCase(variableRepo)
 
 	// Group name lookup via AssetGroup table
 	groupLookup := func(ctx context.Context, id uint) string {
@@ -140,7 +195,13 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client) *HTTPServer {
 
 	// Executor
 	executor := biz.NewNetworkProbeExecutor(taskRepo, resultRepo, pgwRepo, groupLookup)
+	variableResolver := biz.NewVariableResolver(variableRepo)
+	executor.SetVariableResolver(variableResolver)
 	sched.RegisterExecutor(executor)
+
+	// Host health check executor
+	healthExecutor := assetbiz.NewHostHealthExecutor(hostRepo, credentialRepo)
+	sched.RegisterExecutor(healthExecutor)
 
 	// Start scheduler
 	if err := sched.Start(context.Background()); err != nil {
@@ -151,10 +212,12 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client) *HTTPServer {
 
 	// Services
 	probeConfigSvc := svc.NewProbeConfigService(configUC)
+	probeConfigSvc.SetVariableResolver(variableResolver)
 	probeTaskSvc := svc.NewProbeTaskService(taskUC, resultUC, sched)
 	pgwSvc := svc.NewPushgatewayService(pgwUC)
+	variableSvc := svc.NewProbeVariableService(variableUC)
 
-	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, sched)
+	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, healthExecutor)
 }
 
 // migrateData performs one-time data migration:
@@ -193,6 +256,7 @@ func AutoMigrateModels() []interface{} {
 		&biz.ProbeResult{},
 		&biz.PushgatewayConfig{},
 		&biz.ProbeTaskConfig{},
+		&biz.ProbeVariable{},
 	}
 }
 

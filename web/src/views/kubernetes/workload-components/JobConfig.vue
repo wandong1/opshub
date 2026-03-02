@@ -7,25 +7,25 @@
     <div class="panel-content">
       <div class="form-row">
         <label>完成次数 (Completions)</label>
-        <el-input-number v-model="formData.completions" :min="1" :max="100" size="small" style="width: 100%" />
+        <a-input-number v-model="formData.completions" :min="1" :max="100" size="small" style="width: 100%" />
         <div class="form-tip">需要成功完成的Pod数量。设置为1表示只需要一个Pod成功完成任务</div>
       </div>
 
       <div class="form-row">
         <label>并行度 (Parallelism)</label>
-        <el-input-number v-model="formData.parallelism" :min="1" :max="50" size="small" style="width: 100%" />
+        <a-input-number v-model="formData.parallelism" :min="1" :max="50" size="small" style="width: 100%" />
         <div class="form-tip">同时运行的Pod最大数量。设置为1表示串行执行</div>
       </div>
 
       <div class="form-row">
         <label>失败重试次数 (Backoff Limit)</label>
-        <el-input-number v-model="formData.backoffLimit" :min="0" :max="20" size="small" style="width: 100%" />
+        <a-input-number v-model="formData.backoffLimit" :min="0" :max="20" size="small" style="width: 100%" />
         <div class="form-tip">Pod失败后的重试次数。设置为0表示不重试，6表示最多重试6次</div>
       </div>
 
       <div class="form-row">
         <label>活跃 deadline 秒数 (Active Deadline Seconds)</label>
-        <el-input-number v-model="formData.activeDeadlineSeconds" :min="0" :max="86400" size="small" style="width: 100%" />
+        <a-input-number v-model="formData.activeDeadlineSeconds" :min="0" :max="86400" size="small" style="width: 100%" />
         <div class="form-tip">Job的最长运行时间（秒）。超过此时间Job将被标记为失败并终止所有Pod。设置为0表示无限制</div>
       </div>
 
@@ -184,11 +184,11 @@ const applyExample = (type: string) => {
   letter-spacing: 0.3px;
 }
 
-.form-row .el-input-number {
+.form-row .arco-input-number {
   width: 100%;
 }
 
-.form-row .el-input-number :deep(.el-input__wrapper) {
+.form-row .arco-input-number :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -196,12 +196,12 @@ const applyExample = (type: string) => {
   transition: all 0.3s ease;
 }
 
-.form-row .el-input-number :deep(.el-input__wrapper:hover) {
+.form-row .arco-input-number :deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.form-row .el-input-number :deep(.el-input__wrapper.is-focus) {
+.form-row .arco-input-number :deep(.arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
 }

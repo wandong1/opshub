@@ -1,0 +1,291 @@
+groups:
+- name: 严重告警
+  rules:
+  - alert: 算法接口-成功率低于50%-最近10分钟
+    expr: ((sum by (calleeEndpoint) (rate(web_server_qps_total{retCode="200",calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      * 100.0) / sum by (calleeEndpoint) (rate(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[8h]))
+      < 200 unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[8h]
+      offset 1d)) < 200) < 95
+    for: 0s
+    labels:
+      severity: 严重告警
+      status: 严重告警
+      type: 算法接口
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟成功率为{{ $value }}
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-成功率低告警
+  - alert: KubeletDown
+    expr: absent(up{job="kubelet"} == 1)
+    for: 15m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: '{{$labels.instance}} KubeletDown'
+      summary: '{{$labels.instance}} KubeletDown'
+  - alert: KubeAPIDown
+    expr: absent(up{job="apiserver"} == 1)
+    for: 15m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: '{{$labels.instance}} KubeAPIDown'
+      summary: '{{$labels.instance}} KubeAPIDown'
+  - alert: 视频流告警回调往用户未推送成功的堆积数量
+    expr: send_task_stacking_nums > 1000
+    for: 5m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: 视频流告警回调往用户未推送成功的堆积数量
+      summary: '{{ $labels.send_url }} 存在{{$value}} 条告警任务推送堆积'
+  - alert: ceph集群radosgw vip连通性
+    expr: ceph_radosgw_check_pass == 0
+    for: 5m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.host }} ceph radosgw连通性异常'
+      summary: '{{ $labels.host }} ceph radosgw连通性异常'
+  - alert: kafka集群节点Down
+    expr: count(kafka_server_replicamanager_leadercount) < 3
+    for: 1m
+    labels:
+      severity: critical
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.instance }} kafka健康检查失败！'
+      summary: '{{$labels.instance}} kafka集群宕机！'
+  - alert: MongoDBDown
+    expr: mongodb_up != 1
+    for: 2m
+    labels:
+      status: 严重告警
+    annotations:
+      description: MongoDB instance {{ $labels.instance }} is down.
+      summary: MongoDB is down
+  - alert: Redis状态Down
+    expr: redis_up != 1
+    for: 1m
+    labels:
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.instance }} Redis状态检查失败！'
+      summary: '{{$labels.instance}} Redis宕机！'
+  - alert: Mysql状态Down
+    expr: mysql_up != 1
+    for: 1m
+    labels:
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.instance }} Mysql状态检查失败！'
+      summary: '{{$labels.instance}} Mysql宕机！'
+  - alert: MysqlTooManyConnections > 95%
+    expr: max_over_time(mysql_global_status_threads_connected[1m]) / mysql_global_variables_max_connections
+      * 100 > 95
+    for: 2m
+    labels:
+      status: 严重告警
+    annotations:
+      description: |-
+        More than 95% of MySQL connections are in use on {{ $labels.instance }}
+          VALUE = {{ $value }}
+          LABELS = {{ $labels }}
+      summary: MySQL too many connections (> 95%) (instance {{ $labels.instance }})
+  - alert: ceph状态Down
+    expr: ceph_health_status == 2
+    for: 1m
+    labels:
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.instance }} ceph集群状态检查失败！'
+      summary: '{{ $labels.instance }} 状态错误，ceph宕机！'
+  - alert: 磁盘容量使用爆满
+    expr: 100-(node_filesystem_free_bytes{fstype=~"ext4|xfs"}/node_filesystem_size_bytes
+      {fstype=~"ext4|xfs"}*100) > 99
+    for: 1m
+    labels:
+      status: 严重告警
+    annotations:
+      description: '{{$labels.mountpoint }} 磁盘分区使用大于99%(目前使用:{{$value}}%)'
+      summary: '{{$labels.mountpoint}} 磁盘分区使用率过高！'
+  - alert: CPU使用 > 99%
+    expr: 100-(avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) by(instance)* 100)
+      > 99
+    for: 2m
+    labels:
+      status: 严重告警
+    annotations:
+      description: '{{$labels.mountpoint }} CPU使用大于99%(目前使用:{{$value}}%)'
+      summary: '{{$labels.mountpoint}} CPU使用率过高！'
+  - alert: 服务状态Down
+    expr: up{job!="ai-demo"} == 0
+    for: 5m
+    labels:
+      status: 严重告警
+    annotations:
+      description: '{{$labels.instance}}{{$labels.job}}:服务延时超过5分钟'
+      summary: '{{$labels.instance}} {{$labels.job}}:服务宕机'
+  - alert: sms-zlmediakit服务心跳5分钟内无上报
+    expr: eop_zlmediakit_heartbeat_not_alive > 0
+    for: 5m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: sms-zlmediakit服务心跳5分钟内无上报
+      summary: sms-zlmediakit服务心跳5分钟内无上报
+  - alert: 算法服务副本健康状态异常率超过50%
+    expr: count(aicore_service_status != 1) by (service_name,node_type,algorithm_list,type)
+      / count(aicore_service_status) by (service_name,node_type,algorithm_list,type)
+      > 0.5
+    for: 10m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: 算法服务副本异常率超过50%
+      summary: 算法类型：{{$labels.type}} 算法名称：{{ $labels.algorithm_list }} 服务副本数异常率超过50%
+  - alert: AI平台主机节点Down
+    expr: status != 1
+    for: 1m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.job }}主机节点{{ $labels.nodeIp }}宕机！'
+      summary: '{{ $labels.job }}主机节点宕机！'
+  - alert: AI平台业务pod持续1小时存在重启
+    expr: increase(restart_count{podName=~'^pod.*'}[10m]) > 0
+    for: 60m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: '{{ $labels.nodeIp }}节点{{ $labels.podName }}容器持续1小时重启频率{{ $value
+        }}/10m'
+      summary: '{{ $labels.nodeIp }}节点{{ $labels.podName }}容器持续1小时重启'
+  - alert: 平台维度视频流core任务状态异常率大于75%
+    expr: count(aicore_task_status{} != 1 and aicore_task_status{} !=7) by (job) *
+      100/ count(aicore_task_status) by (job) > 75
+    for: 15m
+    labels:
+      severity: 严重告警
+      status: 严重告警
+    annotations:
+      description: '{{$labels.job}} 平台维度视频流core任务状态异常率超过阈值，请尽快排查处理！'
+      summary: 平台维度视频流接入任务异常率：{{ $value }}%
+- name: 一般告警
+  rules:
+  - alert: 算法接口-成功率低于95%-最近10分钟
+    expr: ((sum by (calleeEndpoint) (rate(web_server_qps_total{retCode="200",calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      * 100.0) / sum by (calleeEndpoint) (rate(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[8h]))
+      < 200 unless sum by (calleeEndpoint) (increase(web_server_qps_total{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[8h]
+      offset 1d)) < 200) < 95
+    for: 0s
+    labels:
+      severity: 一般告警
+      status: 一般告警
+      type: 算法接口
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟成功率为{{ $value }}
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-成功率低告警
+  - alert: 算法接口-Lantency大于6秒-最近10分钟
+    expr: sum by (calleeEndpoint) (increase(web_server_latency_sum{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      / sum by (calleeEndpoint) (increase(web_server_latency_count{calleeEndpoint=~"/aipass/aipassweb-api/openapi/openApi/v1/ai/.*"}[10m]))
+      >6000
+    for: 30s
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: 算法接口-{{ $labels.calleeEndpoint }}-最近10分钟Latency大于6秒
+      summary: 算法接口-{{ $labels.calleeEndpoint }}-Latency过高告警
+  - alert: IO > 95%
+    expr: 100-(avg(irate(node_disk_io_time_seconds_total[1m])) by(instance)* 100)
+      < 5
+    for: 5m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: '{{$labels.mountpoint }} 流入磁盘IO大于95%(目前使用:{{$value}})'
+      summary: '{{$labels.mountpoint}} 流入磁盘IO使用率过高！'
+  - alert: 内存使用 > 98%
+    expr: (node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Cached_bytes
+      - node_memory_Buffers_bytes ) / node_memory_MemTotal_bytes * 100 > 98
+    for: 2m
+    labels:
+      severity: warning
+      status: 一般告警
+    annotations:
+      description: '{{$labels.mountpoint }} 内存使用大于98%(目前使用:{{$value}}%)'
+      summary: '{{$labels.mountpoint}} 内存使用率过高！'
+  - alert: 视频流算法维度core任务状态异常率大于95%
+    expr: count(aicore_task_status{} != 1 and aicore_task_status{} !=7) by (event_code)/
+      count(aicore_task_status) by (event_code) * 100 > 95
+    for: 15m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: 视频流算法维度core任务状态异常率大于95%阈值
+      summary: 算法编码：{{$labels.event_code}} 接入任务异常率：{{ $value }}%
+  - alert: GPU解码率超过90%阈值
+    expr: DCGM_FI_DEV_DEC_UTIL > 90
+    for: 5m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: '{{ $labels.instance }}|{{ $labels.pod }}|{{ $labels.container
+        }}GPU解码率超过90%阈值'
+      summary: '{{ $labels.pod }} 当前GPU解码率：{{ $value }}% '
+  - alert: AI平台业务pod CPU使用率
+    expr: cpu_usage_rate{job="ai-platform",podName=~"pod.*"}>99
+    for: 5m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      description: '{{ $labels.nodeIp }}节点,{{ $labels.podName }} CPU使用率超过99%阈值'
+      summary: '{{$labels.podName}} CPU使用率：{{ $value }}%'
+  - alert: AI平台业务pod 内存使用率
+    expr: memory_rss_rate{job="ai-platform",podName=~"pod.*"} > 99
+    for: 5m
+    labels:
+      severity: 一般告警
+    annotations:
+      description: '{{ $labels.nodeIp }}节点,{{ $labels.podName }} 内存使用率超过99%阈值'
+      summary: '{{$labels.podName}} 内存使用率：{{ $value }}%'
+  - alert: GPU计算利用率超过99%阈值
+    expr: DCGM_FI_DEV_GPU_UTIL > 99
+    for: 5m
+    labels:
+      severity: 一般告警
+    annotations:
+      description: '{{ $labels.instance }}|{{ $labels.pod }}|{{ $labels.container
+        }}GPU计算利用率超过99%阈值'
+      summary: '{{ $labels.pod }} 当前GPU计算利用率：{{ $value }}% '
+  - alert: GPU显存占用率超过99.9%阈值
+    expr: DCGM_FI_DEV_FB_USED/ (DCGM_FI_DEV_FB_FREE+ DCGM_FI_DEV_FB_USED) *100 > 99.9
+    for: 5m
+    labels:
+      severity: 一般告警
+    annotations:
+      description: '{{ $labels.instance }}|{{ $labels.pod }}|{{ $labels.container
+        }}GPU显存占用率超过99.9%阈值'
+      summary: '{{ $labels.pod }} 当前GPU显存占用率：{{ $value }}% '
+  - alert: AI平台节点GPU卡数异常
+    expr: count by(instance)(DCGM_FI_DEV_GPU_TEMP) < 6
+    for: 10m
+    labels:
+      severity: 一般告警
+      status: 一般告警
+    annotations:
+      summary: AI平台节点GPU卡数异常

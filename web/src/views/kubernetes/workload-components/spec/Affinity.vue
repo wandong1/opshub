@@ -1,22 +1,22 @@
 <template>
   <div class="affinity-wrapper">
     <div class="affinity-action-buttons">
-      <el-button type="primary" :icon="Plus" @click="emit('startAddAffinity', 'pod')">添加 Pod 亲和性</el-button>
-      <el-button type="primary" :icon="Plus" @click="emit('startAddAffinity', 'node')">添加 Node 亲和性</el-button>
+      <a-button type="primary" @click="emit('startAddAffinity', 'pod')">添加 Pod 亲和性</a-button>
+      <a-button type="primary" @click="emit('startAddAffinity', 'node')">添加 Node 亲和性</a-button>
     </div>
 
     <!-- 配置表单 -->
     <div v-if="editingAffinityRule !== null" class="affinity-config-container">
       <div class="config-container-header">
         <div class="config-type-badge">
-          <el-tag v-if="editingAffinityRule.type === 'podAffinity'" type="success">Pod 亲和性</el-tag>
-          <el-tag v-else-if="editingAffinityRule.type === 'podAntiAffinity'" type="danger">Pod 反亲和性</el-tag>
-          <el-tag v-else-if="editingAffinityRule.type === 'nodeAffinity'" type="success">Node 亲和性</el-tag>
-          <el-tag v-else type="danger">Node 反亲和性</el-tag>
+          <a-tag v-if="editingAffinityRule.type === 'podAffinity'" color="green">Pod 亲和性</a-tag>
+          <a-tag v-else-if="editingAffinityRule.type === 'podAntiAffinity'" color="red">Pod 反亲和性</a-tag>
+          <a-tag v-else-if="editingAffinityRule.type === 'nodeAffinity'" color="green">Node 亲和性</a-tag>
+          <a-tag v-else color="red">Node 反亲和性</a-tag>
         </div>
         <div class="config-header-actions">
-          <el-button @click="emit('cancelAffinityEdit')">取消</el-button>
-          <el-button type="primary" @click="emit('saveAffinityRule')">添加</el-button>
+          <a-button @click="emit('cancelAffinityEdit')">取消</a-button>
+          <a-button type="primary" @click="emit('saveAffinityRule')">添加</a-button>
         </div>
       </div>
 
@@ -24,40 +24,40 @@
         <!-- 类型 -->
         <div class="config-form-section">
           <label class="form-label">类型</label>
-          <el-radio-group v-model="editingAffinityRule.type" class="affinity-type-radio">
+          <a-radio-group v-model="editingAffinityRule.type" class="affinity-type-radio">
             <template v-if="editingAffinityRule.type.includes('pod')">
-              <el-radio value="podAffinity" class="affinity-radio-item">Pod 亲和性</el-radio>
-              <el-radio value="podAntiAffinity" class="affinity-radio-item">Pod 反亲和性</el-radio>
+              <a-radio value="podAffinity" class="affinity-radio-item">Pod 亲和性</a-radio>
+              <a-radio value="podAntiAffinity" class="affinity-radio-item">Pod 反亲和性</a-radio>
             </template>
             <template v-else>
-              <el-radio value="nodeAffinity" class="affinity-radio-item">Node 亲和性</el-radio>
-              <el-radio value="nodeAntiAffinity" class="affinity-radio-item">Node 反亲和性</el-radio>
+              <a-radio value="nodeAffinity" class="affinity-radio-item">Node 亲和性</a-radio>
+              <a-radio value="nodeAntiAffinity" class="affinity-radio-item">Node 反亲和性</a-radio>
             </template>
-          </el-radio-group>
+          </a-radio-group>
         </div>
 
         <!-- Namespaces（仅Pod亲和性） -->
         <div v-if="editingAffinityRule.type.includes('pod')" class="config-form-section">
           <label class="form-label">Namespaces</label>
-          <el-select
+          <a-select
             v-model="editingAffinityRule.namespaces"
             multiple
             placeholder="选择命名空间"
             class="full-width-input"
           >
-            <el-option
+            <a-option
               v-for="ns in namespaceList"
               :key="ns.name"
               :label="ns.name"
               :value="ns.name"
             />
-          </el-select>
+          </a-select>
         </div>
 
         <!-- 拓扑键（仅Pod亲和性） -->
         <div v-if="editingAffinityRule.type.includes('pod')" class="config-form-section">
           <label class="form-label">拓扑键 (Topology Key)</label>
-          <el-input
+          <a-input
             v-model="editingAffinityRule.topologyKey"
             placeholder="例如: kubernetes.io/hostname, topology.kubernetes.io/zone"
             class="full-width-input"
@@ -70,52 +70,52 @@
         <!-- 优先级 -->
         <div class="config-form-section">
           <label class="form-label">优先级</label>
-          <el-select v-model="editingAffinityRule.priority" class="full-width-input">
-            <el-option label="Required (必须)" value="Required" />
-            <el-option label="Preferred (首选)" value="Preferred" />
-          </el-select>
+          <a-select v-model="editingAffinityRule.priority" class="full-width-input">
+            <a-option label="Required (必须)" value="Required" />
+            <a-option label="Preferred (首选)" value="Preferred" />
+          </a-select>
         </div>
 
         <!-- 权重 -->
         <div v-if="editingAffinityRule.priority === 'Preferred'" class="config-form-section">
           <label class="form-label">权重</label>
-          <el-input-number v-model="editingAffinityRule.weight" :min="1" :max="100" class="full-width-input" />
+          <a-input-number v-model="editingAffinityRule.weight" :min="1" :max="100" class="full-width-input" />
         </div>
 
         <!-- Match Expressions -->
         <div class="config-form-section">
           <div class="section-header">
             <label class="form-label">Match Expressions</label>
-            <el-button type="primary" :icon="Plus" size="small" @click="emit('addMatchExpression')">添加</el-button>
+            <a-button type="primary" size="small" @click="emit('addMatchExpression')">添加</a-button>
           </div>
           <div class="expressions-list">
             <div v-for="(exp, index) in editingAffinityRule.matchExpressions" :key="'expr-'+index" class="expression-config-row">
               <div class="expression-config-grid">
                 <div class="config-grid-item">
                   <label class="config-grid-label">Key</label>
-                  <el-input v-model="exp.key" placeholder="例如: app" />
+                  <a-input v-model="exp.key" placeholder="例如: app" />
                 </div>
                 <div class="config-grid-item">
                   <label class="config-grid-label">Operator</label>
-                  <el-select v-model="exp.operator" placeholder="选择操作符">
-                    <el-option label="In" value="In" />
-                    <el-option label="NotIn" value="NotIn" />
-                    <el-option label="Exists" value="Exists" />
-                    <el-option label="DoesNotExist" value="DoesNotExist" />
-                    <el-option label="Gt" value="Gt" />
-                    <el-option label="Lt" value="Lt" />
-                  </el-select>
+                  <a-select v-model="exp.operator" placeholder="选择操作符">
+                    <a-option label="In" value="In" />
+                    <a-option label="NotIn" value="NotIn" />
+                    <a-option label="Exists" value="Exists" />
+                    <a-option label="DoesNotExist" value="DoesNotExist" />
+                    <a-option label="Gt" value="Gt" />
+                    <a-option label="Lt" value="Lt" />
+                  </a-select>
                 </div>
                 <div class="config-grid-item" v-if="exp.operator !== 'Exists' && exp.operator !== 'DoesNotExist'">
                   <label class="config-grid-label">Values</label>
-                  <el-input v-model="exp.valueStr" placeholder="多个值用逗号分隔" />
+                  <a-input v-model="exp.valueStr" placeholder="多个值用逗号分隔" />
                 </div>
               </div>
               <div class="expression-config-actions">
-                <el-button type="danger" :icon="Delete" size="small" @click="emit('removeMatchExpression', index)">删除</el-button>
+                <a-button status="danger" size="small" @click="emit('removeMatchExpression', index)">删除</a-button>
               </div>
             </div>
-            <el-empty v-if="editingAffinityRule.matchExpressions.length === 0" description="暂无匹配表达式" :image-size="60" />
+            <a-empty v-if="editingAffinityRule.matchExpressions.length === 0" description="暂无匹配表达式" :image-size="60" />
           </div>
         </div>
 
@@ -123,18 +123,18 @@
         <div class="config-form-section">
           <div class="section-header">
             <label class="form-label">Match Labels</label>
-            <el-button type="primary" :icon="Plus" size="small" @click="emit('addMatchLabel')">添加</el-button>
+            <a-button type="primary" size="small" @click="emit('addMatchLabel')">添加</a-button>
           </div>
           <div class="labels-list">
             <div v-for="(label, index) in editingAffinityRule.matchLabels" :key="'label-'+index" class="label-config-row">
               <div class="label-config-grid">
-                <el-input v-model="label.key" placeholder="Key" style="flex: 1" />
+                <a-input v-model="label.key" placeholder="Key" style="flex: 1" />
                 <span class="label-separator">=</span>
-                <el-input v-model="label.value" placeholder="Value" style="flex: 1" />
+                <a-input v-model="label.value" placeholder="Value" style="flex: 1" />
               </div>
-              <el-button type="danger" :icon="Delete" size="small" @click="emit('removeMatchLabel', index)">删除</el-button>
+              <a-button status="danger" size="small" @click="emit('removeMatchLabel', index)">删除</a-button>
             </div>
-            <el-empty v-if="editingAffinityRule.matchLabels.length === 0" description="暂无标签" :image-size="60" />
+            <a-empty v-if="editingAffinityRule.matchLabels.length === 0" description="暂无标签" :image-size="60" />
           </div>
         </div>
       </div>
@@ -148,12 +148,12 @@
       <div v-for="(rule, rIndex) in affinityRules" :key="'aff-rule-'+rIndex" class="affinity-rule-card">
         <div class="affinity-rule-header">
           <div class="rule-type-badge">
-            <el-tag v-if="rule.type === 'podAffinity'" type="success">Pod 亲和性</el-tag>
-            <el-tag v-else-if="rule.type === 'podAntiAffinity'" type="danger">Pod 反亲和性</el-tag>
-            <el-tag v-else-if="rule.type === 'nodeAffinity'" type="success">Node 亲和性</el-tag>
-            <el-tag v-else type="danger">Node 反亲和性</el-tag>
+            <a-tag v-if="rule.type === 'podAffinity'" color="green">Pod 亲和性</a-tag>
+            <a-tag v-else-if="rule.type === 'podAntiAffinity'" color="red">Pod 反亲和性</a-tag>
+            <a-tag v-else-if="rule.type === 'nodeAffinity'" color="green">Node 亲和性</a-tag>
+            <a-tag v-else color="red">Node 反亲和性</a-tag>
           </div>
-          <el-button type="danger" :icon="Delete" size="small" @click="emit('removeAffinityRule', rIndex)">删除</el-button>
+          <a-button status="danger" size="small" @click="emit('removeAffinityRule', rIndex)">删除</a-button>
         </div>
         <div class="affinity-rule-body">
           <div class="rule-detail-row" v-if="rule.namespaces && rule.namespaces.length > 0">
@@ -193,7 +193,6 @@
 </template>
 
 <script setup lang="ts">
-import { Plus, Delete } from '@element-plus/icons-vue'
 
 interface AffinityRule {
   type: 'podAffinity' | 'podAntiAffinity' | 'nodeAffinity' | 'nodeAntiAffinity'
@@ -316,12 +315,12 @@ const emit = defineEmits<{
 }
 
 .affinity-radio-item:hover {
-  border-color: #409eff;
+  border-color: #165dff;
   background: #ecf5ff;
 }
 
 .affinity-radio-item.is-checked {
-  border-color: #409eff;
+  border-color: #165dff;
   background: #ecf5ff;
 }
 
@@ -333,7 +332,7 @@ const emit = defineEmits<{
   margin-top: 8px;
   padding: 8px 12px;
   background: #e7f3ff;
-  border-left: 3px solid #409eff;
+  border-left: 3px solid #165dff;
   border-radius: 4px;
   font-size: 12px;
   color: #606266;
@@ -363,7 +362,7 @@ const emit = defineEmits<{
 }
 
 .expression-config-row:hover {
-  border-color: #409eff;
+  border-color: #165dff;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
 }
 
@@ -446,7 +445,7 @@ const emit = defineEmits<{
 }
 
 .affinity-rule-card:hover {
-  border-color: #409eff;
+  border-color: #165dff;
   box-shadow: 0 2px 12px rgba(64, 158, 255, 0.15);
 }
 
@@ -524,7 +523,7 @@ const emit = defineEmits<{
 }
 
 .exp-operator {
-  color: #409eff;
+  color: #165dff;
   font-weight: 500;
 }
 

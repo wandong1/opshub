@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><Key /></el-icon>
+          <icon-safe />
         </div>
         <div>
           <h2 class="page-title">配置管理</h2>
@@ -12,26 +12,26 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-select
+        <a-select
           v-model="selectedClusterId"
           placeholder="选择集群"
           class="cluster-select"
           @change="handleClusterChange"
         >
           <template #prefix>
-            <el-icon class="search-icon"><Platform /></el-icon>
+            <icon-apps />
           </template>
-          <el-option
+          <a-option
             v-for="cluster in clusterList"
             :key="cluster.id"
             :label="cluster.alias || cluster.name"
             :value="cluster.id"
           />
-        </el-select>
-        <el-button class="black-button" @click="loadCurrentResources">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-select>
+        <a-button type="primary" @click="loadCurrentResources">
+          <icon-refresh />
           刷新
-        </el-button>
+        </a-button>
       </div>
     </div>
 
@@ -43,9 +43,7 @@
         :class="['type-tab', { active: activeTab === type.value }]"
         @click="handleTabChange(type.value)"
       >
-        <el-icon class="type-icon">
           <component :is="type.icon" />
-        </el-icon>
         <span class="type-label">{{ type.label }}</span>
         <span v-if="type.count !== undefined" class="type-count">({{ type.count }})</span>
       </div>
@@ -116,16 +114,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import {
-  Platform,
-  Refresh,
-  Key,
-  Lock,
-  Histogram,
-  Operation,
-  TrendCharts
-} from '@element-plus/icons-vue'
+  IconSafe,
+  IconLock,
+  IconBarChart,
+  IconSettings,
+  IconDashboard,
+  IconThunderbolt
+} from '@arco-design/web-vue/es/icon'
 import { getClusterList, type Cluster } from '@/api/kubernetes'
 import axios from 'axios'
 import ConfigMapList from './config-components/ConfigMapList.vue'
@@ -144,12 +141,12 @@ interface ConfigType {
 }
 
 const configTypes = ref<ConfigType[]>([
-  { label: 'ConfigMaps', value: 'configmaps', icon: Key, count: 0 },
-  { label: 'Secrets', value: 'secrets', icon: Lock, count: 0 },
-  { label: 'ResourceQuotas', value: 'resourcequotas', icon: Histogram, count: 0 },
-  { label: 'LimitRanges', value: 'limitranges', icon: Operation, count: 0 },
-  { label: 'HPA', value: 'hpa', icon: TrendCharts, count: 0 },
-  { label: 'PodDisruptionBudgets', value: 'pdb', icon: Lock, count: 0 },
+  { label: 'ConfigMaps', value: 'configmaps', icon: IconSafe, count: 0 },
+  { label: 'Secrets', value: 'secrets', icon: IconLock, count: 0 },
+  { label: 'ResourceQuotas', value: 'resourcequotas', icon: IconBarChart, count: 0 },
+  { label: 'LimitRanges', value: 'limitranges', icon: IconSettings, count: 0 },
+  { label: 'HPA', value: 'hpa', icon: IconDashboard, count: 0 },
+  { label: 'PodDisruptionBudgets', value: 'pdb', icon: IconThunderbolt, count: 0 },
 ])
 
 const clusterList = ref<Cluster[]>([])
@@ -180,7 +177,7 @@ const loadClusters = async () => {
       }
     }
   } catch (error) {
-    ElMessage.error('获取集群列表失败')
+    Message.error('获取集群列表失败')
   }
 }
 
@@ -226,20 +223,20 @@ const loadCurrentResources = async () => {
 
 // ConfigMap 操作
 const handleEditConfigMap = (configMap: any) => {
-  ElMessage.info('编辑 ConfigMap 功能开发中...')
+  Message.info('编辑 ConfigMap 功能开发中...')
 }
 
 const handleEditConfigMapYAML = (configMap: any) => {
-  ElMessage.info('编辑 ConfigMap YAML 功能开发中...')
+  Message.info('编辑 ConfigMap YAML 功能开发中...')
 }
 
 // Secret 操作
 const handleEditSecret = (secret: any) => {
-  ElMessage.info('编辑 Secret 功能开发中...')
+  Message.info('编辑 Secret 功能开发中...')
 }
 
 const handleEditSecretYAML = (secret: any) => {
-  ElMessage.info('编辑 Secret YAML 功能开发中...')
+  Message.info('编辑 Secret YAML 功能开发中...')
 }
 
 // 更新数量
@@ -286,15 +283,15 @@ onMounted(() => {
 .page-title-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #165dff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
+  border: none;
 }
 
 .page-title {
@@ -322,24 +319,6 @@ onMounted(() => {
   width: 280px;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
 /* 配置类型标签栏 */
 .config-types-bar {
   display: flex;
@@ -357,8 +336,8 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: #1a1a1a;
-  color: #fff;
+  background: #f7f8fa;
+  color: #4e5969;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -367,14 +346,15 @@ onMounted(() => {
 }
 
 .type-tab:hover {
-  background: #2a2a2a;
+  background: #e8f3ff;
+  color: #165dff;
 }
 
 .type-tab.active {
-  background: #d4af37;
-  color: #000;
-  border: 1px solid #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+  background: #165dff;
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.3);
 }
 
 .type-icon {
@@ -396,7 +376,7 @@ onMounted(() => {
   background: transparent;
 }
 
-.cluster-select :deep(.el-input__wrapper) {
+.cluster-select :deep(.arco-input__wrapper) {
   border-radius: 8px;
 }
 </style>

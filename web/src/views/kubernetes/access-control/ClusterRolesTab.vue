@@ -1,34 +1,29 @@
 <template>
   <div class="cluster-roles-tab">
     <div class="table-wrapper">
-      <el-table :data="paginatedList" v-loading="loading" class="modern-table" :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }">
-        <el-table-column label="名称" min-width="200" fixed="left">
-          <template #default="{ row }">
+      <a-table :data="paginatedList" :loading="loading" class="modern-table" :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }" :columns="tableColumns">
+          <template #name="{ record }">
             <div class="name-cell">
-              <div class="name-icon-wrapper"><el-icon class="name-icon"><Key /></el-icon></div>
-              <span class="name-text">{{ row.name }}</span>
+              <div class="name-icon-wrapper"><icon-safe /></div>
+              <span class="name-text">{{ record.name }}</span>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="存活时间" prop="age" width="140" />
-        <el-table-column label="操作" width="100" fixed="right" align="center">
-          <template #default="{ row }">
-            <el-button v-permission="'k8s-clusterroles:update'" link @click="handleEdit(row)" class="action-btn">
-              <el-icon :size="18"><Edit /></el-icon>
-            </el-button>
-            <el-button v-permission="'k8s-clusterroles:delete'" link @click="handleDelete(row)" class="action-btn danger">
-              <el-icon :size="18"><Delete /></el-icon>
-            </el-button>
+          <template #actions="{ record }">
+            <a-button v-permission="'k8s-clusterroles:update'" type="text" @click="handleEdit(record)" class="action-btn">
+              <icon-edit />
+            </a-button>
+            <a-button v-permission="'k8s-clusterroles:delete'" type="text" @click="handleDelete(record)" class="action-btn danger">
+              <icon-delete />
+            </a-button>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
       <div class="pagination-wrapper">
-        <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" :total="filteredData.length" layout="total, sizes, prev, pager, next, jumper" />
+        <a-pagination v-model:current="currentPage" v-model:page-size="pageSize" :page-size-options="[10, 20, 50, 100]" :total="filteredData.length" show-total show-page-size show-jumper />
       </div>
     </div>
 
     <!-- YAML 弹窗 -->
-    <el-dialog v-model="yamlDialogVisible" :title="yamlDialogTitle" width="900px" class="yaml-dialog">
+    <a-modal v-model:visible="yamlDialogVisible" :title="yamlDialogTitle" width="900px" class="yaml-dialog">
       <div class="yaml-editor-wrapper">
         <div class="yaml-line-numbers">
           <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
@@ -43,18 +38,24 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="handleSaveYAML" :loading="saving" class="black-button">保存</el-button>
+          <a-button @click="yamlDialogVisible = false">关闭</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="saving">保存</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+const tableColumns = [
+  { title: '名称', slotName: 'name', width: 200, fixed: 'left' },
+  { title: '存活时间', dataIndex: 'age', width: 140 },
+  { title: '操作', slotName: 'actions', width: 100, fixed: 'right', align: 'center' }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Key, Edit, Delete, Plus } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getClusterRoles, createClusterRoleFromYAML, updateClusterRoleFromYAML, deleteClusterRole, type ClusterRoleInfo } from '@/api/kubernetes'
 import axios from 'axios'
 import * as yaml from 'js-yaml'
@@ -114,7 +115,7 @@ const loadData = async () => {
     const data = await getClusterRoles(props.clusterId)
     clusterRoles.value = data || []
   } catch (error) {
-    ElMessage.error('获取 ClusterRole 列表失败')
+    Message.error('获取 ClusterRole 列表失败')
   } finally {
     loading.value = false
   }
@@ -162,7 +163,7 @@ const handleEdit = async (row: ClusterRoleInfo) => {
     })
     yamlDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
   }
 }
 
@@ -202,7 +203,7 @@ const cleanK8sResource = (data: any): any => {
 // 删除 ClusterRole
 const handleDelete = async (row: ClusterRoleInfo) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除 ClusterRole ${row.name} 吗？此操作不可恢复！`,
       '删除 ClusterRole 确认',
       {
@@ -213,7 +214,7 @@ const handleDelete = async (row: ClusterRoleInfo) => {
     )
     // 先执行删除
     await deleteClusterRole(props.clusterId, row.name)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     // 删除成功后再刷新列表，刷新失败不影响删除结果
     try {
       await loadData()
@@ -221,7 +222,7 @@ const handleDelete = async (row: ClusterRoleInfo) => {
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '删除失败')
+      Message.error(error.response?.data?.message || '删除失败')
     }
   }
 }
@@ -233,24 +234,24 @@ const handleSaveYAML = async () => {
     // 从 YAML 中解析对象
     const yamlObj: any = yaml.load(yamlContent.value)
     if (!yamlObj || !yamlObj.metadata || !yamlObj.metadata.name) {
-      ElMessage.error('YAML 中缺少必要的 metadata.name 字段')
+      Message.error('YAML 中缺少必要的 metadata.name 字段')
       return
     }
 
     if (isCreateMode.value) {
       // 创建模式
       await createClusterRoleFromYAML(props.clusterId, yamlObj)
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     } else {
       // 编辑模式 - 调用更新 API
       await updateClusterRoleFromYAML(props.clusterId, selectedClusterRole.value!.name, yamlObj)
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     }
 
     yamlDialogVisible.value = false
     await loadData()
   } catch (error: any) {
-    ElMessage.error(`保存失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`保存失败: ${error.response?.data?.message || error.message}`)
   } finally {
     saving.value = false
   }
@@ -292,46 +293,45 @@ defineExpose({
 .cluster-roles-tab { width: 100%; }
 .search-bar { margin-bottom: 16px; }
 .search-input { width: 300px; }
-.search-icon { color: #d4af37; }
 .table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; }
 .name-cell { display: flex; align-items: center; gap: 10px; }
-.name-icon-wrapper { width: 32px; height: 32px; border-radius: 6px; background: linear-gradient(135deg, #000 0%, #1a1a1a 100%); display: flex; align-items: center; justify-content: center; border: 1px solid #d4af37; }
-.name-icon { color: #d4af37; }
+.name-icon-wrapper { width: 32px; height: 32px; border-radius: 6px; background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%); display: flex; align-items: center; justify-content: center; border: none; }
+.name-icon { color: #165dff; }
 .name-text { font-weight: 600; color: #303133; }
-.action-btn { color: #d4af37; margin: 0 4px; }
+.action-btn { color: #165dff; margin: 0 4px; padding: 0; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; }
 .action-btn.danger { color: #f56c6c; }
 .action-btn:hover { transform: scale(1.1); }
 .pagination-wrapper { display: flex; justify-content: flex-end; padding: 16px 20px; border-top: 1px solid #f0f0f0; }
 
 /* YAML 编辑弹窗 */
-.yaml-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__header) {
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
+  color: #165dff;
   border-radius: 8px 8px 0 0;
   padding: 20px 24px;
 }
 
-.yaml-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
+.yaml-dialog :deep(.arco-dialog__title) {
+  color: #165dff;
   font-size: 16px;
   font-weight: 600;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 24px;
-  background-color: #1a1a1a;
+  background-color: #fafafa;
 }
 
 .yaml-editor-wrapper {
   display: flex;
-  border: 1px solid #d4af37;
+  border: 1px solid #e5e6eb;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #000000;
+  background-color: #fafafa;
 }
 
 .yaml-line-numbers {
-  background-color: #0d0d0d;
+  background-color: #f2f3f5;
   color: #666;
   padding: 16px 8px;
   text-align: right;
@@ -341,7 +341,7 @@ defineExpose({
   user-select: none;
   overflow: hidden;
   min-width: 40px;
-  border-right: 1px solid #333;
+  border-right: 1px solid #e5e6eb;
 }
 
 .line-number {
@@ -351,8 +351,8 @@ defineExpose({
 
 .yaml-textarea {
   flex: 1;
-  background-color: #000000;
-  color: #d4af37;
+  background-color: #fafafa;
+  color: #1d2129;
   border: none;
   outline: none;
   padding: 16px;
@@ -375,19 +375,5 @@ defineExpose({
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
 }
 </style>

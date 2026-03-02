@@ -1,582 +1,442 @@
 <template>
   <div class="workloads-container">
     <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Tools /></el-icon>
+    <a-card class="page-header-card">
+      <div class="page-header">
+        <div class="page-title-group">
+          <div class="page-title-icon">
+            <icon-tool />
+          </div>
+          <div>
+            <h2 class="page-title">工作负载</h2>
+            <p class="page-subtitle">管理 Kubernetes 工作负载资源</p>
+          </div>
         </div>
-        <div>
-          <h2 class="page-title">工作负载</h2>
-          <p class="page-subtitle">管理 Kubernetes 工作负载资源</p>
+        <div class="header-actions">
+          <a-select
+            v-model="selectedClusterId"
+            placeholder="选择集群"
+            style="width: 260px"
+            @change="handleClusterChange"
+          >
+            <template #prefix>
+              <icon-apps />
+            </template>
+            <a-option
+              v-for="cluster in clusterList"
+              :key="cluster.id"
+              :label="cluster.alias || cluster.name"
+              :value="cluster.id"
+            />
+          </a-select>
+          <a-button @click="loadWorkloads">
+            <template #icon><icon-refresh /></template>
+            刷新
+          </a-button>
         </div>
       </div>
-      <div class="header-actions">
-        <el-select
-          v-model="selectedClusterId"
-          placeholder="选择集群"
-          class="cluster-select"
-          @change="handleClusterChange"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Platform /></el-icon>
-          </template>
-          <el-option
-            v-for="cluster in clusterList"
-            :key="cluster.id"
-            :label="cluster.alias || cluster.name"
-            :value="cluster.id"
-          />
-        </el-select>
-        <el-button class="black-button" @click="loadWorkloads">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
-          刷新
-        </el-button>
-      </div>
-    </div>
+    </a-card>
 
     <!-- 工作负载类型标签 -->
-    <div class="workload-types-bar">
-      <div
-        v-for="type in workloadTypes"
-        :key="type.value"
-        :class="['type-tab', { active: selectedType === type.value }]"
-        @click="handleTypeChange(type.value)"
-      >
-        <el-icon class="type-icon">
-          <component :is="type.icon" />
-        </el-icon>
-        <span class="type-label">{{ type.label }}</span>
-        <span class="type-count" v-if="type.count !== undefined">({{ type.count }})</span>
-      </div>
-    </div>
+    <a-card class="types-card">
+      <a-radio-group v-model="selectedType" type="button" @change="handleTypeChange">
+        <a-radio v-for="type in workloadTypes" :key="type.value" :value="type.value">
+          {{ type.label }}
+          <span v-if="type.count !== undefined" class="type-count">({{ type.count }})</span>
+        </a-radio>
+      </a-radio-group>
+    </a-card>
 
     <!-- 操作栏 -->
-    <div class="action-bar">
-      <div class="search-section">
-        <el-input
-          v-model="searchName"
-          placeholder="搜索工作负载名称..."
-          clearable
-          @clear="handleSearch"
-          @keyup.enter="handleSearch"
-          @input="handleSearch"
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
+    <a-card class="search-card">
+      <div class="action-bar">
+        <div class="search-section">
+          <a-input
+            v-model="searchName"
+            placeholder="搜索工作负载名称..."
+            allow-clear
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+            @input="handleSearch"
+            style="width: 280px"
+          >
+            <template #prefix>
+              <icon-search />
+            </template>
+          </a-input>
 
-        <el-select
-          v-model="selectedNamespace"
-          placeholder="所有命名空间"
-          clearable
-          filterable
-          @change="handleSearch"
-          class="namespace-select"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><FolderOpened /></el-icon>
-          </template>
-          <el-option
-            v-for="ns in namespaceList"
-            :key="ns.name"
-            :label="ns.name"
-            :value="ns.name"
-          />
-        </el-select>
+          <a-select
+            v-model="selectedNamespace"
+            placeholder="所有命名空间"
+            allow-clear
+            :allow-search="true"
+            @change="handleSearch"
+            style="width: 200px"
+          >
+            <template #prefix>
+              <icon-folder />
+            </template>
+            <a-option
+              v-for="ns in namespaceList"
+              :key="ns.name"
+              :label="ns.name"
+              :value="ns.name"
+            />
+          </a-select>
+        </div>
+
+        <a-space>
+          <a-button v-permission="'k8s-workloads:create'" type="primary" @click="handleAddWorkloadYAML">
+            <template #icon><icon-file /></template>
+            YAML创建
+          </a-button>
+          <a-button
+            v-if="selectedType !== 'Pod'"
+            v-permission="'k8s-workloads:create'"
+            status="success"
+            @click="handleAddWorkloadForm"
+          >
+            <template #icon><icon-edit /></template>
+            表单创建
+          </a-button>
+        </a-space>
       </div>
-
-      <div class="action-buttons">
-        <el-button v-permission="'k8s-workloads:create'" type="primary" @click="handleAddWorkloadYAML" class="add-button">
-          <el-icon><Document /></el-icon>
-          YAML创建
-        </el-button>
-
-        <el-button
-          v-if="selectedType !== 'Pod'"
-          v-permission="'k8s-workloads:create'"
-          type="success"
-          @click="handleAddWorkloadForm"
-          class="add-button-form"
-        >
-          <el-icon><Edit /></el-icon>
-          表单创建
-        </el-button>
-      </div>
-    </div>
+    </a-card>
 
     <!-- 批量操作栏 -->
-    <div v-if="selectedWorkloads.length > 0" class="batch-action-bar">
-      <div class="batch-action-left">
+    <a-card v-if="selectedWorkloads.length > 0" class="batch-actions-bar">
+      <div class="batch-actions-content">
         <span class="selected-count">已选择 {{ selectedWorkloads.length }} 项</span>
+        <a-space>
+          <a-button
+            v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet' || selectedType === 'DaemonSet'"
+            v-permission="'k8s-workloads:batch-restart'"
+            @click="handleBatchRestart"
+            :loading="batchActionLoading"
+          >
+            <template #icon><icon-refresh /></template>
+            批量重启
+          </a-button>
+          <a-button
+            v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
+            v-permission="'k8s-workloads:batch-stop'"
+            @click="handleBatchPause"
+            :loading="batchActionLoading"
+            status="warning"
+          >
+            <template #icon><icon-pause-circle /></template>
+            批量停止
+          </a-button>
+          <a-button
+            v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
+            v-permission="'k8s-workloads:batch-resume'"
+            @click="handleBatchResume"
+            :loading="batchActionLoading"
+            status="success"
+          >
+            <template #icon><icon-play-arrow /></template>
+            批量恢复
+          </a-button>
+          <a-button
+            v-permission="'k8s-workloads:batch-delete'"
+            @click="handleBatchDelete"
+            :loading="batchActionLoading"
+            status="danger"
+          >
+            <template #icon><icon-delete /></template>
+            批量删除
+          </a-button>
+          <a-button @click="clearSelection">取消选择</a-button>
+        </a-space>
       </div>
-      <div class="batch-action-right">
-        <el-button
-          v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet' || selectedType === 'DaemonSet'"
-          v-permission="'k8s-workloads:batch-restart'"
-          @click="handleBatchRestart"
-          :loading="batchActionLoading"
-          class="batch-btn"
-        >
-          <el-icon><Refresh /></el-icon>
-          批量重启
-        </el-button>
-        <el-button
-          v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
-          v-permission="'k8s-workloads:batch-stop'"
-          @click="handleBatchPause"
-          :loading="batchActionLoading"
-          type="warning"
-          class="batch-btn"
-        >
-          <el-icon><VideoPause /></el-icon>
-          批量停止
-        </el-button>
-        <el-button
-          v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'"
-          v-permission="'k8s-workloads:batch-resume'"
-          @click="handleBatchResume"
-          :loading="batchActionLoading"
-          type="success"
-          class="batch-btn"
-        >
-          <el-icon><VideoPlay /></el-icon>
-          批量恢复
-        </el-button>
-        <el-button
-          v-permission="'k8s-workloads:batch-delete'"
-          @click="handleBatchDelete"
-          :loading="batchActionLoading"
-          type="danger"
-          class="batch-btn"
-        >
-          <el-icon><Delete /></el-icon>
-          批量删除
-        </el-button>
-        <el-button @click="clearSelection" class="batch-btn">
-          取消选择
-        </el-button>
-      </div>
-    </div>
+    </a-card>
 
     <!-- 工作负载列表 -->
-    <div class="table-wrapper">
-      <el-table
+    <a-card class="table-card">
+      <a-table
         :data="paginatedWorkloadList"
-        v-loading="loading"
-        class="modern-table"
-        size="default"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
-        :row-style="{ height: '56px' }"
-        :cell-style="{ padding: '8px 0' }"
+        :loading="loading"
+        :bordered="false"
         @selection-change="handleSelectionChange"
-      >
-        <!-- 选择列 -->
-        <el-table-column type="selection" width="55" fixed="left" />
-        <!-- 名称列（所有类型通用，但显示内容不同） -->
-        <el-table-column label="名称" min-width="200" fixed="left">
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Tools /></el-icon>
-              名称
-            </span>
-          </template>
-          <template #default="{ row }">
+       :columns="tableColumns7" :row-selection="{ type: 'checkbox', showCheckedAll: true }"
+       :pagination="false">
+          <template #name="{ record }">
             <div class="workload-name-cell">
-              <div class="workload-type-icon-box">
-                <el-icon class="workload-type-icon-gold" :size="18">
-                  <Tools />
-                </el-icon>
+              <div class="workload-type-icon-box" :class="`icon-${(record.type || selectedType).toLowerCase()}`">
+                <icon-apps v-if="(record.type || selectedType) === 'Deployment'" />
+                <icon-storage v-else-if="(record.type || selectedType) === 'StatefulSet'" />
+                <icon-relation v-else-if="(record.type || selectedType) === 'DaemonSet'" />
+                <icon-thunderbolt v-else-if="(record.type || selectedType) === 'Job'" />
+                <icon-clock-circle v-else-if="(record.type || selectedType) === 'CronJob'" />
+                <icon-common v-else-if="(record.type || selectedType) === 'Pod'" />
+                <icon-tool v-else />
               </div>
               <div class="workload-name-content">
-                <el-tooltip :content="row.name" placement="top" effect="light">
-                  <div class="workload-name clickable" @click="row.type === 'Pod' ? handlePodWorkloadClick(row) : handleShowDetail(row)">{{ row.name }}</div>
-                </el-tooltip>
-                <!-- Pod类型显示容器，其他类型显示命名空间 -->
-                <div v-if="selectedType === 'Pod'" class="workload-namespace">{{ row.containers || '-' }}</div>
-                <div v-else class="workload-namespace">{{ row.namespace }}</div>
+                <a-tooltip :content="record.name" position="top">
+                  <div class="workload-name clickable" @click="record.type === 'Pod' ? handlePodWorkloadClick(record) : handleShowDetail(record)">{{ record.name }}</div>
+                </a-tooltip>
+                <div v-if="selectedType === 'Pod'" class="workload-namespace">{{ record.containers || '-' }}</div>
+                <div v-else class="workload-namespace">{{ record.namespace }}</div>
               </div>
             </div>
           </template>
-        </el-table-column>
-
-        <!-- Pod 专用列 -->
-        <template v-if="selectedType === 'Pod'">
-          <!-- CPU/内存 列 -->
-          <el-table-column label="CPU/内存" min-width="150">
-            <template #default="{ row }">
+          <template #col_4432="{ record }">
               <div class="resource-cell">
-                <div v-if="row.cpu || row.memory" class="resource-item">
-                  <span v-if="row.cpu" class="resource-value">{{ row.cpu }}</span>
-                  <span v-if="row.cpu && row.memory" class="resource-separator"> / </span>
-                  <span v-if="row.memory" class="resource-value">{{ row.memory }}</span>
+                <div v-if="record.cpu || record.memory" class="resource-item">
+                  <span v-if="record.cpu" class="resource-value">{{ record.cpu }}</span>
+                  <span v-if="record.cpu && record.memory" class="resource-separator"> / </span>
+                  <span v-if="record.memory" class="resource-value">{{ record.memory }}</span>
                 </div>
                 <div v-else class="resource-empty">-</div>
               </div>
             </template>
-          </el-table-column>
-
-          <!-- 状态列 -->
-          <el-table-column label="状态" min-width="150" align="center">
-            <template #default="{ row }">
-              <div :class="['status-badge', `status-${row.podStatus?.toLowerCase()}`]">
-                {{ row.podStatus || '-' }}
+          <template #status="{ record }">
+              <div v-if="selectedType === 'Pod'" :class="['status-badge', `status-${record.podStatus?.toLowerCase()}`]">
+                {{ record.podStatus || '-' }}
+              </div>
+              <div v-else :class="['status-badge', `status-${record.status?.toLowerCase()}`]">
+                {{ record.status || '-' }}
               </div>
             </template>
-          </el-table-column>
-
-          <!-- 重启次数 -->
-          <el-table-column label="重启次数" width="100" align="center">
-            <template #default="{ row }">
-              <span>{{ row.restartCount ?? '-' }}</span>
+          <template #restarts="{ record }">
+              <span>{{ record.restartCount ?? '-' }}</span>
             </template>
-          </el-table-column>
-
-          <!-- 命名空间 -->
-          <el-table-column label="命名空间" width="150">
-            <template #default="{ row }">
-              <span>{{ row.namespace }}</span>
+          <template #namespace="{ record }">
+              <span>{{ record.namespace }}</span>
             </template>
-          </el-table-column>
-
-          <!-- Pod IP -->
-          <el-table-column label="PodIP" width="140" align="center">
-            <template #default="{ row }">
-              <span class="pod-ip">{{ row.podIP || '-' }}</span>
+          <template #col_PodIP="{ record }">
+              <span class="pod-ip">{{ record.podIP || '-' }}</span>
             </template>
-          </el-table-column>
-
-          <!-- 调度节点 -->
-          <el-table-column label="调度节点" min-width="150">
-            <template #default="{ row }">
-              <span>{{ row.node || '-' }}</span>
+          <template #col_4850="{ record }">
+              <span>{{ record.node || '-' }}</span>
             </template>
-          </el-table-column>
-        </template>
-
-        <!-- DaemonSet 专用列 -->
-        <template v-if="selectedType === 'DaemonSet'">
-          <!-- 准备就绪 -->
-          <el-table-column label="准备就绪" width="120" align="center">
-            <template #default="{ row }">
+          <template #col_4602="{ record }">
               <div class="pod-count-cell">
-                <span class="pod-count">{{ row.readyPods || 0 }}/{{ row.desiredPods || 0 }}</span>
+                <span class="pod-count">{{ record.readyPods || 0 }}/{{ record.desiredPods || 0 }}</span>
               </div>
             </template>
-          </el-table-column>
-
-          <!-- 当前调度 -->
-          <el-table-column label="当前调度" width="100" align="center">
-            <template #default="{ row }">
-              <span>{{ row.currentScheduled ?? '-' }}</span>
+          <template #col_8023="{ record }">
+              <span>{{ record.currentScheduled ?? '-' }}</span>
             </template>
-          </el-table-column>
-
-          <!-- 期望调度 -->
-          <el-table-column label="期望调度" width="100" align="center">
-            <template #default="{ row }">
-              <span>{{ row.desiredScheduled ?? '-' }}</span>
+          <template #col_6437="{ record }">
+              <span>{{ record.desiredScheduled ?? '-' }}</span>
             </template>
-          </el-table-column>
-        </template>
-
-        <!-- Deployment 和 StatefulSet 通用列 -->
-        <template v-if="selectedType === 'Deployment' || selectedType === 'StatefulSet'">
-          <!-- 标签 -->
-          <el-table-column label="标签" width="120" align="center">
-            <template #default="{ row }">
-              <div class="label-cell" @click="showLabels(row)">
-                <div class="label-badge-wrapper">
-                  <span class="label-count">{{ Object.keys(row.labels || {}).length }}</span>
-                  <el-icon class="label-icon"><PriceTag /></el-icon>
-                </div>
-              </div>
+          <template #labels="{ record }">
+              <a-button type="text" size="small" @click="showLabels(record)">
+                <a-badge :count="Object.keys(record.labels || {}).length" :dot-style="{ background: 'var(--ops-primary, #165dff)' }">
+                  <icon-tag :size="18" />
+                </a-badge>
+              </a-button>
             </template>
-          </el-table-column>
-
-          <!-- 容器组 -->
-          <el-table-column label="容器组" width="150" align="center">
-            <template #default="{ row }">
+          <template #col_8234="{ record }">
               <div class="pod-count-cell">
-                <span class="pod-count">{{ row.readyPods || 0 }}/{{ row.desiredPods || 0 }}</span>
+                <span class="pod-count">{{ record.readyPods || 0 }}/{{ record.desiredPods || 0 }}</span>
                 <span class="pod-label">Pods</span>
               </div>
             </template>
-          </el-table-column>
-
-          <!-- Requests/Limits -->
-          <el-table-column label="Requests/Limits" min-width="200">
-            <template #default="{ row }">
+          <template #resourceLimits="{ record }">
               <div class="resource-cell">
-                <div v-if="row.requests?.cpu || row.limits?.cpu" class="resource-item">
+                <div v-if="record.requests?.cpu || record.limits?.cpu" class="resource-item">
                   <span class="resource-label">CPU:</span>
-                  <span v-if="row.requests?.cpu" class="resource-value requests-value">{{ row.requests.cpu }}</span>
-                  <span v-if="row.requests?.cpu && row.limits?.cpu" class="resource-separator">/</span>
-                  <span v-if="row.limits?.cpu" class="resource-value limits-value">{{ row.limits.cpu }}</span>
+                  <span v-if="record.requests?.cpu" class="resource-value requests-value">{{ record.requests.cpu }}</span>
+                  <span v-if="record.requests?.cpu && record.limits?.cpu" class="resource-separator">/</span>
+                  <span v-if="record.limits?.cpu" class="resource-value limits-value">{{ record.limits.cpu }}</span>
                 </div>
-                <div v-if="row.requests?.memory || row.limits?.memory" class="resource-item">
+                <div v-if="record.requests?.memory || record.limits?.memory" class="resource-item">
                   <span class="resource-label">Mem:</span>
-                  <span v-if="row.requests?.memory" class="resource-value requests-value">{{ row.requests.memory }}</span>
-                  <span v-if="row.requests?.memory && row.limits?.memory" class="resource-separator">/</span>
-                  <span v-if="row.limits?.memory" class="resource-value limits-value">{{ row.limits.memory }}</span>
+                  <span v-if="record.requests?.memory" class="resource-value requests-value">{{ record.requests.memory }}</span>
+                  <span v-if="record.requests?.memory && record.limits?.memory" class="resource-separator">/</span>
+                  <span v-if="record.limits?.memory" class="resource-value limits-value">{{ record.limits.memory }}</span>
                 </div>
-                <div v-if="!row.requests?.cpu && !row.requests?.memory && !row.limits?.cpu && !row.limits?.memory" class="resource-empty">-</div>
+                <div v-if="!record.requests?.cpu && !record.requests?.memory && !record.limits?.cpu && !record.limits?.memory" class="resource-empty">-</div>
               </div>
             </template>
-          </el-table-column>
-
-          <!-- 镜像 -->
-          <el-table-column label="镜像" min-width="300">
-            <template #default="{ row }">
+          <template #image="{ record }">
               <div class="image-cell">
-                <el-tooltip
-                  v-if="row.images && row.images.length > 0"
+                <a-tooltip
+                  v-if="record.images && record.images.length > 0"
                   placement="top"
                   effect="light"
                 >
                   <template #content>
                     <div class="image-tooltip-content">
-                      <div v-for="(image, index) in row.images" :key="index" class="image-tooltip-item">
+                      <div v-for="(image, index) in record.images" :key="index" class="image-tooltip-item">
                         {{ image }}
                       </div>
                     </div>
                   </template>
                   <div class="image-list">
-                    <span v-for="(image, index) in getDisplayImages(row.images)" :key="index" class="image-item">
+                    <span v-for="(image, index) in getDisplayImages(record.images)" :key="index" class="image-item">
                       {{ image }}
                     </span>
-                    <span v-if="row.images.length > 2" class="image-more">
-                      +{{ row.images.length - 2 }}
+                    <span v-if="record.images.length > 2" class="image-more">
+                      +{{ record.images.length - 2 }}
                     </span>
                   </div>
-                </el-tooltip>
+                </a-tooltip>
                 <span v-else class="image-empty">-</span>
               </div>
             </template>
-          </el-table-column>
-        </template>
-
-        <!-- Job 专用列 -->
-        <template v-if="selectedType === 'Job'">
-          <!-- 状态 -->
-          <el-table-column label="状态" min-width="150" align="center">
-            <template #default="{ row }">
-              <div :class="['status-badge', `status-${row.status?.toLowerCase()}`]">
-                {{ row.status || '-' }}
-              </div>
+          <template #col_615="{ record }">
+              <span>{{ record.duration || '-' }}</span>
             </template>
-          </el-table-column>
-
-          <!-- 耗时 -->
-          <el-table-column label="耗时" width="150">
-            <template #default="{ row }">
-              <span>{{ row.duration || '-' }}</span>
+          <template #schedulable="{ record }">
+              <span class="schedule-text">{{ record.schedule || '-' }}</span>
             </template>
-          </el-table-column>
-        </template>
-
-        <!-- CronJob 专用列 -->
-        <template v-if="selectedType === 'CronJob'">
-          <!-- 调度 -->
-          <el-table-column label="调度" width="150">
-            <template #default="{ row }">
-              <span class="schedule-text">{{ row.schedule || '-' }}</span>
+          <template #col_8590="{ record }">
+              <span>{{ record.lastScheduleTime || '-' }}</span>
             </template>
-          </el-table-column>
-
-          <!-- 最后的调度时间 -->
-          <el-table-column label="最后的调度时间" width="180">
-            <template #default="{ row }">
-              <span>{{ row.lastScheduleTime || '-' }}</span>
+          <template #suspend="{ record }">
+              <a-tag v-if="record.suspended" color="gray" size="small">是</a-tag>
+              <a-tag v-else color="green" size="small">否</a-tag>
             </template>
-          </el-table-column>
-
-          <!-- 暂停 -->
-          <el-table-column label="暂停" width="80" align="center">
-            <template #default="{ row }">
-              <el-tag v-if="row.suspended" type="info" size="small">是</el-tag>
-              <el-tag v-else type="success" size="small">否</el-tag>
-            </template>
-          </el-table-column>
-        </template>
-
-        <!-- 存活时间（除 Pod 外的所有类型） -->
-        <el-table-column v-if="selectedType !== 'Pod'" label="存活时间" width="150">
-          <template #default="{ row }">
+          <template #col_8379="{ record }">
             <div class="age-cell">
-              <el-icon class="age-icon"><Clock /></el-icon>
-              <span>{{ formatAge(row.createdAt) }}</span>
+              <icon-clock-circle />
+              <span>{{ formatAge(record.createdAt) }}</span>
             </div>
           </template>
-        </el-table-column>
-
-        <!-- Pod 的存活时间列 -->
-        <el-table-column v-if="selectedType === 'Pod'" label="存活时间" width="150">
-          <template #default="{ row }">
-            <div class="age-cell">
-              <el-icon class="age-icon"><Clock /></el-icon>
-              <span>{{ formatAge(row.createdAt) }}</span>
-            </div>
-          </template>
-        </el-table-column>
-
-        <!-- 操作列 -->
-        <el-table-column label="操作" width="180" fixed="right" align="center">
-          <template #default="{ row }">
+          <template #actions="{ record }">
             <!-- Pod 类型工作负载的特殊菜单 -->
             <template v-if="selectedType === 'Pod'">
-              <el-popover
-                placement="bottom"
-                :width="220"
+              <a-popover
+                position="bottom"
                 trigger="click"
-                @before-enter="fetchPodDetailsForMenu(row.name, row.namespace)"
+                @popup-visible-change="(visible) => visible && fetchPodDetailsForMenu(record.name, record.namespace)"
               >
-                <template #reference>
-                  <el-button link class="action-btn">
-                    <el-icon :size="18"><Edit /></el-icon>
-                  </el-button>
-                </template>
-                <div v-loading="podMenuLoading" class="pod-action-menu">
-                  <template v-if="podMenuData && podMenuData.spec?.containers">
-                    <!-- 容器选项 -->
+                <a-button type="text" class="action-btn">
+                  <icon-more />
+                </a-button>
+                <template #content>
+                  <div v-if="podMenuLoading" style="padding: 16px; text-align: center">
+                    <a-spin />
+                  </div>
+                  <div v-else-if="podMenuData && podMenuData.spec?.containers" class="pod-action-menu">
                     <div v-for="container in podMenuData.spec.containers" :key="container.name" class="container-actions">
                       <div class="container-name">{{ container.name }}</div>
                       <div class="container-menu-items">
-                        <div class="menu-item" @click="handleOpenFileBrowser(row.name, container.name, row.namespace)">
-                          <el-icon><FolderOpened /></el-icon>
+                        <div class="menu-item" @click="handleOpenFileBrowser(record.name, container.name, record.namespace)">
+                          <icon-folder />
                           <span>文件浏览</span>
                         </div>
-                        <div class="menu-item" @click="handleOpenTerminal(row.name, container.name, row.namespace)">
-                          <el-icon><Monitor /></el-icon>
+                        <div class="menu-item" @click="handleOpenTerminal(record.name, container.name, record.namespace)">
+                          <icon-desktop />
                           <span>终端</span>
                         </div>
-                        <div class="menu-item" @click="handleOpenLogs(row.name, container.name, row.namespace)">
-                          <el-icon><Document /></el-icon>
+                        <div class="menu-item" @click="handleOpenLogs(record.name, container.name, record.namespace)">
+                          <icon-file />
                           <span>日志</span>
                         </div>
                       </div>
                     </div>
-                    <!-- 分割线 -->
-                    <el-divider style="margin: 8px 0" />
-                    <!-- 删除 Pod -->
-                    <div class="menu-item danger" @click="handleDeletePod(row.name, row.namespace)">
-                      <el-icon><Delete /></el-icon>
+                    <a-divider style="margin: 8px 0" />
+                    <div class="menu-item danger" @click="handleDeletePod(record.name, record.namespace)">
+                      <icon-delete />
                       <span>删除 Pod</span>
                     </div>
-                  </template>
-                  <div v-else-if="!podMenuLoading" class="menu-error">
+                  </div>
+                  <div v-else style="padding: 16px; text-align: center; color: var(--ops-text-tertiary)">
                     加载失败
                   </div>
-                </div>
-              </el-popover>
+                </template>
+              </a-popover>
             </template>
             <!-- 非Pod 类型工作负载的标准操作 -->
             <template v-else>
               <div class="action-buttons">
-                <!-- YAML 按钮 -->
-                <el-button link class="action-btn" @click="handleWorkloadYAML(row)" title="YAML">
-                  <el-icon :size="16"><Document /></el-icon>
-                </el-button>
-                <!-- 编辑按钮 -->
-                <el-button link class="action-btn" @click="handleWorkloadEdit(row)" title="编辑">
-                  <el-icon :size="16"><Edit /></el-icon>
-                </el-button>
-                <!-- 删除按钮 -->
-                <el-button link class="action-btn danger" @click="handleWorkloadDelete(row)" title="删除">
-                  <el-icon :size="16"><Delete /></el-icon>
-                </el-button>
+                <a-tooltip content="YAML" position="top">
+                  <a-button type="text" class="action-btn" @click="handleWorkloadYAML(record)">
+                    <icon-file />
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="编辑" position="top">
+                  <a-button type="text" class="action-btn action-edit" @click="handleWorkloadEdit(record)">
+                    <icon-edit />
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="删除" position="top">
+                  <a-button type="text" class="action-btn action-delete" @click="handleWorkloadDelete(record)">
+                    <icon-delete />
+                  </a-button>
+                </a-tooltip>
               </div>
             </template>
           </template>
-        </el-table-column>
-      </el-table>
+        </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
+        <a-pagination
+          v-model:current="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-size-options="[10, 20, 50, 100]"
           :total="filteredWorkloadList.length"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handlePageChange"
-          @size-change="handleSizeChange"
+          show-total show-page-size show-jumper
+          @change="handlePageChange"
+          @page-size-change="handleSizeChange"
         />
       </div>
-    </div>
+    </a-card>
 
     <!-- 标签弹窗 -->
-    <el-dialog
-      v-model="labelDialogVisible"
+    <a-modal
+      v-model:visible="labelDialogVisible"
       title="工作负载标签"
-      width="700px"
-      class="label-dialog"
+      :width="700"
     >
-      <div class="label-dialog-content">
-        <el-table :data="labelList" class="label-table" max-height="500">
-          <el-table-column prop="key" label="Key" min-width="280">
-            <template #default="{ row }">
-              <div class="label-key-wrapper" @click="copyToClipboard(row.key, 'Key')">
-                <span class="label-key-text">{{ row.key }}</span>
-                <el-icon class="copy-icon"><CopyDocument /></el-icon>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column prop="value" label="Value" min-width="350">
-            <template #default="{ row }">
-              <span class="label-value">{{ row.value }}</span>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <a-table :data="labelList" :bordered="false" :pagination="false" :columns="tableColumns6" style="max-height: 500px">
+        <template #key="{ record }">
+          <a-tag color="arcoblue" class="label-key-tag" @click="copyToClipboard(record.key, 'Key')">
+            {{ record.key }}
+            <icon-copy :size="12" style="margin-left: 4px" />
+          </a-tag>
+        </template>
+        <template #value="{ record }">
+          <span class="label-value">{{ record.value }}</span>
+        </template>
+      </a-table>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="labelDialogVisible = false">关闭</el-button>
+          <a-button @click="labelDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- YAML 编辑弹窗 -->
-    <el-dialog
-      v-model="yamlDialogVisible"
+    <a-modal
+      v-model:visible="yamlDialogVisible"
       :title="`工作负载 YAML - ${selectedWorkload?.name || ''}`"
-      width="900px"
-      class="yaml-dialog"
+      :width="900"
     >
-      <div class="yaml-dialog-content">
-        <div class="yaml-editor-wrapper">
-          <div class="yaml-line-numbers">
-            <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
-          </div>
-          <textarea
-            v-model="yamlContent"
-            class="yaml-textarea"
-            placeholder="YAML 内容"
-            spellcheck="false"
-            @input="handleYamlInput"
-            @scroll="handleYamlScroll"
-            ref="yamlTextarea"
-          ></textarea>
+      <div class="yaml-editor-wrapper">
+        <div class="line-numbers">
+          <div v-for="line in yamlLineCount" :key="line" class="line-number">{{ line }}</div>
         </div>
+        <textarea
+          v-model="yamlContent"
+          class="code-textarea"
+          placeholder="YAML 内容"
+          spellcheck="false"
+          @input="handleYamlInput"
+          @scroll="handleYamlScroll"
+          ref="yamlTextarea"
+        ></textarea>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="yamlDialogVisible = false">取消</el-button>
-          <el-button type="primary" class="black-button" @click="handleSaveYAML" :loading="yamlSaving">
+          <a-button @click="yamlDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveYAML" :loading="yamlSaving">
             保存
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 工作负载详情对话框 -->
-    <el-dialog
-      v-model="detailDialogVisible"
+    <a-modal
+      v-model:visible="detailDialogVisible"
       :title="`${detailData?.type || ''} - ${detailData?.name || ''}`"
-      width="1200px"
-      class="detail-dialog"
+      :width="1200"
     >
       <div v-if="detailData" class="detail-wrapper">
         <!-- 基本信息区域 -->
@@ -614,7 +474,7 @@
             <div class="info-item full-width">
               <span class="info-label">标签</span>
               <div class="info-value labels-list">
-                <el-tag
+                <a-tag
                   v-for="(value, key) in detailData.workload.metadata.labels"
                   :key="key"
                   size="small"
@@ -622,7 +482,7 @@
                   type="info"
                 >
                   {{ key }}: {{ value }}
-                </el-tag>
+                </a-tag>
               </div>
             </div>
           </div>
@@ -632,130 +492,110 @@
             <div class="info-item full-width">
               <span class="info-label">注解</span>
               <div class="info-value">
-                <el-tooltip :content="getAnnotationsTooltip(detailData.workload.metadata.annotations)" placement="top" effect="light" :show-after="500">
+                <a-tooltip :content="getAnnotationsTooltip(detailData.workload.metadata.annotations)" placement="top" effect="light" :show-after="500">
                   <span class="annotations-text">{{ getAnnotationsText(detailData.workload.metadata.annotations) }}</span>
-                </el-tooltip>
+                </a-tooltip>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 标签页区域 -->
-        <el-tabs v-model="activeDetailTab" type="border-card" class="detail-tabs">
-          <el-tab-pane label="容器组" name="pods">
+        <a-tabs v-model:active-key="activeDetailTab" type="border-card" class="detail-tabs">
+          <a-tab-pane title="容器组" key="pods">
             <div class="tab-content">
-              <el-table :data="detailData.pods" size="default" class="pods-table">
-                <el-table-column prop="metadata.name" label="名称" min-width="220" show-overflow-tooltip>
-                  <template #default="{ row }">
-                    <div class="pod-name-cell" @click="showPodDetail(row)" style="cursor: pointer;">
-                      <el-icon class="pod-icon"><Box /></el-icon>
-                      <span class="pod-name">{{ row.metadata?.name }}</span>
+              <a-table :data="detailData.pods" size="default" class="pods-table" :columns="tableColumns5">
+          <template #metadata_name="{ record }">
+                    <div class="pod-name-cell" @click="showPodDetail(record)" style="cursor: pointer;">
+                      <icon-storage />
+                      <span class="pod-name">{{ record.metadata?.name }}</span>
                     </div>
                   </template>
-                </el-table-column>
-                <el-table-column label="状态" width="90" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="getPodStatusType(row.status?.phase)" size="small" effect="plain">
-                      {{ getPodStatusText(row.status?.phase) }}
-                    </el-tag>
+          <template #status="{ record }">
+                    <a-tag :type="getPodStatusType(record.status?.phase)" size="small">
+                      {{ getPodStatusText(record.status?.phase) }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column label="CPU" width="120" align="center">
-                  <template #default="{ row }">
-                    <span class="resource-value">{{ getPodCPU(row) }}</span>
+          <template #cpu="{ record }">
+                    <span class="resource-value">{{ getPodCPU(record) }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="内存" width="120" align="center">
-                  <template #default="{ row }">
-                    <span class="resource-value">{{ getPodMemory(row) }}</span>
+          <template #memory="{ record }">
+                    <span class="resource-value">{{ getPodMemory(record) }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="重启" width="80" align="center">
-                  <template #default="{ row }">
-                    <span :class="{'restart-high': getRestartCount(row) > 5}">{{ getRestartCount(row) }}</span>
+          <template #col_7754="{ record }">
+                    <span :class="{'restart-high': getRestartCount(record) > 5}">{{ getRestartCount(record) }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column prop="spec.nodeName" label="节点" min-width="140" show-overflow-tooltip />
-                <el-table-column label="操作" width="70" align="center" fixed="right">
-                  <template #default="{ row }">
-                    <el-dropdown trigger="click" @command="(cmd) => handlePodAction(cmd, row)">
-                      <el-button type="primary" size="small" circle :icon="MoreFilled" />
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item v-for="container in row.spec?.containers || []" :key="container.name" disabled>
+          <template #actions="{ record }">
+                    <a-dropdown trigger="click" @select="(cmd) => handlePodAction(cmd, record)">
+                      <a-button type="primary" size="small">
+                        <icon-more />
+                      </a-button>
+                      <template #content>
+                        <template v-for="container in record.spec?.containers || []" :key="container.name">
+                          <a-doption disabled>
                             <div class="container-group-header">{{ container.name }}</div>
-                          </el-dropdown-item>
-                          <el-dropdown-item v-for="container in row.spec?.containers || []" :key="`terminal-${container.name}`" :command="{ action: 'terminal', container: container.name, pod: row.metadata?.name }">
-                            <el-icon><Monitor /></el-icon>
+                          </a-doption>
+                          <a-doption :value="{ action: 'terminal', container: container.name, pod: record.metadata?.name }">
+                            <icon-desktop />
                             <span>{{ container.name }} 终端</span>
-                          </el-dropdown-item>
-                          <el-dropdown-item v-for="container in row.spec?.containers || []" :key="`logs-${container.name}`" :command="{ action: 'logs', container: container.name, pod: row.metadata?.name }">
-                            <el-icon><Document /></el-icon>
+                          </a-doption>
+                          <a-doption :value="{ action: 'logs', container: container.name, pod: record.metadata?.name }">
+                            <icon-file />
                             <span>{{ container.name }} 日志</span>
-                          </el-dropdown-item>
-                        </el-dropdown-menu>
+                          </a-doption>
+                        </template>
                       </template>
-                    </el-dropdown>
+                    </a-dropdown>
                   </template>
-                </el-table-column>
-              </el-table>
+        </a-table>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
-          <el-tab-pane label="服务" name="services">
+          <a-tab-pane title="服务" key="services">
             <div class="tab-content">
-              <el-table :data="detailData.services" class="detail-table services-table" v-if="detailData.services && detailData.services.length > 0">
-                <el-table-column label="名称" min-width="220" show-overflow-tooltip>
-                  <template #default="{ row }">
+              <a-table :data="detailData.services" class="detail-table services-table" v-if="detailData.services && detailData.services.length > 0" :columns="tableColumns4">
+          <template #name="{ record }">
                     <div class="service-name-wrapper">
-                      <el-icon class="service-icon"><Connection /></el-icon>
-                      <span class="service-name-text">{{ row.metadata?.name || '-' }}</span>
+                      <icon-link />
+                      <span class="service-name-text">{{ record.metadata?.name || '-' }}</span>
                     </div>
                   </template>
-                </el-table-column>
-                <el-table-column label="类型" width="110" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="getServiceTypeColor(row.spec?.type)" size="small" effect="plain">
-                      {{ row.spec?.type || '-' }}
-                    </el-tag>
+          <template #type="{ record }">
+                    <a-tag :type="getServiceTypeColor(record.spec?.type)" size="small">
+                      {{ record.spec?.type || '-' }}
+                    </a-tag>
                   </template>
-                </el-table-column>
-                <el-table-column label="集群IP" width="130" align="center">
-                  <template #default="{ row }">
+          <template #clusterIP="{ record }">
                     <div class="ip-cell">
-                      <span v-if="row.spec?.clusterIP" class="ip-text">{{ row.spec.clusterIP }}</span>
+                      <span v-if="record.spec?.clusterIP" class="ip-text">{{ record.spec.clusterIP }}</span>
                       <span v-else class="empty-text">None</span>
                     </div>
                   </template>
-                </el-table-column>
-                <el-table-column label="外部IP" width="130" align="center">
-                  <template #default="{ row }">
+          <template #col_481="{ record }">
                     <div class="ip-cell">
-                      <span v-if="row.spec?.externalIPs && row.spec.externalIPs.length > 0" class="ip-text external-ip">
-                        {{ row.spec.externalIPs[0] }}
-                        <el-tooltip v-if="row.spec.externalIPs.length > 1" :content="row.spec.externalIPs.join(', ')" placement="top">
-                          <span class="more-badge">+{{ row.spec.externalIPs.length - 1 }}</span>
-                        </el-tooltip>
+                      <span v-if="record.spec?.externalIPs && record.spec.externalIPs.length > 0" class="ip-text external-ip">
+                        {{ record.spec.externalIPs[0] }}
+                        <a-tooltip v-if="record.spec.externalIPs.length > 1" :content="record.spec.externalIPs.join(', ')" placement="top">
+                          <span class="more-badge">+{{ record.spec.externalIPs.length - 1 }}</span>
+                        </a-tooltip>
                       </span>
-                      <span v-else-if="row.status?.loadBalancer?.ingress && row.status.loadBalancer.ingress.length > 0" class="ip-text external-ip">
-                        {{ row.status.loadBalancer.ingress[0].ip || row.status.loadBalancer.ingress[0].hostname }}
+                      <span v-else-if="record.status?.loadBalancer?.ingress && record.status.loadBalancer.ingress.length > 0" class="ip-text external-ip">
+                        {{ record.status.loadBalancer.ingress[0].ip || record.status.loadBalancer.ingress[0].hostname }}
                       </span>
                       <span v-else class="empty-text">-</span>
                     </div>
                   </template>
-                </el-table-column>
-                <el-table-column label="端口" min-width="320">
-                  <template #default="{ row }">
-                    <div v-if="row.spec?.ports?.length > 0" class="ports-combined">
-                      <div v-for="(port, idx) in row.spec.ports" :key="idx" class="port-row">
+          <template #ports="{ record }">
+                    <div v-if="record.spec?.ports?.length > 0" class="ports-combined">
+                      <div v-for="(port, idx) in record.spec.ports" :key="idx" class="port-row">
                         <div class="port-info">
-                          <el-tag size="small" :type="port.protocol === 'TCP' ? '' : 'warning'" effect="plain">
+                          <a-tag size="small" :type="port.protocol === 'TCP' ? '' : 'warning'">
                             {{ port.protocol || 'TCP' }}
-                          </el-tag>
+                          </a-tag>
                           <span class="port-number">{{ port.port }}</span>
-                          <el-icon class="port-arrow"><Right /></el-icon>
+                          <icon-right />
                           <span class="target-port">{{ port.targetPort || port.port }}</span>
-                          <span v-if="row.spec?.type === 'NodePort' && port.nodePort" class="nodeport-badge">
+                          <span v-if="record.spec?.type === 'NodePort' && port.nodePort" class="nodeport-badge">
                             NodePort: {{ port.nodePort }}
                           </span>
                         </div>
@@ -764,33 +604,30 @@
                     </div>
                     <span v-else class="empty-text">-</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="存活时间" width="100" align="center">
-                  <template #default="{ row }">
-                    <span class="age-text">{{ calculateAge(row.metadata?.creationTimestamp) }}</span>
+          <template #col_8379="{ record }">
+                    <span class="age-text">{{ calculateAge(record.metadata?.creationTimestamp) }}</span>
                   </template>
-                </el-table-column>
-              </el-table>
-              <el-empty v-else description="暂无服务" :image-size="120" />
+        </a-table>
+              <a-empty v-else description="暂无服务" :image-size="120" />
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
-          <el-tab-pane label="路由" name="ingresses">
+          <a-tab-pane title="路由" key="ingresses">
             <div class="tab-content">
               <div v-if="detailData.ingresses && detailData.ingresses.length > 0" class="ingress-content">
                 <!-- 域名列表 -->
                 <div class="ingress-hosts-section">
                   <div class="section-title">
-                    <el-icon><Link /></el-icon>
+                    <icon-link />
                     <span>域名列表</span>
                   </div>
                   <div class="hosts-list">
                     <div v-for="ingress in ingressHosts" :key="ingress.host" class="host-item">
                       <div class="host-content">
-                        <el-icon class="host-icon"><Platform /></el-icon>
-                        <el-tooltip :content="ingress.host" placement="top">
+                        <icon-apps />
+                        <a-tooltip :content="ingress.host" placement="top">
                           <span class="host-text">{{ ingress.host }}</span>
-                        </el-tooltip>
+                        </a-tooltip>
                       </div>
                       <div class="host-ingress-names">
                         <span v-for="name in ingress.names" :key="name" class="ingress-name-tag">{{ name }}</span>
@@ -802,97 +639,79 @@
                 <!-- 路由规则表格 -->
                 <div class="ingress-rules-section">
                   <div class="section-title">
-                    <el-icon><Guide /></el-icon>
+                    <icon-compass />
                     <span>路由规则</span>
                   </div>
-                  <el-table :data="ingressRules" class="ingress-rules-table">
-                    <el-table-column label="名称" min-width="180">
-                      <template #default="{ row }">
+                  <a-table :data="ingressRules" class="ingress-rules-table" :columns="tableColumns3">
+          <template #name="{ record }">
                         <div class="rule-name-cell">
-                          <el-icon class="rule-icon"><Document /></el-icon>
-                          <span class="rule-name-text">{{ row.ingressName }}</span>
+                          <icon-file />
+                          <span class="rule-name-text">{{ record.ingressName }}</span>
                         </div>
                       </template>
-                    </el-table-column>
-                    <el-table-column label="域名" min-width="200" show-overflow-tooltip>
-                      <template #default="{ row }">
-                        <span class="host-text-cell">{{ row.host || '-' }}</span>
+          <template #col_2513="{ record }">
+                        <span class="host-text-cell">{{ record.host || '-' }}</span>
                       </template>
-                    </el-table-column>
-                    <el-table-column label="路径" min-width="180">
-                      <template #default="{ row }">
-                        <el-tooltip :content="`${row.pathType || 'Prefix'}: ${row.path || '/'}`" placement="top">
-                          <span class="path-text-simple">{{ row.path || '/' }}</span>
-                        </el-tooltip>
+          <template #path="{ record }">
+                        <a-tooltip :content="`${record.pathType || 'Prefix'}: ${record.path || '/'}`" placement="top">
+                          <span class="path-text-simple">{{ record.path || '/' }}</span>
+                        </a-tooltip>
                       </template>
-                    </el-table-column>
-                    <el-table-column label="服务" min-width="150">
-                      <template #default="{ row }">
-                        <span class="service-name-cell">{{ row.serviceName || '-' }}</span>
+          <template #col_3269="{ record }">
+                        <span class="service-name-cell">{{ record.serviceName || '-' }}</span>
                       </template>
-                    </el-table-column>
-                    <el-table-column label="端口" width="100" align="center">
-                      <template #default="{ row }">
-                        <span v-if="row.servicePort" class="port-number-cell">{{ row.servicePort }}</span>
+          <template #ports="{ record }">
+                        <span v-if="record.servicePort" class="port-number-cell">{{ record.servicePort }}</span>
                         <span v-else class="empty-text">-</span>
                       </template>
-                    </el-table-column>
-                  </el-table>
+        </a-table>
                 </div>
               </div>
-              <el-empty v-else description="暂无路由" :image-size="120" />
+              <a-empty v-else description="暂无路由" :image-size="120" />
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
-          <el-tab-pane label="运行时信息" name="runtime">
+          <a-tab-pane title="运行时信息" key="runtime">
             <div class="tab-content">
               <div v-if="detailData.workload" class="runtime-content">
-                <el-table :data="getRuntimeInfo()" class="runtime-table" border>
-                  <el-table-column label="类别" width="150">
-                    <template #default="{ row }">
+                <a-table :data="getRuntimeInfo()" class="runtime-table" border :columns="tableColumns2">
+          <template #col_6294="{ record }">
                       <div class="runtime-category">
-                        <el-icon :class="`category-icon ${row.iconClass}`"><component :is="row.icon" /></el-icon>
-                        <span class="category-text">{{ row.category }}</span>
+                        <component :is="record.icon" />
+                        <span class="category-text">{{ record.category }}</span>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="状态" min-width="150" align="center">
-                    <template #default="{ row }">
+          <template #status="{ record }">
                       <div class="status-cell">
-                        <el-icon :class="`status-indicator status-${row.statusType} ${row.isLoading ? 'is-loading' : ''}`">
-                          <component :is="row.statusIcon" />
-                        </el-icon>
-                        <span :class="`status-text status-${row.statusType}`">{{ row.status }}</span>
+                        <span :class="`status-indicator status-${record.statusType} ${record.isLoading ? 'is-loading' : ''}`">
+                          <component :is="record.statusIcon" />
+                        </span>
+                        <span :class="`status-text status-${record.statusType}`">{{ record.status }}</span>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="消息" min-width="350">
-                    <template #default="{ row }">
+          <template #col_8959="{ record }">
                       <div class="message-cell">
-                        <span class="message-text">{{ row.message }}</span>
+                        <span class="message-text">{{ record.message }}</span>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="最后更新时间" width="160" align="center">
-                    <template #default="{ row }">
-                      <span class="time-text">{{ row.lastUpdate }}</span>
+          <template #col_8885="{ record }">
+                      <span class="time-text">{{ record.lastUpdate }}</span>
                     </template>
-                  </el-table-column>
-                </el-table>
+        </a-table>
               </div>
-              <el-empty v-else description="暂无运行时信息" :image-size="120" />
+              <a-empty v-else description="暂无运行时信息" :image-size="120" />
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
-          <el-tab-pane label="暂停" name="paused">
+          <a-tab-pane title="暂停" key="paused">
             <div class="tab-content">
               <div class="paused-content">
                 <div class="paused-header">
                   <div class="paused-icon-wrapper">
-                    <el-icon class="paused-icon" :class="{ 'is-paused': isWorkloadPaused }">
+                    <span class="paused-icon" :class="{ 'is-paused': isWorkloadPaused }">
                       <VideoPause v-if="isWorkloadPaused" />
                       <VideoPlay v-else />
-                    </el-icon>
+                    </span>
                   </div>
                   <div class="paused-title">
                     <h3>工作负载暂停状态</h3>
@@ -905,18 +724,18 @@
                 <div class="paused-control">
                   <div class="paused-switch-wrapper">
                     <span class="switch-label">暂停状态</span>
-                    <el-switch
+                    <a-switch
                       v-model="isWorkloadPaused"
                       size="large"
                       :loading="pauseLoading"
                       active-text="已暂停"
                       inactive-text="运行中"
                       @change="handlePauseChange"
-                      style="--el-switch-on-color: #f56c6c; --el-switch-off-color: #67c23a;"
+                      style="--color-fill-4: #f56c6c;"
                     />
                   </div>
                   <div class="paused-description">
-                    <el-alert
+                    <a-alert
                       :title="isWorkloadPaused ? '暂停状态下，新的 Pod 副本不会被创建，但现有的 Pod 不会被删除。' : '正常运行状态下，控制器会根据指定的副本数创建和管理 Pod。'"
                       :type="isWorkloadPaused ? 'warning' : 'success'"
                       :closable="false"
@@ -926,49 +745,46 @@
                 </div>
 
                 <div class="paused-info">
-                  <el-descriptions :column="2" border>
-                    <el-descriptions-item label="工作负载类型">
+                  <a-descriptions :column="2" :bordered="true">
+                    <a-descriptions-item label="工作负载类型">
                       {{ workloadType }}
-                    </el-descriptions-item>
-                    <el-descriptions-item label="命名空间">
+                    </a-descriptions-item>
+                    <a-descriptions-item label="命名空间">
                       {{ detailData.workload?.metadata?.namespace || '-' }}
-                    </el-descriptions-item>
-                    <el-descriptions-item label="当前副本数">
+                    </a-descriptions-item>
+                    <a-descriptions-item label="当前副本数">
                       {{ detailData.workload?.spec?.replicas || 0 }}
-                    </el-descriptions-item>
-                    <el-descriptions-item label="可用副本数">
+                    </a-descriptions-item>
+                    <a-descriptions-item label="可用副本数">
                       {{ detailData.workload?.status?.availableReplicas || 0 }}
-                    </el-descriptions-item>
-                  </el-descriptions>
+                    </a-descriptions-item>
+                  </a-descriptions>
                 </div>
               </div>
             </div>
-          </el-tab-pane>
+          </a-tab-pane>
 
-          <el-tab-pane label="历史版本" name="revisions">
+          <a-tab-pane title="历史版本" key="revisions">
             <div class="tab-content">
               <div v-if="sortedReplicaSets.length > 0" class="revisions-content">
-                <el-table :data="sortedReplicaSets" class="revisions-table" stripe>
-                  <el-table-column label="版本" width="140" align="center">
-                    <template #default="{ row }">
+                <a-table :data="sortedReplicaSets" class="revisions-table" stripe :columns="tableColumns">
+          <template #col_8377="{ record }">
                       <div class="revision-cell">
                         <div class="revision-number-wrapper">
                           <span class="revision-icon">#</span>
-                          <span class="revision-number">{{ getReplicaSetRevision(row) }}</span>
+                          <span class="revision-number">{{ getReplicaSetRevision(record) }}</span>
                         </div>
-                        <el-tag v-if="isCurrentReplicaSet(row)" size="small" type="success" class="current-tag">
-                          <el-icon><CircleCheck /></el-icon>
+                        <a-tag v-if="isCurrentReplicaSet(record)" size="small" color="green" class="current-tag">
+                          <icon-check-circle />
                           当前
-                        </el-tag>
+                        </a-tag>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="镜像" min-width="350">
-                    <template #default="{ row }">
+          <template #image="{ record }">
                       <div class="images-column-enhanced">
-                        <div v-for="(image, idx) in getReplicaSetImages(row)" :key="idx" class="image-card">
+                        <div v-for="(image, idx) in getReplicaSetImages(record)" :key="idx" class="image-card">
                           <div class="image-icon">
-                            <el-icon><Box /></el-icon>
+                            <icon-storage />
                           </div>
                           <div class="image-info">
                             <div class="image-name">{{ image }}</div>
@@ -976,90 +792,80 @@
                         </div>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="副本信息" width="160" align="center">
-                    <template #default="{ row }">
+          <template #col_6379="{ record }">
                       <div class="replicas-info">
                         <div class="replica-item">
                           <span class="replica-label">期望</span>
-                          <span class="replica-value">{{ row.spec?.replicas || 0 }}</span>
+                          <span class="replica-value">{{ record.spec?.replicas || 0 }}</span>
                         </div>
                         <div class="replica-divider"></div>
                         <div class="replica-item">
                           <span class="replica-label">就绪</span>
-                          <span class="replica-value ready">{{ row.status?.availableReplicas || 0 }}</span>
+                          <span class="replica-value ready">{{ record.status?.availableReplicas || 0 }}</span>
                         </div>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="创建时间" width="180">
-                    <template #default="{ row }">
+          <template #createdAt="{ record }">
                       <div class="time-cell">
-                        <el-icon class="time-icon"><Clock /></el-icon>
-                        <span class="time-text">{{ formatAgeShort(row.metadata?.creationTimestamp) }}</span>
+                        <icon-clock-circle />
+                        <span class="time-text">{{ formatAgeShort(record.metadata?.creationTimestamp) }}</span>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="状态" width="120" align="center">
-                    <template #default="{ row }">
+          <template #status="{ record }">
                       <div class="status-cell-enhanced">
-                        <el-icon :class="`status-dot status-${getReplicaSetStatusType(row)}`">
-                          <component :is="getStatusDotIcon(getReplicaSetStatusType(row))" />
-                        </el-icon>
-                        <span :class="`status-text-enhanced status-${getReplicaSetStatusType(row)}`">
-                          {{ getReplicaSetStatusText(row) }}
+                        <span :class="`status-dot status-${getReplicaSetStatusType(record)}`">
+                          <component :is="getStatusDotIcon(getReplicaSetStatusType(record))" />
+                        </span>
+                        <span :class="`status-text-enhanced status-${getReplicaSetStatusType(record)}`">
+                          {{ getReplicaSetStatusText(record) }}
                         </span>
                       </div>
                     </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="200" align="center" fixed="right">
-                    <template #default="{ row }">
+          <template #actions="{ record }">
                       <div class="action-buttons">
-                        <el-button
+                        <a-button
                           type="primary"
                           size="small"
                           plain
-                          @click="handleViewReplicaSetYAML(row)"
+                          @click="handleViewReplicaSetYAML(record)"
                           class="action-btn view-btn"
                         >
-                          <el-icon><Document /></el-icon>
+                          <icon-file />
                           <span>详情</span>
-                        </el-button>
-                        <el-button
-                          v-if="!isCurrentReplicaSet(row)"
+                        </a-button>
+                        <a-button
+                          v-if="!isCurrentReplicaSet(record)"
                           type="warning"
                           size="small"
                           plain
-                          @click="handleRollback(row)"
+                          @click="handleRollback(record)"
                           class="action-btn rollback-btn"
                         >
-                          <el-icon><RefreshLeft /></el-icon>
+                          <icon-undo />
                           <span>回滚</span>
-                        </el-button>
+                        </a-button>
                       </div>
                     </template>
-                  </el-table-column>
-                </el-table>
+        </a-table>
               </div>
-              <el-empty v-else description="暂无历史版本" :image-size="120" />
+              <a-empty v-else description="暂无历史版本" :image-size="120" />
             </div>
-          </el-tab-pane>
-        </el-tabs>
+          </a-tab-pane>
+        </a-tabs>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="detailDialogVisible = false">关闭</el-button>
+          <a-button @click="detailDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 工作负载编辑对话框 -->
-    <el-dialog
-      v-model="editDialogVisible"
+    <a-modal
+      v-model:visible="editDialogVisible"
       :title="isCreateMode ? '创建工作负载' : '编辑工作负载'"
       width="90%"
-      :close-on-click-modal="false"
-      class="workload-edit-dialog"
+      :mask-closable="false"
       @close="isCreateMode = false"
     >
       <div class="workload-edit-content" v-if="editWorkloadData">
@@ -1078,8 +884,8 @@
 
         <!-- 右侧：详细配置 -->
         <div class="edit-main">
-          <el-tabs v-model="activeEditTab" type="border-card">
-            <el-tab-pane label="容器配置" name="containers">
+          <a-tabs v-model:active-key="activeEditTab" type="border-card">
+            <a-tab-pane title="容器配置" key="containers">
               <div class="tab-content">
                 <ContainerConfig
                   :containers="editWorkloadData.containers || []"
@@ -1089,8 +895,8 @@
                   @updateInitContainers="updateInitContainers"
                 />
               </div>
-            </el-tab-pane>
-            <el-tab-pane label="存储" name="storage">
+            </a-tab-pane>
+            <a-tab-pane title="存储" key="storage">
               <div class="tab-content">
                 <VolumeConfig
                   :volumes="editWorkloadData.volumes || []"
@@ -1105,8 +911,8 @@
                   @refreshPVCs="loadPVCs"
                 />
               </div>
-            </el-tab-pane>
-            <el-tab-pane label="扩容配置" name="scaling">
+            </a-tab-pane>
+            <a-tab-pane title="扩容配置" key="scaling">
               <div class="tab-content scaling-tab-content">
                 <ScalingConfig
                   :workloadType="editWorkloadData.type"
@@ -1120,8 +926,8 @@
                   @update:cronJobConfig="updateCronJobConfig"
                 />
               </div>
-            </el-tab-pane>
-            <el-tab-pane label="节点调度" name="scheduling">
+            </a-tab-pane>
+            <a-tab-pane title="节点调度" key="scheduling">
               <div class="tab-content scheduling-tab-content">
                 <!-- 调度类型 -->
                 <div class="info-panel">
@@ -1179,8 +985,8 @@
                   </div>
                 </div>
               </div>
-            </el-tab-pane>
-            <el-tab-pane label="网络" name="network">
+            </a-tab-pane>
+            <a-tab-pane title="网络" key="network">
               <div class="tab-content">
                 <Network
                   :formData="editWorkloadData"
@@ -1192,163 +998,155 @@
                   @removeDNSOption="handleRemoveDNSOption"
                 />
               </div>
-            </el-tab-pane>
-            <el-tab-pane label="其他" name="others">
+            </a-tab-pane>
+            <a-tab-pane title="其他" key="others">
               <div class="tab-content">
                 <Others :formData="editWorkloadData" />
               </div>
-            </el-tab-pane>
-          </el-tabs>
+            </a-tab-pane>
+          </a-tabs>
         </div>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="editDialogVisible = false">取消</el-button>
-          <el-button type="primary" class="black-button" @click="handleSaveEdit" :loading="editSaving">
+          <a-button @click="editDialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSaveEdit" :loading="editSaving">
             保存
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 终端对话框 -->
-    <el-dialog
-      v-model="terminalDialogVisible"
+    <a-modal
+      v-model:visible="terminalDialogVisible"
       :title="`终端 - Pod: ${terminalData.pod} | 容器: ${terminalData.container}`"
       width="90%"
-      :close-on-click-modal="false"
-      class="terminal-dialog"
+      :mask-closable="false"
       @close="handleCloseTerminal"
-      @opened="handleDialogOpened"
+      @open="handleDialogOpened"
     >
       <div class="terminal-container">
         <div v-if="!terminalConnected" class="terminal-loading-overlay">
-          <el-icon class="is-loading"><Loading /></el-icon>
+          <a-spin />
           <span>正在连接终端...</span>
         </div>
         <div class="terminal-wrapper" ref="terminalWrapper"></div>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="terminalDialogVisible = false">关闭</el-button>
+          <a-button @click="terminalDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 日志对话框 -->
-    <el-dialog
-      v-model="logsDialogVisible"
+    <a-modal
+      v-model:visible="logsDialogVisible"
       :title="`日志 - Pod: ${logsData.pod} | 容器: ${logsData.container}`"
       width="90%"
-      :close-on-click-modal="false"
-      class="logs-dialog"
-      @opened="handleLogsDialogOpened"
+      :mask-closable="false"
+      @open="handleLogsDialogOpened"
     >
       <div class="logs-toolbar">
-        <el-button size="small" @click="handleRefreshLogs" :loading="logsLoading">
-          <el-icon><Refresh /></el-icon>
-          刷新
-        </el-button>
-        <el-button size="small" @click="handleDownloadLogs">
-          <el-icon><Download /></el-icon>
-          下载
-        </el-button>
-        <el-button size="small" @click="logsAutoScroll = !logsAutoScroll" :type="logsAutoScroll ? 'primary' : 'default'">
-          <el-icon><Bottom /></el-icon>
-          {{ logsAutoScroll ? '自动滚动' : '停止滚动' }}
-        </el-button>
-        <el-select v-model="logsTailLines" size="small" style="width: 120px; margin-left: 10px;">
-          <el-option label="最近100行" :value="100" />
-          <el-option label="最近500行" :value="500" />
-          <el-option label="最近1000行" :value="1000" />
-          <el-option label="全部" :value="0" />
-        </el-select>
+        <a-space>
+          <a-button size="small" @click="handleRefreshLogs" :loading="logsLoading">
+            <template #icon><icon-refresh /></template>
+            刷新
+          </a-button>
+          <a-button size="small" @click="handleDownloadLogs">
+            <template #icon><icon-download /></template>
+            下载
+          </a-button>
+          <a-button size="small" @click="logsAutoScroll = !logsAutoScroll" :type="logsAutoScroll ? 'primary' : 'secondary'">
+            <template #icon><icon-down /></template>
+            {{ logsAutoScroll ? '自动滚动' : '停止滚动' }}
+          </a-button>
+          <a-select v-model="logsTailLines" size="small" style="width: 120px">
+            <a-option label="最近100行" :value="100" />
+            <a-option label="最近500行" :value="500" />
+            <a-option label="最近1000行" :value="1000" />
+            <a-option label="全部" :value="0" />
+          </a-select>
+        </a-space>
       </div>
       <div class="logs-wrapper" ref="logsWrapper">
         <pre v-if="logsContent" class="logs-content">{{ logsContent }}</pre>
-        <el-empty v-else-if="!logsLoading" description="暂无日志" />
+        <a-empty v-else-if="!logsLoading" description="暂无日志" />
         <div v-if="logsLoading" class="logs-loading">
-          <el-icon class="is-loading"><Loading /></el-icon>
+          <a-spin />
           <span>正在加载日志...</span>
         </div>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="logsDialogVisible = false">关闭</el-button>
+          <a-button @click="logsDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- ReplicaSet YAML 对话框 -->
-    <el-dialog
-      v-model="replicaSetYamlDialogVisible"
+    <a-modal
+      v-model:visible="replicaSetYamlDialogVisible"
       :title="`ReplicaSet YAML - ${replicaSetYamlData.name}`"
-      width="900px"
-      :close-on-click-modal="false"
-      class="yaml-dialog"
+      :width="900"
+      :mask-closable="false"
     >
-      <div class="yaml-dialog-content">
-        <div class="yaml-editor-wrapper">
-          <div class="yaml-line-numbers">
-            <div v-for="line in replicaSetYamlLineCount" :key="line" class="line-number">{{ line }}</div>
-          </div>
-          <textarea
-            v-model="replicaSetYamlContent"
-            class="yaml-textarea"
-            placeholder="YAML 内容"
-            spellcheck="false"
-            readonly
-          ></textarea>
+      <div class="yaml-editor-wrapper">
+        <div class="line-numbers">
+          <div v-for="line in replicaSetYamlLineCount" :key="line" class="line-number">{{ line }}</div>
         </div>
+        <textarea
+          v-model="replicaSetYamlContent"
+          class="code-textarea"
+          placeholder="YAML 内容"
+          spellcheck="false"
+          readonly
+        ></textarea>
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="handleCopyReplicaSetYAML">
-            <el-icon><CopyDocument /></el-icon>
+          <a-button @click="handleCopyReplicaSetYAML">
+            <icon-copy />
             复制
-          </el-button>
-          <el-button type="primary" @click="replicaSetYamlDialogVisible = false">关闭</el-button>
+          </a-button>
+          <a-button type="primary" @click="replicaSetYamlDialogVisible = false">关闭</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 创建工作负载弹窗 -->
-    <el-dialog
-      v-model="createWorkloadDialogVisible"
+    <a-modal
+      v-model:visible="createWorkloadDialogVisible"
       :title="`YAML创建${selectedType || ''}`"
-      width="800px"
-      :close-on-click-modal="false"
-      class="create-workload-dialog"
+      :width="800"
+      :mask-closable="false"
     >
-      <div class="yaml-create-mode">
-        <div class="yaml-editor-container">
-          <div class="yaml-editor-wrapper">
-            <div class="yaml-line-numbers">
-              <div v-for="line in createYamlLineCount" :key="line" class="line-number">{{ line }}</div>
-            </div>
-            <textarea
-              v-model="createYamlContent"
-              class="yaml-textarea"
-              placeholder="请输入或修改 YAML 内容..."
-              spellcheck="false"
-            ></textarea>
-          </div>
+      <div class="yaml-editor-wrapper">
+        <div class="line-numbers">
+          <div v-for="line in createYamlLineCount" :key="line" class="line-number">{{ line }}</div>
         </div>
+        <textarea
+          v-model="createYamlContent"
+          class="code-textarea"
+          placeholder="请输入或修改 YAML 内容..."
+          spellcheck="false"
+        ></textarea>
       </div>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="createWorkloadDialogVisible = false">取消</el-button>
-          <el-button
+          <a-button @click="createWorkloadDialogVisible = false">取消</a-button>
+          <a-button
             type="primary"
             :loading="createYamlLoading"
             @click="handleCreateFromYaml"
           >
             创建
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- Pod 详情对话框 -->
     <PodDetail
@@ -1370,49 +1168,64 @@
 </template>
 
 <script setup lang="ts">
+import { confirmModal } from '@/utils/confirm'
+
+const tableColumns6 = [
+  { title: 'Key', dataIndex: 'key', slotName: 'key', width: 280 },
+  { title: 'Value', dataIndex: 'value', slotName: 'value', width: 350 }
+]
+
+const tableColumns5 = [
+  { title: '名称', dataIndex: 'metadata.name', slotName: 'metadata.name', width: 220, ellipsis: true, tooltip: true },
+  { title: '状态', slotName: 'status', width: 90, align: 'center' },
+  { title: 'CPU', slotName: 'cpu', width: 120, align: 'center' },
+  { title: '内存', slotName: 'memory', width: 120, align: 'center' },
+  { title: '重启', slotName: 'col_7754', width: 80, align: 'center' },
+  { title: '节点', dataIndex: 'spec.nodeName', width: 140, ellipsis: true, tooltip: true },
+  { title: '操作', slotName: 'actions', width: 70, fixed: 'right', align: 'center' }
+]
+
+const tableColumns4 = [
+  { title: '名称', slotName: 'name', width: 220, ellipsis: true, tooltip: true },
+  { title: '类型', slotName: 'type', width: 110, align: 'center' },
+  { title: '集群IP', slotName: 'clusterIP', width: 130, align: 'center' },
+  { title: '外部IP', slotName: 'col_481', width: 130, align: 'center' },
+  { title: '端口', slotName: 'ports', width: 320 },
+  { title: '存活时间', slotName: 'col_8379', width: 100, align: 'center' }
+]
+
+const tableColumns3 = [
+  { title: '名称', slotName: 'name', width: 180 },
+  { title: '域名', slotName: 'col_2513', width: 200, ellipsis: true, tooltip: true },
+  { title: '路径', slotName: 'path', width: 180 },
+  { title: '服务', slotName: 'col_3269', width: 150 },
+  { title: '端口', slotName: 'ports', width: 100, align: 'center' }
+]
+
+const tableColumns2 = [
+  { title: '类别', slotName: 'col_6294', width: 150 },
+  { title: '状态', slotName: 'status', width: 150, align: 'center' },
+  { title: '消息', slotName: 'col_8959', width: 350 },
+  { title: '最后更新时间', slotName: 'col_8885', width: 160, align: 'center' }
+]
+
+const tableColumns = [
+  { title: '版本', slotName: 'col_8377', width: 140, align: 'center' },
+  { title: '镜像', slotName: 'image', width: 350 },
+  { title: '副本信息', slotName: 'col_6379', width: 160, align: 'center' },
+  { title: '创建时间', slotName: 'createdAt', width: 180 },
+  { title: '状态', slotName: 'status', width: 120, align: 'center' },
+  { title: '操作', slotName: 'actions', width: 200, fixed: 'right', align: 'center' }
+]
+
 import { ref, onMounted, computed, nextTick, onUnmounted, watch } from 'vue'
-import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
 import axios from 'axios'
 import * as yaml from 'js-yaml'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import {
-  Search,
-  Tools,
-  Grid,
-  Platform,
-  FolderOpened,
-  PriceTag,
-  Clock,
-  Refresh,
-  Edit,
-  View,
-  Document,
-  Monitor,
-  RefreshRight,
-  RefreshLeft,
-  Rank,
-  Delete,
-  CopyDocument,
-  Box,
-  ArrowDown,
-  MoreFilled,
-  Loading,
-  Download,
-  Bottom,
-  Connection,
-  Right,
-  Link,
-  Guide,
-  CircleCheck,
-  CircleClose,
-  Warning,
-  VideoPause,
-  VideoPlay,
-  Plus
-} from '@element-plus/icons-vue'
 import { getClusterList, updateWorkload, getConfigMaps, getSecrets, getPersistentVolumeClaims, type Cluster } from '@/api/kubernetes'
 // 导入工作负载编辑组件
 import BasicInfo from './workload-components/BasicInfo.vue'
@@ -1478,6 +1291,76 @@ const selectedCluster = computed(() => {
 const selectedType = ref<string>('Deployment') // 默认选择 Deployment
 const workloadList = ref<Workload[]>([])
 
+// 根据工作负载类型动态计算表格列
+const tableColumns7 = computed(() => {
+  const type = selectedType.value
+  const nameCol = { title: '名称', slotName: 'name', width: 200, fixed: 'left' }
+  const statusCol = { title: '状态', slotName: 'status', width: 120, align: 'center' }
+  const labelsCol = { title: '标签', slotName: 'labels', width: 80, align: 'center' }
+  const ageCol = { title: '存活时间', slotName: 'col_8379', width: 150 }
+  const actionsCol = { title: '操作', slotName: 'actions', width: 180, fixed: 'right', align: 'center' }
+  const imageCol = { title: '镜像', slotName: 'image', width: 300 }
+
+  if (type === 'Pod') {
+    return [
+      nameCol,
+      { title: 'CPU/内存', slotName: 'col_4432', width: 150 },
+      statusCol,
+      { title: '重启次数', slotName: 'restarts', width: 100, align: 'center' },
+      { title: '命名空间', slotName: 'namespace', width: 150 },
+      { title: 'PodIP', slotName: 'col_PodIP', width: 140, align: 'center' },
+      { title: '调度节点', slotName: 'col_4850', width: 150 },
+      labelsCol,
+      ageCol,
+      actionsCol
+    ]
+  } else if (type === 'Deployment' || type === 'StatefulSet') {
+    return [
+      nameCol,
+      { title: '容器组', slotName: 'col_8234', width: 130, align: 'center' },
+      statusCol,
+      { title: 'Requests/Limits', slotName: 'resourceLimits', width: 200 },
+      imageCol,
+      labelsCol,
+      ageCol,
+      actionsCol
+    ]
+  } else if (type === 'DaemonSet') {
+    return [
+      nameCol,
+      { title: '当前调度', slotName: 'col_8023', width: 100, align: 'center' },
+      { title: '期望调度', slotName: 'col_6437', width: 100, align: 'center' },
+      { title: '准备就绪', slotName: 'col_4602', width: 120, align: 'center' },
+      statusCol,
+      imageCol,
+      labelsCol,
+      ageCol,
+      actionsCol
+    ]
+  } else if (type === 'Job') {
+    return [
+      nameCol,
+      statusCol,
+      { title: '耗时', slotName: 'col_615', width: 150 },
+      imageCol,
+      labelsCol,
+      ageCol,
+      actionsCol
+    ]
+  } else if (type === 'CronJob') {
+    return [
+      nameCol,
+      { title: '调度', slotName: 'schedulable', width: 150 },
+      { title: '暂停', slotName: 'suspend', width: 80, align: 'center' },
+      { title: '最后调度时间', slotName: 'col_8590', width: 180 },
+      imageCol,
+      labelsCol,
+      ageCol,
+      actionsCol
+    ]
+  }
+  return [nameCol, statusCol, labelsCol, ageCol, actionsCol]
+})
 // 工作负载类型配置
 const workloadTypes = ref([
   { label: 'Deployment', value: 'Deployment', icon: 'Box', count: 0 },
@@ -1881,7 +1764,7 @@ const showLabels = (row: Workload) => {
 const copyToClipboard = async (text: string, type: string) => {
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success(`${type} 已复制到剪贴板`)
+    Message.success(`${type} 已复制到剪贴板`)
   } catch (error) {
     // 降级方案：使用传统方法
     const textarea = document.createElement('textarea')
@@ -1892,9 +1775,9 @@ const copyToClipboard = async (text: string, type: string) => {
     textarea.select()
     try {
       document.execCommand('copy')
-      ElMessage.success(`${type} 已复制到剪贴板`)
+      Message.success(`${type} 已复制到剪贴板`)
     } catch (err) {
-      ElMessage.error('复制失败')
+      Message.error('复制失败')
     }
     document.body.removeChild(textarea)
   }
@@ -1932,7 +1815,7 @@ const loadClusters = async () => {
       await loadWorkloads()
     }
   } catch (error) {
-    ElMessage.error('获取集群列表失败')
+    Message.error('获取集群列表失败')
   }
 }
 
@@ -1967,8 +1850,8 @@ const handleClusterChange = async () => {
 }
 
 // 切换工作负载类型
-const handleTypeChange = (type: string) => {
-  selectedType.value = type
+const handleTypeChange = (type: string | number | boolean) => {
+  selectedType.value = type as string
   currentPage.value = 1
   loadWorkloads()
 }
@@ -2012,7 +1895,7 @@ const handleAddWorkloadYAML = () => {
   }
 
   if (!selectedClusterId.value) {
-    ElMessage.warning('请先选择集群')
+    Message.warning('请先选择集群')
     return
   }
 
@@ -2034,7 +1917,7 @@ const handleAddWorkloadForm = async () => {
   }
 
   if (!selectedClusterId.value) {
-    ElMessage.warning('请先选择集群')
+    Message.warning('请先选择集群')
     return
   }
 
@@ -2116,7 +1999,7 @@ const handleAddWorkloadForm = async () => {
 // 创建工作负载（YAML方式）
 const handleCreateFromYaml = async () => {
   if (!createYamlContent.value.trim()) {
-    ElMessage.warning('请输入YAML内容')
+    Message.warning('请输入YAML内容')
     return
   }
 
@@ -2131,12 +2014,12 @@ const handleCreateFromYaml = async () => {
       },
       { headers: { Authorization: `Bearer ${token}` } }
     )
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     createWorkloadDialogVisible.value = false
     loadWorkloads()
   } catch (error: any) {
     const errorMsg = error.response?.data?.message || '创建工作负载失败'
-    ElMessage.error(errorMsg)
+    Message.error(errorMsg)
   } finally {
     createYamlLoading.value = false
   }
@@ -2178,7 +2061,7 @@ const loadWorkloads = async () => {
     updateWorkloadTypeCounts(allWorkloads)
   } catch (error) {
     workloadList.value = []
-    ElMessage.error('获取工作负载列表失败')
+    Message.error('获取工作负载列表失败')
   } finally {
     loading.value = false
   }
@@ -2239,7 +2122,7 @@ const handleActionCommand = async (command: string | any, row: Workload) => {
       handleShowYAML()
       break
     case 'pods':
-      ElMessage.info('Pods 列表功能开发中...')
+      Message.info('Pods 列表功能开发中...')
       break
     case 'restart':
       handleRestart()
@@ -2265,7 +2148,7 @@ const fetchPodDetailsForMenu = async (podName: string, namespace: string) => {
     // 后端现在返回标准格式 {code: 0, message: "success", data: pod}
     podMenuData.value = response.data.data
   } catch (error: any) {
-    ElMessage.error('获取 Pod 详情失败: ' + (error.response?.data?.message || error.message))
+    Message.error('获取 Pod 详情失败: ' + (error.response?.data?.message || error.message))
     podMenuData.value = null
   } finally {
     podMenuLoading.value = false
@@ -2275,7 +2158,7 @@ const fetchPodDetailsForMenu = async (podName: string, namespace: string) => {
 // 删除 Pod
 const handleDeletePod = async (podName: string, namespace: string) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除 Pod "${podName}" 吗？此操作不可撤销！`,
       '删除确认',
       {
@@ -2306,14 +2189,14 @@ const handleDeletePod = async (podName: string, namespace: string) => {
       await loadWorkloads()
 
       loadingInstance.close()
-      ElMessage.success('Pod 删除成功')
+      Message.success('Pod 删除成功')
     } catch (err) {
       loadingInstance.close()
       throw err
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '删除 Pod 失败')
+      Message.error(error.response?.data?.message || '删除 Pod 失败')
     }
   }
 }
@@ -2347,12 +2230,12 @@ const clearSelection = () => {
 
 const handleBatchDelete = async () => {
   if (selectedWorkloads.value.length === 0) {
-    ElMessage.warning('请先选择要删除的工作负载')
+    Message.warning('请先选择要删除的工作负载')
     return
   }
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
       '批量删除确认',
       {
@@ -2386,19 +2269,19 @@ const handleBatchDelete = async () => {
       if (failureCount > 0) {
         const failures = results.filter(r => !r.success)
         const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
-        ElMessage.warning(`批量删除完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+        Message.warning(`批量删除完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
       } else {
-        ElMessage.success(`成功删除 ${successCount} 个工作负载`)
+        Message.success(`成功删除 ${successCount} 个工作负载`)
       }
 
       clearSelection()
       await loadWorkloads()
     } else {
-      ElMessage.error(response.data.message || '批量删除失败')
+      Message.error(response.data.message || '批量删除失败')
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('批量删除失败')
+      Message.error('批量删除失败')
     }
   } finally {
     batchActionLoading.value = false
@@ -2407,12 +2290,12 @@ const handleBatchDelete = async () => {
 
 const handleBatchRestart = async () => {
   if (selectedWorkloads.value.length === 0) {
-    ElMessage.warning('请先选择要重启的工作负载')
+    Message.warning('请先选择要重启的工作负载')
     return
   }
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要重启选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
       '批量重启确认',
       {
@@ -2452,19 +2335,19 @@ const handleBatchRestart = async () => {
         // 显示失败详情
         const failures = results.filter(r => !r.success)
         const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
-        ElMessage.warning(`批量重启完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+        Message.warning(`批量重启完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
       } else {
-        ElMessage.success(`成功重启 ${successCount} 个工作负载`)
+        Message.success(`成功重启 ${successCount} 个工作负载`)
       }
 
       clearSelection()
       await loadWorkloads()
     } else {
-      ElMessage.error(response.data.message || '批量重启失败')
+      Message.error(response.data.message || '批量重启失败')
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '批量重启失败')
+      Message.error(error.response?.data?.message || '批量重启失败')
     }
   } finally {
     batchActionLoading.value = false
@@ -2473,12 +2356,12 @@ const handleBatchRestart = async () => {
 
 const handleBatchPause = async () => {
   if (selectedWorkloads.value.length === 0) {
-    ElMessage.warning('请先选择要停止的工作负载')
+    Message.warning('请先选择要停止的工作负载')
     return
   }
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要停止选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
       '批量停止确认',
       {
@@ -2512,19 +2395,19 @@ const handleBatchPause = async () => {
       if (failureCount > 0) {
         const failures = results.filter(r => !r.success)
         const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
-        ElMessage.warning(`批量停止完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+        Message.warning(`批量停止完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
       } else {
-        ElMessage.success(`成功停止 ${successCount} 个工作负载`)
+        Message.success(`成功停止 ${successCount} 个工作负载`)
       }
 
       clearSelection()
       await loadWorkloads()
     } else {
-      ElMessage.error(response.data.message || '批量停止失败')
+      Message.error(response.data.message || '批量停止失败')
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('批量停止失败')
+      Message.error('批量停止失败')
     }
   } finally {
     batchActionLoading.value = false
@@ -2533,12 +2416,12 @@ const handleBatchPause = async () => {
 
 const handleBatchResume = async () => {
   if (selectedWorkloads.value.length === 0) {
-    ElMessage.warning('请先选择要恢复的工作负载')
+    Message.warning('请先选择要恢复的工作负载')
     return
   }
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要恢复选中的 ${selectedWorkloads.value.length} 个工作负载吗？`,
       '批量恢复确认',
       {
@@ -2572,19 +2455,19 @@ const handleBatchResume = async () => {
       if (failureCount > 0) {
         const failures = results.filter(r => !r.success)
         const failureMsg = failures.map(f => `${f.name}: ${f.message}`).join('; ')
-        ElMessage.warning(`批量恢复完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
+        Message.warning(`批量恢复完成：成功 ${successCount} 个，失败 ${failureCount} 个。${failureMsg}`)
       } else {
-        ElMessage.success(`成功恢复 ${successCount} 个工作负载`)
+        Message.success(`成功恢复 ${successCount} 个工作负载`)
       }
 
       clearSelection()
       await loadWorkloads()
     } else {
-      ElMessage.error(response.data.message || '批量恢复失败')
+      Message.error(response.data.message || '批量恢复失败')
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('批量恢复失败')
+      Message.error('批量恢复失败')
     }
   } finally {
     batchActionLoading.value = false
@@ -2801,7 +2684,7 @@ const handleShowDetail = async (workload: Workload) => {
     activeDetailTab.value = 'pods'
     detailDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error('获取工作负载详情失败')
+    Message.error('获取工作负载详情失败')
   }
 }
 
@@ -3017,7 +2900,7 @@ const handlePauseChange = async (value: boolean) => {
       { headers: { Authorization: `Bearer ${token}` } }
     )
 
-    ElMessage.success(value ? '工作负载已暂停' : '工作负载已恢复运行')
+    Message.success(value ? '工作负载已暂停' : '工作负载已恢复运行')
 
     // 保存当前标签页
     const currentTab = activeDetailTab.value
@@ -3032,7 +2915,7 @@ const handlePauseChange = async (value: boolean) => {
     // 恢复标签页
     activeDetailTab.value = currentTab
   } catch (error: any) {
-    ElMessage.error('更新暂停状态失败: ' + (error.response?.data?.message || error.message))
+    Message.error('更新暂停状态失败: ' + (error.response?.data?.message || error.message))
     // 恢复开关状态
     isWorkloadPaused.value = !value
   } finally {
@@ -3130,7 +3013,7 @@ const handleViewReplicaSetYAML = async (replicaSet: any) => {
     }
     replicaSetYamlDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error('获取 ReplicaSet YAML 失败')
+    Message.error('获取 ReplicaSet YAML 失败')
   }
 }
 
@@ -3138,16 +3021,16 @@ const handleViewReplicaSetYAML = async (replicaSet: any) => {
 const handleCopyReplicaSetYAML = async () => {
   try {
     await navigator.clipboard.writeText(replicaSetYamlContent.value)
-    ElMessage.success('YAML 已复制到剪贴板')
+    Message.success('YAML 已复制到剪贴板')
   } catch (error: any) {
-    ElMessage.error('复制失败')
+    Message.error('复制失败')
   }
 }
 
 // 回滚到指定版本
 const handleRollback = async (replicaSet: any) => {
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要回滚到版本 #${getReplicaSetRevision(replicaSet)} 吗？此操作将创建一个新的 ReplicaSet 并更新工作负载。`,
       '回滚确认',
       {
@@ -3176,7 +3059,7 @@ const handleRollback = async (replicaSet: any) => {
       { headers: { Authorization: `Bearer ${token}` } }
     )
 
-    ElMessage.success('回滚成功')
+    Message.success('回滚成功')
 
     // 保存当前标签页
     const currentTab = activeDetailTab.value
@@ -3192,7 +3075,7 @@ const handleRollback = async (replicaSet: any) => {
     activeDetailTab.value = currentTab
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('回滚失败: ' + (error.response?.data?.message || error.message))
+      Message.error('回滚失败: ' + (error.response?.data?.message || error.message))
     }
   }
 }
@@ -3222,7 +3105,7 @@ const getRuntimeInfo = () => {
     statusIcon: runningPods.length === pods.length ? 'CircleCheck' : 'Warning',
     statusType: runningPods.length === pods.length ? 'success' : 'warning',
     isLoading: false,
-    message: `总计 ${pods.length} 个 Pod：运行中 ${runningPods.length} 个，等待中 ${pendingPods.length} 个，失败 ${failedPods.length} 个`,
+    content: `总计 ${pods.length} 个 Pod：运行中 ${runningPods.length} 个，等待中 ${pendingPods.length} 个，失败 ${failedPods.length} 个`,
     lastUpdate: calculateAge(workload.metadata?.creationTimestamp)
   })
 
@@ -3243,7 +3126,7 @@ const getRuntimeInfo = () => {
     statusIcon: replicasHealthy ? 'CircleCheck' : 'Loading',
     statusType: replicasHealthy ? 'success' : 'primary',
     isLoading: !replicasHealthy,
-    message: `期望 ${specReplicas} 个，当前 ${statusReplicas} 个，可用 ${availableReplicas} 个，就绪 ${readyReplicas} 个，已更新 ${updatedReplicas} 个`,
+    content: `期望 ${specReplicas} 个，当前 ${statusReplicas} 个，可用 ${availableReplicas} 个，就绪 ${readyReplicas} 个，已更新 ${updatedReplicas} 个`,
     lastUpdate: calculateAge(workload.status?.conditions?.find((c: any) => c.type === 'Progressing')?.lastTransitionTime)
   })
 
@@ -3305,7 +3188,7 @@ const getRuntimeInfo = () => {
       statusIcon: 'Warning',
       statusType: 'warning',
       isLoading: false,
-      message: `检测到 ${collisionCount} 次更新冲突，可能有并发更新问题`,
+      content: `检测到 ${collisionCount} 次更新冲突，可能有并发更新问题`,
       lastUpdate: calculateAge(workload.metadata?.creationTimestamp)
     })
   }
@@ -3323,7 +3206,7 @@ const getRuntimeInfo = () => {
       statusIcon: observedGeneration === generation ? 'CircleCheck' : 'Clock',
       statusType: observedGeneration === generation ? 'success' : 'warning',
       isLoading: false,
-      message: `当前代数 ${generation}，已观察到代数 ${observedGeneration}${observedGeneration < generation ? '，控制器正在处理最新配置' : ''}`,
+      content: `当前代数 ${generation}，已观察到代数 ${observedGeneration}${observedGeneration < generation ? '，控制器正在处理最新配置' : ''}`,
       lastUpdate: calculateAge(workload.metadata?.creationTimestamp)
     })
   }
@@ -3616,7 +3499,7 @@ const stopLogsAutoRefresh = () => {
 // 打开文件浏览器
 const handleOpenFileBrowser = (podName: string, containerName: string, namespace: string) => {
   if (!selectedClusterId.value) {
-    ElMessage.error('请先选择集群')
+    Message.error('请先选择集群')
     return
   }
   selectedFileBrowserPod.value = podName
@@ -3656,7 +3539,7 @@ const handleLoadLogs = async () => {
       }, 100)
     }
   } catch (error: any) {
-    ElMessage.error(`获取日志失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取日志失败: ${error.response?.data?.message || error.message}`)
   } finally {
     logsLoading.value = false
   }
@@ -3679,7 +3562,7 @@ const handleDownloadLogs = () => {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
-  ElMessage.success('日志下载成功')
+  Message.success('日志下载成功')
 }
 
 // 监听日志内容变化，自动滚动到底部
@@ -3762,7 +3645,7 @@ const handleShowYAML = async () => {
 
     yamlDialogVisible.value = true
   } catch (error: any) {
-    ElMessage.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取 YAML 失败: ${error.response?.data?.message || error.message}`)
   } finally {
     yamlSaving.value = false
   }
@@ -3791,11 +3674,11 @@ const handleSaveYAML = async () => {
         headers: { Authorization: `Bearer ${token}` }
       }
     )
-    ElMessage.success('保存成功')
+    Message.success('保存成功')
     yamlDialogVisible.value = false
     await loadWorkloads()
   } catch (error) {
-    ElMessage.error('保存 YAML 失败')
+    Message.error('保存 YAML 失败')
   } finally {
     yamlSaving.value = false
   }
@@ -3820,7 +3703,7 @@ const handleRestart = async () => {
   if (!selectedWorkload.value) return
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要重启工作负载 ${selectedWorkload.value.name} 吗？`,
       '重启确认',
       {
@@ -3843,11 +3726,11 @@ const handleRestart = async () => {
       }
     )
 
-    ElMessage.success('工作负载重启成功')
+    Message.success('工作负载重启成功')
     await loadWorkloads()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`重启失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`重启失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -3857,7 +3740,7 @@ const handleScale = async () => {
   if (!selectedWorkload.value) return
 
   try {
-    const { value } = await ElMessageBox.prompt(
+    const { value } = await confirmModal(
       `请输入 ${selectedWorkload.value.name} 的副本数：`,
       '扩缩容',
       {
@@ -3870,7 +3753,7 @@ const handleScale = async () => {
 
     const replicas = parseInt(value)
     if (isNaN(replicas) || replicas < 0) {
-      ElMessage.error('请输入有效的副本数')
+      Message.error('请输入有效的副本数')
       return
     }
 
@@ -3887,11 +3770,11 @@ const handleScale = async () => {
       }
     )
 
-    ElMessage.success('扩缩容成功')
+    Message.success('扩缩容成功')
     await loadWorkloads()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`扩缩容失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`扩缩容失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -4057,10 +3940,10 @@ const handleShowEditDialog = async () => {
       isCreateMode.value = false
       editDialogVisible.value = true
     } else {
-      ElMessage.warning('未获取到工作负载数据')
+      Message.warning('未获取到工作负载数据')
     }
   } catch (error: any) {
-    ElMessage.error(`获取工作负载详情失败: ${error.response?.data?.message || error.message}`)
+    Message.error(`获取工作负载详情失败: ${error.response?.data?.message || error.message}`)
   } finally {
     editSaving.value = false
   }
@@ -4304,20 +4187,20 @@ const handleSaveAffinityRule = () => {
 
   // 验证 Pod 亲和性的拓扑键
   if (editingAffinityRule.value.type.includes('pod') && !editingAffinityRule.value.topologyKey) {
-    ElMessage.warning('Pod 亲和性必须指定拓扑键')
+    Message.warning('Pod 亲和性必须指定拓扑键')
     return
   }
 
   // 验证必填字段
   if (editingAffinityRule.value.matchExpressions.length === 0 &&
       editingAffinityRule.value.matchLabels.length === 0) {
-    ElMessage.warning('请至少添加一个匹配表达式或标签')
+    Message.warning('请至少添加一个匹配表达式或标签')
     return
   }
 
   affinityRules.value.push({ ...editingAffinityRule.value })
   editingAffinityRule.value = null
-  ElMessage.success('亲和性规则添加成功')
+  Message.success('亲和性规则添加成功')
 }
 
 // 添加匹配表达式
@@ -4354,7 +4237,7 @@ const handleRemoveMatchLabel = (index: number) => {
 // 删除亲和性规则
 const handleRemoveAffinityRule = (index: number) => {
   affinityRules.value.splice(index, 1)
-  ElMessage.success('亲和性规则删除成功')
+  Message.success('亲和性规则删除成功')
 }
 
 // 添加容忍度
@@ -5188,7 +5071,7 @@ const handleSaveEdit = async () => {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       )
-      ElMessage.success('工作负载创建成功')
+      Message.success('工作负载创建成功')
       isCreateMode.value = false
     } else {
       // 编辑模式：调用更新API
@@ -5199,7 +5082,7 @@ const handleSaveEdit = async () => {
         name: editWorkloadData.value.name,
         yaml
       })
-      ElMessage.success('工作负载更新成功')
+      Message.success('工作负载更新成功')
     }
 
     editDialogVisible.value = false
@@ -5207,7 +5090,7 @@ const handleSaveEdit = async () => {
     // 重新加载列表
     await loadWorkloads()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || (isCreateMode.value ? '创建工作负载失败' : '更新工作负载失败'))
+    Message.error(error.response?.data?.message || (isCreateMode.value ? '创建工作负载失败' : '更新工作负载失败'))
   } finally {
     editSaving.value = false
   }
@@ -5435,7 +5318,7 @@ const handleDelete = async () => {
   if (!selectedWorkload.value) return
 
   try {
-    await ElMessageBox.confirm(
+    await confirmModal(
       `确定要删除工作负载 ${selectedWorkload.value.name} 吗？此操作不可恢复！`,
       '删除确认',
       {
@@ -5458,11 +5341,11 @@ const handleDelete = async () => {
       }
     )
 
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
     await loadWorkloads()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(`删除失败: ${error.response?.data?.message || error.message}`)
+      Message.error(`删除失败: ${error.response?.data?.message || error.message}`)
     }
   }
 }
@@ -5489,194 +5372,86 @@ onMounted(() => {
 <style scoped>
 .workloads-container {
   padding: 0;
-  background-color: transparent;
 }
 
 /* 页面头部 */
+.page-header-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  align-items: center;
 }
 
 .page-title-group {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 14px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: #000;
+  width: 44px;
+  height: 44px;
+  background: var(--ops-primary, #165dff);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-tertiary, #86909c);
   line-height: 1.4;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-}
-
-.cluster-select {
-  width: 280px;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-.black-button {
-  background: #000 !important;
-  color: #fff !important;
-  border: none !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.black-button:hover {
-  background: #333 !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
-
-/* 上下文选择栏 */
-.context-bar {
-  margin-bottom: 12px;
-  padding: 12px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-
-.context-selectors {
-  display: flex;
-  gap: 24px;
-  align-items: center;
-}
-
-.context-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.context-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #606266;
-  white-space: nowrap;
-}
-
-.context-select {
-  min-width: 200px;
 }
 
 /* 工作负载类型标签栏 */
-.workload-types-bar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 12px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  flex-wrap: wrap;
-}
-
-.type-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #1a1a1a;
-  color: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  user-select: none;
-  border: 2px solid #1a1a1a;
-}
-
-.type-tab:hover {
-  background: #333;
-  border-color: #333;
-  transform: translateY(-1px);
-}
-
-.type-tab.active {
-  background: #d4af37;
-  color: #1a1a1a;
-  border-color: #d4af37;
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
-  font-weight: 600;
-}
-
-.type-tab.active .type-icon {
-  color: #1a1a1a;
-}
-
-.type-icon {
-  font-size: 18px;
-  color: #fff;
-}
-
-.type-tab.active .type-icon {
-  color: #1a1a1a;
-}
-
-.type-label {
-  font-size: 14px;
-  font-weight: 500;
+.types-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
 .type-count {
   font-size: 12px;
-  opacity: 0.8;
+  opacity: 0.7;
   margin-left: 2px;
 }
 
 /* 操作栏 */
+.search-card {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
+.search-card :deep(.arco-form-item) {
+  margin-bottom: 0;
+}
+
 .action-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding: 12px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
 .search-section {
@@ -5686,303 +5461,77 @@ onMounted(() => {
   flex: 1;
 }
 
-.search-input {
-  width: 280px;
-}
-
-.namespace-select {
-  width: 200px;
-}
-
-.action-section {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 12px;
-}
-
 /* 批量操作栏 */
-.batch-action-bar {
+.batch-actions-bar {
+  margin-bottom: 16px;
+  border-radius: var(--ops-border-radius-md, 8px);
+  background: var(--ops-primary-bg, #e8f0ff);
+  border: 1px solid var(--ops-primary-lighter, #6694ff);
+}
+
+.batch-actions-content {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  margin-bottom: 16px;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e0e0e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.batch-action-left {
-  display: flex;
   align-items: center;
 }
 
 .selected-count {
-  font-size: 15px;
-  color: #1a1a1a;
-  font-weight: 700;
-  padding: 8px 16px;
-  background: #ffffff;
-  border: 2px solid #d4af37;
-  border-radius: 8px;
+  font-size: 14px;
+  color: var(--ops-text-primary, #1d2129);
+  font-weight: 500;
+}
+
+/* 表格卡片 */
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
+}
+
+/* 操作按钮 */
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--ops-border-radius-sm, 4px);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
-}
-
-.selected-count::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  background: #d4af37;
-  border-radius: 50%;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.05);
-    box-shadow: 0 0 0 6px rgba(212, 175, 55, 0);
-  }
-}
-
-.batch-action-right {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.batch-btn {
-  padding: 10px 18px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid #1a1a1a;
-  background: #1a1a1a;
-  color: #ffffff;
-}
-
-.batch-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-  background: #333333;
-  border-color: #333333;
-  color: #ffffff;
-}
-
-/* 统一所有按钮类型为黑底白字 */
-.batch-btn.el-button--danger,
-.batch-btn.el-button--warning,
-.batch-btn.el-button--success,
-.batch-btn.el-button--info,
-.batch-btn.el-button--primary {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: #ffffff;
-}
-
-.batch-btn.el-button--danger:hover,
-.batch-btn.el-button--warning:hover,
-.batch-btn.el-button--success:hover,
-.batch-btn.el-button--info:hover,
-.batch-btn.el-button--primary:hover {
-  background: #333333;
-  border-color: #333333;
-  color: #ffffff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-}
-
-/* 选择列样式优化 */
-.modern-table :deep(.el-table__header .el-table-column--selection .cell) {
-  display: flex;
   justify-content: center;
-  align-items: center;
+  transition: all 0.2s;
+  color: var(--ops-text-secondary, #4e5969);
+  font-size: 16px;
 }
 
-.modern-table :deep(.el-table__body .el-table-column--selection .cell) {
+.action-btn:deep(.arco-btn-icon) {
+  font-size: 16px;
+}
+
+.action-btn:hover {
+  background-color: var(--ops-primary-bg, #e8f0ff);
+  color: var(--ops-primary, #165dff);
+}
+
+.action-edit:hover {
+  background-color: #fff7e8;
+  color: var(--ops-warning, #ff7d00);
+}
+
+.action-delete:hover {
+  background-color: #ffece8;
+  color: var(--ops-danger, #f53f3f);
+}
+
+/* 分页 */
+.pagination-wrapper {
   display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* 自定义复选框样式 */
-.modern-table :deep(.el-checkbox__inner) {
-  border-radius: 4px;
-  border: 2px solid #d4af37;
-  background: transparent;
-  width: 18px;
-  height: 18px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.modern-table :deep(.el-checkbox__inner:hover) {
-  border-color: #c9a227;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.15);
-}
-
-.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
-  background: #d4af37;
-  border-color: #d4af37;
-}
-
-.modern-table :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
-  border-color: #ffffff;
-  border-width: 2px;
-}
-
-.modern-table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner::before) {
-  background-color: #ffffff;
-}
-
-/* 选中行的样式 */
-.modern-table :deep(.el-table__body tr.current-row) {
-  background: rgba(24, 144, 255, 0.05) !important;
-}
-
-.modern-table :deep(.el-table__body tr:hover td) {
-  background: rgba(24, 144, 255, 0.03) !important;
-}
-
-/* 创建按钮样式 */
-.add-button {
-  background: #1a1a1a !important;
-  color: #fff !important;
-  border: none !important;
-  font-weight: 500;
-  padding: 10px 20px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.add-button:hover {
-  background: #333 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.add-button:active {
-  transform: translateY(0);
-}
-
-.add-button-form {
-  background: #1a1a1a !important;
-  color: #fff !important;
-  border: none !important;
-  font-weight: 500;
-  padding: 10px 20px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.add-button-form:hover {
-  background: #333 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.add-button-form:active {
-  transform: translateY(0);
-}
-
-/* 搜索栏 */
-.search-bar {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  gap: 16px;
-}
-
-.search-inputs {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-}
-
-.search-input {
-  width: 280px;
-}
-
-.filter-select,
-.cluster-select {
-  width: 180px;
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-/* 表格容器 */
-.table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
-
-/* 搜索框样式优化 */
-.search-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.search-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
-}
-
-.search-bar :deep(.el-select .el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-/* 表头图标 */
-.header-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  justify-content: flex-end;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--ops-border-color, #e5e6eb);
 }
 
 .header-icon {
@@ -5998,24 +5547,24 @@ onMounted(() => {
   width: 100%;
 }
 
-.modern-table :deep(.el-table__body-wrapper) {
+.modern-table :deep(.arco-table__body-wrapper) {
   border-radius: 0 0 12px 12px;
 }
 
-.modern-table :deep(.el-table__row) {
+.modern-table :deep(.arco-table__row) {
   transition: background-color 0.2s ease;
   height: 56px !important;
 }
 
-.modern-table :deep(.el-table__row td) {
+.modern-table :deep(.arco-table__row td) {
   height: 56px !important;
 }
 
-.modern-table :deep(.el-table__row:hover) {
+.modern-table :deep(.arco-table__row:hover) {
   background-color: #f8fafc !important;
 }
 
-.modern-table :deep(.el-tag) {
+.modern-table :deep(.arco-tag) {
   border-radius: 6px;
   padding: 4px 10px;
   font-weight: 500;
@@ -6028,49 +5577,53 @@ onMounted(() => {
   gap: 12px;
 }
 
-.workload-icon-wrapper {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #d4af37;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(212, 175, 55, 0.25);
-}
-
-.workload-icon {
-  color: #1a1a1a;
-  font-size: 18px;
-}
-
 .workload-name-content {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.workload-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 .workload-type-icon-box {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #e8f3ff 0%, #f2f3f5 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d4af37;
   flex-shrink: 0;
+  color: #165dff;
+  font-size: 18px;
 }
 
-.workload-type-icon-gold {
-  color: #d4af37;
+.workload-type-icon-box.icon-deployment {
+  background: linear-gradient(135deg, #e8f3ff 0%, #d6e8ff 100%);
+  color: #165dff;
+}
+
+.workload-type-icon-box.icon-statefulset {
+  background: linear-gradient(135deg, #e8ffea 0%, #d1f5d3 100%);
+  color: #00b42a;
+}
+
+.workload-type-icon-box.icon-daemonset {
+  background: linear-gradient(135deg, #fff7e8 0%, #ffe8c8 100%);
+  color: #ff7d00;
+}
+
+.workload-type-icon-box.icon-job {
+  background: linear-gradient(135deg, #f0e8ff 0%, #e0d1ff 100%);
+  color: #722ed1;
+}
+
+.workload-type-icon-box.icon-cronjob {
+  background: linear-gradient(135deg, #e8fffb 0%, #c8fff4 100%);
+  color: #0fc6c2;
+}
+
+.workload-type-icon-box.icon-pod {
+  background: linear-gradient(135deg, #ffe8f1 0%, #ffd1e1 100%);
+  color: #f5319d;
 }
 
 .workload-name {
@@ -6382,7 +5935,7 @@ onMounted(() => {
   min-width: 140px;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item) {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -6390,34 +5943,34 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item .el-icon) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item .arco-icon) {
   color: #d4af37;
   font-size: 16px;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item.danger-item) {
   color: #f56c6c;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item .el-icon) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item.danger-item .arco-icon) {
   color: #f56c6c;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item:hover) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item:hover) {
   background-color: #f5f5f5;
   color: #d4af37;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item:hover .el-icon) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item:hover .arco-icon) {
   color: #d4af37;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item:hover) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item.danger-item:hover) {
   background-color: #fef0f0;
   color: #f56c6c;
 }
 
-.action-dropdown-menu :deep(.el-dropdown-menu__item.danger-item:hover .el-icon) {
+.action-dropdown-menu :deep(.arco-dropdown-menu__item.danger-item:hover .arco-icon) {
   color: #f56c6c;
 }
 
@@ -6431,14 +5984,14 @@ onMounted(() => {
 }
 
 /* 标签弹窗 */
-.label-dialog :deep(.el-dialog__header) {
+.label-dialog :deep(.arco-dialog__header) {
   background: #d4af37;
   color: #1a1a1a;
   border-radius: 8px 8px 0 0;
   padding: 20px 24px;
 }
 
-.label-dialog :deep(.el-dialog__title) {
+.label-dialog :deep(.arco-dialog__title) {
   color: #1a1a1a;
   font-size: 16px;
   font-weight: 600;
@@ -6452,7 +6005,7 @@ onMounted(() => {
   width: 100%;
 }
 
-.label-table :deep(.el-table__cell) {
+.label-table :deep(.arco-table__cell) {
   padding: 8px 0;
 }
 
@@ -6517,20 +6070,20 @@ onMounted(() => {
 }
 
 /* YAML 编辑弹窗 */
-.yaml-dialog :deep(.el-dialog__header) {
+.yaml-dialog :deep(.arco-dialog__header) {
   background: #d4af37;
   color: #1a1a1a;
   border-radius: 8px 8px 0 0;
   padding: 20px 24px;
 }
 
-.yaml-dialog :deep(.el-dialog__title) {
+.yaml-dialog :deep(.arco-dialog__title) {
   color: #1a1a1a;
   font-size: 16px;
   font-weight: 600;
 }
 
-.yaml-dialog :deep(.el-dialog__body) {
+.yaml-dialog :deep(.arco-dialog__body) {
   padding: 24px;
   background-color: #ffffff;
 }
@@ -6607,7 +6160,7 @@ onMounted(() => {
   border: 1px solid #b3d8ff;
   border-radius: 6px;
   font-size: 13px;
-  color: #409eff;
+  color: #165dff;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   word-break: break-all;
   transition: all 0.3s ease;
@@ -6615,7 +6168,7 @@ onMounted(() => {
 
 .image-tag:hover {
   background: linear-gradient(135deg, #d9ecff 0%, #e8f4fd 100%);
-  border-color: #409eff;
+  border-color: #165dff;
   box-shadow: 0 2px 6px rgba(64, 158, 255, 0.2);
 }
 
@@ -6641,8 +6194,8 @@ onMounted(() => {
 
 .labels-list .label-tag:hover {
   background: linear-gradient(135deg, #e8f4fd 0%, #f5f9ff 100%);
-  border-color: #409eff;
-  color: #409eff;
+  border-color: #165dff;
+  color: #165dff;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(64, 158, 255, 0.2);
 }
@@ -6693,16 +6246,16 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.pods-table :deep(.el-table__body-wrapper) {
+.pods-table :deep(.arco-table__body-wrapper) {
   max-height: 400px;
   overflow-y: auto;
 }
 
-.pods-table :deep(.el-table__header) {
+.pods-table :deep(.arco-table__header) {
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
 }
 
-.pods-table :deep(.el-table__header th) {
+.pods-table :deep(.arco-table__header th) {
   background: transparent !important;
   color: #1f2329;
   font-weight: 700;
@@ -6710,16 +6263,16 @@ onMounted(() => {
   border-bottom: 2px solid #e8eaed;
 }
 
-.pods-table :deep(.el-table__body tr) {
+.pods-table :deep(.arco-table__body tr) {
   transition: all 0.3s ease;
 }
 
-.pods-table :deep(.el-table__body tr:hover) {
+.pods-table :deep(.arco-table__body tr:hover) {
   background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%) !important;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
 }
 
-.pods-table :deep(.el-table__body tr td) {
+.pods-table :deep(.arco-table__body tr td) {
   border-bottom: 1px solid #f0f2f5;
 }
 
@@ -6737,11 +6290,11 @@ onMounted(() => {
 }
 
 .pod-name-cell:hover .pod-name {
-  color: #409eff;
+  color: #165dff;
 }
 
 .pod-icon {
-  color: #409eff;
+  color: #165dff;
   font-size: 16px;
 }
 
@@ -6789,11 +6342,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.services-table :deep(.el-table__header) {
+.services-table :deep(.arco-table__header) {
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
 }
 
-.services-table :deep(.el-table__header th) {
+.services-table :deep(.arco-table__header th) {
   background: transparent !important;
   color: #1f2329;
   font-weight: 700;
@@ -6801,11 +6354,11 @@ onMounted(() => {
   border-bottom: 2px solid #e8eaed;
 }
 
-.services-table :deep(.el-table__body tr) {
+.services-table :deep(.arco-table__body tr) {
   transition: all 0.2s ease;
 }
 
-.services-table :deep(.el-table__body tr:hover) {
+.services-table :deep(.arco-table__body tr:hover) {
   background: linear-gradient(90deg, #f5f7ff 0%, #ffffff 100%) !important;
 }
 
@@ -6816,7 +6369,7 @@ onMounted(() => {
 }
 
 .service-icon {
-  color: #409eff;
+  color: #165dff;
   font-size: 18px;
   flex-shrink: 0;
 }
@@ -6891,7 +6444,7 @@ onMounted(() => {
 .port-number {
   font-size: 14px;
   font-weight: 600;
-  color: #409eff;
+  color: #165dff;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
@@ -6967,12 +6520,12 @@ onMounted(() => {
   left: 0;
   width: 50px;
   height: 2px;
-  background: linear-gradient(90deg, #409eff 0%, #66b1ff 100%);
+  background: linear-gradient(90deg, #165dff 0%, #4080ff 100%);
   border-radius: 2px;
 }
 
-.section-title .el-icon {
-  color: #409eff;
+.section-title .arco-icon {
+  color: #165dff;
   font-size: 18px;
 }
 
@@ -7002,7 +6555,7 @@ onMounted(() => {
   left: 0;
   width: 4px;
   height: 100%;
-  background: linear-gradient(180deg, #409eff 0%, #66b1ff 100%);
+  background: linear-gradient(180deg, #165dff 0%, #4080ff 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -7010,7 +6563,7 @@ onMounted(() => {
 .host-item:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
-  border-color: #409eff;
+  border-color: #165dff;
 }
 
 .host-item:hover::before {
@@ -7053,7 +6606,7 @@ onMounted(() => {
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: #409eff;
+  color: #165dff;
   background: #ffffff;
   border: 1px solid #b3d8ff;
   border-radius: 4px;
@@ -7063,7 +6616,7 @@ onMounted(() => {
 
 .ingress-name-tag:hover {
   background: #ecf5ff;
-  border-color: #409eff;
+  border-color: #165dff;
   transform: scale(1.05);
 }
 
@@ -7073,11 +6626,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.ingress-rules-table :deep(.el-table__header) {
+.ingress-rules-table :deep(.arco-table__header) {
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
 }
 
-.ingress-rules-table :deep(.el-table__header th) {
+.ingress-rules-table :deep(.arco-table__header th) {
   background: transparent !important;
   color: #1f2329;
   font-weight: 700;
@@ -7085,11 +6638,11 @@ onMounted(() => {
   border-bottom: 2px solid #e8eaed;
 }
 
-.ingress-rules-table :deep(.el-table__body tr) {
+.ingress-rules-table :deep(.arco-table__body tr) {
   transition: all 0.2s ease;
 }
 
-.ingress-rules-table :deep(.el-table__body tr:hover) {
+.ingress-rules-table :deep(.arco-table__body tr:hover) {
   background: linear-gradient(90deg, #f5f7ff 0%, #ffffff 100%) !important;
   transform: scale(1.005);
 }
@@ -7101,7 +6654,7 @@ onMounted(() => {
 }
 
 .rule-icon {
-  color: #409eff;
+  color: #165dff;
   font-size: 16px;
 }
 
@@ -7162,7 +6715,7 @@ onMounted(() => {
 .service-name-cell {
   font-size: 13px;
   font-weight: 600;
-  color: #409eff;
+  color: #165dff;
   background: linear-gradient(135deg, #ecf5ff 0%, #d9ecff 100%);
   padding: 4px 10px;
   border-radius: 4px;
@@ -7189,15 +6742,15 @@ onMounted(() => {
 }
 
 /* 下拉菜单样式 */
-.pods-table :deep(.el-dropdown-menu__item) {
+.pods-table :deep(.arco-dropdown-menu__item) {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
 }
 
-.pods-table :deep(.el-dropdown-menu__item .el-icon) {
-  color: #409eff;
+.pods-table :deep(.arco-dropdown-menu__item .arco-icon) {
+  color: #165dff;
   font-size: 14px;
 }
 
@@ -7214,11 +6767,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.runtime-table :deep(.el-table__header) {
+.runtime-table :deep(.arco-table__header) {
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
 }
 
-.runtime-table :deep(.el-table__header th) {
+.runtime-table :deep(.arco-table__header th) {
   background: transparent !important;
   color: #1f2329;
   font-weight: 700;
@@ -7226,15 +6779,15 @@ onMounted(() => {
   border-bottom: 2px solid #e8eaed;
 }
 
-.runtime-table :deep(.el-table__body tr) {
+.runtime-table :deep(.arco-table__body tr) {
   transition: all 0.2s ease;
 }
 
-.runtime-table :deep(.el-table__body tr:hover) {
+.runtime-table :deep(.arco-table__body tr:hover) {
   background: linear-gradient(90deg, #f5f7ff 0%, #ffffff 100%) !important;
 }
 
-.runtime-table :deep(.el-table__body td) {
+.runtime-table :deep(.arco-table__body td) {
   border-bottom: 1px solid #f0f2f5;
 }
 
@@ -7250,7 +6803,7 @@ onMounted(() => {
 }
 
 .category-icon.icon-pod {
-  color: #409eff;
+  color: #165dff;
 }
 
 .category-icon.icon-replica {
@@ -7308,7 +6861,7 @@ onMounted(() => {
 }
 
 .status-indicator.status-primary {
-  color: #409eff;
+  color: #165dff;
 }
 
 .status-indicator.status-info {
@@ -7346,7 +6899,7 @@ onMounted(() => {
 }
 
 .status-text.status-primary {
-  color: #409eff;
+  color: #165dff;
 }
 
 .status-text.status-info {
@@ -7470,12 +7023,12 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.paused-info :deep(.el-descriptions__label) {
+.paused-info :deep(.arco-descriptions__label) {
   font-weight: 600;
   background: #f5f7fa !important;
 }
 
-.paused-info :deep(.el-descriptions__content) {
+.paused-info :deep(.arco-descriptions__content) {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
@@ -7501,11 +7054,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.revisions-table :deep(.el-table__header) {
+.revisions-table :deep(.arco-table__header) {
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
 }
 
-.revisions-table :deep(.el-table__header th) {
+.revisions-table :deep(.arco-table__header th) {
   background: transparent !important;
   color: #1f2329;
   font-weight: 700;
@@ -7513,15 +7066,15 @@ onMounted(() => {
   border-bottom: 2px solid #e8eaed;
 }
 
-.revisions-table :deep(.el-table__body tr) {
+.revisions-table :deep(.arco-table__body tr) {
   transition: all 0.2s ease;
 }
 
-.revisions-table :deep(.el-table__body tr:hover) {
+.revisions-table :deep(.arco-table__body tr:hover) {
   background: linear-gradient(90deg, #f5f7ff 0%, #ffffff 100%) !important;
 }
 
-.revisions-table :deep(.el-table__body td) {
+.revisions-table :deep(.arco-table__body td) {
   border-bottom: 1px solid #f0f2f5;
 }
 
@@ -7543,7 +7096,7 @@ onMounted(() => {
 .revision-icon {
   font-size: 14px;
   font-weight: 600;
-  color: #409eff;
+  color: #165dff;
 }
 
 .revision-number {
@@ -7592,7 +7145,7 @@ onMounted(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  background: linear-gradient(135deg, #165dff 0%, #4080ff 100%);
   border-radius: 6px;
   color: #fff;
   font-size: 14px;
@@ -7747,12 +7300,12 @@ onMounted(() => {
 .view-btn {
   background: linear-gradient(135deg, #ecf5ff 0%, #d9ecff 100%);
   border-color: #b3d8ff;
-  color: #409eff;
+  color: #165dff;
 }
 
 .view-btn:hover {
   background: linear-gradient(135deg, #d9ecff 0%, #b3d8ff 100%);
-  border-color: #409eff;
+  border-color: #165dff;
 }
 
 .rollback-btn {
@@ -7794,12 +7347,12 @@ onMounted(() => {
   background: #1e1e1e;
   border-radius: 8px;
   z-index: 10;
-  color: #409eff;
+  color: #165dff;
   font-size: 16px;
   gap: 12px;
 }
 
-.terminal-loading-overlay .el-icon {
+.terminal-loading-overlay .arco-icon {
   font-size: 32px;
 }
 
@@ -7845,12 +7398,12 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #409eff;
+  color: #165dff;
   font-size: 16px;
   gap: 16px;
 }
 
-.logs-loading .el-icon {
+.logs-loading .arco-icon {
   font-size: 32px;
 }
 
@@ -8039,11 +7592,11 @@ onMounted(() => {
 }
 
 /* 工作负载编辑对话框 - 白金风格 */
-.workload-edit-dialog :deep(.el-dialog__wrapper) {
+.workload-edit-dialog :deep(.arco-dialog__wrapper) {
   overflow: hidden;
 }
 
-.workload-edit-dialog :deep(.el-dialog) {
+.workload-edit-dialog :deep(.arco-dialog) {
   background: #ffffff;
   border: 1px solid #e8e8e8;
   border-radius: 16px;
@@ -8055,7 +7608,7 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.workload-edit-dialog :deep(.el-dialog__header) {
+.workload-edit-dialog :deep(.arco-dialog__header) {
   background: #d4af37;
   border-bottom: 2px solid #c9a227;
   padding: 24px 32px;
@@ -8063,11 +7616,11 @@ onMounted(() => {
   position: relative;
 }
 
-.workload-edit-dialog :deep(.el-dialog__header::before) {
+.workload-edit-dialog :deep(.arco-dialog__header::before) {
   display: none;
 }
 
-.workload-edit-dialog :deep(.el-dialog__title) {
+.workload-edit-dialog :deep(.arco-dialog__title) {
   font-size: 20px;
   font-weight: 700;
   color: #1a1a1a;
@@ -8075,19 +7628,19 @@ onMounted(() => {
   font-family: 'Helvetica Neue', Arial, sans-serif;
 }
 
-.workload-edit-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+.workload-edit-dialog :deep(.arco-dialog__headerbtn .arco-modal__close) {
   color: #1a1a1a;
   font-size: 20px;
   transition: all 0.3s ease;
   font-weight: bold;
 }
 
-.workload-edit-dialog :deep(.el-dialog__headerbtn .el-dialog__close:hover) {
+.workload-edit-dialog :deep(.arco-dialog__headerbtn .arco-modal__close:hover) {
   color: #000000;
   transform: rotate(90deg);
 }
 
-.workload-edit-dialog :deep(.el-dialog__body) {
+.workload-edit-dialog :deep(.arco-dialog__body) {
   padding: 0;
   background: #ffffff;
   flex: 1;
@@ -8095,7 +7648,7 @@ onMounted(() => {
   min-height: 0;
 }
 
-.workload-edit-dialog :deep(.el-dialog__footer) {
+.workload-edit-dialog :deep(.arco-dialog__footer) {
   padding: 16px 32px;
   background: #ffffff;
   border-top: 1px solid #e8e8e8;
@@ -8142,25 +7695,25 @@ onMounted(() => {
   background: #ffffff;
 }
 
-.edit-main :deep(.el-tabs) {
+.edit-main :deep(.arco-tabs) {
   display: flex;
   flex-direction: column;
   height: 100%;
   background: transparent;
 }
 
-.edit-main :deep(.el-tabs__header) {
+.edit-main :deep(.arco-tabs__header) {
   margin: 0;
   background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
   border-bottom: 2px solid #e8e8e8;
   padding: 0 32px;
 }
 
-.edit-main :deep(.el-tabs__nav-wrap::after) {
+.edit-main :deep(.arco-tabs__nav-wrap::after) {
   display: none;
 }
 
-.edit-main :deep(.el-tabs__item) {
+.edit-main :deep(.arco-tabs__item) {
   color: #666;
   font-weight: 500;
   font-size: 15px;
@@ -8172,42 +7725,42 @@ onMounted(() => {
   letter-spacing: 0.3px;
 }
 
-.edit-main :deep(.el-tabs__item:hover) {
+.edit-main :deep(.arco-tabs__item:hover) {
   color: #d4af37;
 }
 
-.edit-main :deep(.el-tabs__item.is-active) {
+.edit-main :deep(.arco-tabs__item.is-active) {
   color: #d4af37;
   background: transparent;
   font-weight: 600;
 }
 
-.edit-main :deep(.el-tabs__active-bar) {
+.edit-main :deep(.arco-tabs__active-bar) {
   height: 3px;
   background: #d4af37;
 }
 
-.edit-main :deep(.el-tabs__content) {
+.edit-main :deep(.arco-tabs__content) {
   flex: 1;
   overflow-y: auto;
   padding: 0;
   background: transparent;
 }
 
-.edit-main :deep(.el-tabs__content)::-webkit-scrollbar {
+.edit-main :deep(.arco-tabs__content)::-webkit-scrollbar {
   width: 10px;
 }
 
-.edit-main :deep(.el-tabs__content)::-webkit-scrollbar-track {
+.edit-main :deep(.arco-tabs__content)::-webkit-scrollbar-track {
   background: #fafafa;
 }
 
-.edit-main :deep(.el-tabs__content)::-webkit-scrollbar-thumb {
+.edit-main :deep(.arco-tabs__content)::-webkit-scrollbar-thumb {
   background: #d4af37;
   border-radius: 5px;
 }
 
-.edit-main :deep(.el-tabs__content)::-webkit-scrollbar-thumb:hover {
+.edit-main :deep(.arco-tabs__content)::-webkit-scrollbar-thumb:hover {
   background: #c9a227;
 }
 
@@ -8264,15 +7817,15 @@ onMounted(() => {
   border: 1px dashed #e0e0e0;
 }
 
-.placeholder :deep(.el-icon) {
+.placeholder :deep(.arco-icon) {
   font-size: 64px;
   opacity: 0.4;
   color: #d4af37;
 }
 
 /* 白金风格按钮样式 */
-.edit-main :deep(.el-button--primary),
-.edit-sidebar :deep(.el-button--primary) {
+.edit-main :deep(.arco-button--primary),
+.edit-sidebar :deep(.arco-button--primary) {
   background: #d4af37;
   border: none;
   color: #1a1a1a;
@@ -8282,20 +7835,20 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 
-.edit-main :deep(.el-button--primary:hover),
-.edit-sidebar :deep(.el-button--primary:hover) {
+.edit-main :deep(.arco-button--primary:hover),
+.edit-sidebar :deep(.arco-button--primary:hover) {
   background: #c9a227;
   box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
   transform: translateY(-1px);
 }
 
-.edit-main :deep(.el-button--primary:active),
-.edit-sidebar :deep(.el-button--primary:active) {
+.edit-main :deep(.arco-button--primary:active),
+.edit-sidebar :deep(.arco-button--primary:active) {
   transform: translateY(0);
 }
 
-.edit-main :deep(.el-button--default),
-.edit-sidebar :deep(.el-button--default) {
+.edit-main :deep(.arco-button--default),
+.edit-sidebar :deep(.arco-button--default) {
   background: #ffffff;
   border: 1px solid #e0e0e0;
   color: #666;
@@ -8303,28 +7856,28 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 
-.edit-main :deep(.el-button--default:hover),
-.edit-sidebar :deep(.el-button--default:hover) {
+.edit-main :deep(.arco-button--default:hover),
+.edit-sidebar :deep(.arco-button--default:hover) {
   background: #fafafa;
   border-color: #d4af37;
   color: #d4af37;
 }
 
-.edit-main :deep(.el-button--danger) {
+.edit-main :deep(.arco-button--danger) {
   background: #ff4d4f;
   border: none;
   color: #ffffff;
   font-weight: 500;
 }
 
-.edit-main :deep(.el-button--danger:hover) {
+.edit-main :deep(.arco-button--danger:hover) {
   background: #ff7875;
 }
 
 /* 白金风格输入框 */
-.edit-main :deep(.el-input__wrapper),
-.edit-main :deep(.el-textarea__inner),
-.edit-main :deep(.el-select .el-input__wrapper) {
+.edit-main :deep(.arco-input__wrapper),
+.edit-main :deep(.arco-textarea__inner),
+.edit-main :deep(.arco-select .arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -8332,109 +7885,109 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 
-.edit-main :deep(.el-input__wrapper:hover),
-.edit-main :deep(.el-textarea__inner:hover),
-.edit-main :deep(.el-select .el-input__wrapper:hover) {
+.edit-main :deep(.arco-input__wrapper:hover),
+.edit-main :deep(.arco-textarea__inner:hover),
+.edit-main :deep(.arco-select .arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.edit-main :deep(.el-input__wrapper.is-focus),
-.edit-main :deep(.el-textarea__inner:focus),
-.edit-main :deep(.el-select .el-input__wrapper.is-focus) {
+.edit-main :deep(.arco-input__wrapper.is-focus),
+.edit-main :deep(.arco-textarea__inner:focus),
+.edit-main :deep(.arco-select .arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
 }
 
-.edit-main :deep(.el-input__inner) {
+.edit-main :deep(.arco-input__inner) {
   color: #333;
   font-weight: 500;
 }
 
-.edit-main :deep(.el-input__inner::placeholder) {
+.edit-main :deep(.arco-input__inner::placeholder) {
   color: #aaa;
 }
 
-.edit-main :deep(.el-textarea__inner) {
+.edit-main :deep(.arco-textarea__inner) {
   color: #333;
   background: #fafafa;
 }
 
-.edit-main :deep(.el-select .el-input__inner) {
+.edit-main :deep(.arco-select .arco-input__inner) {
   color: #333;
 }
 
 /* 白金风格标签 */
-.edit-main :deep(.el-tag) {
+.edit-main :deep(.arco-tag) {
   background: rgba(212, 175, 55, 0.1);
   border: 1px solid #d4af37;
   color: #d4af37;
   font-weight: 600;
 }
 
-.edit-main :deep(.el-tag--success) {
+.edit-main :deep(.arco-tag--success) {
   background: rgba(82, 196, 26, 0.1);
   border-color: #52c41a;
   color: #52c41a;
 }
 
-.edit-main :deep(.el-tag--warning) {
+.edit-main :deep(.arco-tag--warning) {
   background: rgba(250, 173, 20, 0.1);
   border-color: #faad14;
   color: #faad14;
 }
 
-.edit-main :deep(.el-tag--danger) {
+.edit-main :deep(.arco-tag--danger) {
   background: rgba(255, 77, 79, 0.1);
   border-color: #ff4d4f;
   color: #ff4d4f;
 }
 
 /* 白金风格表单 */
-.edit-main :deep(.el-form-item__label) {
+.edit-main :deep(.arco-form-item__label) {
   color: #333;
   font-weight: 600;
   font-size: 14px;
   letter-spacing: 0.3px;
 }
 
-.edit-main :deep(.el-checkbox__label) {
+.edit-main :deep(.arco-checkbox__label) {
   color: #333;
   font-weight: 500;
 }
 
-.edit-main :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+.edit-main :deep(.arco-checkbox__input.is-checked .arco-checkbox__inner) {
   background: #d4af37;
   border-color: #d4af37;
 }
 
 /* 白金风格表格 */
-.edit-main :deep(.el-table) {
+.edit-main :deep(.arco-table) {
   background: #ffffff;
   color: #333;
 }
 
-.edit-main :deep(.el-table th) {
+.edit-main :deep(.arco-table th) {
   background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
   color: #333;
   font-weight: 600;
   border-bottom: 2px solid #e8e8e8;
 }
 
-.edit-main :deep(.el-table tr) {
+.edit-main :deep(.arco-table tr) {
   transition: all 0.3s ease;
 }
 
-.edit-main :deep(.el-table tr:hover) {
+.edit-main :deep(.arco-table tr:hover) {
   background: #fafafa;
 }
 
-.edit-main :deep(.el-table td) {
+.edit-main :deep(.arco-table td) {
   border-bottom: 1px solid #f0f0f0;
 }
 
 /* 白金风格折叠面板 */
-.edit-main :deep(.el-collapse-item__header) {
+.edit-main :deep(.arco-collapse-item__header) {
   background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
   border: 1px solid #e8e8e8;
   color: #333;
@@ -8442,57 +7995,56 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 
-.edit-main :deep(.el-collapse-item__header:hover) {
+.edit-main :deep(.arco-collapse-item__header:hover) {
   background: #ffffff;
   border-color: #d4af37;
 }
 
-.edit-main :deep(.el-collapse-item__wrap) {
+.edit-main :deep(.arco-collapse-item__wrap) {
   background: #ffffff;
   border: none;
 }
 
 /* 白金风格开关 */
-.edit-main :deep(.el-switch.is-checked .el-switch__core) {
-  background: #d4af37;
-  border-color: #d4af37;
+.edit-main :deep(.arco-switch.arco-switch-checked) {
+  background-color: #d4af37;
 }
 
 /* 白金风格选择器下拉 */
-.edit-main :deep(.el-select-dropdown) {
+.edit-main :deep(.arco-select-dropdown) {
   background: #ffffff;
   border: 1px solid #e8e8e8;
 }
 
-.edit-main :deep(.el-select-dropdown__item) {
+.edit-main :deep(.arco-select-dropdown__item) {
   color: #333;
 }
 
-.edit-main :deep(.el-select-dropdown__item:hover) {
+.edit-main :deep(.arco-select-dropdown__item:hover) {
   background: #fafafa;
   color: #d4af37;
 }
 
-.edit-main :deep(.el-select-dropdown__item.is-selected) {
+.edit-main :deep(.arco-select-dropdown__item.is-selected) {
   background: rgba(212, 175, 55, 0.1);
   color: #d4af37;
 }
 
 /* 白金风格数字输入框 */
-.edit-main :deep(.el-input-number .el-input__wrapper) {
+.edit-main :deep(.arco-input-number .arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
 }
 
-.edit-main :deep(.el-input-number__decrease),
-.edit-main :deep(.el-input-number__increase) {
+.edit-main :deep(.arco-input-number__decrease),
+.edit-main :deep(.arco-input-number__increase) {
   background: #f5f5f5;
   border-left: 1px solid #e0e0e0;
   color: #d4af37;
 }
 
-.edit-main :deep(.el-input-number__decrease:hover),
-.edit-main :deep(.el-input-number__increase:hover) {
+.edit-main :deep(.arco-input-number__decrease:hover),
+.edit-main :deep(.arco-input-number__increase:hover) {
   color: #c9a227;
 }
 
@@ -8515,7 +8067,7 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.create-workload-dialog :deep(.el-dialog__footer) {
+.create-workload-dialog :deep(.arco-dialog__footer) {
   padding: 16px 20px;
   border-top: 1px solid #ebeef5;
 }
@@ -8575,7 +8127,7 @@ onMounted(() => {
   color: #f56c6c;
 }
 
-.menu-item .el-icon {
+.menu-item .arco-icon {
   font-size: 16px;
 }
 

@@ -6,47 +6,35 @@
     </div>
     <div class="spec-content">
       <div class="tolerations-table-wrapper">
-        <el-table :data="tolerations" border stripe>
-          <el-table-column label="键" min-width="150">
-            <template #default="{ row }">
-              <el-input v-model="row.key" placeholder="键名，如: key" size="small" />
-            </template>
-          </el-table-column>
-          <el-table-column label="运算符" min-width="120">
-            <template #default="{ row }">
-              <el-select v-model="row.operator" placeholder="运算符" size="small">
-                <el-option label="Equal" value="Equal" />
-                <el-option label="Exists" value="Exists" />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="值" min-width="150">
-            <template #default="{ row }">
-              <el-input v-model="row.value" placeholder="值" size="small" :disabled="row.operator === 'Exists'" />
-            </template>
-          </el-table-column>
-          <el-table-column label="影响" min-width="150">
-            <template #default="{ row }">
-              <el-select v-model="row.effect" placeholder="影响类型" size="small">
-                <el-option label="NoExecute" value="NoExecute" />
-                <el-option label="NoSchedule" value="NoSchedule" />
-                <el-option label="PreferNoSchedule" value="PreferNoSchedule" />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="容忍时间(秒)" min-width="150">
-            <template #default="{ row }">
-              <el-input v-model="row.tolerationSeconds" placeholder="仅 NoExecute 生效" size="small" :disabled="row.effect !== 'NoExecute'" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" fixed="right">
-            <template #default="{ $index }">
-              <el-button type="danger" link @click="emit('removeToleration', $index)" :icon="Delete" size="small">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <a-table :columns="columns" :data="tolerations" :bordered="{ cell: true }" stripe>
+          <template #key="{ record }">
+            <a-input v-model="record.key" placeholder="键名，如: key" size="small" />
+          </template>
+          <template #operator="{ record }">
+            <a-select v-model="record.operator" placeholder="运算符" size="small">
+              <a-option label="Equal" value="Equal" />
+              <a-option label="Exists" value="Exists" />
+            </a-select>
+          </template>
+          <template #value="{ record }">
+            <a-input v-model="record.value" placeholder="值" size="small" :disabled="record.operator === 'Exists'" />
+          </template>
+          <template #effect="{ record }">
+            <a-select v-model="record.effect" placeholder="影响类型" size="small">
+              <a-option label="NoExecute" value="NoExecute" />
+              <a-option label="NoSchedule" value="NoSchedule" />
+              <a-option label="PreferNoSchedule" value="PreferNoSchedule" />
+            </a-select>
+          </template>
+          <template #tolerationSeconds="{ record }">
+            <a-input v-model="record.tolerationSeconds" placeholder="仅 NoExecute 生效" size="small" :disabled="record.effect !== 'NoExecute'" />
+          </template>
+          <template #actions="{ rowIndex }">
+            <a-button type="text" status="danger" size="small" @click="emit('removeToleration', rowIndex)">删除</a-button>
+          </template>
+        </a-table>
         <div class="tolerations-actions">
-          <el-button type="primary" @click="emit('addToleration')" :icon="Plus">添加容忍</el-button>
+          <a-button type="primary" @click="emit('addToleration')">添加容忍</a-button>
         </div>
       </div>
     </div>
@@ -54,7 +42,16 @@
 </template>
 
 <script setup lang="ts">
-import { Plus, Delete } from '@element-plus/icons-vue'
+import type { TableColumnData } from '@arco-design/web-vue'
+
+const columns: TableColumnData[] = [
+  { title: '键', dataIndex: 'key', slotName: 'key', width: 150 },
+  { title: '运算符', dataIndex: 'operator', slotName: 'operator', width: 120 },
+  { title: '值', dataIndex: 'value', slotName: 'value', width: 150 },
+  { title: '影响', dataIndex: 'effect', slotName: 'effect', width: 150 },
+  { title: '容忍时间(秒)', dataIndex: 'tolerationSeconds', slotName: 'tolerationSeconds', width: 150 },
+  { title: '操作', slotName: 'actions', width: 80, fixed: 'right' },
+]
 
 interface Toleration {
   key: string
@@ -107,7 +104,7 @@ const emit = defineEmits<{
   width: 100%;
 }
 
-.tolerations-table-wrapper .el-table {
+.tolerations-table-wrapper .arco-table {
   width: 100%;
   margin-bottom: 16px;
 }

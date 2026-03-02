@@ -8,58 +8,57 @@
             <span class="port-number">端口 {{ index + 1 }}</span>
             <span v-if="port.name" class="port-name">{{ port.name }}</span>
           </div>
-          <el-button type="danger" link @click="removePort(index)" :icon="Delete" size="small">删除</el-button>
+          <a-button status="danger" type="text" @click="removePort(index)" size="small">删除</a-button>
         </div>
         <div class="port-card-body">
           <div class="port-field-row">
             <div class="port-field">
               <label>容器端口</label>
-              <el-input-number v-model="port.containerPort" :min="1" :max="65535" placeholder="端口号" size="small" style="width: 100%;" @change="updatePorts" />
+              <a-input-number v-model="port.containerPort" :min="1" :max="65535" placeholder="端口号" size="small" style="width: 100%;" @change="updatePorts" />
             </div>
             <div class="port-field">
               <label>协议</label>
-              <el-select v-model="port.protocol" placeholder="选择协议" size="small" style="width: 100%;" @change="updatePorts">
-                <el-option label="TCP" value="TCP" />
-                <el-option label="UDP" value="UDP" />
-                <el-option label="SCTP" value="SCTP" />
-              </el-select>
+              <a-select v-model="port.protocol" placeholder="选择协议" size="small" style="width: 100%;" @change="updatePorts">
+                <a-option label="TCP" value="TCP" />
+                <a-option label="UDP" value="UDP" />
+                <a-option label="SCTP" value="SCTP" />
+              </a-select>
             </div>
           </div>
           <div class="port-field-row">
             <div class="port-field">
               <label>端口名称</label>
-              <el-input v-model="port.name" placeholder="端口名称，如: http" size="small" @input="updatePorts" />
+              <a-input v-model="port.name" placeholder="端口名称，如: http" size="small" @input="updatePorts" />
             </div>
             <div class="port-field">
               <label>主机端口</label>
-              <el-input-number v-model="port.hostPort" :min="1" :max="65535" placeholder="可选" size="small" style="width: 100%;" @change="updatePorts" />
+              <a-input-number v-model="port.hostPort" :min="1" :max="65535" placeholder="可选" size="small" style="width: 100%;" @change="updatePorts" />
             </div>
           </div>
           <div class="port-field-row">
             <div class="port-field full-width">
               <label>主机 IP</label>
-              <el-input v-model="port.hostIP" placeholder="可选，绑定到特定主机的 IP 地址" size="small" @input="updatePorts" />
+              <a-input v-model="port.hostIP" placeholder="可选，绑定到特定主机的 IP 地址" size="small" @input="updatePorts" />
             </div>
           </div>
         </div>
       </div>
     </div>
     <div v-else class="empty-ports">
-      <el-empty description="暂未配置端口" :image-size="80">
-        <el-button type="primary" @click="addPort" :icon="Plus">添加端口</el-button>
-      </el-empty>
+      <a-empty description="暂未配置端口" :image-size="80">
+        <a-button type="primary" @click="addPort">添加端口</a-button>
+      </a-empty>
     </div>
 
     <!-- 添加端口按钮 -->
     <div v-if="localPorts.length > 0" class="add-port-section">
-      <el-button type="primary" @click="addPort" :icon="Plus" style="width: 100%;">添加端口</el-button>
+      <a-button type="primary" @click="addPort" style="width: 100%;">添加端口</a-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Delete, Plus } from '@element-plus/icons-vue'
 
 interface ContainerPort {
   containerPort: number
@@ -202,7 +201,7 @@ const updatePorts = () => {
   letter-spacing: 0.3px;
 }
 
-.port-card-body :deep(.el-input__wrapper) {
+.port-card-body :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -210,27 +209,27 @@ const updatePorts = () => {
   transition: all 0.3s ease;
 }
 
-.port-card-body :deep(.el-input__wrapper:hover) {
+.port-card-body :deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.port-card-body :deep(.el-input__wrapper.is-focus) {
+.port-card-body :deep(.arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
 }
 
-.port-card-body :deep(.el-input-number) {
+.port-card-body :deep(.arco-input-number) {
   width: 100%;
 }
 
-.port-card-body :deep(.el-input-number .el-input__wrapper) {
+.port-card-body :deep(.arco-input-number .arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
 }
 
-.port-card-body :deep(.el-select .el-input__wrapper) {
+.port-card-body :deep(.arco-select .arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -244,11 +243,11 @@ const updatePorts = () => {
   border: 1px dashed #e0e0e0;
 }
 
-.empty-ports :deep(.el-empty) {
-  --el-empty-padding: 40px 0;
+.empty-ports :deep(.arco-empty) {
+  padding: 40px 0;
 }
 
-.empty-ports :deep(.el-empty__description) {
+.empty-ports :deep(.arco-empty__description) {
   color: #999;
 }
 
@@ -256,7 +255,7 @@ const updatePorts = () => {
   margin-top: 8px;
 }
 
-.add-port-section .el-button {
+.add-port-section .arco-btn {
   border-radius: 8px;
   font-weight: 500;
   background: #d4af37;
@@ -264,7 +263,7 @@ const updatePorts = () => {
   color: #1a1a1a;
 }
 
-.add-port-section .el-button:hover {
+.add-port-section .arco-btn:hover {
   background: #c9a227;
   box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
 }

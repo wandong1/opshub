@@ -1,25 +1,25 @@
 <template>
-  <el-drawer
-    :model-value="visible"
+  <a-drawer
+    :visible="visible"
     :title="'Milvus 控制台 - ' + (middleware?.name || '')"
-    direction="rtl"
-    size="100%"
-    :destroy-on-close="true"
+    placement="right"
+    :width="'100%'"
+    unmount-on-close
     class="milvus-console-drawer"
-    @close="emit('update:visible', false)"
+    @cancel="emit('update:visible', false)"
   >
-    <template #header>
+    <template #title>
       <div class="console-header">
         <div class="header-left">
-          <el-icon style="font-size: 18px; color: #409eff;"><Connection /></el-icon>
+          <icon-link style="font-size: 18px; color: #165dff;" />
           <span class="header-title">Milvus 控制台 - {{ middleware?.name }}</span>
         </div>
         <div class="header-actions">
-          <el-select v-model="currentDatabase" placeholder="选择数据库" size="small" style="width: 160px" @change="handleDatabaseChange">
-            <el-option v-for="db in databases" :key="db" :label="db" :value="db" />
-          </el-select>
-          <el-button size="small" @click="showCreateDbDialog = true">新建数据库</el-button>
-          <el-button size="small" @click="showMetricsDialog = true; loadMetrics()">系统信息</el-button>
+          <a-select v-model="currentDatabase" placeholder="选择数据库" size="small" style="width: 160px" @change="handleDatabaseChange">
+            <a-option v-for="db in databases" :key="db" :label="db" :value="db" />
+          </a-select>
+          <a-button size="small" @click="showCreateDbDialog = true">新建数据库</a-button>
+          <a-button size="small" @click="showMetricsDialog = true; loadMetrics()">系统信息</a-button>
         </div>
       </div>
     </template>
@@ -28,300 +28,302 @@
       <!-- 左侧栏 -->
       <div class="sidebar">
         <div class="sidebar-header">
-          <el-icon><Coin /></el-icon>
+          <icon-common />
           <span>Collections</span>
           <div style="flex:1"></div>
-          <el-tooltip content="新建 Collection" placement="top">
-            <el-icon class="sidebar-action" @click="showCreateCollDialog = true"><Plus /></el-icon>
-          </el-tooltip>
-          <el-tooltip content="刷新" placement="top">
-            <el-icon class="sidebar-action" @click="loadCollections"><Refresh /></el-icon>
-          </el-tooltip>
+          <a-tooltip content="新建 Collection" position="top">
+            <icon-plus class="sidebar-action" @click="showCreateCollDialog = true" />
+          </a-tooltip>
+          <a-tooltip content="刷新" position="top">
+            <icon-refresh class="sidebar-action" @click="loadCollections" />
+          </a-tooltip>
         </div>
-        <el-input v-model="collSearchKeyword" placeholder="搜索..." clearable size="small" style="padding: 4px 8px;" />
-        <div class="collection-list" v-loading="collectionsLoading">
-          <div
-            v-for="col in filteredCollections"
-            :key="col.name"
-            class="collection-item"
-            :class="{ active: currentCollection === col.name }"
-            @click="handleSelectCollection(col.name)"
-          >
-<!-- TEMPLATE_CONT -->
-            <el-icon style="color: #409eff;"><Document /></el-icon>
-            <div class="collection-info">
-              <span class="collection-name">{{ col.name }}</span>
-              <el-tag v-if="col.loaded" type="success" size="small" effect="plain">已加载</el-tag>
+        <a-input v-model="collSearchKeyword" placeholder="搜索..." allow-clear size="small" style="padding: 4px 8px;" />
+        <a-spin :loading="collectionsLoading" style="flex: 1; overflow: auto;">
+          <div class="collection-list">
+            <div
+              v-for="col in filteredCollections"
+              :key="col.name"
+              class="collection-item"
+              :class="{ active: currentCollection === col.name }"
+              @click="handleSelectCollection(col.name)"
+            >
+              <icon-file style="color: #165dff;" />
+              <div class="collection-info">
+                <span class="collection-name">{{ col.name }}</span>
+                <a-tag v-if="col.loaded" color="green" size="small">已加载</a-tag>
+              </div>
             </div>
+            <div v-if="!filteredCollections.length && !collectionsLoading" class="collection-empty">暂无 Collection</div>
           </div>
-          <div v-if="!filteredCollections.length && !collectionsLoading" class="collection-empty">暂无 Collection</div>
-        </div>
+        </a-spin>
       </div>
 
       <!-- 右侧主区域 -->
       <div class="main-area">
-        <el-tabs v-model="activeTab" type="border-card">
+        <a-tabs v-model:active-key="activeTab" type="card-gutter">
           <!-- Collections Tab -->
-          <el-tab-pane label="Collections" name="collections">
+          <a-tab-pane title="Collections" key="collections">
             <div v-if="!currentCollection" class="empty-tip">请从左侧选择一个 Collection</div>
             <div v-else>
-              <el-tabs v-model="activeSubTab" type="card">
-                <el-tab-pane label="Schema" name="schema">
-                  <el-table :data="collectionDetail?.fields || []" border size="small" style="width:100%">
-                    <el-table-column prop="name" label="字段名" width="180" />
-                    <el-table-column prop="dataType" label="类型" width="140" />
-                    <el-table-column label="主键" width="70" align="center">
-                      <template #default="{ row }">
-                        <el-tag v-if="row.primaryKey" type="danger" size="small">PK</el-tag>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="AutoID" width="80" align="center">
-                      <template #default="{ row }">
-                        <el-tag v-if="row.autoID" type="warning" size="small">Auto</el-tag>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="维度" width="100">
-                      <template #default="{ row }">{{ row.typeParams?.dim || '-' }}</template>
-                    </el-table-column>
-                    <el-table-column prop="description" label="描述" />
-                  </el-table>
-                </el-tab-pane>
-<!-- TEMPLATE_INDEX_TAB -->
-                <el-tab-pane label="索引" name="indexes">
+              <a-tabs v-model:active-key="activeSubTab" type="card">
+                <a-tab-pane title="Schema" key="schema">
+                  <a-table :data="collectionDetail?.fields || []" :bordered="{ cell: true }" stripe size="small" style="width:100%" :pagination="false">
+                    <template #columns>
+                      <a-table-column title="字段名" data-index="name" :width="180" />
+                      <a-table-column title="类型" data-index="dataType" :width="140" />
+                      <a-table-column title="主键" :width="70" align="center">
+                        <template #cell="{ record }">
+                          <a-tag v-if="record.primaryKey" color="red" size="small">PK</a-tag>
+                        </template>
+                      </a-table-column>
+                      <a-table-column title="AutoID" :width="80" align="center">
+                        <template #cell="{ record }">
+                          <a-tag v-if="record.autoID" color="orangered" size="small">Auto</a-tag>
+                        </template>
+                      </a-table-column>
+                      <a-table-column title="维度" :width="100">
+                        <template #cell="{ record }">{{ record.typeParams?.dim || '-' }}</template>
+                      </a-table-column>
+                      <a-table-column title="描述" data-index="description" />
+                    </template>
+                  </a-table>
+                </a-tab-pane>
+                <a-tab-pane title="索引" key="indexes">
                   <div style="margin-bottom: 8px;">
-                    <el-button type="primary" size="small" @click="showCreateIndexDialog = true">创建索引</el-button>
+                    <a-button type="primary" size="small" @click="showCreateIndexDialog = true">创建索引</a-button>
                   </div>
-                  <el-table :data="collectionDetail?.indexes || []" border size="small" style="width:100%">
-                    <el-table-column prop="fieldName" label="字段" width="160" />
-                    <el-table-column prop="indexName" label="索引名" width="160" />
-                    <el-table-column prop="indexType" label="索引类型" width="140" />
-                    <el-table-column label="参数">
-                      <template #default="{ row }">{{ JSON.stringify(row.params) }}</template>
-                    </el-table-column>
-                    <el-table-column label="操作" width="80" align="center">
-                      <template #default="{ row }">
-                        <el-button link type="danger" size="small" @click="handleDropIndex(row.fieldName)">删除</el-button>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </el-tab-pane>
+                  <a-table :data="collectionDetail?.indexes || []" :bordered="{ cell: true }" stripe size="small" style="width:100%" :pagination="false">
+                    <template #columns>
+                      <a-table-column title="字段" data-index="fieldName" :width="160" />
+                      <a-table-column title="索引名" data-index="indexName" :width="160" />
+                      <a-table-column title="索引类型" data-index="indexType" :width="140" />
+                      <a-table-column title="参数">
+                        <template #cell="{ record }">{{ JSON.stringify(record.params) }}</template>
+                      </a-table-column>
+                      <a-table-column title="操作" :width="80" align="center">
+                        <template #cell="{ record }">
+                          <a-button type="text" status="danger" size="small" @click="handleDropIndex(record.fieldName)">删除</a-button>
+                        </template>
+                      </a-table-column>
+                    </template>
+                  </a-table>
+                </a-tab-pane>
 
-                <el-tab-pane label="属性" name="properties">
-                  <el-descriptions :column="2" border size="small">
-                    <el-descriptions-item label="Collection ID">{{ collectionDetail?.id }}</el-descriptions-item>
-                    <el-descriptions-item label="加载状态">
-                      <el-tag :type="collectionDetail?.loadState === 'Loaded' ? 'success' : 'info'" size="small">
+                <a-tab-pane title="属性" key="properties">
+                  <a-descriptions :column="2" bordered size="small">
+                    <a-descriptions-item label="Collection ID">{{ collectionDetail?.id }}</a-descriptions-item>
+                    <a-descriptions-item label="加载状态">
+                      <a-tag :color="collectionDetail?.loadState === 'Loaded' ? 'green' : 'gray'" size="small">
                         {{ collectionDetail?.loadState }}
-                      </el-tag>
-                    </el-descriptions-item>
-                    <el-descriptions-item label="动态字段">{{ collectionDetail?.enableDynamic ? '是' : '否' }}</el-descriptions-item>
-                    <el-descriptions-item label="一致性级别">{{ collectionDetail?.consistencyLevel }}</el-descriptions-item>
-                    <el-descriptions-item label="描述" :span="2">{{ collectionDetail?.description || '-' }}</el-descriptions-item>
-                    <el-descriptions-item label="统计信息" :span="2">{{ JSON.stringify(collectionDetail?.statistics) }}</el-descriptions-item>
-                  </el-descriptions>
+                      </a-tag>
+                    </a-descriptions-item>
+                    <a-descriptions-item label="动态字段">{{ collectionDetail?.enableDynamic ? '是' : '否' }}</a-descriptions-item>
+                    <a-descriptions-item label="一致性级别">{{ collectionDetail?.consistencyLevel }}</a-descriptions-item>
+                    <a-descriptions-item label="描述" :span="2">{{ collectionDetail?.description || '-' }}</a-descriptions-item>
+                    <a-descriptions-item label="统计信息" :span="2">{{ JSON.stringify(collectionDetail?.statistics) }}</a-descriptions-item>
+                  </a-descriptions>
                   <div style="margin-top: 12px; display: flex; gap: 8px;">
-                    <el-button type="primary" size="small" :disabled="collectionDetail?.loadState === 'Loaded'" @click="handleLoadCollection">加载到内存</el-button>
-                    <el-button type="warning" size="small" :disabled="collectionDetail?.loadState !== 'Loaded'" @click="handleReleaseCollection">释放内存</el-button>
-                    <el-button type="danger" size="small" @click="handleDropCollection">删除 Collection</el-button>
+                    <a-button type="primary" size="small" :disabled="collectionDetail?.loadState === 'Loaded'" @click="handleLoadCollection">加载到内存</a-button>
+                    <a-button status="warning" size="small" :disabled="collectionDetail?.loadState !== 'Loaded'" @click="handleReleaseCollection">释放内存</a-button>
+                    <a-button status="danger" size="small" @click="handleDropCollection">删除 Collection</a-button>
                   </div>
-                </el-tab-pane>
-              </el-tabs>
+                </a-tab-pane>
+              </a-tabs>
             </div>
-          </el-tab-pane>
-<!-- TEMPLATE_DATA_TAB -->
-
+          </a-tab-pane>
           <!-- 数据 Tab -->
-          <el-tab-pane label="数据" name="data">
+          <a-tab-pane title="数据" key="data">
             <div v-if="!currentCollection" class="empty-tip">请从左侧选择一个 Collection</div>
             <div v-else class="data-panel">
               <div class="query-section">
                 <div class="query-row">
-                  <el-input v-model="queryFilter" placeholder="过滤表达式，如 id > 100" size="small" style="flex:1" />
-                  <el-input-number v-model="queryLimit" :min="1" :max="10000" size="small" style="width: 120px" />
-                  <el-button type="primary" size="small" :loading="queryLoading" @click="handleQuery">查询</el-button>
+                  <a-input v-model="queryFilter" placeholder="过滤表达式，如 id > 100" size="small" style="flex:1" />
+                  <a-input-number v-model="queryLimit" :min="1" :max="10000" size="small" style="width: 120px" />
+                  <a-button type="primary" size="small" :loading="queryLoading" @click="handleQuery">查询</a-button>
                 </div>
                 <div class="query-row" style="margin-top: 6px;">
-                  <el-select v-model="queryOutputFields" multiple placeholder="输出字段（留空=全部）" size="small" style="flex:1" clearable>
-                    <el-option v-for="f in collectionDetail?.fields || []" :key="f.name" :label="f.name" :value="f.name" />
-                  </el-select>
+                  <a-select v-model="queryOutputFields" multiple placeholder="输出字段（留空=全部）" size="small" style="flex:1" allow-clear>
+                    <a-option v-for="f in collectionDetail?.fields || []" :key="f.name" :label="f.name" :value="f.name" />
+                  </a-select>
                 </div>
               </div>
-              <el-table :data="queryResults" border size="small" style="width:100%; margin-top: 8px;" max-height="400">
-                <el-table-column v-for="col in queryColumns" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
-              </el-table>
-              <div style="margin-top: 4px; color: #909399; font-size: 12px;">共 {{ queryResults.length }} 条</div>
+              <a-table :data="queryResults" :bordered="{ cell: true }" stripe size="small" style="width:100%; margin-top: 8px;" :scroll="{ y: 400 }" :pagination="false">
+                <template #columns>
+                  <a-table-column v-for="col in queryColumns" :key="col" :data-index="col" :title="col" :width="140" ellipsis tooltip />
+                </template>
+              </a-table>
+              <div style="margin-top: 4px; color: #86909c; font-size: 12px;">共 {{ queryResults.length }} 条</div>
 
-              <el-divider />
+              <a-divider />
               <div class="insert-section">
                 <h4 style="margin: 0 0 8px;">插入数据</h4>
-                <el-input v-model="insertJson" type="textarea" :rows="5" placeholder='[{"field1": "value1", ...}]' />
-                <el-button type="primary" size="small" style="margin-top: 6px;" @click="handleInsert">插入</el-button>
+                <a-textarea v-model="insertJson" :auto-size="{ minRows: 5 }" placeholder='[{"field1": "value1", ...}]' />
+                <a-button type="primary" size="small" style="margin-top: 6px;" @click="handleInsert">插入</a-button>
               </div>
-              <el-divider />
+              <a-divider />
               <div class="delete-section">
                 <h4 style="margin: 0 0 8px;">删除数据</h4>
                 <div class="query-row">
-                  <el-input v-model="deleteFilter" placeholder="删除表达式，如 id in [1,2,3]" size="small" style="flex:1" />
-                  <el-button type="danger" size="small" @click="handleDelete">删除</el-button>
+                  <a-input v-model="deleteFilter" placeholder="删除表达式，如 id in [1,2,3]" size="small" style="flex:1" />
+                  <a-button status="danger" size="small" @click="handleDelete">删除</a-button>
                 </div>
               </div>
             </div>
-          </el-tab-pane>
-<!-- TEMPLATE_SEARCH_TAB -->
-
+          </a-tab-pane>
           <!-- 向量搜索 Tab -->
-          <el-tab-pane label="向量搜索" name="search">
+          <a-tab-pane title="向量搜索" key="search">
             <div v-if="!currentCollection" class="empty-tip">请从左侧选择一个 Collection</div>
             <div v-else class="search-panel">
               <div class="query-row">
-                <el-select v-model="searchVectorField" placeholder="向量字段" size="small" style="width: 180px">
-                  <el-option v-for="f in vectorFields" :key="f.name" :label="f.name" :value="f.name" />
-                </el-select>
-                <el-select v-model="searchMetricType" size="small" style="width: 120px">
-                  <el-option label="L2" value="L2" />
-                  <el-option label="IP" value="IP" />
-                  <el-option label="COSINE" value="COSINE" />
-                </el-select>
-                <el-input-number v-model="searchTopK" :min="1" :max="16384" size="small" style="width: 120px" />
-                <el-button type="primary" size="small" :loading="searchLoading" @click="handleSearch">搜索</el-button>
+                <a-select v-model="searchVectorField" placeholder="向量字段" size="small" style="width: 180px">
+                  <a-option v-for="f in vectorFields" :key="f.name" :label="f.name" :value="f.name" />
+                </a-select>
+                <a-select v-model="searchMetricType" size="small" style="width: 120px">
+                  <a-option label="L2" value="L2" />
+                  <a-option label="IP" value="IP" />
+                  <a-option label="COSINE" value="COSINE" />
+                </a-select>
+                <a-input-number v-model="searchTopK" :min="1" :max="16384" size="small" style="width: 120px" />
+                <a-button type="primary" size="small" :loading="searchLoading" @click="handleSearch">搜索</a-button>
               </div>
-              <el-input v-model="searchVectors" type="textarea" :rows="3" placeholder="向量数据 (JSON 数组)，如 [[0.1, 0.2, ...]]" style="margin-top: 6px;" />
+              <a-textarea v-model="searchVectors" :auto-size="{ minRows: 3 }" placeholder="向量数据 (JSON 数组)，如 [[0.1, 0.2, ...]]" style="margin-top: 6px;" />
               <div class="query-row" style="margin-top: 6px;">
-                <el-input v-model="searchFilter" placeholder="过滤表达式（可选）" size="small" style="flex:1" />
+                <a-input v-model="searchFilter" placeholder="过滤表达式（可选）" size="small" style="flex:1" />
               </div>
               <div class="query-row" style="margin-top: 6px;">
-                <el-select v-model="searchOutputFields" multiple placeholder="输出字段" size="small" style="flex:1" clearable>
-                  <el-option v-for="f in collectionDetail?.fields || []" :key="f.name" :label="f.name" :value="f.name" />
-                </el-select>
+                <a-select v-model="searchOutputFields" multiple placeholder="输出字段" size="small" style="flex:1" allow-clear>
+                  <a-option v-for="f in collectionDetail?.fields || []" :key="f.name" :label="f.name" :value="f.name" />
+                </a-select>
               </div>
               <div v-if="searchResults.length" style="margin-top: 12px;">
                 <div v-for="(group, gi) in searchResults" :key="gi" style="margin-bottom: 12px;">
                   <h4 style="margin: 0 0 6px;">查询向量 #{{ gi + 1 }} 结果</h4>
-                  <el-table :data="group" border size="small" max-height="300">
-                    <el-table-column prop="score" label="距离/分数" width="120" />
-                    <el-table-column v-for="col in searchResultColumns" :key="col" :label="col" min-width="140" show-overflow-tooltip>
-                      <template #default="{ row }">{{ row.fields?.[col] }}</template>
-                    </el-table-column>
-                  </el-table>
+                  <a-table :data="group" :bordered="{ cell: true }" stripe size="small" :scroll="{ y: 300 }" :pagination="false">
+                    <template #columns>
+                      <a-table-column title="距离/分数" data-index="score" :width="120" />
+                      <a-table-column v-for="col in searchResultColumns" :key="col" :title="col" :width="140" ellipsis tooltip>
+                        <template #cell="{ record }">{{ record.fields?.[col] }}</template>
+                      </a-table-column>
+                    </template>
+                  </a-table>
                 </div>
               </div>
             </div>
-          </el-tab-pane>
-<!-- TEMPLATE_PARTITION_TAB -->
-
+          </a-tab-pane>
           <!-- 分区 Tab -->
-          <el-tab-pane label="分区" name="partitions">
+          <a-tab-pane title="分区" key="partitions">
             <div v-if="!currentCollection" class="empty-tip">请从左侧选择一个 Collection</div>
             <div v-else>
               <div style="margin-bottom: 8px; display: flex; gap: 8px;">
-                <el-input v-model="newPartitionName" placeholder="分区名称" size="small" style="width: 200px" />
-                <el-button type="primary" size="small" @click="handleCreatePartition">创建分区</el-button>
-                <el-button size="small" @click="loadPartitions">刷新</el-button>
+                <a-input v-model="newPartitionName" placeholder="分区名称" size="small" style="width: 200px" />
+                <a-button type="primary" size="small" @click="handleCreatePartition">创建分区</a-button>
+                <a-button size="small" @click="loadPartitions">刷新</a-button>
               </div>
-              <el-table :data="partitions" border size="small" style="width:100%">
-                <el-table-column prop="name" label="分区名" />
-                <el-table-column prop="id" label="ID" width="120" />
-                <el-table-column label="已加载" width="80" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="row.loaded ? 'success' : 'info'" size="small">{{ row.loaded ? '是' : '否' }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="80" align="center">
-                  <template #default="{ row }">
-                    <el-button link type="danger" size="small" @click="handleDropPartition(row.name)" :disabled="row.name === '_default'">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
+              <a-table :data="partitions" :bordered="{ cell: true }" stripe size="small" style="width:100%" :pagination="false">
+                <template #columns>
+                  <a-table-column title="分区名" data-index="name" />
+                  <a-table-column title="ID" data-index="id" :width="120" />
+                  <a-table-column title="已加载" :width="80" align="center">
+                    <template #cell="{ record }">
+                      <a-tag :color="record.loaded ? 'green' : 'gray'" size="small">{{ record.loaded ? '是' : '否' }}</a-tag>
+                    </template>
+                  </a-table-column>
+                  <a-table-column title="操作" :width="80" align="center">
+                    <template #cell="{ record }">
+                      <a-button type="text" status="danger" size="small" @click="handleDropPartition(record.name)" :disabled="record.name === '_default'">删除</a-button>
+                    </template>
+                  </a-table-column>
+                </template>
+              </a-table>
             </div>
-          </el-tab-pane>
-        </el-tabs>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </div>
-<!-- TEMPLATE_DIALOGS -->
-
     <!-- 创建数据库对话框 -->
-    <el-dialog v-model="showCreateDbDialog" title="创建数据库" width="400px">
-      <el-input v-model="newDbName" placeholder="数据库名称" />
+    <a-modal v-model:visible="showCreateDbDialog" title="创建数据库" :width="400" unmount-on-close>
+      <a-input v-model="newDbName" placeholder="数据库名称" />
       <template #footer>
-        <el-button @click="showCreateDbDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateDatabase">确定</el-button>
+        <a-button @click="showCreateDbDialog = false">取消</a-button>
+        <a-button type="primary" @click="handleCreateDatabase">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 创建 Collection 对话框 -->
-    <el-dialog v-model="showCreateCollDialog" title="创建 Collection" width="700px">
-      <el-form label-width="100px" size="small">
-        <el-form-item label="名称"><el-input v-model="newCollForm.name" /></el-form-item>
-        <el-form-item label="描述"><el-input v-model="newCollForm.description" /></el-form-item>
-        <el-form-item label="AutoID"><el-switch v-model="newCollForm.autoID" /></el-form-item>
-        <el-form-item label="动态字段"><el-switch v-model="newCollForm.enableDynamic" /></el-form-item>
-        <el-form-item label="字段">
+    <a-modal v-model:visible="showCreateCollDialog" title="创建 Collection" :width="700" unmount-on-close>
+      <a-form auto-label-width size="small">
+        <a-form-item label="名称" field="name"><a-input v-model="newCollForm.name" /></a-form-item>
+        <a-form-item label="描述" field="description"><a-input v-model="newCollForm.description" /></a-form-item>
+        <a-form-item label="AutoID" field="autoID"><a-switch v-model="newCollForm.autoID" /></a-form-item>
+        <a-form-item label="动态字段" field="enableDynamic"><a-switch v-model="newCollForm.enableDynamic" /></a-form-item>
+        <a-form-item label="字段">
           <div v-for="(f, i) in newCollForm.fields" :key="i" style="display:flex; gap:6px; margin-bottom:6px; align-items:center; flex-wrap:wrap;">
-            <el-input v-model="f.name" placeholder="字段名" style="width:120px" />
-            <el-select v-model="f.dataType" placeholder="类型" style="width:140px">
-              <el-option v-for="t in fieldTypes" :key="t" :label="t" :value="t" />
-            </el-select>
-            <el-checkbox v-model="f.primaryKey">主键</el-checkbox>
-            <el-checkbox v-model="f.autoID">AutoID</el-checkbox>
-            <el-input-number v-if="f.dataType === 'FloatVector' || f.dataType === 'BinaryVector'" v-model="f.dim" :min="1" placeholder="维度" style="width:100px" />
-            <el-input-number v-if="f.dataType === 'VarChar'" v-model="f.maxLength" :min="1" placeholder="最大长度" style="width:120px" />
-            <el-button link type="danger" @click="newCollForm.fields.splice(i, 1)"><el-icon><Delete /></el-icon></el-button>
+            <a-input v-model="f.name" placeholder="字段名" style="width:120px" />
+            <a-select v-model="f.dataType" placeholder="类型" style="width:140px">
+              <a-option v-for="t in fieldTypes" :key="t" :label="t" :value="t" />
+            </a-select>
+            <a-checkbox v-model="f.primaryKey">主键</a-checkbox>
+            <a-checkbox v-model="f.autoID">AutoID</a-checkbox>
+            <a-input-number v-if="f.dataType === 'FloatVector' || f.dataType === 'BinaryVector'" v-model="f.dim" :min="1" placeholder="维度" style="width:100px" />
+            <a-input-number v-if="f.dataType === 'VarChar'" v-model="f.maxLength" :min="1" placeholder="最大长度" style="width:120px" />
+            <a-button type="text" status="danger" @click="newCollForm.fields.splice(i, 1)"><icon-delete /></a-button>
           </div>
-          <el-button size="small" @click="newCollForm.fields.push({ name: '', dataType: 'Int64', primaryKey: false, autoID: false, dim: 128, maxLength: 256, description: '' })">添加字段</el-button>
-        </el-form-item>
-      </el-form>
+          <a-button size="small" @click="newCollForm.fields.push({ name: '', dataType: 'Int64', primaryKey: false, autoID: false, dim: 128, maxLength: 256, description: '' })">添加字段</a-button>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="showCreateCollDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateCollection">确定</el-button>
+        <a-button @click="showCreateCollDialog = false">取消</a-button>
+        <a-button type="primary" @click="handleCreateCollection">确定</a-button>
       </template>
-    </el-dialog>
-<!-- TEMPLATE_MORE_DIALOGS -->
-
+    </a-modal>
     <!-- 创建索引对话框 -->
-    <el-dialog v-model="showCreateIndexDialog" title="创建索引" width="500px">
-      <el-form label-width="100px" size="small">
-        <el-form-item label="字段">
-          <el-select v-model="newIndexForm.fieldName" style="width:100%">
-            <el-option v-for="f in collectionDetail?.fields || []" :key="f.name" :label="f.name" :value="f.name" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="索引名"><el-input v-model="newIndexForm.indexName" /></el-form-item>
-        <el-form-item label="索引类型">
-          <el-select v-model="newIndexForm.indexType" style="width:100%">
-            <el-option v-for="t in indexTypes" :key="t" :label="t" :value="t" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="度量类型">
-          <el-select v-model="newIndexForm.metricType" style="width:100%">
-            <el-option label="L2" value="L2" />
-            <el-option label="IP" value="IP" />
-            <el-option label="COSINE" value="COSINE" />
-          </el-select>
-        </el-form-item>
-      </el-form>
+    <a-modal v-model:visible="showCreateIndexDialog" title="创建索引" :width="500" unmount-on-close>
+      <a-form auto-label-width size="small">
+        <a-form-item label="字段" field="fieldName">
+          <a-select v-model="newIndexForm.fieldName" style="width:100%">
+            <a-option v-for="f in collectionDetail?.fields || []" :key="f.name" :label="f.name" :value="f.name" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="索引名" field="indexName"><a-input v-model="newIndexForm.indexName" /></a-form-item>
+        <a-form-item label="索引类型" field="indexType">
+          <a-select v-model="newIndexForm.indexType" style="width:100%">
+            <a-option v-for="t in indexTypes" :key="t" :label="t" :value="t" />
+          </a-select>
+        </a-form-item>
+        <a-form-item label="度量类型" field="metricType">
+          <a-select v-model="newIndexForm.metricType" style="width:100%">
+            <a-option label="L2" value="L2" />
+            <a-option label="IP" value="IP" />
+            <a-option label="COSINE" value="COSINE" />
+          </a-select>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="showCreateIndexDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateIndex">确定</el-button>
+        <a-button @click="showCreateIndexDialog = false">取消</a-button>
+        <a-button type="primary" @click="handleCreateIndex">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 系统信息对话框 -->
-    <el-dialog v-model="showMetricsDialog" title="系统信息" width="500px">
-      <el-descriptions :column="1" border size="small" v-loading="metricsLoading">
-        <el-descriptions-item label="版本">{{ metrics?.version }}</el-descriptions-item>
-        <el-descriptions-item label="数据库">{{ metrics?.databases?.join(', ') }}</el-descriptions-item>
-        <el-descriptions-item label="Collection 数量">{{ metrics?.collectionCount }}</el-descriptions-item>
-      </el-descriptions>
-    </el-dialog>
-  </el-drawer>
+    <a-modal v-model:visible="showMetricsDialog" title="系统信息" :width="500" unmount-on-close>
+      <a-spin :loading="metricsLoading" style="width: 100%;">
+        <a-descriptions :column="1" bordered size="small">
+          <a-descriptions-item label="版本">{{ metrics?.version }}</a-descriptions-item>
+          <a-descriptions-item label="数据库">{{ metrics?.databases?.join(', ') }}</a-descriptions-item>
+          <a-descriptions-item label="Collection 数量">{{ metrics?.collectionCount }}</a-descriptions-item>
+        </a-descriptions>
+      </a-spin>
+    </a-modal>
+  </a-drawer>
 </template>
-
-<!-- SCRIPT_SECTION -->
 
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Coin, Plus, Refresh, Document, Delete } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import {
+  IconLink, IconCommon, IconPlus, IconRefresh, IconFile, IconDelete
+} from '@arco-design/web-vue/es/icon'
 import {
   getMilvusDatabases, createMilvusDatabase, dropMilvusDatabase,
   getMilvusCollections, describeMilvusCollection, createMilvusCollection, dropMilvusCollection,
@@ -352,7 +354,6 @@ const queryOutputFields = ref<string[]>([])
 const queryResults = ref<any[]>([])
 const queryColumns = ref<string[]>([])
 const queryLoading = ref(false)
-
 // 插入/删除
 const insertJson = ref('')
 const deleteFilter = ref('')
@@ -381,8 +382,6 @@ const showMetricsDialog = ref(false)
 const metrics = ref<any>(null)
 const metricsLoading = ref(false)
 
-// SCRIPT_CONT
-
 const fieldTypes = ['Bool', 'Int8', 'Int16', 'Int32', 'Int64', 'Float', 'Double', 'VarChar', 'JSON', 'FloatVector', 'BinaryVector']
 const indexTypes = ['FLAT', 'IVF_FLAT', 'IVF_SQ8', 'IVF_PQ', 'HNSW', 'DISKANN', 'AUTOINDEX', 'SCANN']
 
@@ -395,7 +394,6 @@ const newCollForm = reactive({
 })
 
 const newIndexForm = reactive({ fieldName: '', indexName: '', indexType: 'AUTOINDEX', metricType: 'COSINE' })
-
 const filteredCollections = computed(() => {
   if (!collSearchKeyword.value) return collections.value
   const kw = collSearchKeyword.value.toLowerCase()
@@ -425,7 +423,7 @@ async function loadDatabases() {
     }
     loadCollections()
   } catch (e: any) {
-    ElMessage.error('加载数据库列表失败: ' + (e.message || e))
+    Message.error('加载数据库列表失败: ' + (e.message || e))
   }
 }
 
@@ -435,14 +433,11 @@ async function loadCollections() {
     const res = await getMilvusCollections(mwId.value, currentDatabase.value)
     collections.value = res || []
   } catch (e: any) {
-    ElMessage.error('加载 Collection 列表失败: ' + (e.message || e))
+    Message.error('加载 Collection 列表失败: ' + (e.message || e))
   } finally {
     collectionsLoading.value = false
   }
 }
-
-// SCRIPT_HANDLERS
-
 function handleDatabaseChange() {
   currentCollection.value = ''
   collectionDetail.value = null
@@ -457,7 +452,7 @@ async function handleSelectCollection(name: string) {
     const res = await describeMilvusCollection(mwId.value, name, currentDatabase.value)
     collectionDetail.value = res
   } catch (e: any) {
-    ElMessage.error('获取 Collection 详情失败: ' + (e.message || e))
+    Message.error('获取 Collection 详情失败: ' + (e.message || e))
   }
   loadPartitions()
 }
@@ -466,12 +461,12 @@ async function handleCreateDatabase() {
   if (!newDbName.value) return
   try {
     await createMilvusDatabase(mwId.value, newDbName.value)
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     showCreateDbDialog.value = false
     newDbName.value = ''
     loadDatabases()
   } catch (e: any) {
-    ElMessage.error('创建失败: ' + (e.message || e))
+    Message.error('创建失败: ' + (e.message || e))
   }
 }
 
@@ -479,73 +474,79 @@ async function handleCreateCollection() {
   if (!newCollForm.name) return
   try {
     await createMilvusCollection(mwId.value, { ...newCollForm, database: currentDatabase.value })
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     showCreateCollDialog.value = false
     newCollForm.name = ''
     loadCollections()
   } catch (e: any) {
-    ElMessage.error('创建失败: ' + (e.message || e))
+    Message.error('创建失败: ' + (e.message || e))
   }
 }
-
 async function handleDropCollection() {
-  await ElMessageBox.confirm(`确定删除 Collection "${currentCollection.value}"？`, '确认')
-  try {
-    await dropMilvusCollection(mwId.value, currentCollection.value, currentDatabase.value)
-    ElMessage.success('删除成功')
-    currentCollection.value = ''
-    collectionDetail.value = null
-    loadCollections()
-  } catch (e: any) {
-    ElMessage.error('删除失败: ' + (e.message || e))
-  }
+  Modal.warning({
+    title: '确认',
+    content: `确定删除 Collection "${currentCollection.value}"？`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await dropMilvusCollection(mwId.value, currentCollection.value, currentDatabase.value)
+        Message.success('删除成功')
+        currentCollection.value = ''
+        collectionDetail.value = null
+        loadCollections()
+      } catch (e: any) {
+        Message.error('删除失败: ' + (e.message || e))
+      }
+    }
+  })
 }
-
-// SCRIPT_LOAD_RELEASE
 
 async function handleLoadCollection() {
   try {
     await loadMilvusCollection(mwId.value, { collection: currentCollection.value, database: currentDatabase.value })
-    ElMessage.success('加载请求已提交')
+    Message.success('加载请求已提交')
     handleSelectCollection(currentCollection.value)
   } catch (e: any) {
-    ElMessage.error('加载失败: ' + (e.message || e))
+    Message.error('加载失败: ' + (e.message || e))
   }
 }
 
 async function handleReleaseCollection() {
   try {
     await releaseMilvusCollection(mwId.value, { collection: currentCollection.value, database: currentDatabase.value })
-    ElMessage.success('释放成功')
+    Message.success('释放成功')
     handleSelectCollection(currentCollection.value)
   } catch (e: any) {
-    ElMessage.error('释放失败: ' + (e.message || e))
+    Message.error('释放失败: ' + (e.message || e))
   }
 }
 
 async function handleCreateIndex() {
   try {
     await createMilvusIndex(mwId.value, { ...newIndexForm, collection: currentCollection.value, database: currentDatabase.value })
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     showCreateIndexDialog.value = false
     handleSelectCollection(currentCollection.value)
   } catch (e: any) {
-    ElMessage.error('创建失败: ' + (e.message || e))
+    Message.error('创建失败: ' + (e.message || e))
   }
 }
-
 async function handleDropIndex(fieldName: string) {
-  await ElMessageBox.confirm(`确定删除字段 "${fieldName}" 的索引？`, '确认')
-  try {
-    await dropMilvusIndex(mwId.value, currentCollection.value, fieldName, currentDatabase.value)
-    ElMessage.success('删除成功')
-    handleSelectCollection(currentCollection.value)
-  } catch (e: any) {
-    ElMessage.error('删除失败: ' + (e.message || e))
-  }
+  Modal.warning({
+    title: '确认',
+    content: `确定删除字段 "${fieldName}" 的索引？`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await dropMilvusIndex(mwId.value, currentCollection.value, fieldName, currentDatabase.value)
+        Message.success('删除成功')
+        handleSelectCollection(currentCollection.value)
+      } catch (e: any) {
+        Message.error('删除失败: ' + (e.message || e))
+      }
+    }
+  })
 }
-
-// SCRIPT_DATA_OPS
 
 async function handleQuery() {
   queryLoading.value = true
@@ -565,12 +566,11 @@ async function handleQuery() {
       queryColumns.value = []
     }
   } catch (e: any) {
-    ElMessage.error('查询失败: ' + (e.message || e))
+    Message.error('查询失败: ' + (e.message || e))
   } finally {
     queryLoading.value = false
   }
 }
-
 async function handleInsert() {
   if (!insertJson.value.trim()) return
   try {
@@ -580,34 +580,37 @@ async function handleInsert() {
       collection: currentCollection.value,
       rows: Array.isArray(rows) ? rows : [rows],
     })
-    ElMessage.success(`插入成功，共 ${res?.insertCount || 0} 条`)
+    Message.success(`插入成功，共 ${res?.insertCount || 0} 条`)
     insertJson.value = ''
   } catch (e: any) {
-    ElMessage.error('插入失败: ' + (e.message || e))
+    Message.error('插入失败: ' + (e.message || e))
   }
 }
 
 async function handleDelete() {
   if (!deleteFilter.value.trim()) return
-  await ElMessageBox.confirm('确定执行删除操作？', '确认')
-  try {
-    await deleteMilvusData(mwId.value, {
-      database: currentDatabase.value,
-      collection: currentCollection.value,
-      filter: deleteFilter.value,
-    })
-    ElMessage.success('删除成功')
-    deleteFilter.value = ''
-  } catch (e: any) {
-    ElMessage.error('删除失败: ' + (e.message || e))
-  }
+  Modal.warning({
+    title: '确认',
+    content: '确定执行删除操作？',
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await deleteMilvusData(mwId.value, {
+          database: currentDatabase.value,
+          collection: currentCollection.value,
+          filter: deleteFilter.value,
+        })
+        Message.success('删除成功')
+        deleteFilter.value = ''
+      } catch (e: any) {
+        Message.error('删除失败: ' + (e.message || e))
+      }
+    }
+  })
 }
-
-// SCRIPT_SEARCH_OPS
-
 async function handleSearch() {
   if (!searchVectors.value.trim()) {
-    ElMessage.warning('请输入向量数据')
+    Message.warning('请输入向量数据')
     return
   }
   searchLoading.value = true
@@ -633,7 +636,7 @@ async function handleSearch() {
     }
     searchResultColumns.value = Array.from(cols)
   } catch (e: any) {
-    ElMessage.error('搜索失败: ' + (e.message || e))
+    Message.error('搜索失败: ' + (e.message || e))
   } finally {
     searchLoading.value = false
   }
@@ -645,10 +648,9 @@ async function loadPartitions() {
     const res = await getMilvusPartitions(mwId.value, currentCollection.value, currentDatabase.value)
     partitions.value = res || []
   } catch (e: any) {
-    ElMessage.error('加载分区失败: ' + (e.message || e))
+    Message.error('加载分区失败: ' + (e.message || e))
   }
 }
-
 async function handleCreatePartition() {
   if (!newPartitionName.value) return
   try {
@@ -657,25 +659,29 @@ async function handleCreatePartition() {
       partition: newPartitionName.value,
       database: currentDatabase.value,
     })
-    ElMessage.success('创建成功')
+    Message.success('创建成功')
     newPartitionName.value = ''
     loadPartitions()
   } catch (e: any) {
-    ElMessage.error('创建失败: ' + (e.message || e))
+    Message.error('创建失败: ' + (e.message || e))
   }
 }
 
-// SCRIPT_FINAL
-
 async function handleDropPartition(name: string) {
-  await ElMessageBox.confirm(`确定删除分区 "${name}"？`, '确认')
-  try {
-    await dropMilvusPartition(mwId.value, currentCollection.value, name, currentDatabase.value)
-    ElMessage.success('删除成功')
-    loadPartitions()
-  } catch (e: any) {
-    ElMessage.error('删除失败: ' + (e.message || e))
-  }
+  Modal.warning({
+    title: '确认',
+    content: `确定删除分区 "${name}"？`,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await dropMilvusPartition(mwId.value, currentCollection.value, name, currentDatabase.value)
+        Message.success('删除成功')
+        loadPartitions()
+      } catch (e: any) {
+        Message.error('删除失败: ' + (e.message || e))
+      }
+    }
+  })
 }
 
 async function loadMetrics() {
@@ -684,14 +690,12 @@ async function loadMetrics() {
     const res = await getMilvusMetrics(mwId.value)
     metrics.value = res
   } catch (e: any) {
-    ElMessage.error('获取系统信息失败: ' + (e.message || e))
+    Message.error('获取系统信息失败: ' + (e.message || e))
   } finally {
     metricsLoading.value = false
   }
 }
 </script>
-
-<!-- STYLE_SECTION -->
 
 <style scoped>
 .console-header {
@@ -722,7 +726,7 @@ async function loadMetrics() {
 .sidebar {
   width: 280px;
   min-width: 280px;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   flex-direction: column;
   background: #fafafa;
@@ -734,16 +738,16 @@ async function loadMetrics() {
   padding: 10px 12px;
   font-weight: 600;
   font-size: 13px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   background: #f5f7fa;
 }
 .sidebar-action {
   cursor: pointer;
-  color: #909399;
+  color: #86909c;
   font-size: 16px;
 }
 .sidebar-action:hover {
-  color: #409eff;
+  color: #165dff;
 }
 .collection-list {
   flex: 1;
@@ -760,13 +764,12 @@ async function loadMetrics() {
   transition: background 0.2s;
 }
 .collection-item:hover {
-  background: #ecf5ff;
+  background: #e8f3ff;
 }
 .collection-item.active {
-  background: #d9ecff;
+  background: #bedaff;
   font-weight: 600;
 }
-/* STYLE_CONT */
 .collection-info {
   display: flex;
   align-items: center;
@@ -782,7 +785,7 @@ async function loadMetrics() {
 .collection-empty {
   padding: 20px;
   text-align: center;
-  color: #c0c4cc;
+  color: #c9cdd4;
   font-size: 13px;
 }
 .main-area {
@@ -790,20 +793,10 @@ async function loadMetrics() {
   overflow: auto;
   padding: 0;
 }
-.main-area :deep(.el-tabs--border-card) {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-.main-area :deep(.el-tabs__content) {
-  flex: 1;
-  overflow: auto;
-  padding: 12px;
-}
 .empty-tip {
   padding: 40px;
   text-align: center;
-  color: #c0c4cc;
+  color: #c9cdd4;
   font-size: 14px;
 }
 .query-row {
@@ -817,28 +810,12 @@ async function loadMetrics() {
 </style>
 
 <style>
-.milvus-console-drawer .el-drawer__header {
+.milvus-console-drawer .arco-drawer-header {
   margin-bottom: 0;
   padding: 12px 20px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
 }
-.milvus-console-drawer .el-drawer__body {
+.milvus-console-drawer .arco-drawer-body {
   padding: 0;
 }
 </style>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

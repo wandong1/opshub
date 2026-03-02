@@ -1,261 +1,258 @@
 <template>
   <div class="env-config-content">
     <div class="env-tabs-wrapper">
-      <el-tabs v-model="activeEnvTab" class="env-type-tabs">
-        <el-tab-pane label="普通变量" name="normal">
+      <a-tabs v-model:active-key="activeEnvTab" class="env-type-tabs">
+        <a-tab-pane title="普通变量" key="normal">
           <div class="env-section">
             <div class="env-header">
               <span class="env-header-title">
-                <el-icon><Key /></el-icon>
+                <icon-safe />
                 普通环境变量
               </span>
-              <el-button type="primary" @click="showAddEnvDialog('normal')" :icon="Plus" size="default">
+              <a-button type="primary" @click="showAddEnvDialog('normal')" size="default">
                 添加变量
-              </el-button>
+              </a-button>
             </div>
             <div v-if="normalEnvs.length > 0" class="env-table-wrapper">
-              <el-table :data="normalEnvs" class="env-table" size="default">
-                <el-table-column label="名称" prop="name" min-width="180">
-                  <template #default="{ row }">
-                    <span class="env-name">{{ row.name }}</span>
+              <a-table :data="normalEnvs" class="env-table" size="default" :columns="tableColumns3">
+          <template #name="{ record }">
+                    <span class="env-name">{{ record.name }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="值" prop="value" min-width="250">
-                  <template #default="{ row }">
+          <template #value="{ record }">
                     <div class="env-value-cell">
-                      <el-input
-                        v-if="row.editing"
-                        v-model="row.tempValue"
+                      <a-input
+                        v-if="record.editing"
+                        v-model="record.tempValue"
                         placeholder="请输入变量值"
                         size="small"
                       />
-                      <span v-else class="env-value">{{ row.value || '-' }}</span>
+                      <span v-else class="env-value">{{ record.value || '-' }}</span>
                     </div>
                   </template>
-                </el-table-column>
-                <el-table-column label="操作" width="150" align="center">
-                  <template #default="{ row, $index }">
+          <template #actions="{ record }">
                     <div class="action-buttons">
-                      <template v-if="row.editing">
-                        <el-button type="success" link size="small" @click="saveEnvEdit(row, $index)">
-                          <el-icon><Select /></el-icon>
-                        </el-button>
-                        <el-button type="info" link size="small" @click="cancelEnvEdit(row, $index)">
-                          <el-icon><Close /></el-icon>
-                        </el-button>
+                      <template v-if="record.editing">
+                        <a-button type="text" status="success" size="small" @click="saveEnvEdit(record, rowIndex)">
+                          <icon-check />
+                        </a-button>
+                        <a-button type="text" size="small" @click="cancelEnvEdit(record, rowIndex)">
+                          <icon-close />
+                        </a-button>
                       </template>
                       <template v-else>
-                        <el-button type="primary" link size="small" @click="editEnv(row, $index)">
-                          <el-icon><Edit /></el-icon>
-                        </el-button>
-                        <el-button type="danger" link size="small" @click="removeEnv('normal', $index)">
-                          <el-icon><Delete /></el-icon>
-                        </el-button>
+                        <a-button type="text" size="small" @click="editEnv(record, rowIndex)">
+                          <icon-edit />
+                        </a-button>
+                        <a-button status="danger" type="text" size="small" @click="removeEnv('normal', rowIndex)">
+                          <icon-delete />
+                        </a-button>
                       </template>
                     </div>
                   </template>
-                </el-table-column>
-              </el-table>
+        </a-table>
             </div>
-            <el-empty v-else description="暂无环境变量配置" :image-size="80" />
+            <a-empty v-else description="暂无环境变量配置" :image-size="80" />
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="配置映射引用" name="configmap">
+        <a-tab-pane title="配置映射引用" key="configmap">
           <div class="env-section">
             <div class="env-header">
               <span class="env-header-title">
-                <el-icon><Document /></el-icon>
+                <icon-file />
                 ConfigMap 引用
               </span>
-              <el-button type="primary" @click="showAddEnvDialog('configmap')" :icon="Plus" size="default">
+              <a-button type="primary" @click="showAddEnvDialog('configmap')" size="default">
                 添加引用
-              </el-button>
+              </a-button>
             </div>
             <div v-if="configmapEnvs.length > 0" class="env-table-wrapper">
-              <el-table :data="configmapEnvs" class="env-table" size="default">
-                <el-table-column label="变量名称" prop="name" min-width="180">
-                  <template #default="{ row }">
-                    <span class="env-name">{{ row.name }}</span>
+              <a-table :data="configmapEnvs" class="env-table" size="default" :columns="tableColumns2">
+          <template #name="{ record }">
+                    <span class="env-name">{{ record.name }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="ConfigMap" prop="configmapName" min-width="150">
-                  <template #default="{ row }">
-                    <span class="env-resource">{{ row.configmapName }}</span>
+          <template #configmapName="{ record }">
+                    <span class="env-resource">{{ record.configmapName }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="Key" prop="key" min-width="150">
-                  <template #default="{ row }">
-                    <span class="env-key">{{ row.key }}</span>
+          <template #key="{ record }">
+                    <span class="env-key">{{ record.key }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="操作" width="150" align="center">
-                  <template #default="{ row, $index }">
+          <template #actions="{ record }">
                     <div class="action-buttons">
-                      <el-button type="primary" link size="small" @click="editConfigMapEnv(row, $index)">
-                        <el-icon><Edit /></el-icon>
-                      </el-button>
-                      <el-button type="danger" link size="small" @click="removeEnv('configmap', $index)">
-                        <el-icon><Delete /></el-icon>
-                      </el-button>
+                      <a-button type="text" size="small" @click="editConfigMapEnv(record, rowIndex)">
+                        <icon-edit />
+                      </a-button>
+                      <a-button status="danger" type="text" size="small" @click="removeEnv('configmap', rowIndex)">
+                        <icon-delete />
+                      </a-button>
                     </div>
                   </template>
-                </el-table-column>
-              </el-table>
+        </a-table>
             </div>
-            <el-empty v-else description="暂无 ConfigMap 引用" :image-size="80" />
+            <a-empty v-else description="暂无 ConfigMap 引用" :image-size="80" />
           </div>
-        </el-tab-pane>
+        </a-tab-pane>
 
-        <el-tab-pane label="密钥引用" name="secret">
+        <a-tab-pane title="密钥引用" key="secret">
           <div class="env-section">
             <div class="env-header">
               <span class="env-header-title">
-                <el-icon><Lock /></el-icon>
+                <icon-lock />
                 Secret 引用
               </span>
-              <el-button type="primary" @click="showAddEnvDialog('secret')" :icon="Plus" size="default">
+              <a-button type="primary" @click="showAddEnvDialog('secret')" size="default">
                 添加引用
-              </el-button>
+              </a-button>
             </div>
             <div v-if="secretEnvs.length > 0" class="env-table-wrapper">
-              <el-table :data="secretEnvs" class="env-table" size="default">
-                <el-table-column label="变量名称" prop="name" min-width="180">
-                  <template #default="{ row }">
-                    <span class="env-name">{{ row.name }}</span>
+              <a-table :data="secretEnvs" class="env-table" size="default" :columns="tableColumns">
+          <template #name="{ record }">
+                    <span class="env-name">{{ record.name }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="Secret" prop="secretName" min-width="150">
-                  <template #default="{ row }">
-                    <span class="env-resource">{{ row.secretName }}</span>
+          <template #secretName="{ record }">
+                    <span class="env-resource">{{ record.secretName }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="Key" prop="key" min-width="150">
-                  <template #default="{ row }">
-                    <span class="env-key">{{ row.key }}</span>
+          <template #key="{ record }">
+                    <span class="env-key">{{ record.key }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="操作" width="150" align="center">
-                  <template #default="{ row, $index }">
+          <template #actions="{ record }">
                     <div class="action-buttons">
-                      <el-button type="primary" link size="small" @click="editSecretEnv(row, $index)">
-                        <el-icon><Edit /></el-icon>
-                      </el-button>
-                      <el-button type="danger" link size="small" @click="removeEnv('secret', $index)">
-                        <el-icon><Delete /></el-icon>
-                      </el-button>
+                      <a-button type="text" size="small" @click="editSecretEnv(record, rowIndex)">
+                        <icon-edit />
+                      </a-button>
+                      <a-button status="danger" type="text" size="small" @click="removeEnv('secret', rowIndex)">
+                        <icon-delete />
+                      </a-button>
                     </div>
                   </template>
-                </el-table-column>
-              </el-table>
+        </a-table>
             </div>
-            <el-empty v-else description="暂无 Secret 引用" :image-size="80" />
+            <a-empty v-else description="暂无 Secret 引用" :image-size="80" />
           </div>
-        </el-tab-pane>
-      </el-tabs>
+        </a-tab-pane>
+      </a-tabs>
     </div>
 
     <!-- 添加/编辑普通变量对话框 -->
-    <el-dialog
+    <a-modal
       v-model="normalEnvDialogVisible"
       :title="editingEnvIndex >= 0 ? '编辑环境变量' : '添加环境变量'"
       width="600px"
     >
-      <el-form :model="normalEnvForm" label-width="100px" label-position="left">
-        <el-form-item label="变量名称" required>
-          <el-input v-model="normalEnvForm.name" placeholder="例如: DATABASE_URL" clearable />
-        </el-form-item>
-        <el-form-item label="变量值" required>
-          <el-input
+      <a-form :model="normalEnvForm" label-width="100px" label-position="left">
+        <a-form-item label="变量名称" required>
+          <a-input v-model="normalEnvForm.name" placeholder="例如: DATABASE_URL" allow-clear />
+        </a-form-item>
+        <a-form-item label="变量值" required>
+          <a-input
             v-model="normalEnvForm.value"
             type="textarea"
             :rows="3"
             placeholder="请输入变量值"
           />
-        </el-form-item>
-      </el-form>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="normalEnvDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveNormalEnv">确定</el-button>
+        <a-button @click="normalEnvDialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="saveNormalEnv">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 添加/编辑 ConfigMap 引用对话框 -->
-    <el-dialog
+    <a-modal
       v-model="configmapEnvDialogVisible"
       :title="editingConfigMapIndex >= 0 ? '编辑 ConfigMap 引用' : '添加 ConfigMap 引用'"
       width="600px"
     >
-      <el-form :model="configmapEnvForm" label-width="120px" label-position="left">
-        <el-form-item label="变量名称" required>
-          <el-input v-model="configmapEnvForm.name" placeholder="环境变量名称" clearable />
-        </el-form-item>
-        <el-form-item label="ConfigMap" required>
-          <el-select
+      <a-form :model="configmapEnvForm" label-width="120px" label-position="left">
+        <a-form-item label="变量名称" required>
+          <a-input v-model="configmapEnvForm.name" placeholder="环境变量名称" allow-clear />
+        </a-form-item>
+        <a-form-item label="ConfigMap" required>
+          <a-select
             v-model="configmapEnvForm.configmapName"
             placeholder="选择 ConfigMap"
             style="width: 100%"
             filterable
           >
-            <el-option
+            <a-option
               v-for="cm in configmapList"
               :key="cm.name"
               :label="cm.name"
               :value="cm.name"
             />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="Key" required>
-          <el-input v-model="configmapEnvForm.key" placeholder="ConfigMap 中的键名" clearable />
-        </el-form-item>
-      </el-form>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="Key" required>
+          <a-input v-model="configmapEnvForm.key" placeholder="ConfigMap 中的键名" allow-clear />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="configmapEnvDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveConfigMapEnv">确定</el-button>
+        <a-button @click="configmapEnvDialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="saveConfigMapEnv">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 添加/编辑 Secret 引用对话框 -->
-    <el-dialog
+    <a-modal
       v-model="secretEnvDialogVisible"
       :title="editingSecretIndex >= 0 ? '编辑 Secret 引用' : '添加 Secret 引用'"
       width="600px"
     >
-      <el-form :model="secretEnvForm" label-width="120px" label-position="left">
-        <el-form-item label="变量名称" required>
-          <el-input v-model="secretEnvForm.name" placeholder="环境变量名称" clearable />
-        </el-form-item>
-        <el-form-item label="Secret" required>
-          <el-select
+      <a-form :model="secretEnvForm" label-width="120px" label-position="left">
+        <a-form-item label="变量名称" required>
+          <a-input v-model="secretEnvForm.name" placeholder="环境变量名称" allow-clear />
+        </a-form-item>
+        <a-form-item label="Secret" required>
+          <a-select
             v-model="secretEnvForm.secretName"
             placeholder="选择 Secret"
             style="width: 100%"
             filterable
           >
-            <el-option
+            <a-option
               v-for="sec in secretList"
               :key="sec.name"
               :label="sec.name"
               :value="sec.name"
             />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="Key" required>
-          <el-input v-model="secretEnvForm.key" placeholder="Secret 中的键名" clearable />
-        </el-form-item>
-      </el-form>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="Key" required>
+          <a-input v-model="secretEnvForm.key" placeholder="Secret 中的键名" allow-clear />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="secretEnvDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveSecretEnv">确定</el-button>
+        <a-button @click="secretEnvDialogVisible = false">取消</a-button>
+        <a-button type="primary" @click="saveSecretEnv">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns3 = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 180 },
+  { title: '值', dataIndex: 'value', slotName: 'value', width: 250 },
+  { title: '操作', slotName: 'actions', width: 150, align: 'center' }
+]
+
+const tableColumns2 = [
+  { title: '变量名称', dataIndex: 'name', slotName: 'name', width: 180 },
+  { title: 'ConfigMap', dataIndex: 'configmapName', slotName: 'configmapName', width: 150 },
+  { title: 'Key', dataIndex: 'key', slotName: 'key', width: 150 },
+  { title: '操作', slotName: 'actions', width: 150, align: 'center' }
+]
+
+const tableColumns = [
+  { title: '变量名称', dataIndex: 'name', slotName: 'name', width: 180 },
+  { title: 'Secret', dataIndex: 'secretName', slotName: 'secretName', width: 150 },
+  { title: 'Key', dataIndex: 'key', slotName: 'key', width: 150 },
+  { title: '操作', slotName: 'actions', width: 150, align: 'center' }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Select, Close, Key, Document, Lock } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 
 // 环境变量接口定义
 interface NormalEnv {
@@ -381,11 +378,11 @@ const cancelEnvEdit = (row: NormalEnv, index: number) => {
 // 保存普通环境变量
 const saveNormalEnv = () => {
   if (!normalEnvForm.value.name) {
-    ElMessage.warning('请输入变量名称')
+    Message.warning('请输入变量名称')
     return
   }
   if (!normalEnvForm.value.value) {
-    ElMessage.warning('请输入变量值')
+    Message.warning('请输入变量值')
     return
   }
 
@@ -419,15 +416,15 @@ const editConfigMapEnv = (row: ConfigMapEnv, index: number) => {
 // 保存 ConfigMap 引用
 const saveConfigMapEnv = () => {
   if (!configmapEnvForm.value.name) {
-    ElMessage.warning('请输入变量名称')
+    Message.warning('请输入变量名称')
     return
   }
   if (!configmapEnvForm.value.configmapName) {
-    ElMessage.warning('请选择 ConfigMap')
+    Message.warning('请选择 ConfigMap')
     return
   }
   if (!configmapEnvForm.value.key) {
-    ElMessage.warning('请输入 Key')
+    Message.warning('请输入 Key')
     return
   }
 
@@ -467,15 +464,15 @@ const editSecretEnv = (row: SecretEnv, index: number) => {
 // 保存 Secret 引用
 const saveSecretEnv = () => {
   if (!secretEnvForm.value.name) {
-    ElMessage.warning('请输入变量名称')
+    Message.warning('请输入变量名称')
     return
   }
   if (!secretEnvForm.value.secretName) {
-    ElMessage.warning('请选择 Secret')
+    Message.warning('请选择 Secret')
     return
   }
   if (!secretEnvForm.value.key) {
-    ElMessage.warning('请输入 Key')
+    Message.warning('请输入 Key')
     return
   }
 
@@ -580,7 +577,7 @@ const updateEnvs = () => {
   color: #1a1a1a;
 }
 
-.env-header-title .el-icon {
+.env-header-title .arco-icon {
   font-size: 18px;
   color: #d4af37;
   display: flex;
@@ -593,14 +590,14 @@ const updateEnvs = () => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.env-header .el-button {
+.env-header .arco-btn {
   background: #ffffff;
   border: 1px solid #d4af37;
   color: #d4af37;
   font-weight: 500;
 }
 
-.env-header .el-button:hover {
+.env-header .arco-btn:hover {
   background: #fafafa;
   border-color: #c9a227;
   box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
@@ -619,26 +616,26 @@ const updateEnvs = () => {
   border-radius: 8px;
 }
 
-.env-table :deep(.el-table__header-wrapper) {
+.env-table :deep(.arco-table__header-wrapper) {
   background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
 }
 
-.env-table :deep(.el-table__header th) {
+.env-table :deep(.arco-table__header th) {
   background: transparent;
   color: #333;
   font-weight: 600;
   border-bottom: 1px solid #e8e8e8;
 }
 
-.env-table :deep(.el-table__body tr) {
+.env-table :deep(.arco-table__body tr) {
   transition: all 0.3s ease;
 }
 
-.env-table :deep(.el-table__body tr:hover) {
+.env-table :deep(.arco-table__body tr:hover) {
   background: #fafafa;
 }
 
-.env-table :deep(.el-table__body td) {
+.env-table :deep(.arco-table__body td) {
   border-bottom: 1px solid #f0f0f0;
 }
 
@@ -676,54 +673,54 @@ const updateEnvs = () => {
   gap: 8px;
 }
 
-:deep(.el-dialog__body) {
+:deep(.arco-dialog__body) {
   padding: 20px;
 }
 
-:deep(.el-form-item__label) {
+:deep(.arco-form-item__label) {
   font-weight: 600;
   color: #333;
 }
 
-:deep(.el-input__wrapper) {
+:deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   transition: all 0.3s ease;
 }
 
-:deep(.el-input__wrapper:hover) {
+:deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-:deep(.el-input__wrapper.is-focus) {
+:deep(.arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.15);
 }
 
-:deep(.el-tabs__content) {
+:deep(.arco-tabs__content) {
   padding-top: 16px;
 }
 
-:deep(.el-tabs__item) {
+:deep(.arco-tabs__item) {
   font-size: 14px;
   font-weight: 500;
 }
 
-:deep(.el-tabs__item.is-active) {
+:deep(.arco-tabs__item.is-active) {
   color: #d4af37;
 }
 
-:deep(.el-tabs__active-bar) {
+:deep(.arco-tabs__active-bar) {
   background: #d4af37;
 }
 
-:deep(.el-empty) {
+:deep(.arco-empty) {
   padding: 40px 0;
 }
 
-:deep(.el-empty__description) {
+:deep(.arco-empty__description) {
   color: #999;
 }
 </style>

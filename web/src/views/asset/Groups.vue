@@ -3,205 +3,202 @@
     <!-- 页面标题和操作按钮 -->
     <div class="page-header">
       <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Collection /></el-icon>
-        </div>
+        <div class="page-title-icon"><icon-folder /></div>
         <div>
           <h2 class="page-title">业务分组</h2>
           <p class="page-subtitle">管理主机业务分组，支持多级层级结构</p>
         </div>
       </div>
       <div class="header-actions">
-        <el-button v-permission="'asset-groups:create'" class="black-button" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
+        <a-button v-permission="'asset-groups:create'" type="primary" @click="handleAdd">
+          <template #icon><icon-plus /></template>
           新增分组
-        </el-button>
-        <el-button @click="toggleExpandAll">
-          <el-icon style="margin-right: 6px;"><Sort /></el-icon>
-          {{ isExpandAll ? '折叠全部' : '展开全部' }}
-        </el-button>
+        </a-button>
+        <a-button @click="toggleExpandAll">
+          <template #icon><icon-sort /></template>
+          {{ expandedKeys.length > 0 ? '折叠全部' : '展开全部' }}
+        </a-button>
       </div>
     </div>
 
     <!-- 搜索栏 -->
-    <div class="search-bar">
-      <div class="search-inputs">
-        <el-input
-          v-model="searchForm.name"
-          placeholder="搜索分组名称..."
-          clearable
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
+    <div class="filter-bar">
+      <a-input
+        v-model="searchForm.name"
+        placeholder="搜索分组名称..."
+        allow-clear
+        class="search-input"
+      >
+        <template #prefix>
+          <icon-search />
+        </template>
+      </a-input>
 
-        <el-select
-          v-model="searchForm.status"
-          placeholder="分组状态"
-          clearable
-          class="search-input"
-        >
-          <el-option label="正常" :value="1" />
-          <el-option label="停用" :value="0" />
-        </el-select>
-      </div>
+      <a-select
+        v-model="searchForm.status"
+        placeholder="分组状态"
+        allow-clear
+        class="search-input"
+      >
+        <a-option :value="1">正常</a-option>
+        <a-option :value="0">停用</a-option>
+      </a-select>
 
-      <div class="search-actions">
-        <el-button class="reset-btn" @click="handleReset">
-          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
-          重置
-        </el-button>
-      </div>
+      <a-button @click="handleReset">
+        <template #icon><icon-refresh /></template>
+        重置
+      </a-button>
     </div>
 
     <!-- 表格容器 -->
     <div class="table-wrapper">
-      <el-table
-        ref="tableRef"
+      <a-table
         :data="filteredGroupTree"
-        v-loading="loading"
+        :loading="loading"
         row-key="id"
-        :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
-        :default-expand-all="isExpandAll"
-        :indent="30"
-        class="modern-table group-tree-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :bordered="{ cell: true }"
+        stripe
+        :default-expand-all-rows="false"
+        v-model:expanded-keys="expandedKeys"
+        :pagination="false"
       >
-        <el-table-column label="分组名称" prop="name" min-width="300">
-          <template #default="{ row }">
-            <span style="display: inline-flex; align-items: center;">
-              <el-icon v-if="!row.parentId || row.parentId === 0" style="color: #67c23a; margin-right: 8px;"><Collection /></el-icon>
-              <el-icon v-else style="color: #409eff; margin-right: 8px;"><Folder /></el-icon>
-              {{ row.name }}
-            </span>
-          </template>
-        </el-table-column>
+        <template #columns>
+          <a-table-column title="分组名称" data-index="name" :width="300">
+            <template #cell="{ record }">
+              <span style="display: inline-flex; align-items: center;">
+                <icon-folder v-if="!record.parentId || record.parentId === 0" style="color: #00b42a; margin-right: 8px;" />
+                <icon-folder v-else style="color: #165dff; margin-right: 8px;" />
+                {{ record.name }}
+              </span>
+            </template>
+          </a-table-column>
 
-        <el-table-column prop="code" min-width="150">
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-gold"><Key /></el-icon>
-              分组编码
-            </span>
-          </template>
-        </el-table-column>
+          <a-table-column data-index="code" :width="150">
+            <template #title>
+              <span class="header-with-icon">
+                <icon-lock class="header-icon header-icon-gold" />
+                分组编码
+              </span>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="描述" prop="description" min-width="300" show-overflow-tooltip />
+          <a-table-column title="描述" data-index="description" :width="300" ellipsis tooltip />
 
-        <el-table-column label="主机数量" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag type="primary">{{ row.hostCount || 0 }}</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="主机数量" :width="120" align="center">
+            <template #cell="{ record }">
+              <a-tag color="arcoblue">{{ record.hostCount || 0 }}</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="中间件数量" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag type="warning">{{ row.middlewareCount || 0 }}</el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="中间件数量" :width="120" align="center">
+            <template #cell="{ record }">
+              <a-tag color="orangered">{{ record.middlewareCount || 0 }}</a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'danger'" effect="dark">
-              {{ row.status === 1 ? '正常' : '停用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
+          <a-table-column title="状态" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-tag :color="record.status === 1 ? 'green' : 'red'">
+                {{ record.status === 1 ? '正常' : '停用' }}
+              </a-tag>
+            </template>
+          </a-table-column>
 
-        <el-table-column label="创建时间" prop="createTime" min-width="180" />
+          <a-table-column title="创建时间" data-index="createTime" :width="180" />
 
-        <el-table-column label="操作" width="200" fixed="right" align="center">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="编辑" placement="top">
-                <el-button v-permission="'asset-groups:update'" link class="action-btn action-edit" @click="handleEdit(row)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'asset-groups:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+          <a-table-column title="操作" :width="200" fixed="right" align="center">
+            <template #cell="{ record }">
+              <div class="action-buttons">
+                <a-tooltip content="编辑" position="top">
+                  <a-button v-permission="'asset-groups:update'" type="text" class="action-btn action-edit" @click="handleEdit(record)">
+                    <template #icon><icon-edit /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip content="删除" position="top">
+                  <a-button v-permission="'asset-groups:delete'" type="text" class="action-btn action-delete" @click="handleDelete(record)">
+                    <template #icon><icon-delete /></template>
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
     </div>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:visible="dialogVisible"
       :title="dialogTitle"
-      width="50%"
-      class="group-edit-dialog responsive-dialog"
-      :close-on-click-modal="false"
+      :width="600"
+      unmount-on-close
+      :mask-closable="false"
       @close="handleDialogClose"
     >
-      <el-form :model="groupForm" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="上级分组" prop="parentId" v-if="showParentSelect && !isRootGroup">
-          <el-cascader
+      <a-form :model="groupForm" :rules="rules" ref="formRef" auto-label-width layout="horizontal">
+        <a-form-item label="上级分组" field="parentId" v-if="showParentSelect && !isRootGroup">
+          <a-cascader
             v-model="parentPath"
             :options="parentOptions"
-            :props="cascaderProps"
-            clearable
+            :field-names="{ value: 'id', label: 'label' }"
+            check-strictly
+            allow-search
+            allow-clear
             placeholder="请选择上级分组"
             style="width: 100%"
             @change="handleParentChange"
           />
           <div class="form-tip">不选择则为顶级分组</div>
-        </el-form-item>
+        </a-form-item>
 
-        <el-form-item label="分组名称" prop="name">
-          <el-input v-model="groupForm.name" placeholder="请输入分组名称" />
-        </el-form-item>
+        <a-form-item label="分组名称" field="name">
+          <a-input v-model="groupForm.name" placeholder="请输入分组名称" />
+        </a-form-item>
 
-        <el-form-item label="分组编码" prop="code">
-          <el-input v-model="groupForm.code" placeholder="请输入分组编码" />
-        </el-form-item>
+        <a-form-item label="分组编码" field="code">
+          <a-input v-model="groupForm.code" placeholder="请输入分组编码" />
+        </a-form-item>
 
-        <el-form-item label="描述" prop="description">
-          <el-input v-model="groupForm.description" type="textarea" :rows="3" placeholder="请输入分组描述" />
-        </el-form-item>
+        <a-form-item label="描述" field="description">
+          <a-textarea v-model="groupForm.description" :auto-size="{ minRows: 3 }" placeholder="请输入分组描述" />
+        </a-form-item>
 
-        <el-form-item label="显示顺序" prop="sort">
-          <el-input-number v-model="groupForm.sort" :min="0" />
-        </el-form-item>
+        <a-form-item label="显示顺序" field="sort">
+          <a-input-number v-model="groupForm.sort" :min="0" />
+        </a-form-item>
 
-        <el-form-item label="状态" prop="status">
-          <el-radio-group v-model="groupForm.status">
-            <el-radio :label="1">正常</el-radio>
-            <el-radio :label="0">停用</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
+        <a-form-item label="状态" field="status">
+          <a-radio-group v-model="groupForm.status">
+            <a-radio :value="1">正常</a-radio>
+            <a-radio :value="0">停用</a-radio>
+          </a-radio-group>
+        </a-form-item>
+      </a-form>
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleSubmit" :loading="submitting">确定</el-button>
+          <a-button @click="dialogVisible = false">取消</a-button>
+          <a-button type="primary" @click="handleSubmit" :loading="submitting">确定</a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { ElMessage, ElMessageBox, FormInstance, FormRules, ElTable } from 'element-plus'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import type { FormInstance } from '@arco-design/web-vue'
 import {
-  Plus,
-  Edit,
-  Delete,
-  Collection,
-  Folder,
-  Search,
-  RefreshLeft,
-  Sort,
-  Key
-} from '@element-plus/icons-vue'
+  IconPlus,
+  IconEdit,
+  IconDelete,
+  IconFolder,
+  IconSearch,
+  IconRefresh,
+  IconSort,
+  IconLock
+} from '@arco-design/web-vue/es/icon'
 import {
   getGroupTree,
   getParentOptions,
@@ -222,7 +219,6 @@ const isRootGroup = ref(false)
 
 // 表单引用
 const formRef = ref<FormInstance>()
-const tableRef = ref<InstanceType<typeof ElTable>>()
 
 // 分组树数据
 const groupTree = ref<any[]>([])
@@ -234,7 +230,20 @@ const searchForm = reactive({
 })
 
 // 展开/折叠状态
-const isExpandAll = ref(true)
+const expandedKeys = ref<(string | number)[]>([])
+
+// Collect all row IDs recursively
+const getAllKeys = (data: any[]): (string | number)[] => {
+  const keys: (string | number)[] = []
+  const traverse = (rows: any[]) => {
+    rows.forEach(row => {
+      keys.push(row.id)
+      if (row.children?.length) traverse(row.children)
+    })
+  }
+  traverse(data)
+  return keys
+}
 
 // 过滤后的分组树
 const filteredGroupTree = computed(() => {
@@ -273,15 +282,6 @@ const filterTree = (nodes: any[]): any[] => {
 const parentOptions = ref([])
 const parentPath = ref<number[]>([])
 
-// 级联选择器配置
-const cascaderProps = {
-  value: 'id',
-  label: 'label',
-  children: 'children',
-  checkStrictly: true,
-  emitPath: true
-}
-
 // 分组表单
 const groupForm = reactive({
   id: 0,
@@ -300,25 +300,23 @@ const showParentSelect = computed(() => {
 })
 
 // 表单验证规则
-const rules: FormRules = {
+const rules = {
   name: [
-    { required: true, message: '请输入分组名称', trigger: 'blur' },
-    { min: 2, max: 100, message: '分组名称长度在 2 到 100 个字符', trigger: 'blur' }
+    { required: true, message: '请输入分组名称' },
+    { minLength: 2, maxLength: 100, message: '分组名称长度在 2 到 100 个字符' }
   ],
   code: [
-    { required: true, message: '请输入分组编码', trigger: 'blur' },
-    { min: 2, max: 50, message: '分组编码长度在 2 到 50 个字符', trigger: 'blur' }
+    { required: true, message: '请输入分组编码' },
+    { minLength: 2, maxLength: 50, message: '分组编码长度在 2 到 50 个字符' }
   ],
-  status: [{ required: true, message: '请选择状态', trigger: 'change' }]
+  status: [{ required: true, message: '请选择状态' }]
 }
 
 // 监听搜索条件变化
-import { watch } from 'vue'
 watch([() => searchForm.name, () => searchForm.status], () => {
   if (searchForm.name || searchForm.status !== undefined) {
-    isExpandAll.value = true
     nextTick(() => {
-      toggleExpandAllRows(true)
+      expandedKeys.value = getAllKeys(filteredGroupTree.value)
     })
   }
 })
@@ -327,33 +325,16 @@ watch([() => searchForm.name, () => searchForm.status], () => {
 const handleReset = () => {
   searchForm.name = ''
   searchForm.status = undefined
-  isExpandAll.value = false
-  nextTick(() => {
-    toggleExpandAllRows(false)
-  })
+  expandedKeys.value = []
 }
 
 // 切换全部展开/折叠
 const toggleExpandAll = () => {
-  isExpandAll.value = !isExpandAll.value
-  toggleExpandAllRows(isExpandAll.value)
-}
-
-// 展开/折叠所有行
-const toggleExpandAllRows = (expand: boolean) => {
-  const table = tableRef.value
-  if (!table) return
-
-  const toggleRows = (rows: any[]) => {
-    rows.forEach(row => {
-      if (row.children && row.children.length > 0) {
-        table.toggleRowExpansion(row, expand)
-        toggleRows(row.children)
-      }
-    })
+  if (expandedKeys.value.length > 0) {
+    expandedKeys.value = []
+  } else {
+    expandedKeys.value = getAllKeys(filteredGroupTree.value)
   }
-
-  toggleRows(filteredGroupTree.value)
 }
 
 // 加载分组树
@@ -364,7 +345,7 @@ const loadGroupTree = async () => {
     // 后端已经返回树形结构，直接使用
     groupTree.value = data || []
   } catch (error) {
-    ElMessage.error('获取分组列表失败')
+    Message.error('获取分组列表失败')
   } finally {
     loading.value = false
   }
@@ -434,20 +415,21 @@ const handleDelete = (row: any) => {
     ? `该分组下有 ${row.children.length} 个子分组，确定要删除分组"${row.name}"及其所有子分组吗？`
     : `确定要删除分组"${row.name}"吗？`
 
-  ElMessageBox.confirm(confirmMsg, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteGroup(row.id)
-      ElMessage.success('删除成功')
-      loadGroupTree()
-      loadParentOptions()
-    } catch (error: any) {
-      ElMessage.error(error.message || '删除失败')
+  Modal.warning({
+    title: '提示',
+    content: confirmMsg,
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await deleteGroup(row.id)
+        Message.success('删除成功')
+        loadGroupTree()
+        loadParentOptions()
+      } catch (error: any) {
+        Message.error(error.message || '删除失败')
+      }
     }
-  }).catch(() => {})
+  })
 }
 
 const handleParentChange = (value: number[]) => {
@@ -463,30 +445,29 @@ const handleParentChange = (value: number[]) => {
 const handleSubmit = async () => {
   if (!formRef.value) return
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+  const errors = await formRef.value.validate()
+  if (errors) return
 
-    submitting.value = true
-    try {
-      const data = { ...groupForm }
+  submitting.value = true
+  try {
+    const data = { ...groupForm }
 
-      if (isEdit.value) {
-        await updateGroup(data.id, data)
-        ElMessage.success('更新成功')
-      } else {
-        await createGroup(data)
-        ElMessage.success('创建成功')
-      }
-
-      dialogVisible.value = false
-      loadGroupTree()
-      loadParentOptions()
-    } catch (error: any) {
-      ElMessage.error(error.message || (isEdit.value ? '更新失败' : '创建失败'))
-    } finally {
-      submitting.value = false
+    if (isEdit.value) {
+      await updateGroup(data.id, data)
+      Message.success('更新成功')
+    } else {
+      await createGroup(data)
+      Message.success('创建成功')
     }
-  })
+
+    dialogVisible.value = false
+    loadGroupTree()
+    loadParentOptions()
+  } catch (error: any) {
+    Message.error(error.message || (isEdit.value ? '更新失败' : '创建失败'))
+  } finally {
+    submitting.value = false
+  }
 }
 
 // 对话框关闭事件
@@ -511,8 +492,8 @@ onMounted(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
+  align-items: center;
+  margin-bottom: 16px;
   padding: 16px 20px;
   background: #fff;
   border-radius: 8px;
@@ -521,37 +502,33 @@ onMounted(() => {
 
 .page-title-group {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
 }
 
 .page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--ops-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
-  font-size: 22px;
-  flex-shrink: 0;
-  border: 1px solid #d4af37;
+  color: #fff;
+  font-size: 18px;
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
-  color: #303133;
-  line-height: 1.3;
+  color: var(--ops-text-primary);
 }
 
 .page-subtitle {
-  margin: 4px 0 0 0;
+  margin: 2px 0 0;
   font-size: 13px;
-  color: #909399;
-  line-height: 1.4;
+  color: var(--ops-text-tertiary);
 }
 
 .header-actions {
@@ -561,115 +538,27 @@ onMounted(() => {
 }
 
 /* 搜索栏 */
-.search-bar {
-  margin-bottom: 12px;
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
   padding: 12px 16px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.search-inputs {
-  display: flex;
-  gap: 12px;
-  flex: 1;
 }
 
 .search-input {
   width: 280px;
 }
 
-.search-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.reset-btn {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #606266;
-}
-
-.reset-btn:hover {
-  background: #e6e8eb;
-  border-color: #c0c4cc;
-}
-
-.search-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.search-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
 /* 表格容器 */
 .table-wrapper {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   overflow: hidden;
-}
-
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
-/* 树形表格特定样式 */
-.group-tree-table :deep(.el-table__expand-icon) {
-  color: #606266 !important;
-  font-size: 16px !important;
-  padding: 0 !important;
-}
-
-.group-tree-table :deep(.el-table__expand-icon:hover) {
-  color: #d4af37 !important;
-}
-
-.group-tree-table :deep(.el-table__expand-icon--expanded) {
-  transform: rotate(90deg);
-}
-
-/* 缩进元素 */
-.group-tree-table :deep(.el-table__indent) {
-  display: inline-block !important;
-  width: 30px !important;
-}
-
-/* 展开图标容器 */
-.group-tree-table :deep(.el-table__cell .el-table__expand-icon) {
-  display: inline-block !important;
-  margin-right: 4px !important;
 }
 
 /* 表头图标 */
@@ -692,6 +581,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   align-items: center;
+  justify-content: center;
 }
 
 .action-btn {
@@ -704,22 +594,18 @@ onMounted(() => {
   transition: all 0.2s ease;
 }
 
-.action-btn :deep(.el-icon) {
-  font-size: 16px;
-}
-
 .action-btn:hover {
   transform: scale(1.1);
 }
 
 .action-edit:hover {
   background-color: #e8f4ff;
-  color: #409eff;
+  color: #165dff;
 }
 
 .action-delete:hover {
   background-color: #fee;
-  color: #f56c6c;
+  color: #f53f3f;
 }
 
 .black-button {
@@ -748,54 +634,5 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-}
-
-:deep(.group-edit-dialog) {
-  border-radius: 12px;
-}
-
-:deep(.group-edit-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.group-edit-dialog .el-dialog__body) {
-  padding: 24px;
-}
-
-:deep(.group-edit-dialog .el-dialog__footer) {
-  padding: 16px 24px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 标签样式 */
-:deep(.el-tag) {
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-weight: 500;
-}
-
-/* 展开/折叠图标 */
-:deep(.el-table__expand-icon) {
-  color: #606266;
-  font-size: 14px;
-}
-
-:deep(.el-table__expand-icon--expanded) {
-  transform: rotate(90deg);
-}
-
-/* 响应式对话框 */
-:deep(.responsive-dialog) {
-  max-width: 900px;
-  min-width: 500px;
-}
-
-@media (max-width: 768px) {
-  :deep(.responsive-dialog .el-dialog) {
-    width: 95% !important;
-    max-width: none;
-    min-width: auto;
-  }
 }
 </style>

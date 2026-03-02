@@ -35,6 +35,7 @@ type HTTPServer struct {
 	hostService                  *assetService.HostService
 	middlewareService            *assetService.MiddlewareService
 	middlewarePermissionService  *rbacService.MiddlewarePermissionService
+	serviceLabelService          *assetService.ServiceLabelService
 	terminalManager              *TerminalManager
 	terminalAuditHandler         *TerminalAuditHandler
 	authMiddleware               *rbacService.AuthMiddleware
@@ -45,6 +46,7 @@ func NewHTTPServer(
 	hostService *assetService.HostService,
 	middlewareService *assetService.MiddlewareService,
 	middlewarePermissionService *rbacService.MiddlewarePermissionService,
+	serviceLabelService *assetService.ServiceLabelService,
 	terminalManager *TerminalManager,
 	db *gorm.DB,
 	authMiddleware *rbacService.AuthMiddleware,
@@ -54,6 +56,7 @@ func NewHTTPServer(
 		hostService:                 hostService,
 		middlewareService:           middlewareService,
 		middlewarePermissionService: middlewarePermissionService,
+		serviceLabelService:         serviceLabelService,
 		terminalManager:             terminalManager,
 		terminalAuditHandler:        NewTerminalAuditHandler(db),
 		authMiddleware:              authMiddleware,
@@ -381,6 +384,16 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 		mwPerms.PUT("/:id", s.middlewarePermissionService.UpdateMiddlewarePermission)
 		mwPerms.DELETE("/:id", s.middlewarePermissionService.DeleteMiddlewarePermission)
 	}
+
+	// 服务标签管理
+	serviceLabels := r.Group("/service-labels")
+	{
+		serviceLabels.GET("", s.serviceLabelService.List)
+		serviceLabels.GET("/:id", s.serviceLabelService.GetByID)
+		serviceLabels.POST("", s.serviceLabelService.Create)
+		serviceLabels.PUT("/:id", s.serviceLabelService.Update)
+		serviceLabels.DELETE("/:id", s.serviceLabelService.Delete)
+	}
 }
 
 // NewAssetServices 创建asset相关的服务
@@ -389,7 +402,12 @@ func NewAssetServices(db *gorm.DB) (
 	*assetService.HostService,
 	*assetService.MiddlewareService,
 	*rbacService.MiddlewarePermissionService,
+	*assetService.ServiceLabelService,
 	*TerminalManager,
+	*assetbiz.HostUseCase,
+	assetbiz.ServiceLabelRepo,
+	assetbiz.HostRepo,
+	assetbiz.CredentialRepo,
 ) {
 	// 初始化Repository
 	assetGroupRepo := assetdata.NewAssetGroupRepo(db)
@@ -399,6 +417,7 @@ func NewAssetServices(db *gorm.DB) (
 	assetPermissionRepo := rbacdata.NewAssetPermissionRepo(db)
 	middlewareRepo := assetdata.NewMiddlewareRepo(db)
 	mwPermissionRepo := rbacdata.NewMiddlewarePermissionRepo(db)
+	serviceLabelRepo := assetdata.NewServiceLabelRepo(db)
 
 	// 初始化UseCase
 	assetGroupUseCase := assetbiz.NewAssetGroupUseCase(assetGroupRepo)
@@ -408,15 +427,17 @@ func NewAssetServices(db *gorm.DB) (
 	assetPermissionUseCase := rbacbiz.NewAssetPermissionUseCase(assetPermissionRepo)
 	middlewareUseCase := assetbiz.NewMiddlewareUseCase(middlewareRepo, assetGroupRepo, hostRepo)
 	mwPermissionUseCase := rbacbiz.NewMiddlewarePermissionUseCase(mwPermissionRepo)
+	serviceLabelUseCase := assetbiz.NewServiceLabelUseCase(serviceLabelRepo)
 
 	// 初始化Service
 	assetGroupService := assetService.NewAssetGroupService(assetGroupUseCase)
 	hostService := assetService.NewHostService(hostUseCase, credentialUseCase, cloudAccountUseCase, assetPermissionUseCase)
 	middlewareService := assetService.NewMiddlewareService(middlewareUseCase, mwPermissionUseCase, db)
 	mwPermissionService := rbacService.NewMiddlewarePermissionService(mwPermissionUseCase)
+	serviceLabelService := assetService.NewServiceLabelService(serviceLabelUseCase)
 
 	// 初始化TerminalManager
 	terminalManager := NewTerminalManager(hostUseCase, db)
 
-	return assetGroupService, hostService, middlewareService, mwPermissionService, terminalManager
+	return assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, terminalManager, hostUseCase, serviceLabelRepo, hostRepo, credentialRepo
 }

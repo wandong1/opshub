@@ -1,305 +1,236 @@
 <template>
-  <div class="position-info-container">
-    <!-- 页面标题和操作按钮 -->
-    <div class="page-header">
-      <div class="page-title-group">
-        <div class="page-title-icon">
-          <el-icon><Briefcase /></el-icon>
+  <div class="page-container">
+    <!-- 页面头部 -->
+    <div class="page-header-card">
+      <div class="page-header-inner">
+        <div class="page-icon">
+          <icon-bookmark />
         </div>
         <div>
-          <h2 class="page-title">岗位信息</h2>
-          <p class="page-subtitle">管理系统岗位信息，支持岗位与用户的关联管理</p>
+          <div class="page-title">岗位信息</div>
+          <div class="page-desc">管理系统岗位信息，支持岗位与用户的关联管理</div>
         </div>
       </div>
-      <div class="header-actions">
-        <el-button v-permission="'positions:create'" class="black-button" @click="handleAdd">
-          <el-icon style="margin-right: 6px;"><Plus /></el-icon>
-          新增岗位
-        </el-button>
-      </div>
     </div>
 
-    <!-- 搜索栏 -->
-    <div class="search-bar">
-      <div class="search-inputs">
-        <el-input
-          v-model="searchForm.postCode"
-          placeholder="搜索岗位编码..."
-          clearable
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
+    <!-- 搜索区域 -->
+    <a-card class="search-card" :bordered="false">
+      <a-row :gutter="16" align="center">
+        <a-col :flex="'auto'">
+          <a-space :size="16" wrap>
+            <a-space>
+              <span class="search-label">岗位编码:</span>
+              <a-input v-model="searchForm.postCode" placeholder="请输入" allow-clear style="width: 200px" @press-enter="handleSearch" />
+            </a-space>
+            <a-space>
+              <span class="search-label">岗位名称:</span>
+              <a-input v-model="searchForm.postName" placeholder="请输入" allow-clear style="width: 200px" @press-enter="handleSearch" />
+            </a-space>
+            <a-button type="primary" @click="handleSearch">
+              <template #icon><icon-search /></template>
+              搜索
+            </a-button>
+            <a-button @click="resetSearch">
+              <template #icon><icon-refresh /></template>
+              重置
+            </a-button>
+          </a-space>
+        </a-col>
+      </a-row>
+    </a-card>
 
-        <el-input
-          v-model="searchForm.postName"
-          placeholder="搜索岗位名称..."
-          clearable
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon class="search-icon"><Search /></el-icon>
-          </template>
-        </el-input>
-      </div>
+    <!-- 岗位列表 -->
+    <a-card class="table-card" :bordered="false">
+      <template #title>
+        <span class="card-title">岗位列表</span>
+      </template>
+      <template #extra>
+        <a-space>
+          <a-button v-permission="'positions:create'" type="primary" @click="handleAdd">
+            <template #icon><icon-plus /></template>
+            新增岗位
+          </a-button>
+          <a-button @click="loadPositionList">
+            <template #icon><icon-refresh /></template>
+          </a-button>
+        </a-space>
+      </template>
 
-      <div class="search-actions">
-        <el-button class="reset-btn" @click="resetSearch">
-          <el-icon style="margin-right: 4px;"><RefreshLeft /></el-icon>
-          重置
-        </el-button>
-      </div>
-    </div>
-
-    <!-- 表格容器 -->
-    <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="positionList"
-        v-loading="loading"
-        class="modern-table"
-        :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: '600' }"
+        :loading="loading"
+        row-key="id"
+        :pagination="tablePagination"
+        @page-change="handlePageChange"
+        @page-size-change="handlePageSizeChange"
       >
-        <el-table-column prop="postCode" min-width="120">
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><Key /></el-icon>
-              岗位编码
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="postName" min-width="150">
-          <template #header>
-            <span class="header-with-icon">
-              <el-icon class="header-icon header-icon-blue"><User /></el-icon>
-              岗位名称
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.postStatus === 1 ? 'success' : 'danger'" effect="dark">
-              {{ row.postStatus === 1 ? '启用' : '禁用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" min-width="180" />
-        <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip />
-        <el-table-column label="操作" width="280" fixed="right">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="编辑" placement="top">
-                <el-button v-permission="'positions:update'" link class="action-btn action-edit" @click="handleEdit(row)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="分配用户" placement="top">
-                <el-button v-permission="'positions:assign-users'" link class="action-btn action-auth" @click="handleAssignUsers(row)">
-                  <el-icon><UserFilled /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'positions:delete'" link class="action-btn action-delete" @click="handleDelete(row)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="loadPositionList"
-          @current-change="loadPositionList"
-        />
-      </div>
-    </div>
+        <template #columns>
+          <a-table-column title="序号" :width="70" align="center">
+            <template #cell="{ rowIndex }">
+              {{ (pagination.page - 1) * pagination.pageSize + rowIndex + 1 }}
+            </template>
+          </a-table-column>
+          <a-table-column title="岗位编码" data-index="postCode" :min-width="140" />
+          <a-table-column title="岗位名称" data-index="postName" :min-width="160" />
+          <a-table-column title="状态" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-tag :color="record.postStatus === 1 ? 'green' : 'red'" size="small">
+                {{ record.postStatus === 1 ? '启用' : '禁用' }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="创建时间" data-index="createTime" :min-width="180" />
+          <a-table-column title="备注" data-index="remark" ellipsis tooltip :min-width="200" />
+          <a-table-column title="操作" :width="160" align="center" fixed="right">
+            <template #cell="{ record }">
+              <a-space>
+                <a-link v-permission="'positions:update'" @click="handleEdit(record)">编辑</a-link>
+                <a-link v-permission="'positions:assign-users'" @click="handleAssignUsers(record)">分配</a-link>
+                <a-popconfirm content="确定要删除该岗位吗？" @ok="handleDelete(record)">
+                  <a-link v-permission="'positions:delete'" status="danger">删除</a-link>
+                </a-popconfirm>
+              </a-space>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
+    </a-card>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogTitle"
-      width="50%"
-      class="position-edit-dialog responsive-dialog"
-      @close="handleDialogClose"
+    <a-modal
+      v-model:visible="dialogVisible"
+      :title="isEdit ? '编辑岗位' : '新增岗位'"
+      :width="560"
+      :unmount-on-close="true"
+      @ok="handleSubmit"
+      @cancel="dialogVisible = false"
     >
-      <el-form :model="positionForm" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="岗位名称" prop="postName">
-          <el-input v-model="positionForm.postName" placeholder="请输入岗位名称" />
-        </el-form-item>
-        <el-form-item label="岗位编码" prop="postCode">
-          <el-input v-model="positionForm.postCode" placeholder="请输入岗位编码" />
-        </el-form-item>
-        <el-form-item label="备注" prop="remark">
-          <el-input
-            v-model="positionForm.remark"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入备注"
-          />
-        </el-form-item>
-        <el-form-item label="状态" prop="postStatus">
-          <el-radio-group v-model="positionForm.postStatus">
-            <el-radio :label="1">启用</el-radio>
-            <el-radio :label="2">禁用</el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleSubmit" :loading="submitLoading">
-            确定
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+      <a-form :model="positionForm" layout="vertical" ref="formRef">
+        <a-form-item label="岗位名称" field="postName" :rules="[{ required: true, message: '请输入岗位名称' }]">
+          <a-input v-model="positionForm.postName" placeholder="请输入岗位名称" />
+        </a-form-item>
+        <a-form-item label="岗位编码" field="postCode" :rules="[{ required: true, message: '请输入岗位编码' }]">
+          <a-input v-model="positionForm.postCode" placeholder="请输入岗位编码" />
+        </a-form-item>
+        <a-form-item label="备注" field="remark">
+          <a-textarea v-model="positionForm.remark" placeholder="请输入备注" :auto-size="{ minRows: 3, maxRows: 6 }" />
+        </a-form-item>
+        <a-form-item label="状态" field="postStatus">
+          <a-radio-group v-model="positionForm.postStatus" type="button">
+            <a-radio :value="1">启用</a-radio>
+            <a-radio :value="2">禁用</a-radio>
+          </a-radio-group>
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 分配用户对话框 -->
-    <el-dialog
-      v-model="assignUsersVisible"
+    <a-modal
+      v-model:visible="assignUsersVisible"
       title="分配用户"
-      width="70%"
-      class="assign-users-dialog responsive-dialog"
-      @close="handleAssignUsersClose"
+      :width="860"
+      :unmount-on-close="true"
+      @ok="handleAssignUsersSubmit"
+      @cancel="assignUsersVisible = false"
     >
       <div class="assign-content">
         <!-- 已分配用户 -->
-        <div class="panel assigned-panel">
+        <div class="assign-panel">
           <div class="panel-header">
-            <div class="panel-title">
-              <el-icon class="panel-icon"><UserFilled /></el-icon>
-              <span>已分配用户</span>
-              <el-badge :value="selectedUsers.length" class="badge" />
-            </div>
+            <span class="panel-title">
+              <icon-user-group style="margin-right: 6px; color: var(--ops-primary);" />
+              已分配用户
+              <a-badge :count="selectedUsers.length" :dot-style="{ background: 'var(--ops-primary)' }" style="margin-left: 8px;" />
+            </span>
           </div>
           <div class="panel-body">
-            <el-empty v-if="selectedUsers.length === 0" description="暂无已分配用户" :image-size="60" />
-            <div v-else class="user-cards-container">
-              <div
-                v-for="user in selectedUsers"
-                :key="user.id || user.ID"
-                class="user-card selected-card"
-              >
-                <div class="user-avatar">
-                  <el-icon class="avatar-icon"><User /></el-icon>
-                </div>
+            <a-empty v-if="selectedUsers.length === 0" description="暂无已分配用户" />
+            <div v-else class="user-cards">
+              <div v-for="user in selectedUsers" :key="user.id || user.ID" class="user-card selected">
+                <a-avatar :size="36" :style="{ backgroundColor: 'var(--ops-primary)' }">
+                  {{ (user.realName || user.username || '').charAt(0) }}
+                </a-avatar>
                 <div class="user-info">
                   <div class="user-name">{{ user.realName || user.username }}</div>
-                  <div class="user-username">@{{ user.username }}</div>
+                  <div class="user-sub">@{{ user.username }}</div>
                 </div>
-                <el-button
-                  type="danger"
-                  size="small"
-                  circle
-                  class="remove-btn"
-                  @click="removeUser(user)"
-                >
-                  <el-icon><Close /></el-icon>
-                </el-button>
+                <a-button type="text" status="danger" size="mini" @click="removeUser(user)">
+                  <template #icon><icon-close /></template>
+                </a-button>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 可用用户 -->
-        <div class="panel available-panel">
+        <div class="assign-panel">
           <div class="panel-header">
-            <div class="panel-title">
-              <el-icon class="panel-icon"><User /></el-icon>
-              <span>可用用户</span>
-            </div>
-            <el-input
+            <span class="panel-title">
+              <icon-user style="margin-right: 6px; color: var(--ops-primary);" />
+              可用用户
+            </span>
+            <a-input
               v-model="userSearchKeyword"
               placeholder="搜索用户名..."
-              clearable
+              allow-clear
               size="small"
-              class="search-box"
-              @input="loadAvailableUsers"
+              style="width: 180px;"
+              @press-enter="loadAvailableUsers"
+              @clear="loadAvailableUsers"
             >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
+              <template #prefix><icon-search /></template>
+            </a-input>
           </div>
           <div class="panel-body">
-            <div v-loading="usersLoading" class="user-cards-container">
-              <el-empty v-if="availableUsers.length === 0 && !usersLoading" description="暂无可分配用户" :image-size="60" />
-              <div
-                v-for="user in availableUsers"
-                :key="user.id || user.ID"
-                class="user-card available-card"
-              >
-                <div class="user-avatar">
-                  <el-icon class="avatar-icon"><User /></el-icon>
+            <a-spin :loading="usersLoading" style="width: 100%;">
+              <a-empty v-if="availableUsers.length === 0 && !usersLoading" description="暂无可分配用户" />
+              <div v-else class="user-cards">
+                <div v-for="user in availableUsers" :key="user.id || user.ID" class="user-card">
+                  <a-avatar :size="36" :style="{ backgroundColor: '#86909c' }">
+                    {{ (user.realName || user.username || '').charAt(0) }}
+                  </a-avatar>
+                  <div class="user-info">
+                    <div class="user-name">{{ user.realName || user.username }}</div>
+                    <div class="user-sub">@{{ user.username }}</div>
+                  </div>
+                  <a-button type="text" status="normal" size="mini" @click="addUser(user)">
+                    <template #icon><icon-plus /></template>
+                  </a-button>
                 </div>
-                <div class="user-info">
-                  <div class="user-name">{{ user.realName || user.username }}</div>
-                  <div class="user-username">@{{ user.username }}</div>
-                </div>
-                <el-button
-                  type="primary"
-                  size="small"
-                  circle
-                  class="add-btn"
-                  @click="addUser(user)"
-                >
-                  <el-icon><Plus /></el-icon>
-                </el-button>
               </div>
-            </div>
+            </a-spin>
             <div v-if="userPagination.total > 0" class="panel-pagination">
-              <el-pagination
-                v-model:current-page="userPagination.page"
+              <a-pagination
+                v-model:current="userPagination.page"
                 v-model:page-size="userPagination.pageSize"
                 :total="userPagination.total"
-                :page-sizes="[10, 20, 50]"
-                layout="total, sizes, prev, pager, next"
-                small
-                @size-change="loadAvailableUsers"
-                @current-change="loadAvailableUsers"
+                :page-size-options="[10, 20, 50]"
+                size="small"
+                show-total
+                show-page-size
+                @change="loadAvailableUsers"
+                @page-size-change="loadAvailableUsers"
               />
             </div>
           </div>
         </div>
       </div>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="assignUsersVisible = false">取消</el-button>
-          <el-button class="black-button" @click="handleAssignUsersSubmit" :loading="submitLoading">
-            保存分配
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox, FormInstance } from 'element-plus'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import {
-  Search,
-  RefreshLeft,
-  Plus,
-  Edit,
-  Delete,
-  Key,
-  User,
-  UserFilled,
-  Briefcase,
-  Close
-} from '@element-plus/icons-vue'
+  IconBookmark,
+  IconSearch,
+  IconRefresh,
+  IconPlus,
+  IconClose,
+  IconUser,
+  IconUserGroup,
+} from '@arco-design/web-vue/es/icon'
 import {
   getPositionList,
   createPosition,
@@ -315,9 +246,8 @@ const submitLoading = ref(false)
 const dialogVisible = ref(false)
 const assignUsersVisible = ref(false)
 const usersLoading = ref(false)
-const dialogTitle = ref('')
 const isEdit = ref(false)
-const formRef = ref<FormInstance>()
+const formRef = ref()
 
 // 分页
 const pagination = reactive({
@@ -326,6 +256,15 @@ const pagination = reactive({
   total: 0
 })
 
+const tablePagination = computed(() => ({
+  current: pagination.page,
+  pageSize: pagination.pageSize,
+  total: pagination.total,
+  showTotal: true,
+  showPageSize: true,
+  pageSizeOptions: [10, 20, 50, 100],
+}))
+
 // 搜索表单
 const searchForm = reactive({
   postCode: '',
@@ -333,7 +272,7 @@ const searchForm = reactive({
 })
 
 // 岗位列表
-const positionList = ref([])
+const positionList = ref<any[]>([])
 
 // 岗位表单
 const positionForm = reactive({
@@ -343,12 +282,6 @@ const positionForm = reactive({
   remark: '',
   postStatus: 1
 })
-
-// 表单验证规则
-const rules = {
-  postName: [{ required: true, message: '请输入岗位名称', trigger: 'blur' }],
-  postCode: [{ required: true, message: '请输入岗位编码', trigger: 'blur' }]
-}
 
 // 用户相关
 const currentPositionId = ref(0)
@@ -361,12 +294,6 @@ const userPagination = reactive({
   total: 0
 })
 
-// 实时搜索 - 监听搜索框变化
-watch([() => searchForm.postCode, () => searchForm.postName], () => {
-  pagination.page = 1
-  loadPositionList()
-})
-
 // 加载岗位列表
 const loadPositionList = async () => {
   loading.value = true
@@ -377,31 +304,35 @@ const loadPositionList = async () => {
       postCode: searchForm.postCode || undefined,
       postName: searchForm.postName || undefined
     })
-    // 修复：后端现在返回 {list, page, pageSize, total} 格式
     positionList.value = res.list || []
     pagination.total = res.total || 0
-  } catch (error) {
-    // 使用模拟数据
-    if (searchForm.postCode || searchForm.postName) {
-      positionList.value = []
-    } else {
-      positionList.value = [
-        { id: 1, postCode: 'AAA', postName: '研发总监', postStatus: 1, createTime: '2023-06-14 20:08:22', remark: '主管各个部门' },
-        { id: 10, postCode: 'ops', postName: '运维工程师', postStatus: 1, createTime: '2025-06-28 22:46:33', remark: '运维工程师' },
-        { id: 11, postCode: 'dev', postName: '研发工程师', postStatus: 1, createTime: '2025-06-28 22:50:29', remark: '研发工程师' },
-        { id: 12, postCode: 'test', postName: '测试工程师', postStatus: 2, createTime: '2025-06-28 22:52:57', remark: '测试工程师' }
-      ]
-    }
-    pagination.total = positionList.value.length
+  } catch {
+    positionList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
 }
 
-// 重置搜索
+const handleSearch = () => {
+  pagination.page = 1
+  loadPositionList()
+}
+
 const resetSearch = () => {
   searchForm.postCode = ''
   searchForm.postName = ''
+  pagination.page = 1
+  loadPositionList()
+}
+
+const handlePageChange = (page: number) => {
+  pagination.page = page
+  loadPositionList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
   pagination.page = 1
   loadPositionList()
 }
@@ -419,7 +350,6 @@ const resetForm = () => {
 // 新增岗位
 const handleAdd = () => {
   resetForm()
-  dialogTitle.value = '新增岗位'
   isEdit.value = false
   dialogVisible.value = true
 }
@@ -427,58 +357,42 @@ const handleAdd = () => {
 // 编辑岗位
 const handleEdit = (row: any) => {
   Object.assign(positionForm, row)
-  dialogTitle.value = '编辑岗位'
   isEdit.value = true
   dialogVisible.value = true
 }
 
 // 删除岗位
-const handleDelete = (row: any) => {
-  ElMessageBox.confirm(`确定要删除岗位"${row.postName}"吗？`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deletePosition(row.id)
-      ElMessage.success('删除成功')
-      loadPositionList()
-    } catch (error) {
-      ElMessage.error('删除失败')
-    }
-  }).catch(() => {})
+const handleDelete = async (row: any) => {
+  try {
+    await deletePosition(row.id)
+    Message.success('删除成功')
+    loadPositionList()
+  } catch {
+    Message.error('删除失败')
+  }
 }
 
 // 提交表单
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  const errors = await formRef.value?.validate()
+  if (errors) return
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-
-    submitLoading.value = true
-    try {
-      if (isEdit.value) {
-        await updatePosition(positionForm.id, positionForm)
-        ElMessage.success('更新成功')
-      } else {
-        await createPosition(positionForm)
-        ElMessage.success('创建成功')
-      }
-      dialogVisible.value = false
-      loadPositionList()
-    } catch (error) {
-      ElMessage.error(isEdit.value ? '更新失败' : '创建失败')
-    } finally {
-      submitLoading.value = false
+  submitLoading.value = true
+  try {
+    if (isEdit.value) {
+      await updatePosition(positionForm.id, positionForm)
+      Message.success('更新成功')
+    } else {
+      await createPosition(positionForm)
+      Message.success('创建成功')
     }
-  })
-}
-
-// 对话框关闭事件
-const handleDialogClose = () => {
-  formRef.value?.resetFields()
-  resetForm()
+    dialogVisible.value = false
+    loadPositionList()
+  } catch {
+    Message.error(isEdit.value ? '更新失败' : '创建失败')
+  } finally {
+    submitLoading.value = false
+  }
 }
 
 // 分配用户 - 打开对话框
@@ -488,18 +402,14 @@ const handleAssignUsers = async (row: any) => {
   userSearchKeyword.value = ''
   userPagination.page = 1
 
-  // 加载已分配的用户
   try {
     const res: any = await getPositionUsers(row.id)
-    // 后端返回 {list, total, page, pageSize} 格式
     selectedUsers.value = res.list || res.data || []
-  } catch (error) {
+  } catch {
     selectedUsers.value = []
   }
 
-  // 加载可用用户列表
   await loadAvailableUsers()
-
   assignUsersVisible.value = true
 }
 
@@ -513,13 +423,10 @@ const loadAvailableUsers = async () => {
       pageSize: userPagination.pageSize,
       keyword: userSearchKeyword.value || undefined
     })
-
-    // 用户列表 API 直接返回 res.list 和 res.total
     const userList = res.list || []
-    // 过滤掉已选择的用户
     availableUsers.value = userList.filter((u: any) => !selectedUserIds.includes(u.id || u.ID))
     userPagination.total = (res.total || 0) - selectedUsers.value.length
-  } catch (error) {
+  } catch {
     availableUsers.value = []
   } finally {
     usersLoading.value = false
@@ -529,9 +436,8 @@ const loadAvailableUsers = async () => {
 // 添加用户到已选列表
 const addUser = (user: any) => {
   const userId = user.id || user.ID
-  // 检查是否已添加
   if (selectedUsers.value.some(u => (u.id || u.ID) === userId)) {
-    ElMessage.warning('该用户已添加')
+    Message.warning('该用户已添加')
     return
   }
   selectedUsers.value.push(user)
@@ -551,21 +457,13 @@ const handleAssignUsersSubmit = async () => {
   try {
     const userIds = selectedUsers.value.map(u => u.id || u.ID)
     await assignUsersToPosition(currentPositionId.value, userIds)
-    ElMessage.success('分配用户成功')
+    Message.success('分配用户成功')
     assignUsersVisible.value = false
-  } catch (error) {
-    ElMessage.error('分配用户失败')
+  } catch {
+    Message.error('分配用户失败')
   } finally {
     submitLoading.value = false
   }
-}
-
-// 分配用户对话框关闭事件
-const handleAssignUsersClose = () => {
-  selectedUsers.value = []
-  availableUsers.value = []
-  userSearchKeyword.value = ''
-  currentPositionId.value = 0
 }
 
 onMounted(() => {
@@ -573,349 +471,134 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.position-info-container {
-  padding: 0;
-  background-color: transparent;
-}
-
-/* 页面头部 */
-.page-header {
+<style scoped lang="scss">
+.page-container {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-
-.page-title-group {
-  display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 16px;
 }
 
-.page-title-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-  border-radius: 10px;
+.page-header-card {
+  background: #fff;
+  border-radius: var(--ops-border-radius-md, 8px);
+  padding: 20px 24px;
+}
+
+.page-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ops-primary, #165dff) 0%, #4080ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
-  margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #303133;
-  line-height: 1.3;
-}
-
-.page-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-primary, #1d2129);
   line-height: 1.4;
 }
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+.page-desc {
+  font-size: 13px;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 2px;
 }
 
-/* 搜索栏 */
-.search-bar {
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
+.search-card {
+  border-radius: var(--ops-border-radius-md, 8px);
 }
 
-.search-inputs {
-  display: flex;
-  gap: 12px;
+.search-label {
+  font-size: 14px;
+  color: var(--ops-text-secondary, #4e5969);
+  white-space: nowrap;
+}
+
+.table-card {
+  border-radius: var(--ops-border-radius-md, 8px);
   flex: 1;
+
+  .card-title {
+    font-weight: 600;
+  }
 }
 
-.search-input {
-  width: 280px;
-}
-
-.search-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.reset-btn {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-  color: #606266;
-}
-
-.reset-btn:hover {
-  background: #e6e8eb;
-  border-color: #c0c4cc;
-}
-
-/* 搜索框样式 */
-.search-bar :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  background-color: #fff;
-}
-
-.search-bar :deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.15);
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
-}
-
-.search-icon {
-  color: #d4af37;
-}
-
-/* 表格容器 */
-.table-wrapper {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
-
-/* 分页 */
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
-}
-
-.modern-table {
-  width: 100%;
-}
-
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
-/* 表头图标 */
-.header-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-icon {
-  font-size: 16px;
-}
-
-.header-icon-blue {
-  color: #d4af37;
-}
-
-/* 操作按钮 */
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.action-btn :deep(.el-icon) {
-  font-size: 16px;
-}
-
-.action-btn:hover {
-  transform: scale(1.1);
-}
-
-.action-auth:hover {
-  background-color: #e8f4ff;
-  color: #409eff;
-}
-
-.action-edit:hover {
-  background-color: #e8f4ff;
-  color: #409eff;
-}
-
-.action-delete:hover {
-  background-color: #fee;
-  color: #f56c6c;
-}
-
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-/* 对话框样式 */
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-/* 分配用户对话框 - 新UI */
+/* 分配用户对话框 */
 .assign-content {
   display: flex;
-  gap: 20px;
-  min-height: 400px;
+  gap: 16px;
+  min-height: 380px;
 }
 
-.panel {
+.assign-panel {
   flex: 1;
-  border-radius: 12px;
-  border: 1px solid #e4e7ed;
-  overflow: hidden;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: var(--ops-border-radius-md, 8px);
   display: flex;
   flex-direction: column;
-}
-
-.assigned-panel {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-}
-
-.available-panel {
-  background: #fff;
+  overflow: hidden;
 }
 
 .panel-header {
-  padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  background: #fafbfc;
 }
 
 .panel-title {
   display: flex;
   align-items: center;
-  gap: 8px;
   font-weight: 600;
-  font-size: 15px;
-  color: #303133;
-}
-
-.panel-icon {
-  font-size: 18px;
-  color: #d4af37;
-}
-
-.badge {
-  margin-left: 8px;
-}
-
-.search-box {
-  width: 200px;
-}
-
-.search-box :deep(.el-input__wrapper) {
-  border-radius: 20px;
+  font-size: 14px;
+  color: var(--ops-text-primary, #1d2129);
 }
 
 .panel-body {
   flex: 1;
-  padding: 16px;
+  padding: 12px;
   overflow-y: auto;
-  max-height: 400px;
+  max-height: 380px;
 }
 
-.user-cards-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+.user-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .user-card {
-  position: relative;
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  padding: 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-}
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: var(--ops-border-radius-md, 8px);
+  transition: all 0.2s;
 
-.user-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
+  &:hover {
+    background: #f7f8fa;
+    border-color: var(--ops-primary-lighter, #6694ff);
+  }
 
-.selected-card {
-  border-color: #d4af37;
-  background: linear-gradient(135deg, #fffaf0 0%, #fff5e6 100%);
-}
-
-.available-card {
-  background: #fff;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #d4af37 0%, #c9a227 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.avatar-icon {
-  font-size: 20px;
-  color: #fff;
+  &.selected {
+    border-color: var(--ops-primary, #165dff);
+    background: var(--ops-primary-bg, #e8f0ff);
+  }
 }
 
 .user-info {
@@ -924,120 +607,23 @@ onMounted(() => {
 }
 
 .user-name {
-  font-weight: 600;
   font-size: 14px;
-  color: #303133;
+  font-weight: 500;
+  color: var(--ops-text-primary, #1d2129);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.user-username {
+.user-sub {
   font-size: 12px;
-  color: #909399;
-  margin-top: 2px;
-}
-
-.remove-btn,
-.add-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-}
-
-.remove-btn {
-  background: #fef0f0;
-  border-color: #fde2e2;
-  color: #f56c6c;
-}
-
-.remove-btn:hover {
-  background: #f56c6c;
-  border-color: #f56c6c;
-  color: #fff;
-}
-
-.add-btn {
-  background: #ecf5ff;
-  border-color: #d9ecff;
-  color: #409eff;
-}
-
-.add-btn:hover {
-  background: #409eff;
-  border-color: #409eff;
-  color: #fff;
+  color: var(--ops-text-tertiary, #86909c);
+  margin-top: 1px;
 }
 
 .panel-pagination {
-  margin-top: 16px;
+  margin-top: 12px;
   display: flex;
   justify-content: center;
-}
-
-/* 编辑对话框样式 */
-:deep(.position-edit-dialog) {
-  border-radius: 12px;
-}
-
-:deep(.position-edit-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.position-edit-dialog .el-dialog__body) {
-  padding: 24px;
-}
-
-:deep(.position-edit-dialog .el-dialog__footer) {
-  padding: 16px 24px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 分配用户对话框样式 */
-:deep(.assign-users-dialog) {
-  border-radius: 12px;
-}
-
-:deep(.assign-users-dialog .el-dialog__header) {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.assign-users-dialog .el-dialog__body) {
-  padding: 24px;
-}
-
-:deep(.assign-users-dialog .el-dialog__footer) {
-  padding: 16px 24px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 标签样式 */
-:deep(.el-tag) {
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-weight: 500;
-}
-
-/* 空状态样式 */
-:deep(.el-empty) {
-  padding: 40px 0;
-}
-
-/* 响应式对话框 */
-:deep(.responsive-dialog) {
-  max-width: 1200px;
-  min-width: 500px;
-}
-
-@media (max-width: 768px) {
-  :deep(.responsive-dialog .el-dialog) {
-    width: 95% !important;
-    max-width: none;
-    min-width: auto;
-  }
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <el-dialog
+  <a-modal
     v-model="visible"
     :title="isEdit ? '编辑 Ingress' : '创建 Ingress'"
     width="1000px"
@@ -9,46 +9,46 @@
   >
     <!-- 基本信息区域 -->
     <div class="basic-info-section">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="名称" prop="name">
-              <el-input v-model="formData.name" placeholder="Ingress 名称" :disabled="isEdit" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="命名空间" prop="namespace">
-              <el-select v-model="formData.namespace" placeholder="选择命名空间" :disabled="isEdit" style="width: 100%">
-                <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
+      <a-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
+        <a-row :gutter="20">
+          <a-col :span="12">
+            <a-form-item label="名称" field="name">
+              <a-input v-model="formData.name" placeholder="Ingress 名称" :disabled="isEdit" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="命名空间" field="namespace">
+              <a-select v-model="formData.namespace" placeholder="选择命名空间" :disabled="isEdit" style="width: 100%">
+                <a-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
     </div>
 
     <!-- Tab 导航 -->
-    <el-tabs v-model="activeTab" class="ingress-tabs">
+    <a-tabs v-model:active-key="activeTab" class="ingress-tabs">
       <!-- 规则配置 -->
-      <el-tab-pane label="规则" name="rules">
+      <a-tab-pane title="规则" key="rules">
         <div class="tab-content">
           <div class="rules-config">
             <div v-for="(rule, ruleIndex) in formData.rules" :key="ruleIndex" class="rule-item">
               <div class="rule-header">
                 <div class="rule-title">
-                  <el-icon class="title-icon"><Document /></el-icon>
+                  <icon-file />
                   <span>规则 {{ ruleIndex + 1 }}</span>
                 </div>
-                <el-button type="danger" link @click="removeRule(ruleIndex)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
+                <a-button status="danger" type="text" @click="removeRule(ruleIndex)">
+                  <icon-delete />
+                </a-button>
               </div>
 
               <!-- 主机名 -->
               <div class="rule-host-section">
                 <div class="field-group">
                   <label>主机名</label>
-                  <el-input v-model="rule.host" placeholder="例如: example.com" size="small" />
+                  <a-input v-model="rule.host" placeholder="例如: example.com" size="small" />
                 </div>
               </div>
 
@@ -56,85 +56,85 @@
               <div class="rule-paths-section">
                 <div class="paths-header">
                   <div class="paths-title">路径配置</div>
-                  <el-button type="primary" link @click="addPath(ruleIndex)">
-                    <el-icon><Plus /></el-icon> 添加路径
-                  </el-button>
+                  <a-button type="text" @click="addPath(ruleIndex)">
+                    <icon-plus /> 添加路径
+                  </a-button>
                 </div>
                 <div v-if="rule.paths.length === 0" class="empty-state">
-                  <el-icon class="empty-icon"><Link /></el-icon>
+                  <icon-link />
                   <p>暂无路径配置，点击上方"添加路径"按钮添加</p>
                 </div>
                 <div v-else class="paths-list">
                   <div v-for="(path, pathIndex) in rule.paths" :key="pathIndex" class="path-card">
                     <div class="path-card-header">
                       <span>路径 {{ pathIndex + 1 }}</span>
-                      <el-button type="danger" link @click="removePath(ruleIndex, pathIndex)">
-                        <el-icon><Delete /></el-icon>
-                      </el-button>
+                      <a-button status="danger" type="text" @click="removePath(ruleIndex, pathIndex)">
+                        <icon-delete />
+                      </a-button>
                     </div>
                     <div class="path-card-body">
-                      <el-row :gutter="12">
-                        <el-col :span="6">
+                      <a-row :gutter="12">
+                        <a-col :span="6">
                           <div class="field-group">
                             <label>路径</label>
-                            <el-input v-model="path.path" placeholder="例如: /api" size="small" />
+                            <a-input v-model="path.path" placeholder="例如: /api" size="small" />
                           </div>
-                        </el-col>
-                        <el-col :span="6">
+                        </a-col>
+                        <a-col :span="6">
                           <div class="field-group">
                             <label>匹配类型</label>
-                            <el-select v-model="path.pathType" size="small" style="width: 100%">
-                              <el-option label="Prefix" value="Prefix" />
-                              <el-option label="Exact" value="Exact" />
-                              <el-option label="ImplementationSpecific" value="ImplementationSpecific" />
-                            </el-select>
+                            <a-select v-model="path.pathType" size="small" style="width: 100%">
+                              <a-option label="Prefix" value="Prefix" />
+                              <a-option label="Exact" value="Exact" />
+                              <a-option label="ImplementationSpecific" value="ImplementationSpecific" />
+                            </a-select>
                           </div>
-                        </el-col>
-                        <el-col :span="6">
+                        </a-col>
+                        <a-col :span="6">
                           <div class="field-group">
                             <label>Service 名称</label>
-                            <el-select v-model="path.service" placeholder="选择服务" size="small" style="width: 100%" filterable>
-                              <el-option v-for="svc in servicesList" :key="svc.name" :label="svc.name" :value="svc.name" />
-                            </el-select>
+                            <a-select v-model="path.service" placeholder="选择服务" size="small" style="width: 100%" filterable>
+                              <a-option v-for="svc in servicesList" :key="svc.name" :label="svc.name" :value="svc.name" />
+                            </a-select>
                           </div>
-                        </el-col>
-                        <el-col :span="6">
+                        </a-col>
+                        <a-col :span="6">
                           <div class="field-group">
                             <label>端口</label>
-                            <el-input-number v-model="path.port" :min="1" :max="65535" size="small" style="width: 100%" />
+                            <a-input-number v-model="path.port" :min="1" :max="65535" size="small" style="width: 100%" />
                           </div>
-                        </el-col>
-                      </el-row>
+                        </a-col>
+                      </a-row>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            <el-button type="primary" link @click="addRule" class="add-rule-btn">
-              <el-icon><Plus /></el-icon> 添加规则
-            </el-button>
+            <a-button type="text" @click="addRule" class="add-rule-btn">
+              <icon-plus /> 添加规则
+            </a-button>
           </div>
         </div>
-      </el-tab-pane>
+      </a-tab-pane>
 
       <!-- 证书配置 -->
-      <el-tab-pane label="证书" name="tls">
+      <a-tab-pane title="证书" key="tls">
         <div class="tab-content">
           <div class="tls-config">
             <div v-if="formData.tls.length === 0" class="empty-state">
-              <el-icon class="empty-icon"><Lock /></el-icon>
+              <icon-lock />
               <p>暂无证书配置，点击下方"添加证书"按钮添加</p>
             </div>
             <div v-else>
               <div v-for="(tls, tlsIndex) in formData.tls" :key="tlsIndex" class="tls-item">
                 <div class="tls-header">
                   <div class="tls-title">
-                    <el-icon class="title-icon"><Lock /></el-icon>
+                    <icon-lock />
                     <span>证书 {{ tlsIndex + 1 }}</span>
                   </div>
-                  <el-button type="danger" link @click="removeTLS(tlsIndex)">
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
+                  <a-button status="danger" type="text" @click="removeTLS(tlsIndex)">
+                    <icon-delete />
+                  </a-button>
                 </div>
 
                 <!-- 主机名列表 -->
@@ -142,7 +142,7 @@
                   <div class="field-group">
                     <label>主机名</label>
                     <div class="tls-hosts-list">
-                      <el-tag
+                      <a-tag
                         v-for="(host, hostIdx) in tls.hosts"
                         :key="hostIdx"
                         closable
@@ -150,8 +150,8 @@
                         class="host-tag"
                       >
                         {{ host }}
-                      </el-tag>
-                      <el-input
+                      </a-tag>
+                      <a-input
                         v-model="newTLSHost[tlsIndex]"
                         placeholder="输入主机名后回车添加"
                         @keyup.enter="addTLSHost(tlsIndex)"
@@ -166,14 +166,14 @@
                 <div class="tls-secret-section">
                   <div class="field-group">
                     <label>Secret 名称</label>
-                    <el-select
+                    <a-select
                       v-model="tls.secretName"
                       placeholder="选择 Secret"
                       size="small"
                       style="width: 100%"
                       filterable
                     >
-                      <el-option
+                      <a-option
                         v-for="secret in secretsList"
                         :key="secret.name"
                         :label="secret.name"
@@ -181,23 +181,23 @@
                       >
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                           <span>{{ secret.name }}</span>
-                          <el-tag v-if="secret.type" size="small" style="margin-left: 8px;">{{ secret.type }}</el-tag>
+                          <a-tag v-if="secret.type" size="small" style="margin-left: 8px;">{{ secret.type }}</a-tag>
                         </div>
-                      </el-option>
-                    </el-select>
+                      </a-option>
+                    </a-select>
                   </div>
                 </div>
               </div>
             </div>
-            <el-button type="primary" link @click="addTLS" class="add-tls-btn">
-              <el-icon><Plus /></el-icon> 添加证书
-            </el-button>
+            <a-button type="text" @click="addTLS" class="add-tls-btn">
+              <icon-plus /> 添加证书
+            </a-button>
           </div>
         </div>
-      </el-tab-pane>
+      </a-tab-pane>
 
       <!-- 标签/注解 -->
-      <el-tab-pane label="标签/注解" name="labelsAnnotations">
+      <a-tab-pane title="标签/注解" key="labelsAnnotations">
         <div class="tab-content">
           <!-- 标签 -->
           <div class="labels-config">
@@ -206,12 +206,12 @@
                 <div class="title">标签 (Labels)</div>
                 <div class="description">用于标识和选择组织的键值对</div>
               </div>
-              <el-button type="primary" link @click="addLabel">
-                <el-icon><Plus /></el-icon> 添加
-              </el-button>
+              <a-button type="text" @click="addLabel">
+                <icon-plus /> 添加
+              </a-button>
             </div>
             <div v-if="labelsList.length === 0" class="empty-state">
-              <el-icon class="empty-icon"><PriceTag /></el-icon>
+              <icon-tag />
               <p>暂无标签配置，点击上方"添加"按钮添加</p>
             </div>
             <div v-else class="kv-list">
@@ -220,18 +220,18 @@
                   <div class="kv-fields">
                     <div class="field-group">
                       <label>键</label>
-                      <el-input v-model="item.key" placeholder="键名" size="small" />
+                      <a-input v-model="item.key" placeholder="键名" size="small" />
                     </div>
                     <div class="equal-sign">=</div>
                     <div class="field-group">
                       <label>值</label>
-                      <el-input v-model="item.value" placeholder="键值" size="small" />
+                      <a-input v-model="item.value" placeholder="键值" size="small" />
                     </div>
                   </div>
                   <div class="kv-actions">
-                    <el-button type="danger" link @click="removeLabel(index)">
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
+                    <a-button status="danger" type="text" @click="removeLabel(index)">
+                      <icon-delete />
+                    </a-button>
                   </div>
                 </div>
               </div>
@@ -245,12 +245,12 @@
                 <div class="title">注解 (Annotations)</div>
                 <div class="description">用于存储任意非标识性数据的键值对</div>
               </div>
-              <el-button type="primary" link @click="addAnnotation">
-                <el-icon><Plus /></el-icon> 添加
-              </el-button>
+              <a-button type="text" @click="addAnnotation">
+                <icon-plus /> 添加
+              </a-button>
             </div>
             <div v-if="annotationsList.length === 0" class="empty-state">
-              <el-icon class="empty-icon"><Document /></el-icon>
+              <icon-file />
               <p>暂无注解配置，点击上方"添加"按钮添加</p>
             </div>
             <div v-else class="kv-list">
@@ -259,40 +259,39 @@
                   <div class="kv-fields">
                     <div class="field-group">
                       <label>键</label>
-                      <el-input v-model="item.key" placeholder="键名" size="small" />
+                      <a-input v-model="item.key" placeholder="键名" size="small" />
                     </div>
                     <div class="equal-sign">=</div>
                     <div class="field-group">
                       <label>值</label>
-                      <el-input v-model="item.value" placeholder="键值" size="small" />
+                      <a-input v-model="item.value" placeholder="键值" size="small" />
                     </div>
                   </div>
                   <div class="kv-actions">
-                    <el-button type="danger" link @click="removeAnnotation(index)">
-                      <el-icon><Delete /></el-icon>
-                    </el-button>
+                    <a-button status="danger" type="text" @click="removeAnnotation(index)">
+                      <icon-delete />
+                    </a-button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </a-tab-pane>
+    </a-tabs>
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleClose">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+        <a-button @click="handleClose">取消</a-button>
+        <a-button type="primary" @click="handleSave" :loading="saving">保存</a-button>
       </div>
     </template>
-  </el-dialog>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Delete, Plus, Document, Lock, Link, PriceTag } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getIngressYAML, updateIngressYAML, createIngress, getSecrets, getServices, type IngressInfo } from '@/api/kubernetes'
 
 interface PathConfig {
@@ -347,8 +346,8 @@ const labelsList = ref<KeyValueItem[]>([])
 const annotationsList = ref<KeyValueItem[]>([])
 
 const rules = {
-  name: [{ required: true, message: '请输入 Ingress 名称', trigger: 'blur' }],
-  namespace: [{ required: true, message: '请选择命名空间', trigger: 'change' }]
+  name: [{ required: true, content: '请输入 Ingress 名称', trigger: 'blur' }],
+  namespace: [{ required: true, content: '请选择命名空间', trigger: 'change' }]
 }
 
 // 打开对话框（编辑模式）
@@ -426,7 +425,7 @@ const openEdit = async (ingress: IngressInfo, nsList: any[]) => {
       addRule()
     }
   } catch (error) {
-    ElMessage.error('获取 Ingress 详情失败')
+    Message.error('获取 Ingress 详情失败')
   }
 }
 
@@ -699,7 +698,7 @@ const handleSave = async () => {
 
   // 验证配置
   if (formData.value.rules.length === 0) {
-    ElMessage.error('请至少配置一个规则')
+    Message.error('请至少配置一个规则')
     return
   }
 
@@ -708,21 +707,21 @@ const handleSave = async () => {
   )
 
   if (!hasValidPath) {
-    ElMessage.error('请至少配置一个有效的路径（包含服务名称和端口）')
+    Message.error('请至少配置一个有效的路径（包含服务名称和端口）')
     return
   }
 
   // 验证 TLS 配置：如果配置了证书，secretName 必须填写
   const invalidTLS = formData.value.tls.filter(t => !t.secretName && t.hosts.length === 0)
   if (invalidTLS.length > 0) {
-    ElMessage.error('请填写 TLS 证书的 Secret 名称或删除无效的证书配置')
+    Message.error('请填写 TLS 证书的 Secret 名称或删除无效的证书配置')
     return
   }
 
   // 只保留有 secretName 的 TLS 配置
   const tlsWithSecret = formData.value.tls.filter(t => t.secretName)
   if (tlsWithSecret.length !== formData.value.tls.length) {
-    ElMessage.warning('已自动过滤未填写 Secret 名称的证书配置')
+    Message.warning('已自动过滤未填写 Secret 名称的证书配置')
     formData.value.tls = tlsWithSecret
   }
 
@@ -737,7 +736,7 @@ const handleSave = async () => {
         formData.value.name,
         ingressData
       )
-      ElMessage.success('更新成功')
+      Message.success('更新成功')
     } else {
       // 构建创建请求数据
       const createData = {
@@ -764,13 +763,13 @@ const handleSave = async () => {
       }
 
       await createIngress(props.clusterId!, formData.value.namespace, createData)
-      ElMessage.success('创建成功')
+      Message.success('创建成功')
     }
 
     emit('success')
     handleClose()
   } catch (error) {
-    ElMessage.error('保存失败')
+    Message.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -808,21 +807,21 @@ defineExpose({
   margin-top: 10px;
 }
 
-.ingress-tabs :deep(.el-tabs__header) {
+.ingress-tabs :deep(.arco-tabs__header) {
   margin-bottom: 20px;
 }
 
-.ingress-tabs :deep(.el-tabs__item) {
+.ingress-tabs :deep(.arco-tabs__item) {
   color: #606266;
   font-weight: 500;
 }
 
-.ingress-tabs :deep(.el-tabs__item.is-active) {
-  color: #d4af37;
+.ingress-tabs :deep(.arco-tabs__item.is-active) {
+  color: #165dff;
 }
 
-.ingress-tabs :deep(.el-tabs__active-bar) {
-  background-color: #d4af37;
+.ingress-tabs :deep(.arco-tabs__active-bar) {
+  background-color: #165dff;
 }
 
 .tab-content {
@@ -861,7 +860,7 @@ defineExpose({
 }
 
 .rule-title .title-icon {
-  color: #d4af37;
+  color: #165dff;
   font-size: 18px;
 }
 
@@ -895,8 +894,8 @@ defineExpose({
 
 .path-card {
   padding: 16px;
-  background-color: #fef9e7;
-  border: 1px solid #d4af37;
+  background-color: #e8f3ff;
+  border: 1px solid #165dff;
   border-radius: 6px;
 }
 
@@ -946,7 +945,7 @@ defineExpose({
 }
 
 .tls-title .title-icon {
-  color: #d4af37;
+  color: #165dff;
   font-size: 18px;
 }
 
@@ -962,8 +961,8 @@ defineExpose({
 }
 
 .host-tag {
-  background-color: #fef9e7;
-  border-color: #d4af37;
+  background-color: #e8f3ff;
+  border-color: #165dff;
   color: #303133;
 }
 
@@ -1055,8 +1054,8 @@ defineExpose({
 }
 
 .kv-item:hover {
-  border-color: #d4af37;
-  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.1);
+  border-color: #165dff;
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.1);
 }
 
 .kv-row {
@@ -1105,144 +1104,144 @@ defineExpose({
 }
 
 /* 输入框样式 */
-:deep(.el-input__wrapper) {
+:deep(.arco-input__wrapper) {
   background-color: #fff;
   border-color: #dcdfe6;
   box-shadow: none;
 }
 
-:deep(.el-input__wrapper:hover) {
-  border-color: #d4af37;
+:deep(.arco-input__wrapper:hover) {
+  border-color: #165dff;
 }
 
-:deep(.el-input__wrapper.is-focus) {
-  border-color: #d4af37;
-  box-shadow: 0 0 0 1px #d4af37;
+:deep(.arco-input__wrapper.is-focus) {
+  border-color: #165dff;
+  box-shadow: 0 0 0 1px #165dff;
 }
 
-:deep(.el-input__inner) {
+:deep(.arco-input__inner) {
   color: #606266;
 }
 
-:deep(.el-select .el-input__wrapper) {
+:deep(.arco-select .arco-input__wrapper) {
   background-color: #fff;
 }
 
-:deep(.el-select .el-input__inner) {
+:deep(.arco-select .arco-input__inner) {
   color: #606266;
 }
 
-:deep(.el-input-number .el-input__wrapper) {
+:deep(.arco-input-number .arco-input__wrapper) {
   background-color: #fff;
 }
 
-:deep(.el-input-number .el-input__inner) {
+:deep(.arco-input-number .arco-input__inner) {
   color: #606266;
 }
 
-:deep(.el-input-number__decrease),
-:deep(.el-input-number__increase) {
+:deep(.arco-input-number__decrease),
+:deep(.arco-input-number__increase) {
   background-color: #f5f7fa;
   border-color: #dcdfe6;
   color: #606266;
 }
 
-:deep(.el-input-number__decrease:hover),
-:deep(.el-input-number__increase:hover) {
-  color: #d4af37;
+:deep(.arco-input-number__decrease:hover),
+:deep(.arco-input-number__increase:hover) {
+  color: #165dff;
 }
 
 /* 按钮样式 */
-:deep(.el-button--primary) {
-  background-color: #d4af37;
-  border-color: #d4af37;
-  color: #000000;
+:deep(.arco-button--primary) {
+  background-color: #165dff;
+  border-color: #165dff;
+  color: #ffffff;
   font-weight: 500;
 }
 
-:deep(.el-button--primary:hover) {
-  background-color: #bfa13f;
-  border-color: #bfa13f;
-  color: #000000;
+:deep(.arco-button--primary:hover) {
+  background-color: #4080ff;
+  border-color: #4080ff;
+  color: #ffffff;
 }
 
-:deep(.el-button--default) {
+:deep(.arco-button--default) {
   background-color: #fff;
   border-color: #dcdfe6;
   color: #606266;
 }
 
-:deep(.el-button--default:hover) {
-  border-color: #d4af37;
-  color: #d4af37;
+:deep(.arco-button--default:hover) {
+  border-color: #165dff;
+  color: #165dff;
   background-color: #fff;
 }
 
 /* Link 按钮样式 */
-:deep(.el-button.is-link) {
-  color: #409eff;
+:deep(.arco-button.is-link) {
+  color: #165dff;
   font-weight: 500;
 }
 
-:deep(.el-button.is-link:hover) {
-  color: #66b1ff;
+:deep(.arco-button.is-link:hover) {
+  color: #4080ff;
 }
 
 /* Primary Link 按钮样式（添加按钮）- 金色文字 */
-:deep(.el-button--primary.is-link) {
-  color: #d4af37;
+:deep(.arco-button--primary.is-link) {
+  color: #165dff;
   font-weight: 500;
   background-color: transparent;
 }
 
-:deep(.el-button--primary.is-link:hover) {
-  color: #bfa13f;
+:deep(.arco-button--primary.is-link:hover) {
+  color: #4080ff;
   background-color: transparent;
 }
 
-:deep(.el-button.is-link.is-danger) {
+:deep(.arco-button.is-link.is-danger) {
   color: #f56c6c;
 }
 
-:deep(.el-button.is-link.is-danger:hover) {
+:deep(.arco-button.is-link.is-danger:hover) {
   color: #f78989;
 }
 
 /* Dialog 对话框背景 */
-:deep(.el-dialog) {
+:deep(.arco-dialog) {
   background-color: #fff;
 }
 
-:deep(.el-dialog__header) {
-  border-bottom: 1px solid #d4af37;
+:deep(.arco-dialog__header) {
+  border-bottom: 1px solid #165dff;
   padding: 20px;
 }
 
-:deep(.el-dialog__title) {
-  color: #d4af37;
+:deep(.arco-dialog__title) {
+  color: #165dff;
   font-weight: 500;
 }
 
-:deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: #d4af37;
+:deep(.arco-dialog__headerbtn .arco-modal__close) {
+  color: #165dff;
 }
 
-:deep(.el-dialog__headerbtn .el-dialog__close:hover) {
-  color: #bfa13f;
+:deep(.arco-dialog__headerbtn .arco-modal__close:hover) {
+  color: #4080ff;
 }
 
-:deep(.el-dialog__body) {
+:deep(.arco-dialog__body) {
   padding: 20px;
   color: #606266;
 }
 
-:deep(.el-dialog__footer) {
+:deep(.arco-dialog__footer) {
   border-top: 1px solid #dcdfe6;
   padding: 15px 20px;
 }
 
 /* Form label */
-:deep(.el-form-item__label) {
+:deep(.arco-form-item__label) {
   color: #606266;
   font-weight: 500;
 }

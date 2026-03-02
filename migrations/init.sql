@@ -1666,3 +1666,115 @@ VALUES
 INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
 VALUES
   (1, 344), (1, 345), (1, 346), (1, 347);
+
+-- ============================================================
+-- 14. 服务标签管理菜单与按钮权限
+-- ============================================================
+
+-- 14.1 页面菜单：资产管理(parent_id=15)下新增服务标签
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (348, '服务标签', 'service-label-management', 2, 15, '/asset/service-labels', 'asset/ServiceLabels', 'PriceTag', 9, 1, 1, '', '', NOW(), NOW());
+
+-- 14.2 按钮权限(type=3, parent_id=348)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (349, '新增标签', 'service-labels:create', 3, 348, '', '', '', 1, 1, 1, '/api/v1/service-labels', 'POST', NOW(), NOW()),
+  (350, '编辑标签', 'service-labels:update', 3, 348, '', '', '', 2, 1, 1, '/api/v1/service-labels/:id', 'PUT', NOW(), NOW()),
+  (351, '删除标签', 'service-labels:delete', 3, 348, '', '', '', 3, 1, 1, '/api/v1/service-labels/:id', 'DELETE', NOW(), NOW());
+
+-- 14.3 菜单API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (349, '/api/v1/service-labels', 'POST', NOW(), NOW()),
+  (350, '/api/v1/service-labels/:id', 'PUT', NOW(), NOW()),
+  (351, '/api/v1/service-labels/:id', 'DELETE', NOW(), NOW());
+
+-- 14.4 为管理员角色(role_id=1)分配服务标签菜单和按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 348), (1, 349), (1, 350), (1, 351);
+
+-- ============================================================
+-- 15. 智能巡检模块菜单与权限
+-- ============================================================
+
+-- 15.1 顶级菜单：智能巡检
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (352, '智能巡检', '_inspection', 1, 0, '/inspection', '', 'Odometer', 85, 1, 1, '', '', NOW(), NOW());
+
+-- 15.2 子菜单 (parent_id=352)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (353, '拨测管理', 'inspection_probes', 2, 352, '/inspection/probes', 'inspection/ProbeManagement', 'Aim', 1, 1, 1, '', '', NOW(), NOW()),
+  (354, '任务调度', 'inspection_tasks', 2, 352, '/inspection/tasks', 'inspection/TaskSchedule', 'Timer', 2, 1, 1, '', '', NOW(), NOW()),
+  (355, 'Pushgateway配置', 'inspection_pushgateways', 2, 352, '/inspection/pushgateways', 'inspection/PushgatewayConfig', 'Cloudy', 3, 1, 1, '', '', NOW(), NOW()),
+  (356, '环境变量', 'inspection_variables', 2, 352, '/inspection/variables', 'inspection/VariableManagement', 'Key', 4, 1, 1, '', '', NOW(), NOW());
+
+-- 15.3 拨测管理按钮权限 (type=3, parent_id=353)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (357, '新增拨测', 'inspection:probes:create', 3, 353, '', '', '', 1, 1, 1, '/api/v1/inspection/probes', 'POST', NOW(), NOW()),
+  (358, '编辑拨测', 'inspection:probes:update', 3, 353, '', '', '', 2, 1, 1, '/api/v1/inspection/probes/:id', 'PUT', NOW(), NOW()),
+  (359, '删除拨测', 'inspection:probes:delete', 3, 353, '', '', '', 3, 1, 1, '/api/v1/inspection/probes/:id', 'DELETE', NOW(), NOW()),
+  (360, '执行拨测', 'inspection:probes:execute', 3, 353, '', '', '', 4, 1, 1, '/api/v1/inspection/probes/:id/run', 'POST', NOW(), NOW()),
+  (361, '导入拨测', 'inspection:probes:import', 3, 353, '', '', '', 5, 1, 1, '/api/v1/inspection/probes/import', 'POST', NOW(), NOW()),
+  (362, '导出拨测', 'inspection:probes:export', 3, 353, '', '', '', 6, 1, 1, '/api/v1/inspection/probes/export', 'GET', NOW(), NOW());
+
+-- 15.4 任务调度按钮权限 (type=3, parent_id=354)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (363, '新增任务', 'inspection:tasks:create', 3, 354, '', '', '', 1, 1, 1, '/api/v1/inspection/tasks', 'POST', NOW(), NOW()),
+  (364, '编辑任务', 'inspection:tasks:update', 3, 354, '', '', '', 2, 1, 1, '/api/v1/inspection/tasks/:id', 'PUT', NOW(), NOW()),
+  (365, '删除任务', 'inspection:tasks:delete', 3, 354, '', '', '', 3, 1, 1, '/api/v1/inspection/tasks/:id', 'DELETE', NOW(), NOW()),
+  (366, '启停任务', 'inspection:tasks:toggle', 3, 354, '', '', '', 4, 1, 1, '/api/v1/inspection/tasks/:id/toggle', 'PUT', NOW(), NOW());
+
+-- 15.5 Pushgateway按钮权限 (type=3, parent_id=355)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (367, '新增Pushgateway', 'inspection:pushgateways:create', 3, 355, '', '', '', 1, 1, 1, '/api/v1/inspection/pushgateways', 'POST', NOW(), NOW()),
+  (368, '编辑Pushgateway', 'inspection:pushgateways:update', 3, 355, '', '', '', 2, 1, 1, '/api/v1/inspection/pushgateways/:id', 'PUT', NOW(), NOW()),
+  (369, '删除Pushgateway', 'inspection:pushgateways:delete', 3, 355, '', '', '', 3, 1, 1, '/api/v1/inspection/pushgateways/:id', 'DELETE', NOW(), NOW()),
+  (370, '测试Pushgateway', 'inspection:pushgateways:test', 3, 355, '', '', '', 4, 1, 1, '/api/v1/inspection/pushgateways/:id/test', 'POST', NOW(), NOW());
+
+-- 15.6 环境变量按钮权限 (type=3, parent_id=356)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (371, '新增变量', 'inspection:variables:create', 3, 356, '', '', '', 1, 1, 1, '/api/v1/inspection/variables', 'POST', NOW(), NOW()),
+  (372, '编辑变量', 'inspection:variables:update', 3, 356, '', '', '', 2, 1, 1, '/api/v1/inspection/variables/:id', 'PUT', NOW(), NOW()),
+  (373, '删除变量', 'inspection:variables:delete', 3, 356, '', '', '', 3, 1, 1, '/api/v1/inspection/variables/:id', 'DELETE', NOW(), NOW());
+
+-- 15.7 菜单API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (353, '/api/v1/inspection/probes', 'GET', NOW(), NOW()),
+  (357, '/api/v1/inspection/probes', 'POST', NOW(), NOW()),
+  (358, '/api/v1/inspection/probes/:id', 'PUT', NOW(), NOW()),
+  (359, '/api/v1/inspection/probes/:id', 'DELETE', NOW(), NOW()),
+  (360, '/api/v1/inspection/probes/:id/run', 'POST', NOW(), NOW()),
+  (361, '/api/v1/inspection/probes/import', 'POST', NOW(), NOW()),
+  (362, '/api/v1/inspection/probes/export', 'GET', NOW(), NOW()),
+  (354, '/api/v1/inspection/tasks', 'GET', NOW(), NOW()),
+  (363, '/api/v1/inspection/tasks', 'POST', NOW(), NOW()),
+  (364, '/api/v1/inspection/tasks/:id', 'PUT', NOW(), NOW()),
+  (365, '/api/v1/inspection/tasks/:id', 'DELETE', NOW(), NOW()),
+  (366, '/api/v1/inspection/tasks/:id/toggle', 'PUT', NOW(), NOW()),
+  (355, '/api/v1/inspection/pushgateways', 'GET', NOW(), NOW()),
+  (367, '/api/v1/inspection/pushgateways', 'POST', NOW(), NOW()),
+  (368, '/api/v1/inspection/pushgateways/:id', 'PUT', NOW(), NOW()),
+  (369, '/api/v1/inspection/pushgateways/:id', 'DELETE', NOW(), NOW()),
+  (370, '/api/v1/inspection/pushgateways/:id/test', 'POST', NOW(), NOW()),
+  (356, '/api/v1/inspection/variables', 'GET', NOW(), NOW()),
+  (371, '/api/v1/inspection/variables', 'POST', NOW(), NOW()),
+  (372, '/api/v1/inspection/variables/:id', 'PUT', NOW(), NOW()),
+  (373, '/api/v1/inspection/variables/:id', 'DELETE', NOW(), NOW());
+
+-- 15.8 为管理员角色(role_id=1)分配智能巡检菜单和按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 352), (1, 353), (1, 354), (1, 355), (1, 356),
+  (1, 357), (1, 358), (1, 359), (1, 360), (1, 361), (1, 362),
+  (1, 363), (1, 364), (1, 365), (1, 366),
+  (1, 367), (1, 368), (1, 369), (1, 370),
+  (1, 371), (1, 372), (1, 373);

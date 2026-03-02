@@ -1,11 +1,11 @@
 <template>
   <div class="method-monitor-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
     <div v-else class="panel-content">
@@ -14,7 +14,7 @@
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">类名</span>
-            <el-input
+            <a-input
               v-model="classPattern"
               placeholder="类名表达式 (如: com.example.service.*)"
               style="width: 300px"
@@ -23,13 +23,13 @@
               :disabled="monitoring"
             >
               <template #prefix>
-                <el-icon><Folder /></el-icon>
+                <icon-folder />
               </template>
-            </el-input>
+            </a-input>
           </div>
           <div class="input-group">
             <span class="input-label">方法名</span>
-            <el-input
+            <a-input
               v-model="methodPattern"
               placeholder="方法名 (如: doSomething)"
               style="width: 200px"
@@ -38,15 +38,15 @@
               :disabled="monitoring"
             >
               <template #prefix>
-                <el-icon><Promotion /></el-icon>
+                <icon-send />
               </template>
-            </el-input>
+            </a-input>
           </div>
         </div>
         <div class="toolbar-row">
           <div class="input-group">
             <span class="input-label">统计周期</span>
-            <el-input-number
+            <a-input-number
               v-model="interval"
               :min="1"
               :max="60"
@@ -58,7 +58,7 @@
           </div>
           <div class="input-group">
             <span class="input-label">最大周期数</span>
-            <el-input-number
+            <a-input-number
               v-model="maxCycles"
               :min="1"
               :max="100"
@@ -69,7 +69,7 @@
           </div>
           <div class="input-group">
             <span class="input-label">条件表达式</span>
-            <el-input
+            <a-input
               v-model="condition"
               placeholder="OGNL 条件 (可选)"
               style="width: 200px"
@@ -78,37 +78,37 @@
               :disabled="monitoring"
             >
               <template #prefix>
-                <el-icon><Filter /></el-icon>
+                <icon-filter />
               </template>
-            </el-input>
+            </a-input>
           </div>
         </div>
         <div class="toolbar-row actions">
-          <el-button
+          <a-button
             type="primary"
             @click="startMonitor"
             :loading="starting"
             :disabled="monitoring || !classPattern || !methodPattern"
           >
-            <el-icon><VideoPlay /></el-icon>
+            <icon-play-arrow />
             {{ starting ? '启动中...' : '开始监控' }}
-          </el-button>
-          <el-button
+          </a-button>
+          <a-button
             @click="stopMonitor"
             :disabled="!monitoring"
             type="danger"
           >
-            <el-icon><VideoPause /></el-icon> 停止监控
-          </el-button>
-          <el-button @click="clearData">
-            <el-icon><Delete /></el-icon> 清空数据
-          </el-button>
-          <el-divider direction="vertical" />
-          <el-tag v-if="monitoring" type="success" effect="dark">
-            <el-icon class="is-loading"><Loading /></el-icon>
+            <icon-pause-circle /> 停止监控
+          </a-button>
+          <a-button @click="clearData">
+            <icon-delete /> 清空数据
+          </a-button>
+          <a-divider direction="vertical" />
+          <a-tag v-if="monitoring" color="green">
+            <icon-loading />
             监控中...
-          </el-tag>
-          <el-tag v-else type="info">未监控</el-tag>
+          </a-tag>
+          <a-tag v-else color="gray">未监控</a-tag>
           <span class="cycle-count" v-if="monitorData.length > 0">
             已统计: {{ monitorData.length }} 个周期
           </span>
@@ -116,8 +116,8 @@
       </div>
 
       <!-- 使用说明 -->
-      <el-collapse v-model="showHelp" class="help-collapse">
-        <el-collapse-item title="使用说明" name="help">
+      <a-collapse v-model="showHelp" class="help-collapse">
+        <a-collapse-item title="使用说明" name="help">
           <div class="help-content">
             <p><strong>monitor 命令</strong> 可以监控方法的执行统计信息，包括调用次数、成功率、平均响应时间等。</p>
             <ul>
@@ -137,90 +137,83 @@
             </div>
             <p class="tip">提示: 监控高频调用的方法时，建议适当增大统计周期，减少输出频率。</p>
           </div>
-        </el-collapse-item>
-      </el-collapse>
+        </a-collapse-item>
+      </a-collapse>
 
       <!-- 统计数据表格 -->
       <div class="data-section">
         <div class="section-header">
           <span>监控数据</span>
           <span class="data-info">
-            <el-tag size="small" type="info">{{ monitorData.length }} 条记录</el-tag>
+            <a-tag size="small" color="gray">{{ monitorData.length }} 条记录</a-tag>
           </span>
         </div>
-        <el-table
+        <a-table
           :data="monitorData"
           border
           stripe
           max-height="400"
           v-loading="starting"
-          empty-text="等待监控数据..."
+          :empty-description="'等待监控数据...'"
           class="monitor-table"
-        >
-          <el-table-column prop="timestamp" label="时间" width="180" fixed>
-            <template #default="{ row }">
-              <span class="timestamp">{{ row.timestamp }}</span>
+         :columns="tableColumns">
+          <template #timestamp="{ record }">
+              <span class="timestamp">{{ record.timestamp }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="class" label="类名" min-width="250" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="class-name">{{ row.class }}</span>
+          <template #class="{ record }">
+              <span class="class-name">{{ record.class }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="method" label="方法名" width="150" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="method-name">{{ row.method }}</span>
+          <template #method="{ record }">
+              <span class="method-name">{{ record.method }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="total" label="调用次数" width="100" align="center">
-            <template #default="{ row }">
-              <span class="total-count">{{ row.total }}</span>
+          <template #total="{ record }">
+              <span class="total-count">{{ record.total }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="success" label="成功" width="80" align="center">
-            <template #default="{ row }">
-              <span class="success-count">{{ row.success }}</span>
+          <template #success="{ record }">
+              <span class="success-count">{{ record.success }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="fail" label="失败" width="80" align="center">
-            <template #default="{ row }">
-              <span :class="['fail-count', { 'has-fail': row.fail > 0 }]">{{ row.fail }}</span>
+          <template #fail="{ record }">
+              <span :class="['fail-count', { 'has-fail': record.fail > 0 }]">{{ record.fail }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="failRate" label="失败率" width="90" align="center">
-            <template #default="{ row }">
-              <el-tag :type="getFailRateType(row.failRate)" size="small">{{ row.failRate }}%</el-tag>
+          <template #failRate="{ record }">
+              <a-tag :type="getFailRateType(record.failRate)" size="small">{{ record.failRate }}%</a-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="avgRt" label="平均RT(ms)" width="110" align="center">
-            <template #default="{ row }">
-              <span :class="['avg-rt', { 'slow': row.avgRt > 1000 }]">{{ row.avgRt }}</span>
+          <template #avgRt="{ record }">
+              <span :class="['avg-rt', { 'slow': record.avgRt > 1000 }]">{{ record.avgRt }}</span>
             </template>
-          </el-table-column>
-          <el-table-column label="RT范围(ms)" width="140" align="center">
-            <template #default="{ row }">
-              <span class="rt-range">{{ row.minRt }} ~ {{ row.maxRt }}</span>
+          <template #col_5437="{ record }">
+              <span class="rt-range">{{ record.minRt }} ~ {{ record.maxRt }}</span>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
       </div>
 
       <!-- 原始输出 -->
-      <el-collapse v-model="showRawOutput" class="raw-output-collapse">
-        <el-collapse-item title="原始输出" name="raw">
+      <a-collapse v-model="showRawOutput" class="raw-output-collapse">
+        <a-collapse-item title="原始输出" name="raw">
           <div class="raw-output">
             <pre>{{ cleanOutput }}</pre>
           </div>
-        </el-collapse-item>
-      </el-collapse>
+        </a-collapse-item>
+      </a-collapse>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns = [
+  { title: '时间', dataIndex: 'timestamp', slotName: 'timestamp', width: 180 },
+  { title: '类名', dataIndex: 'class', slotName: 'class', width: 250, ellipsis: true, tooltip: true },
+  { title: '方法名', dataIndex: 'method', slotName: 'method', width: 150, ellipsis: true, tooltip: true },
+  { title: '调用次数', dataIndex: 'total', slotName: 'total', width: 100, align: 'center' },
+  { title: '成功', dataIndex: 'success', slotName: 'success', width: 80, align: 'center' },
+  { title: '失败', dataIndex: 'fail', slotName: 'fail', width: 80, align: 'center' },
+  { title: '失败率', dataIndex: 'failRate', slotName: 'failRate', width: 90, align: 'center' },
+  { title: '平均RT(ms)', dataIndex: 'avgRt', slotName: 'avgRt', width: 110, align: 'center' },
+  { title: 'RT范围(ms)', slotName: 'col_5437', width: 140, align: 'center' }
+]
+
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, VideoPlay, VideoPause, Delete, Folder, Promotion, Filter, Loading } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { createArthasWebSocket, type ArthasWSMessage } from '@/api/arthas'
 
 const props = defineProps<{
@@ -358,12 +351,12 @@ const parseMonitorOutput = (content: string) => {
 // 开始监控
 const startMonitor = async () => {
   if (!classPattern.value || !methodPattern.value) {
-    ElMessage.warning('请输入类名和方法名')
+    Message.warning('请输入类名和方法名')
     return
   }
 
   if (!props.clusterId || !props.namespace || !props.pod || !props.container) {
-    ElMessage.warning('请先选择 Pod 和容器')
+    Message.warning('请先选择 Pod 和容器')
     return
   }
 
@@ -393,7 +386,7 @@ const startMonitor = async () => {
       ws?.send(JSON.stringify(msg))
       monitoring.value = true
       starting.value = false
-      ElMessage.success('开始监控')
+      Message.success('开始监控')
     }
 
     ws.onmessage = (event) => {
@@ -408,7 +401,7 @@ const startMonitor = async () => {
           parseMonitorOutput(content)
         } else if (data.type === 'error') {
           rawOutput.value += `\n[ERROR] ${data.content}\n`
-          ElMessage.error(data.content)
+          Message.error(data.content)
         } else if (data.type === 'info') {
           rawOutput.value += `[INFO] ${data.content}\n`
         }
@@ -422,7 +415,7 @@ const startMonitor = async () => {
       rawOutput.value += '\n[ERROR] WebSocket 连接错误\n'
       monitoring.value = false
       starting.value = false
-      ElMessage.error('WebSocket 连接失败')
+      Message.error('WebSocket 连接失败')
     }
 
     ws.onclose = () => {
@@ -432,7 +425,7 @@ const startMonitor = async () => {
     }
 
   } catch (error: any) {
-    ElMessage.error('启动监控失败: ' + (error.message || '未知错误'))
+    Message.error('启动监控失败: ' + (error.message || '未知错误'))
     starting.value = false
   }
 }
@@ -449,7 +442,7 @@ const stopMonitor = () => {
   }
   monitoring.value = false
   rawOutput.value += '\n[INFO] 用户停止监控\n'
-  ElMessage.info('已停止监控')
+  Message.info('已停止监控')
 }
 
 // 清空数据
@@ -550,7 +543,7 @@ watch(() => props.attached, (newVal) => {
   border-radius: 6px;
 }
 
-.help-collapse :deep(.el-collapse-item__header) {
+.help-collapse :deep(.arco-collapse-item__header) {
   padding: 0 16px;
   font-size: 13px;
   color: #606266;
@@ -677,7 +670,7 @@ watch(() => props.attached, (newVal) => {
   border-radius: 6px;
 }
 
-.raw-output-collapse :deep(.el-collapse-item__header) {
+.raw-output-collapse :deep(.arco-collapse-item__header) {
   padding: 0 16px;
   font-size: 13px;
   color: #909399;
@@ -726,7 +719,7 @@ watch(() => props.attached, (newVal) => {
     width: 100%;
   }
 
-  .input-group :deep(.el-input) {
+  .input-group :deep(.arco-input) {
     width: 100% !important;
   }
 }

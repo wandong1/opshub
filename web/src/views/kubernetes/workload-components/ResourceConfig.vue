@@ -4,36 +4,36 @@
       <div class="group-header">
         <span class="group-title">CPU 限制</span>
       </div>
-      <el-row :gutter="16">
-        <el-col :span="12">
-          <el-form-item label="请求 (Request)">
-            <el-input v-model="localResources.requests.cpu" placeholder="例如: 100m" @input="update" />
-          </el-form-item>
-        </el-col>
-        <el-col :span="12">
-          <el-form-item label="限制 (Limit)">
-            <el-input v-model="localResources.limits.cpu" placeholder="例如: 500m 或 1" @input="update" />
-          </el-form-item>
-        </el-col>
-      </el-row>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="请求 (Request)">
+            <a-input v-model="localResources.requests.cpu" placeholder="例如: 100m" @input="update" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="限制 (Limit)">
+            <a-input v-model="localResources.limits.cpu" placeholder="例如: 500m 或 1" @input="update" />
+          </a-form-item>
+        </a-col>
+      </a-row>
     </div>
 
     <div class="resource-group">
       <div class="group-header">
         <span class="group-title">内存限制</span>
       </div>
-      <el-row :gutter="16">
-        <el-col :span="12">
-          <el-form-item label="请求 (Request)">
-            <el-input v-model="localResources.requests.memory" placeholder="例如: 128Mi" @input="update" />
-          </el-form-item>
-        </el-col>
-        <el-col :span="12">
-          <el-form-item label="限制 (Limit)">
-            <el-input v-model="localResources.limits.memory" placeholder="例如: 512Mi" @input="update" />
-          </el-form-item>
-        </el-col>
-      </el-row>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="请求 (Request)">
+            <a-input v-model="localResources.requests.memory" placeholder="例如: 128Mi" @input="update" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="限制 (Limit)">
+            <a-input v-model="localResources.limits.memory" placeholder="例如: 512Mi" @input="update" />
+          </a-form-item>
+        </a-col>
+      </a-row>
     </div>
   </div>
 </template>
@@ -132,17 +132,17 @@ const update = () => {
   box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
 }
 
-.resource-group :deep(.el-form-item) {
+.resource-group :deep(.arco-form-item) {
   margin-bottom: 0;
 }
 
-.resource-group :deep(.el-form-item__label) {
+.resource-group :deep(.arco-form-item__label) {
   font-weight: 500;
   color: #666;
   font-size: 13px;
 }
 
-.resource-group :deep(.el-input__wrapper) {
+.resource-group :deep(.arco-input__wrapper) {
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -150,12 +150,12 @@ const update = () => {
   transition: all 0.3s ease;
 }
 
-.resource-group :deep(.el-input__wrapper:hover) {
+.resource-group :deep(.arco-input__wrapper:hover) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(212, 175, 55, 0.1);
 }
 
-.resource-group :deep(.el-input__wrapper.is-focus) {
+.resource-group :deep(.arco-input__wrapper.is-focus) {
   border-color: #d4af37;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 4px rgba(212, 175, 55, 0.15);
 }

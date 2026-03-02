@@ -1,20 +1,20 @@
 <template>
   <div class="perf-counter-panel">
     <div v-if="!attached" class="not-attached">
-      <el-empty description="请先选择Pod并连接到进程">
+      <a-empty description="请先选择Pod并连接到进程">
         <template #image>
-          <el-icon :size="60" color="#909399"><Connection /></el-icon>
+          <icon-link />
         </template>
-      </el-empty>
+      </a-empty>
     </div>
 
-    <div v-else class="panel-content" v-loading="loading">
+    <div v-else class="panel-content" :loading="loading">
       <!-- 工具栏 -->
       <div class="toolbar">
-        <el-button type="primary" size="small" @click="loadPerfCounters" :loading="loading">
-          <el-icon><Refresh /></el-icon> 刷新
-        </el-button>
-        <el-input
+        <a-button type="primary" size="small" @click="loadPerfCounters" :loading="loading">
+          <icon-refresh /> 刷新
+        </a-button>
+        <a-input
           v-model="searchText"
           placeholder="搜索计数器名称..."
           style="width: 280px"
@@ -22,9 +22,9 @@
           size="small"
         >
           <template #prefix>
-            <el-icon><Search /></el-icon>
+            <icon-search />
           </template>
-        </el-input>
+        </a-input>
         <span class="counter-count" v-if="perfCounters.length > 0">
           共 {{ filteredCounters.length }} / {{ perfCounters.length }} 项
         </span>
@@ -32,59 +32,58 @@
 
       <!-- 计数器表格 -->
       <div class="table-section" v-if="filteredCounters.length > 0">
-        <el-table
+        <a-table
           :data="displayCounters"
           stripe
           size="small"
           :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
           style="width: 100%"
-        >
-          <el-table-column prop="name" label="计数器名称" min-width="300" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="counter-name">{{ row.name }}</span>
+         :columns="tableColumns">
+          <template #name="{ record }">
+              <span class="counter-name">{{ record.name }}</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="value" label="值" width="200" align="right">
-            <template #default="{ row }">
-              <span class="counter-value" :class="{ 'is-number': isNumber(row.value) }">
-                {{ formatValue(row.value) }}
+          <template #value="{ record }">
+              <span class="counter-value" :class="{ 'is-number': isNumber(record.value) }">
+                {{ formatValue(record.value) }}
               </span>
             </template>
-          </el-table-column>
-          <el-table-column prop="unit" label="单位" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag v-if="row.unit" size="small" type="info" effect="plain">{{ row.unit }}</el-tag>
+          <template #unit="{ record }">
+              <a-tag v-if="record.unit" size="small" color="gray">{{ record.unit }}</a-tag>
               <span v-else class="text-muted">-</span>
             </template>
-          </el-table-column>
-        </el-table>
+        </a-table>
 
         <!-- 查看更多 -->
         <div v-if="!showAll && filteredCounters.length > pageSize" class="load-more">
-          <el-link type="primary" @click="showAll = true">
+          <a-link type="primary" @click="showAll = true">
             查看更多 (共 {{ filteredCounters.length }} 条)
-          </el-link>
+          </a-link>
         </div>
       </div>
 
-      <el-empty v-else-if="!loading" description="暂无性能计数器数据" />
+      <a-empty v-else-if="!loading" description="暂无性能计数器数据" />
 
       <!-- 原始输出（可折叠） -->
-      <el-collapse v-if="rawOutput" class="raw-output-collapse">
-        <el-collapse-item title="原始输出" name="raw">
+      <a-collapse v-if="rawOutput" class="raw-output-collapse">
+        <a-collapse-item title="原始输出" name="raw">
           <div class="output-content">
             <pre>{{ rawOutput }}</pre>
           </div>
-        </el-collapse-item>
-      </el-collapse>
+        </a-collapse-item>
+      </a-collapse>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const tableColumns = [
+  { title: '计数器名称', dataIndex: 'name', slotName: 'name', width: 300, ellipsis: true, tooltip: true },
+  { title: '值', dataIndex: 'value', slotName: 'value', width: 200, align: 'right' },
+  { title: '单位', dataIndex: 'unit', slotName: 'unit', width: 120, align: 'center' }
+]
+
 import { ref, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Connection, Refresh, Search } from '@element-plus/icons-vue'
+import { Message } from '@arco-design/web-vue'
 import { getPerfCounter } from '@/api/arthas'
 
 const props = defineProps<{
@@ -267,7 +266,7 @@ const loadPerfCounters = async () => {
     if (perfCounters.value.length === 0 && output) {
     }
   } catch (error: any) {
-    ElMessage.error('获取性能计数器失败: ' + (error.message || '未知错误'))
+    Message.error('获取性能计数器失败: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
