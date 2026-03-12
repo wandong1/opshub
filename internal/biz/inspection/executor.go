@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tidwall/gjson"
 	"github.com/ydcloud-dy/opshub/internal/biz/inspection/probers"
+	pb "github.com/ydcloud-dy/opshub/pkg/agentproto"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"github.com/ydcloud-dy/opshub/pkg/metrics"
 	"github.com/ydcloud-dy/opshub/pkg/scheduler"
@@ -189,6 +190,7 @@ func (e *NetworkProbeExecutor) executeAndSaveNetworkProbe(ctx context.Context, p
 		appLogger.Info("probe retry", zap.String("name", origCfg.Name), zap.Int("attempt", retryAttempt))
 		result, agentHostID = e.executeProbe(resolvedCfg)
 	}
+	result.RetryAttempt = retryAttempt
 	dbResult := &ProbeResult{
 		ProbeTaskID:     probeTask.ID,
 		ProbeConfigID:   origCfg.ID,
@@ -247,6 +249,30 @@ func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probe
 		ErrorMessage:      appResult.Error,
 		AgentHostID:       agentHostID,
 		RetryAttempt:      retryAttempt,
+
+		// Performance breakdown
+		DNSLookupTime:       appResult.DNSLookupTime,
+		HTTPTCPConnectTime:  appResult.TCPConnectTime,
+		TLSHandshakeTime:    appResult.TLSHandshakeTime,
+		TTFB:                appResult.TTFB,
+		ContentTransferTime: appResult.ContentTransferTime,
+
+		// TLS/Certificate
+		TLSVersion:      appResult.TLSVersion,
+		TLSCipherSuite:  appResult.TLSCipherSuite,
+		SSLCertNotAfter: appResult.SSLCertNotAfter,
+
+		// HTTP details
+		RedirectCount:       appResult.RedirectCount,
+		RedirectTime:        appResult.RedirectTime,
+		FinalURL:            appResult.FinalURL,
+		ResponseHeaderBytes: appResult.ResponseHeaderBytes,
+		ResponseBodyBytes:   appResult.ResponseBodyBytes,
+
+		// Assertion statistics
+		AssertionPassCount: appResult.AssertionPassCount,
+		AssertionFailCount: appResult.AssertionFailCount,
+		AssertionEvalTime:  appResult.AssertionEvalTime,
 	}
 	if err := e.resultRepo.Create(ctx, dbResult); err != nil {
 		appLogger.Error("save app probe result failed", zap.Error(err))
@@ -255,32 +281,131 @@ func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probe
 		atomic.AddInt64(failCount, 1)
 	}
 	if probeTask.PushgatewayID > 0 {
-		e.pushAppMetrics(ctx, probeTask, origCfg, appResult)
+		e.pushAppMetrics(ctx, probeTask, origCfg, appResult, retryAttempt)
 	}
 }
 
 // executeAppProbe runs a single application probe.
 func (e *NetworkProbeExecutor) executeAppProbe(cfg *ProbeConfig) (*probers.AppResult, uint) {
 	appCfg := buildAppProbeConfig(cfg)
+
+	appLogger.Info("executeAppProbe called",
+		zap.String("probe_name", cfg.Name),
+		zap.String("exec_mode", cfg.ExecMode),
+		zap.String("agent_host_ids", cfg.AgentHostIDs),
+		zap.String("type", cfg.Type),
+	)
+
+	// Agent mode
+	if cfg.ExecMode == ExecModeAgent {
+		appLogger.Info("Agent mode detected for application probe",
+			zap.String("probe_name", cfg.Name),
+			zap.String("agent_host_ids", cfg.AgentHostIDs),
+		)
+
+		if e.agentFactory == nil {
+			appLogger.Error("Agent factory not initialized",
+				zap.String("probe_name", cfg.Name),
+			)
+			return &probers.AppResult{
+				Error: "agent factory not initialized",
+			}, 0
+		}
+
+		// Parse agent host IDs
+		hostIDs := parseHostIDs(cfg.AgentHostIDs)
+		appLogger.Info("Parsed agent host IDs",
+			zap.String("probe_name", cfg.Name),
+			zap.Uints("host_ids", hostIDs),
+		)
+
+		if len(hostIDs) == 0 {
+			appLogger.Error("No agent host specified for agent mode",
+				zap.String("probe_name", cfg.Name),
+			)
+			return &probers.AppResult{
+				Error: "no agent host specified for agent mode",
+			}, 0
+		}
+
+		// Filter online agents
+		var onlineIDs []uint
+		for _, id := range hostIDs {
+			if e.agentFactory.IsOnline(id) {
+				onlineIDs = append(onlineIDs, id)
+			}
+		}
+
+		if len(onlineIDs) == 0 {
+			appLogger.Error("No online agent available",
+				zap.String("probe_name", cfg.Name),
+			)
+			return &probers.AppResult{
+				Error: "no online agent available",
+			}, 0
+		}
+
+		// Random pick an online agent
+		hostID := onlineIDs[rand.Intn(len(onlineIDs))]
+		appLogger.Info("Selected agent for application probe",
+			zap.String("probe_name", cfg.Name),
+			zap.Uint("host_id", hostID),
+		)
+
+		// Build ProbeRequest
+		probeReq := buildProbeRequest(cfg, appCfg)
+
+		appLogger.Info("Sending probe request to agent",
+			zap.String("probe_name", cfg.Name),
+			zap.Uint("host_id", hostID),
+			zap.String("request_id", probeReq.RequestId),
+			zap.String("type", cfg.Type),
+		)
+
+		// Send probe request to agent
+		pbResult, err := e.agentFactory.SendProbeRequest(hostID, probeReq)
+		if err != nil {
+			appLogger.Error("Failed to send probe request to agent",
+				zap.String("probe_name", cfg.Name),
+				zap.Uint("host_id", hostID),
+				zap.Error(err),
+			)
+			return &probers.AppResult{
+				Success: false,
+				Error:   fmt.Sprintf("send probe request failed: %v", err),
+			}, hostID
+		}
+
+		// Convert pb.ProbeResult to probers.AppResult
+		appResult := convertProbeResultToAppResult(pbResult)
+
+		appLogger.Info("Received probe result from agent",
+			zap.String("probe_name", cfg.Name),
+			zap.Uint("host_id", hostID),
+			zap.Bool("success", appResult.Success),
+			zap.Float64("latency", appResult.Latency),
+		)
+
+		return appResult, hostID
+	}
+
 	// Proxy mode: use local prober with proxy
 	if cfg.ExecMode == ExecModeProxy {
+		appLogger.Info("Proxy mode detected, executing locally with proxy",
+			zap.String("probe_name", cfg.Name),
+			zap.String("proxy_url", cfg.ProxyURL),
+		)
 		prober, err := probers.GetAppProber(cfg.Type)
 		if err != nil {
 			return &probers.AppResult{Error: err.Error()}, 0
 		}
 		return prober.ProbeApp(appCfg), 0
 	}
-	// Agent mode
-	if cfg.ExecMode == ExecModeAgent && e.agentFactory != nil {
-		// For now, agent app probing falls back to local execution
-		// TODO: implement agent-side HTTP/WS probing via gRPC
-		prober, err := probers.GetAppProber(cfg.Type)
-		if err != nil {
-			return &probers.AppResult{Error: err.Error()}, 0
-		}
-		return prober.ProbeApp(appCfg), 0
-	}
+
 	// Local execution
+	appLogger.Info("Local mode detected, executing locally",
+		zap.String("probe_name", cfg.Name),
+	)
 	prober, err := probers.GetAppProber(cfg.Type)
 	if err != nil {
 		return &probers.AppResult{Error: err.Error()}, 0
@@ -350,7 +475,7 @@ func parseHostIDs(s string) []uint {
 
 // executeAndSaveWorkflowProbe handles workflow probe execution and persistence.
 func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64) {
-	wfResult := ExecuteWorkflowProbe(ctx, resolvedCfg, e.variableResolver)
+	wfResult := ExecuteWorkflowProbe(ctx, resolvedCfg, e.variableResolver, e.agentFactory)
 	detail := ""
 	if b, err := json.Marshal(wfResult); err == nil {
 		detail = string(b)
@@ -375,7 +500,7 @@ func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, 
 }
 
 // ExecuteWorkflowProbe executes a workflow probe: parse definition, run steps sequentially, extract variables.
-func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *VariableResolver) *WorkflowResult {
+func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *VariableResolver, agentFactory AgentCommandFactory) *WorkflowResult {
 	var def WorkflowDefinition
 	if err := json.Unmarshal([]byte(cfg.Body), &def); err != nil {
 		return &WorkflowResult{Success: false, Error: fmt.Sprintf("parse workflow definition: %v", err)}
@@ -665,21 +790,93 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 			if strings.HasPrefix(strings.ToLower(resolvedURL), "wss://") || strings.HasPrefix(strings.ToLower(resolvedURL), "ws://") {
 				probeType = "websocket"
 			}
-			prober, err := probers.GetAppProber(probeType)
-			if err != nil {
-				stepResult.Error = err.Error()
+
+			appLogger.Info("Workflow step execution",
+				zap.String("workflow_name", cfg.Name),
+				zap.String("step_name", step.Name),
+				zap.Int("step_index", i),
+				zap.String("step_exec_mode", step.ExecMode),
+				zap.String("probe_type", probeType),
+				zap.String("url", resolvedURL),
+			)
+
+			// Check step.ExecMode for agent execution
+			var appResult *probers.AppResult
+			if step.ExecMode == ExecModeAgent && agentFactory != nil {
+				appLogger.Info("Workflow step using agent mode",
+					zap.String("workflow_name", cfg.Name),
+					zap.String("step_name", step.Name),
+					zap.String("agent_host_ids", cfg.AgentHostIDs),
+				)
+
+				// Parse agent host IDs from config
+				hostIDs := parseHostIDs(cfg.AgentHostIDs)
+				appLogger.Info("Parsed agent host IDs for workflow step",
+					zap.String("workflow_name", cfg.Name),
+					zap.String("step_name", step.Name),
+					zap.Uints("host_ids", hostIDs),
+				)
+
+				if len(hostIDs) == 0 {
+					appLogger.Error("No agent host specified for workflow step agent mode",
+						zap.String("workflow_name", cfg.Name),
+						zap.String("step_name", step.Name),
+					)
+					stepResult.Error = "no agent host specified for agent mode"
+					stepResult.Success = false
+					result.StepResults = append(result.StepResults, stepResult)
+					result.Success = false
+					if def.StopOnFailure {
+						appendSkippedSteps(result, def.Steps, i+1)
+						result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
+						result.TotalLatency = totalLatency
+						return result
+					}
+					continue
+				}
+
+				// Agent mode not yet implemented for application probing
+				appLogger.Warn("Agent mode for workflow step not yet implemented",
+					zap.String("workflow_name", cfg.Name),
+					zap.String("step_name", step.Name),
+					zap.Uints("host_ids", hostIDs),
+				)
+				stepResult.Error = fmt.Sprintf("agent mode for application probing not yet implemented (step: %s)", step.Name)
+				stepResult.Success = false
 				result.StepResults = append(result.StepResults, stepResult)
 				result.Success = false
 				if def.StopOnFailure {
 					appendSkippedSteps(result, def.Steps, i+1)
-					result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, err.Error())
+					result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
 					result.TotalLatency = totalLatency
 					return result
 				}
 				continue
+			} else {
+				appLogger.Info("Workflow step using local/proxy mode",
+					zap.String("workflow_name", cfg.Name),
+					zap.String("step_name", step.Name),
+					zap.String("exec_mode", step.ExecMode),
+				)
+
+				// Local or proxy execution
+				prober, err := probers.GetAppProber(probeType)
+				if err != nil {
+					stepResult.Error = err.Error()
+					result.StepResults = append(result.StepResults, stepResult)
+					result.Success = false
+					if def.StopOnFailure {
+						appendSkippedSteps(result, def.Steps, i+1)
+						result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, err.Error())
+						result.TotalLatency = totalLatency
+						return result
+					}
+					continue
+				}
+
+				appResult = prober.ProbeApp(appCfg)
 			}
 
-			appResult := prober.ProbeApp(appCfg)
 			totalLatency += appResult.Latency
 
 			stepResult.HTTPStatusCode = appResult.HTTPStatusCode
@@ -883,6 +1080,9 @@ func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask,
 		// These are handled by pushAppMetrics; should not reach here
 	}
 
+	// Retry attempt metric (for network probes)
+	addGauge("opshub_probe_retry_attempt", "Retry attempts", float64(result.RetryAttempt))
+
 	hostname, _ := os.Hostname()
 	grouping := map[string]string{
 		"instance":  hostname,
@@ -898,7 +1098,7 @@ func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask,
 	}
 }
 
-func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.AppResult) {
+func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.AppResult, retryAttempt int) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
 	if err != nil || pgw.Status != 1 {
 		return
@@ -951,11 +1151,56 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 	addGauge("opshub_probe_http_response_seconds", "HTTP real response time", result.HTTPResponseTime/1000.0)
 	addGauge("opshub_probe_http_status_code", "HTTP status code", float64(result.HTTPStatusCode))
 	addGauge("opshub_probe_http_content_length", "HTTP content length", float64(result.HTTPContentLength))
+
 	assertVal := 0.0
 	if result.AssertionSuccess {
 		assertVal = 1.0
 	}
 	addGauge("opshub_probe_assertion_success", "Assertion success", assertVal)
+
+	// Performance breakdown metrics
+	if result.DNSLookupTime > 0 {
+		addGauge("opshub_probe_dns_lookup_seconds", "DNS lookup time", result.DNSLookupTime/1000.0)
+	}
+	if result.TCPConnectTime > 0 {
+		addGauge("opshub_probe_tcp_connect_seconds", "TCP connect time", result.TCPConnectTime/1000.0)
+	}
+	if result.TLSHandshakeTime > 0 {
+		addGauge("opshub_probe_tls_handshake_seconds", "TLS handshake time", result.TLSHandshakeTime/1000.0)
+	}
+	if result.TTFB > 0 {
+		addGauge("opshub_probe_ttfb_seconds", "Time to first byte", result.TTFB/1000.0)
+	}
+	if result.ContentTransferTime > 0 {
+		addGauge("opshub_probe_content_transfer_seconds", "Content transfer time", result.ContentTransferTime/1000.0)
+	}
+
+	// Certificate monitoring
+	if result.SSLCertNotAfter > 0 {
+		addGauge("opshub_probe_ssl_cert_not_after_seconds", "SSL cert expiry timestamp", float64(result.SSLCertNotAfter))
+	}
+
+	// HTTP details
+	if result.RedirectCount > 0 {
+		addGauge("opshub_probe_http_redirect_count", "HTTP redirect count", float64(result.RedirectCount))
+		addGauge("opshub_probe_http_redirect_time_seconds", "HTTP redirect time", result.RedirectTime/1000.0)
+	}
+	if result.ResponseHeaderBytes > 0 {
+		addGauge("opshub_probe_http_response_header_bytes", "Response header size", float64(result.ResponseHeaderBytes))
+	}
+	if result.ResponseBodyBytes > 0 {
+		addGauge("opshub_probe_http_response_body_bytes", "Response body size", float64(result.ResponseBodyBytes))
+	}
+
+	// Assertion statistics
+	addGauge("opshub_probe_assertion_pass_count", "Passed assertions", float64(result.AssertionPassCount))
+	addGauge("opshub_probe_assertion_fail_count", "Failed assertions", float64(result.AssertionFailCount))
+	if result.AssertionEvalTime > 0 {
+		addGauge("opshub_probe_assertion_eval_seconds", "Assertion evaluation time", result.AssertionEvalTime/1000.0)
+	}
+
+	// Retry attempt metric
+	addGauge("opshub_probe_retry_attempt", "Retry attempts", float64(retryAttempt))
 
 	hostname, _ := os.Hostname()
 	grouping := map[string]string{
@@ -1047,3 +1292,117 @@ func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *Pr
 		)
 	}
 }
+
+// buildProbeRequest 构建 protobuf ProbeRequest
+func buildProbeRequest(cfg *ProbeConfig, appCfg *probers.AppProbeConfig) *pb.ProbeRequest {
+	req := &pb.ProbeRequest{
+		RequestId:  generateRequestID(),
+		ProbeType:  cfg.Type,
+		Target:     cfg.Target,
+		Port:       int32(cfg.Port),
+		Url:        appCfg.URL,
+		Method:     appCfg.Method,
+		Body:       appCfg.Body,
+		Timeout:    int32(appCfg.Timeout),
+		SkipVerify: appCfg.SkipVerify,
+		ProxyUrl:   appCfg.ProxyURL,
+	}
+
+	// Content-Type
+	if appCfg.ContentType != "" {
+		req.ContentType = appCfg.ContentType
+	}
+
+	// Headers
+	if len(appCfg.Headers) > 0 {
+		req.Headers = appCfg.Headers
+	}
+
+	// Params
+	if len(appCfg.Params) > 0 {
+		req.Params = appCfg.Params
+	}
+
+	// Assertions
+	if len(appCfg.Assertions) > 0 {
+		req.Assertions = make([]*pb.ProbeAssertion, 0, len(appCfg.Assertions))
+		for _, a := range appCfg.Assertions {
+			req.Assertions = append(req.Assertions, &pb.ProbeAssertion{
+				Name:      a.Name,
+				Source:    a.Source,
+				Path:      a.Path,
+				Condition: a.Condition,
+				Value:     a.Value,
+			})
+		}
+	}
+
+	// WebSocket specific
+	if cfg.Type == "websocket" {
+		req.WsMessage = appCfg.WSMessage
+		req.WsMessageType = int32(appCfg.WSMessageType)
+		req.WsReadTimeout = int32(appCfg.WSReadTimeout)
+	}
+
+	return req
+}
+
+// convertProbeResultToAppResult 转换 pb.ProbeResult 到 probers.AppResult
+func convertProbeResultToAppResult(pbResult *pb.ProbeResult) *probers.AppResult {
+	result := &probers.AppResult{
+		Success:           pbResult.Success,
+		Error:             pbResult.Error,
+		Latency:           pbResult.Latency,
+		HTTPStatusCode:    int(pbResult.HttpStatusCode),
+		HTTPResponseTime:  pbResult.HttpResponseTime,
+		HTTPContentLength: pbResult.HttpContentLength,
+		ResponseBody:      string(pbResult.ResponseBody), // 转换 []byte 为 string
+		ResponseHeaders:   pbResult.ResponseHeaders,
+
+		// Performance breakdown
+		DNSLookupTime:       pbResult.DnsLookupTime,
+		TCPConnectTime:      pbResult.TcpConnectTimeHttp,
+		TLSHandshakeTime:    pbResult.TlsHandshakeTime,
+		TTFB:                pbResult.Ttfb,
+		ContentTransferTime: pbResult.ContentTransferTime,
+
+		// TLS info
+		TLSVersion:      pbResult.TlsVersion,
+		TLSCipherSuite:  pbResult.TlsCipherSuite,
+		SSLCertNotAfter: pbResult.SslCertNotAfter,
+
+		// HTTP details
+		RedirectCount:       int(pbResult.RedirectCount),
+		RedirectTime:        pbResult.RedirectTime,
+		FinalURL:            pbResult.FinalUrl,
+		ResponseHeaderBytes: int(pbResult.ResponseHeaderBytes),
+		ResponseBodyBytes:   int(pbResult.ResponseBodyBytes),
+
+		// Assertions
+		AssertionSuccess:   pbResult.AssertionSuccess,
+		AssertionPassCount: int(pbResult.AssertionPassCount),
+		AssertionFailCount: int(pbResult.AssertionFailCount),
+		AssertionEvalTime:  pbResult.AssertionEvalTime,
+	}
+
+	// Convert assertion results
+	if len(pbResult.AssertionResults) > 0 {
+		result.AssertionResults = make([]probers.AssertionResult, 0, len(pbResult.AssertionResults))
+		for _, ar := range pbResult.AssertionResults {
+			result.AssertionResults = append(result.AssertionResults, probers.AssertionResult{
+				Name:    ar.Name,
+				Success: ar.Success,
+				Actual:  ar.Actual,
+				Error:   ar.Error,
+			})
+		}
+	}
+
+	return result
+}
+
+// generateRequestID 生成请求 ID
+func generateRequestID() string {
+	return fmt.Sprintf("probe_%d_%d", time.Now().UnixNano(), rand.Int63())
+}
+

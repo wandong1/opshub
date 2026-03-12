@@ -36,6 +36,8 @@ type HTTPServer struct {
 	middlewareService            *assetService.MiddlewareService
 	middlewarePermissionService  *rbacService.MiddlewarePermissionService
 	serviceLabelService          *assetService.ServiceLabelService
+	websiteService               *assetService.WebsiteService
+	websiteProxyHandler          *WebsiteProxyHandler
 	terminalManager              *TerminalManager
 	terminalAuditHandler         *TerminalAuditHandler
 	authMiddleware               *rbacService.AuthMiddleware
@@ -47,6 +49,8 @@ func NewHTTPServer(
 	middlewareService *assetService.MiddlewareService,
 	middlewarePermissionService *rbacService.MiddlewarePermissionService,
 	serviceLabelService *assetService.ServiceLabelService,
+	websiteService *assetService.WebsiteService,
+	websiteProxyHandler *WebsiteProxyHandler,
 	terminalManager *TerminalManager,
 	db *gorm.DB,
 	authMiddleware *rbacService.AuthMiddleware,
@@ -57,6 +61,8 @@ func NewHTTPServer(
 		middlewareService:           middlewareService,
 		middlewarePermissionService: middlewarePermissionService,
 		serviceLabelService:         serviceLabelService,
+		websiteService:              websiteService,
+		websiteProxyHandler:         websiteProxyHandler,
 		terminalManager:             terminalManager,
 		terminalAuditHandler:        NewTerminalAuditHandler(db),
 		authMiddleware:              authMiddleware,
@@ -394,6 +400,18 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 		serviceLabels.PUT("/:id", s.serviceLabelService.Update)
 		serviceLabels.DELETE("/:id", s.serviceLabelService.Delete)
 	}
+
+	// Web站点管理
+	websites := r.Group("/websites")
+	{
+		websites.GET("", s.websiteService.ListWebsites)
+		websites.GET("/:id", s.websiteService.GetWebsite)
+		websites.POST("", s.websiteService.CreateWebsite)
+		websites.PUT("/:id", s.websiteService.UpdateWebsite)
+		websites.DELETE("/:id", s.websiteService.DeleteWebsite)
+		websites.GET("/:id/access", s.websiteProxyHandler.AccessWebsite)
+		websites.Any("/:id/proxy/*path", s.websiteProxyHandler.ProxyRequest)
+	}
 }
 
 // NewAssetServices 创建asset相关的服务
@@ -403,8 +421,10 @@ func NewAssetServices(db *gorm.DB) (
 	*assetService.MiddlewareService,
 	*rbacService.MiddlewarePermissionService,
 	*assetService.ServiceLabelService,
+	*assetService.WebsiteService,
 	*TerminalManager,
 	*assetbiz.HostUseCase,
+	*assetbiz.WebsiteUseCase,
 	assetbiz.ServiceLabelRepo,
 	assetbiz.HostRepo,
 	assetbiz.CredentialRepo,
@@ -418,6 +438,7 @@ func NewAssetServices(db *gorm.DB) (
 	middlewareRepo := assetdata.NewMiddlewareRepo(db)
 	mwPermissionRepo := rbacdata.NewMiddlewarePermissionRepo(db)
 	serviceLabelRepo := assetdata.NewServiceLabelRepo(db)
+	websiteRepo := assetdata.NewWebsiteRepo(db)
 
 	// 初始化UseCase
 	assetGroupUseCase := assetbiz.NewAssetGroupUseCase(assetGroupRepo)
@@ -428,6 +449,7 @@ func NewAssetServices(db *gorm.DB) (
 	middlewareUseCase := assetbiz.NewMiddlewareUseCase(middlewareRepo, assetGroupRepo, hostRepo)
 	mwPermissionUseCase := rbacbiz.NewMiddlewarePermissionUseCase(mwPermissionRepo)
 	serviceLabelUseCase := assetbiz.NewServiceLabelUseCase(serviceLabelRepo)
+	websiteUseCase := assetbiz.NewWebsiteUseCase(websiteRepo, assetGroupRepo, hostRepo)
 
 	// 初始化Service
 	assetGroupService := assetService.NewAssetGroupService(assetGroupUseCase)
@@ -435,9 +457,10 @@ func NewAssetServices(db *gorm.DB) (
 	middlewareService := assetService.NewMiddlewareService(middlewareUseCase, mwPermissionUseCase, db)
 	mwPermissionService := rbacService.NewMiddlewarePermissionService(mwPermissionUseCase)
 	serviceLabelService := assetService.NewServiceLabelService(serviceLabelUseCase)
+	websiteService := assetService.NewWebsiteService(websiteUseCase)
 
 	// 初始化TerminalManager
 	terminalManager := NewTerminalManager(hostUseCase, db)
 
-	return assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, terminalManager, hostUseCase, serviceLabelRepo, hostRepo, credentialRepo
+	return assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo
 }

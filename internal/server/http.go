@@ -30,7 +30,9 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/ydcloud-dy/opshub/docs"
+	"github.com/ydcloud-dy/opshub/internal/cache"
 	"github.com/ydcloud-dy/opshub/internal/conf"
+	agentrepo "github.com/ydcloud-dy/opshub/internal/data/agent"
 	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	"github.com/ydcloud-dy/opshub/internal/plugin"
 	assetserver "github.com/ydcloud-dy/opshub/internal/server/asset"
@@ -63,6 +65,8 @@ type HTTPServer struct {
 	uploadSrv        *UploadServer
 	inspectionServer *inspectionserver.HTTPServer
 	grpcServer       *agentserver.GRPCServer
+	cacheManager     *cache.CacheManager
+	scheduler        *cache.CacheSyncScheduler
 }
 
 // NewHTTPServer 创建HTTP服务器
@@ -116,15 +120,34 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisCl
 		appLogger.Error("注册ssl-cert插件失败", zap.Error(err))
 	}
 
+	// ========== 初始化缓存系统 ==========
+	agentRepo := agentrepo.NewRepository(db)
+	cacheManager := cache.NewCacheManager(redisClient, agentRepo, db)
+	scheduler := cache.NewCacheSyncScheduler(cacheManager)
+
+	// 预热缓存
+	if err := scheduler.WarmupCache(); err != nil {
+		appLogger.Warn("缓存预热失败", zap.Error(err))
+	}
+
+	// 启动定期任务
+	scheduler.Start()
+
+	// 注入到 AgentService
+	grpcServer.GetAgentService().SetCacheManager(cacheManager)
+	// ========== 缓存系统初始化完成 ==========
+
 	// 注册路由
 	s := &HTTPServer{
-		conf:        conf,
-		svc:         svc,
-		db:          db,
-		redisClient: redisClient,
-		pluginMgr:   pluginMgr,
-		uploadSrv:   uploadSrv,
-		grpcServer:  grpcServer,
+		conf:         conf,
+		svc:          svc,
+		db:           db,
+		redisClient:  redisClient,
+		pluginMgr:    pluginMgr,
+		uploadSrv:    uploadSrv,
+		grpcServer:   grpcServer,
+		cacheManager: cacheManager,
+		scheduler:    scheduler,
 	}
 
 	// 先启用所有插件（在注册路由之前）
@@ -175,11 +198,17 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	operationLogService, loginLogService, dataLogService, mwAuditLogService := auditserver.NewAuditServices(s.db)
 
 	// 创建 Asset 服务
-	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, terminalManager, hostUseCase, serviceLabelRepo, hostRepo, credentialRepo := assetserver.NewAssetServices(s.db)
+	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo := assetserver.NewAssetServices(s.db)
 
 	// 设置Agent命令执行工厂，使主机采集支持Agent方式
 	if s.grpcServer != nil {
 		hostUseCase.SetAgentCommandFactory(agentserver.NewAgentCommandFactory(s.grpcServer.Hub()))
+	}
+
+	// 创建 WebsiteProxyHandler
+	var websiteProxyHandler *assetserver.WebsiteProxyHandler
+	if s.grpcServer != nil {
+		websiteProxyHandler = assetserver.NewWebsiteProxyHandler(websiteUseCase, s.grpcServer.Hub())
 	}
 
 	// 设置authMiddleware的assetPermissionRepo
@@ -191,7 +220,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	authMiddleware.SetMiddlewarePermissionRepo(mwPermissionRepo)
 
 	// Asset 路由
-	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, terminalManager, s.db, authMiddleware)
+	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, websiteProxyHandler, terminalManager, s.db, authMiddleware)
 
 	// API v1 - 公开接口(不需要认证)
 	public := router.Group("/api/v1/public")
@@ -478,6 +507,12 @@ func (s *HTTPServer) Start() error {
 
 // Stop 停止服务器
 func (s *HTTPServer) Stop(ctx context.Context) error {
+	// 停止缓存调度器
+	if s.scheduler != nil {
+		s.scheduler.Stop()
+		appLogger.Info("缓存调度器已停止")
+	}
+
 	// 停止巡检调度器
 	inspectionserver.StopScheduler(s.inspectionServer)
 

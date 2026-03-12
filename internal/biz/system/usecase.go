@@ -140,6 +140,11 @@ func (uc *ConfigUseCase) SaveBasicConfig(ctx context.Context, config *BasicConfi
 	return uc.configRepo.BatchSaveOrUpdate(ctx, configs)
 }
 
+// SaveLogoOnly 仅保存Logo配置
+func (uc *ConfigUseCase) SaveLogoOnly(ctx context.Context, logoURL string) error {
+	return uc.configRepo.SaveOrUpdate(ctx, ConfigKeySystemLogo, logoURL)
+}
+
 // SaveSecurityConfig 保存安全配置
 func (uc *ConfigUseCase) SaveSecurityConfig(ctx context.Context, config *SecurityConfig) error {
 	configs := map[string]string{

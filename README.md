@@ -134,6 +134,7 @@ OpsHub 是一个功能强大的**插件化运维管理平台**，采用前后端
 |:-----|:-----|
 | 域名监控 | SSL 证书监控、到期提醒 |
 | 告警管理 | 告警规则配置、多渠道通知 |
+| 智能巡检拨测 | HTTP/HTTPS/WebSocket/TCP/UDP/Ping 拨测，性能分解监控 |
 
 #### 📈 Nginx 日志分析
 
@@ -270,6 +271,7 @@ docker-compose up -d
 | 📗 Kubernetes 插件 | [docs/plugins/kubernetes.md](docs/plugins/kubernetes.md) |
 | 📙 任务中心插件 | [docs/plugins/task.md](docs/plugins/task.md) |
 | 📕 监控中心插件 | [docs/plugins/monitor.md](docs/plugins/monitor.md) |
+| 📊 智能巡检拨测 Metrics | [docs/probe-metrics.md](docs/probe-metrics.md) |
 | 🔐 SSL证书插件 | [docs/plugins/ssl-cert.md](docs/plugins/ssl-cert.md) |
 | 📈 Nginx日志分析插件 | [docs/plugins/nginx.md](docs/plugins/nginx.md) |
 

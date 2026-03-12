@@ -40,7 +40,10 @@ func NewWSSession(wsURL string, reqHeaders map[string]string, params map[string]
 	}
 
 	// Append query params to URL
-	dialURL := wsURL
+	// Clean URL: remove newlines and other control characters
+	dialURL := strings.TrimSpace(wsURL)
+	dialURL = strings.ReplaceAll(dialURL, "\n", "")
+	dialURL = strings.ReplaceAll(dialURL, "\r", "")
 	if len(params) > 0 {
 		qp := url.Values{}
 		for k, v := range params {

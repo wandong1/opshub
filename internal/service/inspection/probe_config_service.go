@@ -44,6 +44,13 @@ func (s *ProbeConfigService) Create(c *gin.Context) {
 		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
 		return
 	}
+
+	// Custom validation based on category
+	if err := s.validateProbeConfig(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
+		return
+	}
+
 	model := req.ToModel()
 	if err := s.useCase.Create(c.Request.Context(), model); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败: "+err.Error())
@@ -59,6 +66,13 @@ func (s *ProbeConfigService) Update(c *gin.Context) {
 		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
 		return
 	}
+
+	// Custom validation based on category
+	if err := s.validateProbeConfig(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
+		return
+	}
+
 	model := req.ToModel()
 	model.ID = uint(id)
 	if err := s.useCase.Update(c.Request.Context(), model); err != nil {
@@ -239,7 +253,7 @@ func (s *ProbeConfigService) RunOnce(c *gin.Context) {
 
 	// Workflow probe
 	if resolvedConfig.Category == biz.ProbeCategoryWorkflow {
-		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver)
+		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver, nil)
 		response.Success(c, wfResult)
 		return
 	}
@@ -407,6 +421,42 @@ func parseHostIDs(s string) []uint {
 	return ids
 }
 
+// validateProbeConfig validates probe config based on category and type.
+func (s *ProbeConfigService) validateProbeConfig(req *biz.ProbeConfigRequest) error {
+	// Determine category from type if not set
+	category := req.Category
+	if category == "" {
+		if cat, ok := biz.TypeToCategoryMap[req.Type]; ok {
+			category = cat
+		} else {
+			category = biz.ProbeCategoryNetwork
+		}
+	}
+
+	// For network and layer4 categories, Target is required
+	if category == biz.ProbeCategoryNetwork || category == biz.ProbeCategoryLayer4 {
+		if req.Target == "" {
+			return fmt.Errorf("Target 字段为必填项")
+		}
+	}
+
+	// For application category, URL is required
+	if category == biz.ProbeCategoryApplication {
+		if req.URL == "" {
+			return fmt.Errorf("URL 字段为必填项")
+		}
+	}
+
+	// For workflow category, Body (workflow definition) is required
+	if category == biz.ProbeCategoryWorkflow {
+		if req.Body == "" {
+			return fmt.Errorf("流程定义为必填项")
+		}
+	}
+
+	return nil
+}
+
 // TestProbe executes a probe from raw config data (without saving) for debugging.
 func (s *ProbeConfigService) TestProbe(c *gin.Context) {
 	var config biz.ProbeConfig
@@ -438,7 +488,7 @@ func (s *ProbeConfigService) TestProbe(c *gin.Context) {
 
 	// Workflow probe
 	if resolvedConfig.Category == biz.ProbeCategoryWorkflow {
-		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver)
+		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver, nil)
 		response.Success(c, wfResult)
 		return
 	}

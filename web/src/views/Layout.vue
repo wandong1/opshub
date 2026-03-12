@@ -12,11 +12,17 @@
     >
       <!-- Logo -->
       <div class="sider-logo" :class="{ 'sider-logo--collapsed': siderCollapsed }">
-        <span v-if="!siderCollapsed" class="logo-text">
-          <span class="logo-first">{{ systemNameFirst }}</span>
-          <span class="logo-second">{{ systemNameSecond }}</span>
-        </span>
-        <span v-else class="logo-icon">{{ systemNameFirst.charAt(0) }}</span>
+        <template v-if="!siderCollapsed">
+          <img v-if="systemStore.systemLogo" :src="systemStore.systemLogo" alt="Logo" class="logo-image" />
+          <span class="logo-text">
+            <span class="logo-first">{{ systemNameFirst }}</span>
+            <span class="logo-second">{{ systemNameSecond }}</span>
+          </span>
+        </template>
+        <template v-else>
+          <img v-if="systemStore.systemLogo" :src="systemStore.systemLogo" alt="Logo" class="logo-image-collapsed" />
+          <span v-else class="logo-icon">{{ systemNameFirst.charAt(0) }}</span>
+        </template>
       </div>
 
       <!-- Menu -->
@@ -77,7 +83,6 @@
       <!-- Header -->
       <a-layout-header class="ops-header">
         <div class="header-left">
-          <img v-if="headerImage" :src="headerImage" alt="" class="header-logo-img" />
           <a-breadcrumb class="header-breadcrumb">
             <a-breadcrumb-item @click="$router.push('/')">首页</a-breadcrumb-item>
             <a-breadcrumb-item v-if="currentRoute.meta.title">{{ currentRoute.meta.title }}</a-breadcrumb-item>
@@ -134,8 +139,6 @@ import {
 import { getUserMenu } from '@/api/menu'
 import { pluginManager } from '@/plugins/manager'
 import { usePermissionStore } from '@/stores/permission'
-
-const headerImage = '/header.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -478,6 +481,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   padding: 0 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
@@ -485,6 +489,20 @@ onMounted(async () => {
 
 .sider-logo--collapsed {
   padding: 0;
+  gap: 0;
+}
+
+.logo-image {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.logo-image-collapsed {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
 .logo-text {

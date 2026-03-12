@@ -6,7 +6,7 @@ type ProbeConfigRequest struct {
 	Name         string `json:"name" binding:"required,min=1,max=100"`
 	Type         string `json:"type" binding:"required"`
 	Category     string `json:"category"`
-	Target       string `json:"target" binding:"required,max=255"`
+	Target       string `json:"target" binding:"max=255"`
 	Port         int    `json:"port"`
 	GroupID      uint   `json:"groupId"`
 	GroupIDs     string `json:"groupIds"`

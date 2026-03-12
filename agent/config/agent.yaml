@@ -1,4 +1,7 @@
 agent_id: ""
 server_addr: "your-server-ip:9090"
 cert_dir: "certs"
-log_file: "/var/log/srehub-agent.log"
+log_file: "/var/log/srehub-agent/agent.log"
+log_max_size: 100      # 日志文件最大大小（MB），默认 100MB
+log_max_backups: 3     # 保留的旧日志文件数量，默认 3
+log_level: "info"      # 日志级别：debug, info, warn, error，默认 info

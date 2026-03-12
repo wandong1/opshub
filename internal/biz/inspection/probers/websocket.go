@@ -43,7 +43,10 @@ func (p *WebSocketProber) ProbeApp(config *AppProbeConfig) *AppResult {
 	}
 
 	// Append query params to URL
-	dialURL := config.URL
+	// Clean URL: remove newlines and other control characters
+	dialURL := strings.TrimSpace(config.URL)
+	dialURL = strings.ReplaceAll(dialURL, "\n", "")
+	dialURL = strings.ReplaceAll(dialURL, "\r", "")
 	if len(config.Params) > 0 {
 		params := url.Values{}
 		for k, v := range config.Params {

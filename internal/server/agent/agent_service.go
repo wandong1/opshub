@@ -9,6 +9,7 @@ import (
 	"time"
 
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	"github.com/ydcloud-dy/opshub/internal/cache"
 	agentrepo "github.com/ydcloud-dy/opshub/internal/data/agent"
 	agentmodel "github.com/ydcloud-dy/opshub/internal/agent"
 	"github.com/ydcloud-dy/opshub/internal/conf"
@@ -29,6 +30,7 @@ type AgentService struct {
 	cfg              *conf.Config
 	hostRepo         assetbiz.HostRepo
 	serviceLabelRepo assetbiz.ServiceLabelRepo
+	cacheManager     *cache.CacheManager // 缓存管理器
 }
 
 // Connect 处理Agent双向流连接
@@ -39,10 +41,27 @@ func (s *AgentService) Connect(stream pb.AgentHub_ConnectServer) error {
 	defer func() {
 		if agentID != "" {
 			s.hub.Unregister(agentID)
+
 			// 更新状态为offline
 			s.agentRepo.UpdateStatus(context.Background(), agentID, "offline")
 			s.db.Model(&struct{ AgentStatus string }{}).
 				Exec("UPDATE hosts SET agent_status = 'offline' WHERE agent_id = ?", agentID)
+
+			// 更新缓存中的状态为offline
+			if s.cacheManager != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+
+				updates := map[string]any{
+					"status": "offline",
+				}
+
+				if err := s.cacheManager.UpdateAgentStatus(ctx, agentID, updates); err != nil {
+					appLogger.Warn("更新 Agent 离线状态到缓存失败",
+						zap.String("agentID", agentID),
+						zap.Error(err))
+				}
+			}
 		}
 	}()
 
@@ -85,6 +104,11 @@ func (s *AgentService) Connect(stream pb.AgentHub_ConnectServer) error {
 			if as != nil {
 				as.ResolvePending(payload.CmdResult.RequestId, payload.CmdResult)
 			}
+
+		case *pb.AgentMessage_ProbeResult:
+			if as != nil {
+				as.ResolvePending(payload.ProbeResult.RequestId, payload.ProbeResult)
+			}
 		}
 	}
 }
@@ -94,39 +118,180 @@ func (s *AgentService) handleRegister(stream pb.AgentHub_ConnectServer, req *pb.
 	// 查找Agent对应的HostID
 	agentInfo, err := s.agentRepo.GetByAgentID(context.Background(), req.AgentId)
 	if err != nil {
-		// Agent记录不存在 → 尝试自动注册
-		if s.hostRepo == nil {
-			appLogger.Error("Agent注册失败: 未找到Agent记录且未配置自动注册", zap.String("agentID", req.AgentId))
-			stream.Send(&pb.ServerMessage{
-				Payload: &pb.ServerMessage_RegisterAck{
-					RegisterAck: &pb.RegisterResponse{Success: false, Message: "Agent未注册"},
-				},
-			})
-			return nil
-		}
+		// Agent记录不存在 → 检查是否为通过平台部署的场景
+		// 优先检查 Host 表中是否已存在该 agent_id（说明是通过部署接口创建的）
+		var existingHost assetbiz.Host
+		if err := s.db.Where("agent_id = ?", req.AgentId).First(&existingHost).Error; err == nil {
+			// Host 已存在但 agent_info 缺失（部署后 agent_info 被意外删除），补充创建
+			appLogger.Warn("发现已部署的Agent缺失agent_info记录，正在修复", zap.String("agentID", req.AgentId), zap.Uint("hostID", existingHost.ID))
+			now := time.Now()
+			agentInfo = &agentmodel.AgentInfo{
+				AgentID:  req.AgentId,
+				HostID:   existingHost.ID,
+				Version:  req.Version,
+				Hostname: req.Hostname,
+				OS:       req.Os,
+				Arch:     req.Arch,
+				Status:   "online",
+				LastSeen: &now,
+			}
+			if createErr := s.agentRepo.Create(context.Background(), agentInfo); createErr != nil {
+				// 创建失败，可能是 host_id 唯一索引冲突，尝试查询现有记录
+				appLogger.Warn("创建agent_info失败，尝试查询现有记录", zap.Error(createErr))
+				existingAgentInfo, queryErr := s.agentRepo.GetByHostID(context.Background(), existingHost.ID)
+				if queryErr != nil {
+					appLogger.Error("查询现有agent_info记录失败", zap.Error(queryErr))
+					stream.Send(&pb.ServerMessage{
+						Payload: &pb.ServerMessage_RegisterAck{
+							RegisterAck: &pb.RegisterResponse{Success: false, Message: "Agent记录异常"},
+						},
+					})
+					return nil
+				}
+				// 找到了现有记录，但 agent_id 不匹配，说明是重复部署导致的
+				// 删除旧记录，使用新的 agent_id
+				appLogger.Info("检测到重复部署，删除旧agent_info记录",
+					zap.String("oldAgentID", existingAgentInfo.AgentID),
+					zap.String("newAgentID", req.AgentId))
+				s.agentRepo.Delete(context.Background(), existingAgentInfo.AgentID)
+				// 重新创建
+				if retryErr := s.agentRepo.Create(context.Background(), agentInfo); retryErr != nil {
+					appLogger.Error("重新创建agent_info记录失败", zap.Error(retryErr))
+					stream.Send(&pb.ServerMessage{
+						Payload: &pb.ServerMessage_RegisterAck{
+							RegisterAck: &pb.RegisterResponse{Success: false, Message: "Agent记录创建失败"},
+						},
+					})
+					return nil
+				}
+			}
+		} else {
+			// Host 不存在 → 可能是手动安装场景，也可能是 SSH 部署但 IP 匹配失败
+			if s.hostRepo == nil {
+				appLogger.Error("Agent注册失败: 未找到Agent记录且未配置自动注册", zap.String("agentID", req.AgentId))
+				stream.Send(&pb.ServerMessage{
+					Payload: &pb.ServerMessage_RegisterAck{
+						RegisterAck: &pb.RegisterResponse{Success: false, Message: "Agent未注册"},
+					},
+				})
+				return nil
+			}
 
-		// 验证agent_id格式
-		if _, parseErr := uuid.Parse(req.AgentId); parseErr != nil {
-			appLogger.Error("Agent自动注册失败: AgentID格式无效", zap.String("agentID", req.AgentId))
-			stream.Send(&pb.ServerMessage{
-				Payload: &pb.ServerMessage_RegisterAck{
-					RegisterAck: &pb.RegisterResponse{Success: false, Message: "AgentID格式无效"},
-				},
-			})
-			return nil
-		}
+			// 验证agent_id格式
+			if _, parseErr := uuid.Parse(req.AgentId); parseErr != nil {
+				appLogger.Error("Agent自动注册失败: AgentID格式无效", zap.String("agentID", req.AgentId))
+				stream.Send(&pb.ServerMessage{
+					Payload: &pb.ServerMessage_RegisterAck{
+						RegisterAck: &pb.RegisterResponse{Success: false, Message: "AgentID格式无效"},
+					},
+				})
+				return nil
+			}
 
-		agentInfo, err = s.autoRegisterHost(stream, req)
-		if err != nil {
-			appLogger.Error("Agent自动注册失败", zap.String("agentID", req.AgentId), zap.Error(err))
-			stream.Send(&pb.ServerMessage{
-				Payload: &pb.ServerMessage_RegisterAck{
-					RegisterAck: &pb.RegisterResponse{Success: false, Message: "自动注册失败: " + err.Error()},
-				},
-			})
-			return nil
+			// 关键修复：检查 IP 是否已存在（SSH 部署场景）
+			// 从 Agent 上报的 IP 列表中提取主 IP
+			var detectedIP string
+			for _, addr := range req.Ips {
+				if addr != "" && addr != "127.0.0.1" && addr != "::1" {
+					detectedIP = addr
+					break
+				}
+			}
+			if detectedIP == "" && len(req.Ips) > 0 {
+				detectedIP = req.Ips[0]
+			}
+			// 兜底：从 gRPC 连接提取 IP
+			if detectedIP == "" {
+				if p, ok := peer.FromContext(stream.Context()); ok {
+					if tcpAddr, ok := p.Addr.(*net.TCPAddr); ok {
+						detectedIP = tcpAddr.IP.String()
+					} else {
+						host, _, splitErr := net.SplitHostPort(p.Addr.String())
+						if splitErr == nil {
+							detectedIP = host
+						}
+					}
+				}
+			}
+
+			// 通过 IP 查找是否已有主机记录（SSH 部署后 Agent 首次连接的场景）
+			var hostByIP assetbiz.Host
+			if detectedIP != "" && detectedIP != "unknown" {
+				if err := s.db.Where("ip = ?", detectedIP).First(&hostByIP).Error; err == nil {
+					// IP 已存在，更新该主机的 agent_id 和 hostname
+					appLogger.Info("检测到 IP 已存在的主机，更新 agent_id 和 hostname",
+						zap.String("ip", detectedIP),
+						zap.Uint("hostID", hostByIP.ID),
+						zap.String("oldAgentID", hostByIP.AgentID),
+						zap.String("newAgentID", req.AgentId),
+						zap.String("oldHostname", hostByIP.Hostname),
+						zap.String("newHostname", req.Hostname))
+
+					// 删除旧的 agent_info 记录（如果存在）
+					if hostByIP.AgentID != "" {
+						s.agentRepo.Delete(context.Background(), hostByIP.AgentID)
+					}
+
+					// 更新 Host 记录
+					s.db.Model(&assetbiz.Host{}).Where("id = ?", hostByIP.ID).Updates(map[string]any{
+						"agent_id":        req.AgentId,
+						"agent_status":    "online",
+						"connection_mode": "agent",
+						"hostname":        req.Hostname,
+						"os":              req.Os,
+						"arch":            req.Arch,
+					})
+
+					// 创建新的 agent_info 记录
+					now := time.Now()
+					agentInfo = &agentmodel.AgentInfo{
+						AgentID:  req.AgentId,
+						HostID:   hostByIP.ID,
+						Version:  req.Version,
+						Hostname: req.Hostname,
+						OS:       req.Os,
+						Arch:     req.Arch,
+						Status:   "online",
+						LastSeen: &now,
+					}
+					if createErr := s.agentRepo.Create(context.Background(), agentInfo); createErr != nil {
+						appLogger.Error("创建 agent_info 记录失败", zap.Error(createErr))
+						stream.Send(&pb.ServerMessage{
+							Payload: &pb.ServerMessage_RegisterAck{
+								RegisterAck: &pb.RegisterResponse{Success: false, Message: "Agent记录创建失败"},
+							},
+						})
+						return nil
+					}
+				} else {
+					// IP 不存在，真正的手动安装场景，创建新主机
+					agentInfo, err = s.autoRegisterHost(stream, req)
+					if err != nil {
+						appLogger.Error("Agent自动注册失败", zap.String("agentID", req.AgentId), zap.Error(err))
+						stream.Send(&pb.ServerMessage{
+							Payload: &pb.ServerMessage_RegisterAck{
+								RegisterAck: &pb.RegisterResponse{Success: false, Message: "自动注册失败: " + err.Error()},
+							},
+						})
+						return nil
+					}
+					appLogger.Info("Agent自动注册成功", zap.String("agentID", req.AgentId), zap.Uint("hostID", agentInfo.HostID))
+				}
+			} else {
+				// 无法获取 IP，回退到自动注册
+				agentInfo, err = s.autoRegisterHost(stream, req)
+				if err != nil {
+					appLogger.Error("Agent自动注册失败", zap.String("agentID", req.AgentId), zap.Error(err))
+					stream.Send(&pb.ServerMessage{
+						Payload: &pb.ServerMessage_RegisterAck{
+							RegisterAck: &pb.RegisterResponse{Success: false, Message: "自动注册失败: " + err.Error()},
+						},
+					})
+					return nil
+				}
+				appLogger.Info("Agent自动注册成功", zap.String("agentID", req.AgentId), zap.Uint("hostID", agentInfo.HostID))
+			}
 		}
-		appLogger.Info("Agent自动注册成功", zap.String("agentID", req.AgentId), zap.Uint("hostID", agentInfo.HostID))
 	}
 
 	// 注册到Hub
@@ -176,16 +341,48 @@ func (s *AgentService) handleRegister(stream pb.AgentHub_ConnectServer, req *pb.
 // handleHeartbeat 处理心跳
 func (s *AgentService) handleHeartbeat(as *AgentStream, req *pb.HeartbeatRequest) {
 	now := time.Now()
-	s.agentRepo.UpdateInfo(context.Background(), req.AgentId, map[string]any{
-		"status":    "online",
-		"last_seen": &now,
-	})
 
+	// Debug 日志：记录收到心跳
+	appLogger.Debug("收到 Agent 心跳",
+		zap.String("agentID", req.AgentId),
+		zap.Time("time", now))
+
+	// 使用缓存管理器更新状态（异步）
+	if s.cacheManager != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			updates := map[string]any{
+				"status":    "online",
+				"last_seen": &now,
+			}
+
+			if err := s.cacheManager.UpdateAgentStatus(ctx, req.AgentId, updates); err != nil {
+				appLogger.Warn("更新 Agent 状态失败",
+					zap.String("agentID", req.AgentId),
+					zap.Error(err))
+			}
+		}()
+	} else {
+		// 降级：直接更新数据库
+		s.agentRepo.UpdateInfo(context.Background(), req.AgentId, map[string]any{
+			"status":    "online",
+			"last_seen": &now,
+		})
+	}
+
+	// 立即响应心跳
 	as.Send(&pb.ServerMessage{
 		Payload: &pb.ServerMessage_HeartbeatAck{
 			HeartbeatAck: &pb.HeartbeatResponse{Success: true},
 		},
 	})
+}
+
+// SetCacheManager 设置缓存管理器
+func (s *AgentService) SetCacheManager(manager *cache.CacheManager) {
+	s.cacheManager = manager
 }
 
 // autoRegisterHost 自动注册主机和AgentInfo

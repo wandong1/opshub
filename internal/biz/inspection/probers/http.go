@@ -1,9 +1,11 @@
 package probers
 
 import (
+	"context"
 	"crypto/tls"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"time"
@@ -22,7 +24,10 @@ func (p *HTTPProber) ProbeApp(config *AppProbeConfig) *AppResult {
 	start := time.Now()
 
 	// Build request
-	reqURL := config.URL
+	// Clean URL: remove newlines and other control characters
+	reqURL := strings.TrimSpace(config.URL)
+	reqURL = strings.ReplaceAll(reqURL, "\n", "")
+	reqURL = strings.ReplaceAll(reqURL, "\r", "")
 	if len(config.Params) > 0 {
 		params := url.Values{}
 		for k, v := range config.Params {
@@ -73,12 +78,63 @@ func (p *HTTPProber) ProbeApp(config *AppProbeConfig) *AppResult {
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   time.Duration(timeout) * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			result.RedirectCount = len(via)
+			return nil
+		},
 	}
+
+	// Setup httptrace for performance breakdown
+	var dnsStart, connectStart, tlsStart, firstByteTime time.Time
+	trace := &httptrace.ClientTrace{
+		DNSStart: func(info httptrace.DNSStartInfo) {
+			dnsStart = time.Now()
+		},
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			if !dnsStart.IsZero() {
+				result.DNSLookupTime = ms(dnsStart)
+			}
+		},
+		ConnectStart: func(network, addr string) {
+			connectStart = time.Now()
+		},
+		ConnectDone: func(network, addr string, err error) {
+			if !connectStart.IsZero() {
+				result.TCPConnectTime = ms(connectStart)
+			}
+		},
+		TLSHandshakeStart: func() {
+			tlsStart = time.Now()
+		},
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			if !tlsStart.IsZero() {
+				result.TLSHandshakeTime = ms(tlsStart)
+			}
+			if err == nil {
+				result.TLSVersion = tlsVersionString(state.Version)
+				result.TLSCipherSuite = tls.CipherSuiteName(state.CipherSuite)
+				if len(state.PeerCertificates) > 0 {
+					result.SSLCertNotAfter = state.PeerCertificates[0].NotAfter.Unix()
+				}
+			}
+		},
+		GotFirstResponseByte: func() {
+			firstByteTime = time.Now()
+		},
+	}
+
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+	req = req.WithContext(ctx)
 
 	// Execute request
 	httpStart := time.Now()
+	redirectStart := httpStart
 	resp, err := client.Do(req)
 	result.HTTPResponseTime = ms(httpStart)
+
+	if result.RedirectCount > 0 {
+		result.RedirectTime = ms(redirectStart)
+	}
 
 	if err != nil {
 		result.Error = "request failed: " + err.Error()
@@ -88,11 +144,33 @@ func (p *HTTPProber) ProbeApp(config *AppProbeConfig) *AppResult {
 	defer resp.Body.Close()
 
 	result.HTTPStatusCode = resp.StatusCode
+	result.FinalURL = resp.Request.URL.String()
+
+	// Calculate TTFB
+	if !firstByteTime.IsZero() {
+		result.TTFB = float64(firstByteTime.Sub(httpStart).Microseconds()) / 1000.0
+	}
 
 	// Read body (limited)
+	contentStart := time.Now()
 	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyRead))
 	bodyStr := string(bodyBytes)
 	result.HTTPContentLength = int64(len(bodyBytes))
+	result.ResponseBodyBytes = len(bodyBytes)
+
+	// Calculate content transfer time
+	if !firstByteTime.IsZero() {
+		result.ContentTransferTime = ms(contentStart)
+	}
+
+	// Calculate response header size (approximate)
+	headerSize := 0
+	for k, vals := range resp.Header {
+		for _, v := range vals {
+			headerSize += len(k) + len(v) + 4 // ": " + "\r\n"
+		}
+	}
+	result.ResponseHeaderBytes = headerSize
 
 	// Store truncated body
 	if len(bodyStr) > maxResponseBodyStore {
@@ -111,17 +189,26 @@ func (p *HTTPProber) ProbeApp(config *AppProbeConfig) *AppResult {
 	result.Success = resp.StatusCode >= 200 && resp.StatusCode < 400
 
 	// Evaluate assertions
+	assertionStart := time.Now()
 	if len(config.Assertions) > 0 {
 		assertionResults := EvaluateAssertions(config.Assertions, bodyStr, resp.Header)
 		result.AssertionResults = assertionResults
 		result.AssertionSuccess = true
+		result.AssertionEvalTime = ms(assertionStart)
+
+		passCount := 0
+		failCount := 0
 		for _, ar := range assertionResults {
-			if !ar.Success {
+			if ar.Success {
+				passCount++
+			} else {
+				failCount++
 				result.AssertionSuccess = false
 				result.Success = false
-				break
 			}
 		}
+		result.AssertionPassCount = passCount
+		result.AssertionFailCount = failCount
 	} else {
 		result.AssertionSuccess = true
 	}
@@ -132,4 +219,19 @@ func (p *HTTPProber) ProbeApp(config *AppProbeConfig) *AppResult {
 
 func ms(start time.Time) float64 {
 	return float64(time.Since(start).Microseconds()) / 1000.0
+}
+
+func tlsVersionString(version uint16) string {
+	switch version {
+	case tls.VersionTLS10:
+		return "TLS 1.0"
+	case tls.VersionTLS11:
+		return "TLS 1.1"
+	case tls.VersionTLS12:
+		return "TLS 1.2"
+	case tls.VersionTLS13:
+		return "TLS 1.3"
+	default:
+		return "Unknown"
+	}
 }

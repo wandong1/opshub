@@ -87,22 +87,35 @@ func (h *AgentHub) Register(agentID string, hostID uint, stream pb.AgentHub_Conn
 	}
 
 	h.mu.Lock()
-	// 关闭旧连接
+	// 检查旧连接
 	if old, ok := h.byAgentID[agentID]; ok {
-		close(old.DoneCh)
+		appLogger.Warn("Agent重复连接，替换旧连接",
+			zap.String("agent_id", agentID),
+			zap.Uint("old_host_id", old.HostID),
+			zap.Uint("new_host_id", hostID),
+		)
+		// 不立即关闭 DoneCh，让正在进行的请求自然完成或超时
+		// 只是从映射表中移除，避免新请求使用旧连接
 	}
 	h.byAgentID[agentID] = as
 	h.byHostID[hostID] = as
+	totalAgents := len(h.byHostID)
 	h.mu.Unlock()
 
-	appLogger.Info("Agent已注册", zap.String("agentID", agentID), zap.Uint("hostID", hostID))
+	appLogger.Info("Agent已注册",
+		zap.String("agent_id", agentID),
+		zap.Uint("host_id", hostID),
+		zap.Int("total_agents", totalAgents),
+	)
 	return as
 }
 
 // Unregister 注销Agent连接
 func (h *AgentHub) Unregister(agentID string) {
 	h.mu.Lock()
+	var hostID uint
 	if as, ok := h.byAgentID[agentID]; ok {
+		hostID = as.HostID
 		delete(h.byAgentID, agentID)
 		delete(h.byHostID, as.HostID)
 		select {
@@ -111,8 +124,14 @@ func (h *AgentHub) Unregister(agentID string) {
 			close(as.DoneCh)
 		}
 	}
+	totalAgents := len(h.byHostID)
 	h.mu.Unlock()
-	appLogger.Info("Agent已注销", zap.String("agentID", agentID))
+
+	appLogger.Info("Agent已注销",
+		zap.String("agent_id", agentID),
+		zap.Uint("host_id", hostID),
+		zap.Int("total_agents", totalAgents),
+	)
 }
 
 // GetByHostID 根据HostID获取Agent流
@@ -136,6 +155,13 @@ func (h *AgentHub) IsOnline(hostID uint) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	_, ok := h.byHostID[hostID]
+
+	appLogger.Info("Checking agent online status",
+		zap.Uint("host_id", hostID),
+		zap.Bool("is_online", ok),
+		zap.Int("total_agents", len(h.byHostID)),
+	)
+
 	return ok
 }
 
@@ -179,4 +205,60 @@ func (h *AgentHub) WaitResponse(as *AgentStream, requestID string, timeout time.
 	case <-as.DoneCh:
 		return nil, fmt.Errorf("Agent连接已断开")
 	}
+}
+
+// SendProbeRequest 发送拨测请求到Agent并等待响应
+func (h *AgentHub) SendProbeRequest(hostID uint, req *pb.ProbeRequest) (*pb.ProbeResult, error) {
+	as, ok := h.GetByHostID(hostID)
+	if !ok {
+		return nil, fmt.Errorf("Agent未连接")
+	}
+
+	// 发送拨测请求
+	msg := &pb.ServerMessage{
+		Payload: &pb.ServerMessage_ProbeRequest{
+			ProbeRequest: req,
+		},
+	}
+
+	if err := as.Send(msg); err != nil {
+		return nil, fmt.Errorf("发送拨测请求失败: %w", err)
+	}
+
+	// 等待响应
+	result, err := h.WaitResponse(as, req.RequestId, 35*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	probeResult, ok := result.(*pb.ProbeResult)
+	if !ok {
+		return nil, fmt.Errorf("响应类型错误")
+	}
+
+	return probeResult, nil
+}
+
+// CloseAll 关闭所有Agent连接
+func (h *AgentHub) CloseAll() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	appLogger.Info("正在关闭所有Agent连接", zap.Int("count", len(h.byAgentID)))
+
+	for agentID, as := range h.byAgentID {
+		select {
+		case <-as.DoneCh:
+			// 已经关闭
+		default:
+			close(as.DoneCh)
+			appLogger.Debug("已关闭Agent连接", zap.String("agentID", agentID))
+		}
+	}
+
+	// 清空所有连接
+	h.byAgentID = make(map[string]*AgentStream)
+	h.byHostID = make(map[uint]*AgentStream)
+
+	appLogger.Info("所有Agent连接已关闭")
 }

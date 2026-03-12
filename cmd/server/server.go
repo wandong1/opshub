@@ -237,6 +237,10 @@ func autoMigrate(db *gorm.DB) error {
 		&assetbiz.TerminalSession{},
 		// 服务标签表
 		&assetbiz.ServiceLabel{},
+		// Web站点管理表
+		&assetbiz.Website{},
+		&assetbiz.WebsiteGroup{},
+		&assetbiz.WebsiteAgent{},
 	); err != nil {
 		return err
 	}
