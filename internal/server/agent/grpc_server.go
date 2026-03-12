@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/ydcloud-dy/opshub/internal/biz/asset"
 	"github.com/ydcloud-dy/opshub/internal/conf"
@@ -109,7 +110,30 @@ func (s *GRPCServer) Start() error {
 // Stop 停止gRPC服务器
 func (s *GRPCServer) Stop() {
 	if s.server != nil {
-		s.server.GracefulStop()
-		appLogger.Info("Agent gRPC服务器已停止")
+		appLogger.Info("正在停止Agent gRPC服务器...")
+
+		// 先关闭所有Agent连接
+		s.hub.CloseAll()
+
+		// 使用带超时的优雅关闭
+		done := make(chan struct{})
+		go func() {
+			s.server.GracefulStop()
+			close(done)
+		}()
+
+		// 等待最多5秒
+		select {
+		case <-done:
+			appLogger.Info("Agent gRPC服务器已优雅停止")
+		case <-time.After(5 * time.Second):
+			appLogger.Warn("Agent gRPC服务器优雅停止超时，强制停止")
+			s.server.Stop()
+		}
 	}
+}
+
+// GetAgentService 获取 AgentService 实例（用于注入依赖）
+func (s *GRPCServer) GetAgentService() *AgentService {
+	return s.service
 }

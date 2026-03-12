@@ -140,6 +140,31 @@ type ProbeResult struct {
 	Detail          string    `gorm:"type:text" json:"detail"`
 	AgentHostID     uint      `gorm:"default:0" json:"agentHostId"`   // 执行的Agent主机ID，0=本地
 	RetryAttempt    int       `gorm:"default:0" json:"retryAttempt"`  // 实际重试次数
+
+	// Performance breakdown metrics
+	DNSLookupTime       float64 `json:"dnsLookupTime"`
+	HTTPTCPConnectTime  float64 `json:"httpTcpConnectTime"` // HTTP-specific TCP connect time
+	TLSHandshakeTime    float64 `json:"tlsHandshakeTime"`
+	TTFB                float64 `json:"ttfb"`
+	ContentTransferTime float64 `json:"contentTransferTime"`
+
+	// TLS/Certificate information
+	TLSVersion      string `gorm:"type:varchar(20)" json:"tlsVersion"`
+	TLSCipherSuite  string `gorm:"type:varchar(100)" json:"tlsCipherSuite"`
+	SSLCertNotAfter int64  `json:"sslCertNotAfter"`
+
+	// HTTP details
+	RedirectCount       int     `json:"redirectCount"`
+	RedirectTime        float64 `json:"redirectTime"`
+	FinalURL            string  `gorm:"type:varchar(2000)" json:"finalUrl"`
+	ResponseHeaderBytes int     `json:"responseHeaderBytes"`
+	ResponseBodyBytes   int     `json:"responseBodyBytes"`
+
+	// Assertion statistics
+	AssertionPassCount int     `json:"assertionPassCount"`
+	AssertionFailCount int     `json:"assertionFailCount"`
+	AssertionEvalTime  float64 `json:"assertionEvalTime"`
+
 	CreatedAt       time.Time `json:"createdAt"`
 }
 

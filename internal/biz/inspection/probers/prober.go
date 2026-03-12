@@ -17,6 +17,7 @@ type Result struct {
 	UDPWriteTime    float64 // ms
 	UDPReadTime     float64 // ms
 	Error           string
+	RetryAttempt    int     // number of retry attempts
 }
 
 // Prober defines the interface for network probing.

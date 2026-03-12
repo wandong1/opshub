@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
@@ -194,6 +195,9 @@ func (s *HTTPServer) deployToHost(ctx context.Context, hostID uint, serverAddr s
 	// 清理临时目录
 	client.Execute(fmt.Sprintf("rm -rf %s", tmpDir))
 
+	// 删除该主机的旧 AgentInfo 记录（如果存在）
+	s.grpcServer.AgentRepo().DeleteByHostID(ctx, hostID)
+
 	// 更新Host记录
 	s.db.Exec("UPDATE hosts SET agent_id = ?, agent_status = 'installed', connection_mode = 'agent' WHERE id = ?", agentID, hostID)
 
@@ -203,30 +207,52 @@ func (s *HTTPServer) deployToHost(ctx context.Context, hostID uint, serverAddr s
 		HostID:  hostID,
 		Status:  "installed",
 	}
-	s.grpcServer.AgentRepo().Create(ctx, agentInfo)
+	if err := s.grpcServer.AgentRepo().Create(ctx, agentInfo); err != nil {
+		return fmt.Errorf("创建AgentInfo记录失败: %w", err)
+	}
 
 	appLogger.Info("Agent部署完成", zap.Uint("hostID", hostID), zap.String("agentID", agentID))
 	return nil
 }
 
 // findAgentTarball 查找Agent安装包tar.gz
+// 优先查找多架构安装包（multi-arch），如果没有则查找任意 .tar.gz
 func (s *HTTPServer) findAgentTarball() (string, error) {
 	binaryDir := s.grpcServer.conf.Agent.BinaryDir
 	entries, err := os.ReadDir(binaryDir)
 	if err != nil {
 		return "", fmt.Errorf("读取目录 %s 失败: %w", binaryDir, err)
 	}
+
+	var multiArchPkg string
+	var anyPkg string
+
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tar.gz") {
-			return binaryDir + "/" + entry.Name(), nil
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".tar.gz") {
+			continue
+		}
+		fullPath := binaryDir + "/" + entry.Name()
+		// 优先选择多架构包
+		if strings.Contains(entry.Name(), "multi-arch") {
+			multiArchPkg = fullPath
+			break
+		}
+		// 记录第一个找到的包作为备选
+		if anyPkg == "" {
+			anyPkg = fullPath
 		}
 	}
-	// 回退：检查裸二进制是否存在
-	binaryPath := binaryDir + "/srehub-agent"
-	if _, err := os.Stat(binaryPath); err == nil {
-		return "", fmt.Errorf("仅找到裸二进制文件，请先运行 agent/build.sh 生成安装包")
+
+	if multiArchPkg != "" {
+		appLogger.Info("使用多架构Agent安装包", zap.String("package", filepath.Base(multiArchPkg)))
+		return multiArchPkg, nil
 	}
-	return "", fmt.Errorf("在 %s 中未找到Agent安装包(.tar.gz)", binaryDir)
+	if anyPkg != "" {
+		appLogger.Info("使用Agent安装包", zap.String("package", filepath.Base(anyPkg)))
+		return anyPkg, nil
+	}
+
+	return "", fmt.Errorf("在 %s 中未找到Agent安装包(.tar.gz)，请先运行 agent/build.sh 生成安装包", binaryDir)
 }
 
 // base64Encode 将字节数据编码为base64字符串
@@ -322,9 +348,39 @@ func (s *HTTPServer) updateAgentOnHost(ctx context.Context, hostID uint, serverA
 		return fmt.Errorf("解压安装包失败: %w", err)
 	}
 
+	// 检测目标主机平台并选择对应的二进制文件
+	detectCmd := `uname -s | tr '[:upper:]' '[:lower:]' && uname -m`
+	platformOutput, err := client.Execute(detectCmd)
+	if err != nil {
+		return fmt.Errorf("检测主机平台失败: %w", err)
+	}
+	lines := strings.Split(strings.TrimSpace(platformOutput), "\n")
+	if len(lines) < 2 {
+		return fmt.Errorf("无法解析主机平台信息")
+	}
+	osType := strings.TrimSpace(lines[0])
+	archType := strings.TrimSpace(lines[1])
+
+	// 标准化架构名称
+	if archType == "x86_64" {
+		archType = "amd64"
+	} else if archType == "aarch64" {
+		archType = "arm64"
+	}
+
+	binaryName := fmt.Sprintf("srehub-agent-%s-%s", osType, archType)
+	appLogger.Info("检测到目标主机平台", zap.String("os", osType), zap.String("arch", archType), zap.String("binary", binaryName))
+
+	// 检查对应的二进制文件是否存在
+	checkCmd := fmt.Sprintf("test -f %s/bin/%s && echo 'exists' || echo 'not found'", tmpDir, binaryName)
+	checkOutput, _ := client.Execute(checkCmd)
+	if !strings.Contains(checkOutput, "exists") {
+		return fmt.Errorf("未找到适用于 %s/%s 的二进制文件: %s", osType, archType, binaryName)
+	}
+
 	// 停止服务 → 替换二进制 → 启动服务
 	client.Execute("sudo systemctl stop srehub-agent")
-	copyCmd := fmt.Sprintf("sudo cp -f %s/srehub-agent %s/srehub-agent", tmpDir, deployPath)
+	copyCmd := fmt.Sprintf("sudo cp -f %s/bin/%s %s/srehub-agent && sudo chmod +x %s/srehub-agent", tmpDir, binaryName, deployPath, deployPath)
 	if _, err := client.Execute(copyCmd); err != nil {
 		return fmt.Errorf("替换Agent二进制失败: %w", err)
 	}

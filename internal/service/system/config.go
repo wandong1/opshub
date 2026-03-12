@@ -30,8 +30,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/ydcloud-dy/opshub/internal/biz/system"
+	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 	"github.com/ydcloud-dy/opshub/pkg/version"
+	"go.uber.org/zap"
 )
 
 // ConfigService 系统配置服务
@@ -251,12 +253,9 @@ func (s *ConfigService) UploadLogo(c *gin.Context) {
 	// 返回文件路径
 	logoURL := "/uploads/logo/" + filename
 
-	// 保存到配置
-	basicConfig := &system.BasicConfig{
-		SystemLogo: logoURL,
-	}
-	// 只更新Logo字段
-	if err := s.configUseCase.SaveBasicConfig(c.Request.Context(), basicConfig); err != nil {
+	// 只更新Logo字段，不影响其他配置
+	if err := s.configUseCase.SaveLogoOnly(c.Request.Context(), logoURL); err != nil {
+		appLogger.Warn("保存Logo配置失败", zap.Error(err))
 		// 忽略错误，文件已经上传成功
 	}
 

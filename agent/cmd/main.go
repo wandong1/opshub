@@ -12,6 +12,8 @@ import (
 	"github.com/ydcloud-dy/opshub/agent/internal/config"
 	"github.com/ydcloud-dy/opshub/agent/internal/executor"
 	"github.com/ydcloud-dy/opshub/agent/internal/filemanager"
+	"github.com/ydcloud-dy/opshub/agent/internal/logger"
+	"github.com/ydcloud-dy/opshub/agent/internal/prober"
 	"github.com/ydcloud-dy/opshub/agent/internal/terminal"
 )
 
@@ -32,9 +34,20 @@ var runCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("SREHub Agent 启动中...\n")
-		fmt.Printf("AgentID: %s\n", cfg.AgentID)
-		fmt.Printf("Server:  %s\n", cfg.ServerAddr)
+		// 初始化日志
+		logFile := cfg.LogFile
+		if logFile == "" {
+			logFile = "/var/log/srehub-agent/agent.log"
+		}
+		if err := logger.Init(logFile, cfg.LogMaxSize, cfg.LogMaxBackups, cfg.LogLevel); err != nil {
+			fmt.Printf("初始化日志失败: %v\n", err)
+			os.Exit(1)
+		}
+
+		logger.Info("SREHub Agent 启动中...")
+		logger.Info("AgentID: %s", cfg.AgentID)
+		logger.Info("Server: %s", cfg.ServerAddr)
+		logger.Info("日志文件: %s (最大: %dMB, 保留: %d个备份)", logFile, cfg.LogMaxSize, cfg.LogMaxBackups)
 
 		grpcClient := client.NewGRPCClient(cfg)
 
@@ -42,7 +55,12 @@ var runCmd = &cobra.Command{
 		ptyMgr := terminal.NewPTYManager(grpcClient)
 		fileMgr := filemanager.NewFileManager()
 		cmdExec := executor.NewCommandExecutor()
+		probeMgr := prober.NewManager()
+
 		grpcClient.SetHandlers(ptyMgr, fileMgr, cmdExec)
+		grpcClient.SetProbeHandler(probeMgr)
+
+		logger.Info("拨测功能已启用")
 
 		// 启动
 		ctx, cancel := context.WithCancel(context.Background())
@@ -53,17 +71,17 @@ var runCmd = &cobra.Command{
 
 		go func() {
 			<-quit
-			fmt.Println("\n正在关闭Agent...")
+			logger.Info("收到退出信号，正在关闭Agent...")
 			cancel()
 		}()
 
 		if err := grpcClient.Run(ctx); err != nil {
 			if ctx.Err() == nil {
-				fmt.Printf("Agent运行错误: %v\n", err)
+				logger.Error("Agent运行错误: %v", err)
 				os.Exit(1)
 			}
 		}
-		fmt.Println("Agent已关闭")
+		logger.Info("Agent已关闭")
 	},
 }
 

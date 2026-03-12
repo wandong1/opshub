@@ -933,7 +933,10 @@ const buildProbeData = () => {
     data.wsMessageType = WS_MESSAGE_TYPES.find(t => t.value === formData.wsMessageFormat)?.wireType || 1
     data.wsMessageFormat = formData.wsMessageFormat
     data.wsReadTimeout = formData.wsReadTimeout
-    if (data.type === 'websocket' && !data.target) data.target = data.url || 'websocket'
+    // Auto-fill target for all application types if not set
+    if (!data.target) {
+      data.target = data.url || (data.type === 'websocket' ? 'websocket' : 'http')
+    }
   }
   if (data.category === 'workflow') {
     const vars: Record<string, string> = {}

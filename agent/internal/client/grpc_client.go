@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ydcloud-dy/opshub/agent/internal/config"
+	"github.com/ydcloud-dy/opshub/agent/internal/logger"
 	pb "github.com/ydcloud-dy/opshub/pkg/agentproto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -37,16 +38,25 @@ type CommandHandler interface {
 	Execute(requestID, command string, timeout int32) *pb.AgentMessage
 }
 
+// ProbeHandler 拨测回调
+type ProbeHandler interface {
+	Probe(req *pb.ProbeRequest) *pb.ProbeResult
+}
+
 // GRPCClient Agent gRPC客户端
 type GRPCClient struct {
-	cfg        *config.Config
-	stream     pb.AgentHub_ConnectClient
-	conn       *grpc.ClientConn
-	mu         sync.Mutex
-	termHandler    TerminalHandler
-	fileHandler    FileHandler
-	cmdHandler     CommandHandler
+	cfg               *config.Config
+	stream            pb.AgentHub_ConnectClient
+	conn              *grpc.ClientConn
+	mu                sync.Mutex
+	termHandler       TerminalHandler
+	fileHandler       FileHandler
+	cmdHandler        CommandHandler
+	probeHandler      ProbeHandler
 	heartbeatInterval int32
+	intervalMu        sync.RWMutex
+	heartbeatCancel   context.CancelFunc
+	heartbeatMu       sync.Mutex
 }
 
 // NewGRPCClient 创建gRPC客户端
@@ -59,6 +69,11 @@ func (c *GRPCClient) SetHandlers(term TerminalHandler, file FileHandler, cmd Com
 	c.termHandler = term
 	c.fileHandler = file
 	c.cmdHandler = cmd
+}
+
+// SetProbeHandler 设置拨测处理器
+func (c *GRPCClient) SetProbeHandler(probe ProbeHandler) {
+	c.probeHandler = probe
 }
 
 // SendMessage 发送消息到服务端
@@ -75,10 +90,11 @@ func (c *GRPCClient) SendMessage(msg *pb.AgentMessage) error {
 func (c *GRPCClient) Run(ctx context.Context) error {
 	for {
 		if err := c.connectAndServe(ctx); err != nil {
-			fmt.Printf("连接断开: %v, 5秒后重连...\n", err)
+			logger.Warn("连接断开: %v, 5秒后重连...", err)
 		}
 		select {
 		case <-ctx.Done():
+			logger.Info("收到退出信号，停止重连")
 			return ctx.Err()
 		case <-time.After(5 * time.Second):
 		}
@@ -87,8 +103,11 @@ func (c *GRPCClient) Run(ctx context.Context) error {
 
 // connectAndServe 连接并处理消息
 func (c *GRPCClient) connectAndServe(ctx context.Context) error {
+	logger.Info("正在连接到服务器: %s", c.cfg.ServerAddr)
+
 	tlsConfig, err := c.loadTLS()
 	if err != nil {
+		logger.Error("加载TLS失败: %v", err)
 		return fmt.Errorf("加载TLS失败: %w", err)
 	}
 
@@ -96,6 +115,7 @@ func (c *GRPCClient) connectAndServe(ctx context.Context) error {
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
 	)
 	if err != nil {
+		logger.Error("gRPC连接失败: %v", err)
 		return fmt.Errorf("gRPC连接失败: %w", err)
 	}
 	defer conn.Close()
@@ -104,6 +124,7 @@ func (c *GRPCClient) connectAndServe(ctx context.Context) error {
 	client := pb.NewAgentHubClient(conn)
 	stream, err := client.Connect(ctx)
 	if err != nil {
+		logger.Error("建立流失败: %v", err)
 		return fmt.Errorf("建立流失败: %w", err)
 	}
 	c.mu.Lock()
@@ -113,6 +134,9 @@ func (c *GRPCClient) connectAndServe(ctx context.Context) error {
 	// 发送注册
 	hostname, _ := os.Hostname()
 	ips := getLocalIPs()
+	logger.Info("发送注册请求 - AgentID: %s, Hostname: %s, OS: %s, Arch: %s",
+		c.cfg.AgentID, hostname, runtime.GOOS, runtime.GOARCH)
+
 	c.SendMessage(&pb.AgentMessage{
 		Payload: &pb.AgentMessage_Register{
 			Register: &pb.RegisterRequest{
@@ -126,13 +150,28 @@ func (c *GRPCClient) connectAndServe(ctx context.Context) error {
 		},
 	})
 
+	// 停止旧的心跳循环（如果存在）
+	c.heartbeatMu.Lock()
+	if c.heartbeatCancel != nil {
+		c.heartbeatCancel()
+	}
+	// 创建新的心跳上下文
+	heartbeatCtx, cancel := context.WithCancel(ctx)
+	c.heartbeatCancel = cancel
+	c.heartbeatMu.Unlock()
+
 	// 启动心跳
-	go c.heartbeatLoop(ctx)
+	c.intervalMu.RLock()
+	interval := c.heartbeatInterval
+	c.intervalMu.RUnlock()
+	logger.Info("启动心跳循环，间隔: %d秒", interval)
+	go c.heartbeatLoop(heartbeatCtx)
 
 	// 接收消息循环
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
+			logger.Error("接收消息失败: %v", err)
 			return fmt.Errorf("接收消息失败: %w", err)
 		}
 		go c.handleServerMessage(msg)
@@ -168,20 +207,30 @@ func (c *GRPCClient) loadTLS() (*tls.Config, error) {
 
 // heartbeatLoop 心跳循环
 func (c *GRPCClient) heartbeatLoop(ctx context.Context) {
-	ticker := time.NewTicker(time.Duration(c.heartbeatInterval) * time.Second)
+	c.intervalMu.RLock()
+	interval := time.Duration(c.heartbeatInterval) * time.Second
+	c.intervalMu.RUnlock()
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
+			logger.Debug("心跳循环退出")
 			return
 		case <-ticker.C:
-			c.SendMessage(&pb.AgentMessage{
+			logger.Debug("发送心跳 - AgentID: %s", c.cfg.AgentID)
+			err := c.SendMessage(&pb.AgentMessage{
 				Payload: &pb.AgentMessage_Heartbeat{
 					Heartbeat: &pb.HeartbeatRequest{
 						AgentId: c.cfg.AgentID,
 					},
 				},
 			})
+			if err != nil {
+				logger.Error("发送心跳失败: %v", err)
+			}
 		}
 	}
 }
@@ -193,7 +242,10 @@ func (c *GRPCClient) handleServerMessage(msg *pb.ServerMessage) {
 		if payload.RegisterAck.Success {
 			fmt.Printf("注册成功: %s\n", payload.RegisterAck.Message)
 			if payload.RegisterAck.HeartbeatInterval > 0 {
+				c.intervalMu.Lock()
 				c.heartbeatInterval = payload.RegisterAck.HeartbeatInterval
+				c.intervalMu.Unlock()
+				fmt.Printf("心跳间隔已更新为: %d 秒\n", payload.RegisterAck.HeartbeatInterval)
 			}
 		} else {
 			fmt.Printf("注册失败: %s\n", payload.RegisterAck.Message)
@@ -236,6 +288,18 @@ func (c *GRPCClient) handleServerMessage(msg *pb.ServerMessage) {
 	case *pb.ServerMessage_CmdRequest:
 		if c.cmdHandler != nil {
 			resp := c.cmdHandler.Execute(payload.CmdRequest.RequestId, payload.CmdRequest.Command, payload.CmdRequest.Timeout)
+			c.SendMessage(resp)
+		}
+
+	case *pb.ServerMessage_ProbeRequest:
+		if c.probeHandler != nil {
+			logger.Info("收到拨测请求: type=%s, target=%s", payload.ProbeRequest.ProbeType, payload.ProbeRequest.Target)
+			result := c.probeHandler.Probe(payload.ProbeRequest)
+			resp := &pb.AgentMessage{
+				Payload: &pb.AgentMessage_ProbeResult{
+					ProbeResult: result,
+				},
+			}
 			c.SendMessage(resp)
 		}
 	}

@@ -34,6 +34,30 @@ type AppResult struct {
 	AssertionResults  []AssertionResult
 	ResponseBody      string            // truncated to 4KB
 	ResponseHeaders   map[string]string
+
+	// Performance breakdown metrics
+	DNSLookupTime       float64 // DNS resolution time (ms)
+	TCPConnectTime      float64 // TCP connection time (ms)
+	TLSHandshakeTime    float64 // TLS handshake time (ms)
+	TTFB                float64 // Time to first byte (ms)
+	ContentTransferTime float64 // Content transfer time (ms)
+
+	// TLS/Certificate information
+	TLSVersion      string // TLS version (e.g., "TLS 1.3")
+	TLSCipherSuite  string // Cipher suite name
+	SSLCertNotAfter int64  // Certificate expiry timestamp
+
+	// HTTP details
+	RedirectCount       int     // Number of redirects
+	RedirectTime        float64 // Total redirect time (ms)
+	FinalURL            string  // Final URL after redirects
+	ResponseHeaderBytes int     // Response header size
+	ResponseBodyBytes   int     // Response body size
+
+	// Assertion statistics
+	AssertionPassCount int     // Number of passed assertions
+	AssertionFailCount int     // Number of failed assertions
+	AssertionEvalTime  float64 // Assertion evaluation time (ms)
 }
 
 // AppProber defines the interface for application-level probing.

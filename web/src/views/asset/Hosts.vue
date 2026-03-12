@@ -2395,6 +2395,8 @@ const agentDeployServerAddr = ref('')
 
 // 加载Agent状态并合并到主机列表
 const agentStatusMap = ref<Record<number, any>>({})
+let agentStatusTimer: ReturnType<typeof setInterval> | null = null
+
 const loadAgentStatuses = async () => {
   try {
     const data = await getAgentStatuses()
@@ -2408,6 +2410,24 @@ const loadAgentStatuses = async () => {
     mergeAgentStatuses()
   } catch {
     // 静默失败
+  }
+}
+
+// 启动Agent状态定时刷新
+const startAgentStatusPolling = () => {
+  // 立即加载一次
+  loadAgentStatuses()
+  // 每30秒刷新一次Agent状态
+  agentStatusTimer = setInterval(() => {
+    loadAgentStatuses()
+  }, 30000)
+}
+
+// 停止Agent状态定时刷新
+const stopAgentStatusPolling = () => {
+  if (agentStatusTimer) {
+    clearInterval(agentStatusTimer)
+    agentStatusTimer = null
   }
 }
 
@@ -2797,6 +2817,7 @@ const handleGenerateInstallPackage = async () => {
 // 组件销毁时清理资源
 onBeforeUnmount(() => {
   closeTerminal()
+  stopAgentStatusPolling()
 })
 
 onMounted(async () => {
@@ -2813,7 +2834,7 @@ onMounted(async () => {
   loadCredentialList()
   loadServiceLabels()
   loadCloudAccountList()
-  loadAgentStatuses()
+  startAgentStatusPolling()
 })
 </script>
 

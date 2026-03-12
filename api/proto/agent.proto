@@ -17,6 +17,8 @@ message AgentMessage {
     FileChunk file_chunk = 4;
     CommandResult cmd_result = 5;
     FileListResult file_list = 6;
+    ProbeResult probe_result = 7;
+    HttpProxyResponse http_proxy_response = 8;
   }
 }
 
@@ -31,6 +33,8 @@ message ServerMessage {
     TerminalClose term_close = 6;
     FileRequest file_request = 7;
     CommandRequest cmd_request = 8;
+    ProbeRequest probe_request = 9;
+    HttpProxyRequest http_proxy_request = 10;
   }
 }
 
@@ -131,5 +135,119 @@ message CommandResult {
   int32 exit_code = 2;
   string stdout = 3;
   string stderr = 4;
+  string error = 5;
+}
+
+// ========== 拨测 ==========
+message ProbeRequest {
+  string request_id = 1;
+  string probe_type = 2; // http, https, websocket, ping, tcp, udp
+  string target = 3;
+  int32 port = 4;
+  int32 timeout = 5;
+
+  // HTTP/HTTPS/WebSocket specific
+  string method = 10;
+  string url = 11;
+  map<string, string> headers = 12;
+  map<string, string> params = 13;
+  string body = 14;
+  string content_type = 15;
+  bool skip_verify = 16;
+  string proxy_url = 17;
+  repeated ProbeAssertion assertions = 18;
+  int32 max_response_body_size = 19; // 最大响应体大小(字节)，0表示不限制，默认4KB
+
+  // WebSocket specific
+  string ws_message = 20;
+  int32 ws_message_type = 21; // 1=text, 2=binary
+  int32 ws_read_timeout = 22;
+
+  // Ping specific
+  int32 count = 30;
+  int32 packet_size = 31;
+}
+
+message ProbeAssertion {
+  string name = 1;
+  string source = 2; // body, header, status
+  string path = 3;
+  string condition = 4; // ==, >, >=, <, <=, contains, notcontains, regexp, notregexp
+  string value = 5;
+}
+
+message ProbeResult {
+  string request_id = 1;
+  bool success = 2;
+  string error = 3;
+  double latency = 4; // ms
+
+  // Network probe results
+  double packet_loss = 10;
+  double ping_rtt_avg = 11;
+  double ping_rtt_min = 12;
+  double ping_rtt_max = 13;
+  double ping_stddev = 14;
+  int32 ping_packets_sent = 15;
+  int32 ping_packets_recv = 16;
+  double tcp_connect_time = 17;
+  double udp_write_time = 18;
+  double udp_read_time = 19;
+
+  // HTTP/HTTPS/WebSocket results
+  int32 http_status_code = 20;
+  double http_response_time = 21;
+  int64 http_content_length = 22;
+  bytes response_body = 23; // 支持二进制内容（图片、CSS、JS等）
+  map<string, string> response_headers = 24;
+
+  // Performance breakdown
+  double dns_lookup_time = 30;
+  double tcp_connect_time_http = 31;
+  double tls_handshake_time = 32;
+  double ttfb = 33; // time to first byte
+  double content_transfer_time = 34;
+
+  // TLS/Certificate info
+  string tls_version = 40;
+  string tls_cipher_suite = 41;
+  int64 ssl_cert_not_after = 42;
+
+  // HTTP details
+  int32 redirect_count = 50;
+  double redirect_time = 51;
+  string final_url = 52;
+  int32 response_header_bytes = 53;
+  int32 response_body_bytes = 54;
+
+  // Assertion results
+  bool assertion_success = 60;
+  repeated ProbeAssertionResult assertion_results = 61;
+  int32 assertion_pass_count = 62;
+  int32 assertion_fail_count = 63;
+  double assertion_eval_time = 64;
+}
+
+message ProbeAssertionResult {
+  string name = 1;
+  bool success = 2;
+  string actual = 3;
+  string error = 4;
+}
+// ========== HTTP 代理 ==========
+message HttpProxyRequest {
+  string request_id = 1;
+  string method = 2;
+  string url = 3;
+  map<string, string> headers = 4;
+  bytes body = 5;
+  int32 timeout = 6;
+}
+
+message HttpProxyResponse {
+  string request_id = 1;
+  int32 status_code = 2;
+  map<string, string> headers = 3;
+  bytes body = 4;
   string error = 5;
 }

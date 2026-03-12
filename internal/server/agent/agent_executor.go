@@ -77,3 +77,8 @@ func (f *AgentCommandFactory) NewExecutor(hostID uint) (collector.CommandExecuto
 	}
 	return &AgentExecutor{hub: f.hub, stream: as}, nil
 }
+
+// SendProbeRequest 发送拨测请求到Agent并等待结果
+func (f *AgentCommandFactory) SendProbeRequest(hostID uint, req *pb.ProbeRequest) (*pb.ProbeResult, error) {
+	return f.hub.SendProbeRequest(hostID, req)
+}

@@ -4,9 +4,11 @@ go 1.25.0
 
 require (
 	github.com/creack/pty v1.1.24
+	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/spf13/cobra v1.10.2
 	github.com/ydcloud-dy/opshub v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.78.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

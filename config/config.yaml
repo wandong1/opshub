@@ -20,7 +20,7 @@ database:
 redis:
   host: 127.0.0.1
   port: 6379
-  password: ""
+  password: "1ujasdJ67Ps"
   db: 0
   pool_size: 10
   min_idle_conn: 5
@@ -38,5 +38,5 @@ agent:
   enabled: true
   cert_dir: "data/agent-certs"
   binary_dir: "data/agent-binaries"
-  heartbeat_timeout: 90
+  heartbeat_timeout: 180  # 心跳超时时间（秒），实际心跳间隔为 timeout/3 = 60秒
   deploy_path: "/opt/srehub-agent"

@@ -138,6 +138,12 @@ const router = createRouter({
           meta: { title: '服务标签' }
         },
         {
+          path: 'asset/websites',
+          name: 'AssetWebsites',
+          component: () => import('@/views/asset/Websites.vue'),
+          meta: { title: 'Web站点管理' }
+        },
+        {
           path: 'profile',
           name: 'Profile',
           component: () => import('@/views/Profile.vue'),

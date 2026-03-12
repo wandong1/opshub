@@ -73,3 +73,22 @@ type ServiceLabelRepo interface {
 	List(ctx context.Context, page, pageSize int, keyword string) ([]*ServiceLabel, int64, error)
 	GetAllEnabled(ctx context.Context) ([]*ServiceLabel, error)
 }
+
+type WebsiteRepo interface {
+	Create(ctx context.Context, website *Website) error
+	Update(ctx context.Context, website *Website) error
+	Delete(ctx context.Context, id uint) error
+	GetByID(ctx context.Context, id uint) (*Website, error)
+	List(ctx context.Context, page, pageSize int, keyword string, groupIDs []uint, siteType string) ([]*Website, int64, error)
+	GetAll(ctx context.Context) ([]*Website, error)
+
+	// 分组关联
+	AddGroups(ctx context.Context, websiteID uint, groupIDs []uint) error
+	RemoveGroups(ctx context.Context, websiteID uint) error
+	GetGroupIDs(ctx context.Context, websiteID uint) ([]uint, error)
+
+	// Agent关联
+	AddAgents(ctx context.Context, websiteID uint, hostIDs []uint) error
+	RemoveAgents(ctx context.Context, websiteID uint) error
+	GetAgentHostIDs(ctx context.Context, websiteID uint) ([]uint, error)
+}
