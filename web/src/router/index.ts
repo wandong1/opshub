@@ -228,6 +228,18 @@ const router = createRouter({
           name: 'InspectionVariables',
           component: () => import('@/views/inspection/VariableManagement.vue'),
           meta: { title: '环境变量' }
+        },
+        {
+          path: 'inspection/management',
+          name: 'InspectionManagement',
+          component: () => import('@/views/inspection/InspectionManagement.vue'),
+          meta: { title: '巡检管理' }
+        },
+        {
+          path: 'inspection/records',
+          name: 'InspectionRecords',
+          component: () => import('@/views/inspection/InspectionRecords.vue'),
+          meta: { title: '执行记录' }
         }
       ]
     }

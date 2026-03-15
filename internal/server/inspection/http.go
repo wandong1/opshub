@@ -9,7 +9,10 @@ import (
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	biz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
 	inspectiondata "github.com/ydcloud-dy/opshub/internal/data/inspection"
+	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
+	"github.com/ydcloud-dy/opshub/internal/server/agent"
 	svc "github.com/ydcloud-dy/opshub/internal/service/inspection"
+	inspectionmgmtsvc "github.com/ydcloud-dy/opshub/internal/service/inspection_mgmt"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"github.com/ydcloud-dy/opshub/pkg/scheduler"
 	"go.uber.org/zap"
@@ -25,6 +28,18 @@ type HTTPServer struct {
 	scheduler            *scheduler.Scheduler
 	executor             *biz.NetworkProbeExecutor
 	healthExecutor       *assetbiz.HostHealthExecutor
+
+	// 巡检管理服务
+	inspectionGroupService  *inspectionmgmtsvc.GroupService
+	inspectionItemService   *inspectionmgmtsvc.ItemService
+	inspectionRecordService *inspectionmgmtsvc.RecordService
+	inspectionTaskService   *inspectionmgmtsvc.TaskService
+
+	// 巡检管理仓库（用于导出功能）
+	hostRepo   assetbiz.HostRepo
+	groupRepo  inspectionmgmtdata.GroupRepository
+	itemRepo   inspectionmgmtdata.ItemRepository
+	recordRepo inspectionmgmtdata.RecordRepository
 }
 
 // NewHTTPServer creates the HTTPServer.
@@ -36,15 +51,31 @@ func NewHTTPServer(
 	sched *scheduler.Scheduler,
 	executor *biz.NetworkProbeExecutor,
 	healthExecutor *assetbiz.HostHealthExecutor,
+	inspectionGroupService *inspectionmgmtsvc.GroupService,
+	inspectionItemService *inspectionmgmtsvc.ItemService,
+	inspectionRecordService *inspectionmgmtsvc.RecordService,
+	inspectionTaskService *inspectionmgmtsvc.TaskService,
+	hostRepo assetbiz.HostRepo,
+	groupRepo inspectionmgmtdata.GroupRepository,
+	itemRepo inspectionmgmtdata.ItemRepository,
+	recordRepo inspectionmgmtdata.RecordRepository,
 ) *HTTPServer {
 	return &HTTPServer{
-		probeConfigService:   probeConfigService,
-		probeTaskService:     probeTaskService,
-		pushgatewayService:   pushgatewayService,
-		probeVariableService: probeVariableService,
-		scheduler:            sched,
-		executor:             executor,
-		healthExecutor:       healthExecutor,
+		probeConfigService:      probeConfigService,
+		probeTaskService:        probeTaskService,
+		pushgatewayService:      pushgatewayService,
+		probeVariableService:    probeVariableService,
+		scheduler:               sched,
+		executor:                executor,
+		healthExecutor:          healthExecutor,
+		inspectionGroupService:  inspectionGroupService,
+		inspectionItemService:   inspectionItemService,
+		inspectionRecordService: inspectionRecordService,
+		inspectionTaskService:   inspectionTaskService,
+		hostRepo:                hostRepo,
+		groupRepo:               groupRepo,
+		itemRepo:                itemRepo,
+		recordRepo:              recordRepo,
 	}
 }
 
@@ -116,6 +147,9 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 		variables.PUT("/:id", s.probeVariableService.Update)
 		variables.DELETE("/:id", s.probeVariableService.Delete)
 	}
+
+	// 注册巡检管理路由
+	s.RegisterInspectionMgmtRoutes(r)
 }
 
 // Scheduler returns the scheduler instance for lifecycle management.
@@ -123,19 +157,21 @@ func (s *HTTPServer) Scheduler() *scheduler.Scheduler {
 	return s.scheduler
 }
 
-// taskProvider adapts the ProbeTaskRepo to scheduler.TaskProvider.
+// taskProvider adapts the ProbeTaskRepo and InspectionTaskRepo to scheduler.TaskProvider.
 type taskProvider struct {
-	taskRepo   biz.ProbeTaskRepo
-	configRepo biz.ProbeConfigRepo
+	taskRepo           biz.ProbeTaskRepo
+	configRepo         biz.ProbeConfigRepo
+	inspectionTaskRepo inspectionmgmtdata.TaskRepository
 }
 
 func (p *taskProvider) GetEnabledTasks(ctx context.Context) ([]scheduler.Task, error) {
-	tasks, err := p.taskRepo.GetEnabled(ctx)
+	// 获取拨测任务
+	probeTasks, err := p.taskRepo.GetEnabled(ctx)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]scheduler.Task, 0, len(tasks)+1)
-	for _, t := range tasks {
+	result := make([]scheduler.Task, 0, len(probeTasks)+10)
+	for _, t := range probeTasks {
 		payload, _ := json.Marshal(map[string]uint{"task_id": t.ID})
 		result = append(result, scheduler.Task{
 			ID:       t.ID,
@@ -145,6 +181,40 @@ func (p *taskProvider) GetEnabledTasks(ctx context.Context) ([]scheduler.Task, e
 			Payload:  string(payload),
 			Enabled:  t.Status == 1,
 		})
+	}
+
+	// 获取新表中的巡检任务和拨测任务
+	if p.inspectionTaskRepo != nil {
+		inspectionTasks, err := p.inspectionTaskRepo.GetEnabledTasks(ctx)
+		if err != nil {
+			appLogger.Error("get enabled inspection tasks failed", zap.Error(err))
+		} else {
+			for _, t := range inspectionTasks {
+				if t.TaskType == "inspection" {
+					// 巡检任务
+					payload, _ := json.Marshal(map[string]uint{"task_id": t.ID})
+					result = append(result, scheduler.Task{
+						ID:       t.ID + 100000, // 偏移ID避免与旧拨测任务冲突
+						Name:     t.Name,
+						Type:     "inspection_task",
+						CronExpr: t.CronExpr,
+						Payload:  string(payload),
+						Enabled:  t.Enabled,
+					})
+				} else if t.TaskType == "probe" {
+					// 新表中的拨测任务
+					payload, _ := json.Marshal(map[string]uint{"task_id": t.ID})
+					result = append(result, scheduler.Task{
+						ID:       t.ID + 200000, // 偏移ID避免与旧拨测任务和巡检任务冲突
+						Name:     t.Name,
+						Type:     "network_probe_v2",
+						CronExpr: t.CronExpr,
+						Payload:  string(payload),
+						Enabled:  t.Enabled,
+					})
+				}
+			}
+		}
 	}
 
 	// 内置系统任务：主机健康检查（每5分钟）
@@ -160,9 +230,29 @@ func (p *taskProvider) GetEnabledTasks(ctx context.Context) ([]scheduler.Task, e
 	return result, nil
 }
 
+// pushgatewayAdapter 适配器，将拨测的 Pushgateway 配置转换为巡检执行器需要的格式
+type pushgatewayAdapter struct {
+	repo biz.PushgatewayConfigRepo
+}
+
+func (a *pushgatewayAdapter) GetByID(ctx context.Context, id uint) (*inspectionmgmtsvc.PushgatewayConfig, error) {
+	pgw, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &inspectionmgmtsvc.PushgatewayConfig{
+		ID:       pgw.ID,
+		Name:     pgw.Name,
+		URL:      pgw.URL,
+		Username: pgw.Username,
+		Password: pgw.Password,
+		Status:   int(pgw.Status),
+	}, nil
+}
+
 // NewInspectionServices is the factory function that assembles the full dependency chain.
 // Returns the HTTPServer and starts the scheduler.
-func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo assetbiz.HostRepo, credentialRepo assetbiz.CredentialRepo) *HTTPServer {
+func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo assetbiz.HostRepo, credentialRepo assetbiz.CredentialRepo, agentHub *agent.AgentHub) *HTTPServer {
 	// Repos
 	configRepo := inspectiondata.NewProbeConfigRepo(db)
 	taskRepo := inspectiondata.NewProbeTaskRepo(db)
@@ -189,8 +279,18 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 		return group.Name
 	}
 
-	// Scheduler
-	provider := &taskProvider{taskRepo: taskRepo, configRepo: configRepo}
+	// 初始化巡检管理的仓库（必须在 scheduler 启动前初始化）
+	inspectionTaskRepo := inspectionmgmtdata.NewTaskRepository(db)
+	inspectionGroupRepo := inspectionmgmtdata.NewGroupRepository(db)
+	inspectionItemRepo := inspectionmgmtdata.NewItemRepository(db)
+	inspectionRecordRepo := inspectionmgmtdata.NewRecordRepository(db)
+
+	// Scheduler（包含 inspectionTaskRepo 以便加载新表任务）
+	provider := &taskProvider{
+		taskRepo:           taskRepo,
+		configRepo:         configRepo,
+		inspectionTaskRepo: inspectionTaskRepo,
+	}
 	sched := scheduler.New(redisClient, provider)
 
 	// Executor
@@ -203,7 +303,36 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	healthExecutor := assetbiz.NewHostHealthExecutor(hostRepo, credentialRepo)
 	sched.RegisterExecutor(healthExecutor)
 
-	// Start scheduler
+	// 初始化巡检管理服务
+	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _ := InitInspectionMgmtServices(db, hostRepo, agentHub)
+
+	// 创建 Pushgateway 适配器
+	pgwAdapter := &pushgatewayAdapter{repo: pgwRepo}
+
+	// 创建巡检执行器
+	inspectionExecutor := inspectionmgmtsvc.NewInspectionExecutor(
+		inspectionTaskRepo,
+		inspectionGroupRepo,
+		inspectionItemRepo,
+		inspectionRecordRepo,
+		pgwAdapter,
+		inspectionItemService,
+	)
+	sched.RegisterExecutor(inspectionExecutor)
+
+	// 创建新表拨测任务执行器（使用 inspection_tasks 表的 probe 类型任务）
+	inspectionTaskRepoAdapter := biz.NewInspectionTaskRepoAdapter(inspectionTaskRepo)
+	probeV2Executor := biz.NewNetworkProbeV2Executor(
+		inspectionTaskRepoAdapter,
+		configRepo,
+		resultRepo,
+		pgwRepo,
+		groupLookup,
+	)
+	probeV2Executor.SetVariableResolver(variableResolver)
+	sched.RegisterExecutor(probeV2Executor)
+
+	// Start scheduler（所有执行器注册完成后启动）
 	if err := sched.Start(context.Background()); err != nil {
 		appLogger.Error("启动巡检调度器失败", zap.Error(err))
 	} else {
@@ -217,7 +346,7 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	pgwSvc := svc.NewPushgatewayService(pgwUC)
 	variableSvc := svc.NewProbeVariableService(variableUC)
 
-	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, healthExecutor)
+	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, healthExecutor, inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, hostRepo, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo)
 }
 
 // migrateData performs one-time data migration:

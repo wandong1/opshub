@@ -1406,3 +1406,177 @@ func generateRequestID() string {
 	return fmt.Sprintf("probe_%d_%d", time.Now().UnixNano(), rand.Int63())
 }
 
+
+// NetworkProbeV2Executor implements scheduler.TaskExecutor for probe tasks from inspection_tasks table.
+type NetworkProbeV2Executor struct {
+	inspectionTaskRepo InspectionTaskRepo
+	configRepo         ProbeConfigRepo
+	resultRepo         ProbeResultRepo
+	pgwRepo            PushgatewayConfigRepo
+	groupLookup        func(ctx context.Context, id uint) string
+	agentFactory       AgentCommandFactory
+	variableResolver   *VariableResolver
+}
+
+// InspectionTaskRepo interface for accessing inspection_tasks table
+type InspectionTaskRepo interface {
+	GetByID(ctx context.Context, id uint) (*InspectionTaskV2, error)
+	UpdateLastRun(ctx context.Context, id uint, status string) error
+}
+
+// InspectionTaskV2 represents a task from inspection_tasks table
+type InspectionTaskV2 struct {
+	ID            uint
+	Name          string
+	TaskType      string
+	CronExpr      string
+	Enabled       bool
+	GroupIDs      string
+	ItemIDs       string
+	PushgatewayID uint
+	Concurrency   int
+}
+
+// NewNetworkProbeV2Executor creates a new executor for probe tasks from inspection_tasks table.
+func NewNetworkProbeV2Executor(
+	inspectionTaskRepo InspectionTaskRepo,
+	configRepo ProbeConfigRepo,
+	resultRepo ProbeResultRepo,
+	pgwRepo PushgatewayConfigRepo,
+	groupLookup func(ctx context.Context, id uint) string,
+) *NetworkProbeV2Executor {
+	return &NetworkProbeV2Executor{
+		inspectionTaskRepo: inspectionTaskRepo,
+		configRepo:         configRepo,
+		resultRepo:         resultRepo,
+		pgwRepo:            pgwRepo,
+		groupLookup:        groupLookup,
+	}
+}
+
+// SetAgentCommandFactory injects Agent capability.
+func (e *NetworkProbeV2Executor) SetAgentCommandFactory(f AgentCommandFactory) {
+	e.agentFactory = f
+}
+
+// SetVariableResolver injects variable resolver capability.
+func (e *NetworkProbeV2Executor) SetVariableResolver(r *VariableResolver) {
+	e.variableResolver = r
+}
+
+func (e *NetworkProbeV2Executor) Type() string { return "network_probe_v2" }
+
+// Execute runs a probe task from inspection_tasks table.
+func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Task) error {
+	var payload struct {
+		TaskID uint `json:"task_id"`
+	}
+	if err := json.Unmarshal([]byte(task.Payload), &payload); err != nil {
+		return fmt.Errorf("parse payload: %w", err)
+	}
+
+	inspectionTask, err := e.inspectionTaskRepo.GetByID(ctx, payload.TaskID)
+	if err != nil {
+		return fmt.Errorf("get inspection task: %w", err)
+	}
+
+	// Parse item_ids (probe config IDs) from JSON array
+	configIDs := parseJSONArray(inspectionTask.ItemIDs)
+	if len(configIDs) == 0 {
+		return fmt.Errorf("no probe config IDs in task %d", payload.TaskID)
+	}
+
+	// Load probe configs
+	var configs []*ProbeConfig
+	for _, configID := range configIDs {
+		cfg, err := e.configRepo.GetByID(ctx, configID)
+		if err != nil {
+			appLogger.Error("get probe config failed", zap.Uint("config_id", configID), zap.Error(err))
+			continue
+		}
+		configs = append(configs, cfg)
+	}
+
+	if len(configs) == 0 {
+		return fmt.Errorf("no valid probe configs for task %d", payload.TaskID)
+	}
+
+	concurrency := inspectionTask.Concurrency
+	if concurrency <= 0 {
+		concurrency = 5
+	}
+
+	// Create a temporary ProbeTask for compatibility with existing execution logic
+	probeTask := &ProbeTask{
+		ID:            payload.TaskID,
+		Name:          inspectionTask.Name,
+		PushgatewayID: inspectionTask.PushgatewayID,
+		Concurrency:   concurrency,
+	}
+
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	var failCount int64
+
+	for _, config := range configs {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(cfg *ProbeConfig) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			// Variable resolution
+			resolvedCfg := cfg
+			if e.variableResolver != nil {
+				if rc, err := e.variableResolver.ResolveConfig(ctx, cfg); err != nil {
+					appLogger.Error("resolve variables failed", zap.String("name", cfg.Name), zap.Error(err))
+				} else {
+					resolvedCfg = rc
+				}
+			}
+
+			// Execute probe using the same logic as NetworkProbeExecutor
+			executor := &NetworkProbeExecutor{
+				resultRepo:       e.resultRepo,
+				pgwRepo:          e.pgwRepo,
+				groupLookup:      e.groupLookup,
+				agentFactory:     e.agentFactory,
+				variableResolver: e.variableResolver,
+			}
+
+			if resolvedCfg.Category == ProbeCategoryApplication {
+				executor.executeAndSaveAppProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+			} else if resolvedCfg.Category == ProbeCategoryWorkflow {
+				executor.executeAndSaveWorkflowProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+			} else {
+				executor.executeAndSaveNetworkProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+			}
+		}(config)
+	}
+	wg.Wait()
+
+	// Auto-cleanup: keep latest 30 * len(configs) results per task
+	keepCount := 30 * len(configs)
+	if err := e.resultRepo.CleanupByTaskID(ctx, probeTask.ID, keepCount); err != nil {
+		appLogger.Error("cleanup probe results failed", zap.Error(err))
+	}
+
+	runStatus := "success"
+	if failCount > 0 {
+		runStatus = "failed"
+	}
+	if err := e.inspectionTaskRepo.UpdateLastRun(ctx, payload.TaskID, runStatus); err != nil {
+		appLogger.Error("update last run failed", zap.Error(err))
+	}
+
+	return nil
+}
+
+// parseJSONArray parses a JSON array string like "[1,2,3]" into []uint
+func parseJSONArray(jsonStr string) []uint {
+	var ids []uint
+	if err := json.Unmarshal([]byte(jsonStr), &ids); err != nil {
+		return nil
+	}
+	return ids
+}

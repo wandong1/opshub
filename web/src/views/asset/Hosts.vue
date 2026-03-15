@@ -730,66 +730,66 @@
           </div>
 
           <!-- 平铺信息区 -->
-          <div class="detail-flat-section">
+          <div class="detail-info-section">
             <div class="detail-section-title">基本信息</div>
-            <div class="detail-flat-grid">
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">SSH用户</span>
-                <span class="detail-flat-value">{{ hostDetail.sshUser || '-' }}</span>
+            <div class="detail-info-grid-3col">
+              <div class="detail-info-item">
+                <div class="detail-info-label">SSH用户</div>
+                <div class="detail-info-value">{{ hostDetail.sshUser || '-' }}</div>
               </div>
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">所属分组</span>
-                <span class="detail-flat-value">{{ hostDetail.groupName || '未分组' }}</span>
+              <div class="detail-info-item">
+                <div class="detail-info-label">所属分组</div>
+                <div class="detail-info-value">{{ hostDetail.groupName || '未分组' }}</div>
               </div>
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">最后连接</span>
-                <span class="detail-flat-value">{{ hostDetail.lastSeen || '未连接' }}</span>
+              <div class="detail-info-item">
+                <div class="detail-info-label">最后连接</div>
+                <div class="detail-info-value">{{ hostDetail.lastSeen || '未连接' }}</div>
               </div>
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">创建时间</span>
-                <span class="detail-flat-value">{{ hostDetail.createTime || '-' }}</span>
+              <div class="detail-info-item">
+                <div class="detail-info-label">创建时间</div>
+                <div class="detail-info-value">{{ hostDetail.createTime || '-' }}</div>
               </div>
-              <div class="detail-flat-item" v-if="hostDetail.credential">
-                <span class="detail-flat-label">凭证名称</span>
-                <span class="detail-flat-value">{{ hostDetail.credential.name }}</span>
+              <div class="detail-info-item" v-if="hostDetail.credential">
+                <div class="detail-info-label">凭证名称</div>
+                <div class="detail-info-value">{{ hostDetail.credential.name }}</div>
               </div>
-              <div class="detail-flat-item" v-if="hostDetail.credential">
-                <span class="detail-flat-label">认证方式</span>
-                <span class="detail-flat-value">
+              <div class="detail-info-item" v-if="hostDetail.credential">
+                <div class="detail-info-label">认证方式</div>
+                <div class="detail-info-value">
                   <a-tag :color="hostDetail.credential.type === 'password' ? 'orangered' : 'green'" size="small">{{ hostDetail.credential.typeText }}</a-tag>
-                </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="detail-flat-section">
+          <div class="detail-info-section">
             <div class="detail-section-title">系统信息</div>
-            <div class="detail-flat-grid">
-              <div class="detail-flat-item detail-flat-item-wide">
-                <span class="detail-flat-label">操作系统</span>
-                <span class="detail-flat-value">{{ hostDetail.os || '-' }}</span>
+            <div class="detail-info-grid-3col">
+              <div class="detail-info-item detail-info-item-span2">
+                <div class="detail-info-label">操作系统</div>
+                <div class="detail-info-value">{{ hostDetail.os || '-' }}</div>
               </div>
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">内核版本</span>
-                <span class="detail-flat-value">{{ hostDetail.kernel || '-' }}</span>
+              <div class="detail-info-item">
+                <div class="detail-info-label">系统架构</div>
+                <div class="detail-info-value">{{ hostDetail.arch || '-' }}</div>
               </div>
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">系统架构</span>
-                <span class="detail-flat-value">{{ hostDetail.arch || '-' }}</span>
+              <div class="detail-info-item detail-info-item-span2">
+                <div class="detail-info-label">内核版本</div>
+                <div class="detail-info-value">{{ hostDetail.kernel || '-' }}</div>
               </div>
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">主机名</span>
-                <span class="detail-flat-value">{{ hostDetail.hostname || '-' }}</span>
+              <div class="detail-info-item">
+                <div class="detail-info-label">主机名</div>
+                <div class="detail-info-value">{{ hostDetail.hostname || '-' }}</div>
               </div>
-              <div class="detail-flat-item">
-                <span class="detail-flat-label">运行时间</span>
-                <span class="detail-flat-value">{{ hostDetail.uptime || '-' }}</span>
+              <div class="detail-info-item detail-info-item-span3">
+                <div class="detail-info-label">运行时间</div>
+                <div class="detail-info-value">{{ hostDetail.uptime || '-' }}</div>
               </div>
             </div>
           </div>
 
           <!-- 标签 -->
-          <div class="detail-flat-section" v-if="hostDetail.tags && hostDetail.tags.length > 0">
+          <div class="detail-info-section" v-if="hostDetail.tags && hostDetail.tags.length > 0">
             <div class="detail-section-title">标签</div>
             <div class="detail-tags-row">
               <a-tag v-for="(tag, index) in hostDetail.tags" :key="index" size="medium" color="arcoblue">{{ tag }}</a-tag>
@@ -797,7 +797,7 @@
           </div>
 
           <!-- 备注 -->
-          <div class="detail-flat-section" v-if="hostDetail.description">
+          <div class="detail-info-section" v-if="hostDetail.description">
             <div class="detail-section-title">备注</div>
             <div class="detail-remark-text">{{ hostDetail.description }}</div>
           </div>
@@ -2263,8 +2263,9 @@ const handleCloudHostSelectionChange = (selection: any[]) => {
 }
 
 // 主机选择变化
-const handleHostSelectionChange = (selection: any[]) => {
-  selectedHosts.value = selection
+const handleHostSelectionChange = (rowKeys: any[]) => {
+  // selection-change 返回的是 rowKey 数组（即 ID 数组），不是对象数组
+  selectedHosts.value = rowKeys
 }
 
 // 批量删除主机
@@ -2280,8 +2281,8 @@ const handleBatchDelete = async () => {
     hideCancel: false,
     onOk: async () => {
       try {
-        const hostIds = selectedHosts.value.map((h: any) => h.id)
-        await batchDeleteHosts(hostIds)
+        // selectedHosts.value 已经是 ID 数组了，直接使用
+        await batchDeleteHosts(selectedHosts.value)
         Message.success('批量删除成功')
         selectedHosts.value = []
         loadHostList()
@@ -2315,8 +2316,8 @@ const confirmAgentDeploy = async () => {
   showAgentDeployDialog.value = false
   if (agentDeployMode.value === 'batch') {
     try {
-      const hostIds = selectedHosts.value.map((h: any) => h.id)
-      await batchDeployAgent(hostIds, addr)
+      // selectedHosts.value 已经是 ID 数组了，直接使用
+      await batchDeployAgent(selectedHosts.value, addr)
       Message.success('批量部署完成')
       selectedHosts.value = []
       loadHostList()
@@ -3750,16 +3751,80 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 
+/* 新的信息区域样式 */
+.detail-info-section {
+  margin-bottom: 24px;
+}
+
 .detail-section-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--ops-text-primary, #1d2129);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   padding-left: 10px;
   border-left: 3px solid var(--ops-primary, #165dff);
   line-height: 1;
 }
 
+/* 3列网格布局 */
+.detail-info-grid-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* 2列网格布局（保留） */
+.detail-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.detail-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--ops-bg-secondary, #f7f8fa);
+  border-radius: 6px;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  transition: all 0.2s;
+  min-height: 68px;
+}
+
+.detail-info-item:hover {
+  border-color: var(--ops-primary, #165dff);
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.1);
+}
+
+.detail-info-item-full {
+  grid-column: span 2;
+}
+
+.detail-info-item-span2 {
+  grid-column: span 2;
+}
+
+.detail-info-item-span3 {
+  grid-column: span 3;
+}
+
+.detail-info-label {
+  font-size: 12px;
+  color: var(--ops-text-tertiary, #86909c);
+  line-height: 1;
+  font-weight: 500;
+}
+
+.detail-info-value {
+  font-size: 14px;
+  color: var(--ops-text-primary, #1d2129);
+  font-weight: 500;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+/* 保留旧样式以兼容 */
 .detail-flat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3812,7 +3877,7 @@ onMounted(async () => {
   background: var(--ops-bg-secondary, #f7f8fa);
   border: 1px solid var(--ops-border-color, #e5e6eb);
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 16px;
   font-size: 14px;
   color: var(--ops-text-secondary, #4e5969);
   line-height: 1.6;

@@ -6,6 +6,229 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 OpsHub 是一个插件化的云原生运维管理平台。项目采用单仓库结构，后端使用 Go，前端使用 Vue 3，通过插件架构组织功能模块（Kubernetes 管理、任务执行、监控告警、Nginx 日志分析、SSL 证书管理），各插件可独立启用/禁用。平台支持 Agent 和 SSH 双通道管理主机，Agent 在线时优先使用 gRPC 通道。
 
+## 项目目录结构
+
+```
+opshub/
+├── agent/                          # Agent 端独立项目
+│   ├── cmd/                        # Agent 命令行入口
+│   ├── internal/                   # Agent 内部实现
+│   │   ├── client/                 # gRPC 客户端，连接服务端
+│   │   ├── config/                 # Agent 配置管理
+│   │   ├── executor/               # 命令执行器
+│   │   ├── filemanager/            # 文件管理（上传/下载/列表/删除）
+│   │   ├── logger/                 # 日志管理
+│   │   ├── prober/                 # 探测器（健康检查）
+│   │   └── terminal/               # PTY 终端管理
+│   ├── config/                     # Agent 配置文件
+│   ├── dist/                       # 构建产物目录
+│   ├── build.sh                    # 多架构构建脚本
+│   ├── go.mod                      # Agent Go 依赖
+│   └── README.md                   # Agent 文档
+│
+├── cmd/                            # 服务端命令行
+│   ├── root/                       # 根命令
+│   ├── server/                     # 服务启动命令
+│   ├── version/                    # 版本命令
+│   └── config/                     # 配置命令
+│
+├── internal/                       # 服务端内部实现（不可导出）
+│   ├── biz/                        # 业务逻辑层（UseCase）
+│   │   ├── asset/                  # 资产管理业务逻辑
+│   │   ├── audit/                  # 审计业务逻辑
+│   │   ├── identity/               # 身份认证业务逻辑
+│   │   ├── inspection/             # 拨测业务逻辑
+│   │   ├── inspection_mgmt/        # 巡检管理业务逻辑
+│   │   ├── rbac/                   # 权限控制业务逻辑
+│   │   └── system/                 # 系统配置业务逻辑
+│   │
+│   ├── data/                       # 数据访问层（Repository + Model）
+│   │   ├── agent/                  # Agent 数据模型和仓储
+│   │   ├── asset/                  # 资产数据模型和仓储
+│   │   ├── audit/                  # 审计数据模型和仓储
+│   │   ├── identity/               # 身份认证数据模型和仓储
+│   │   ├── inspection/             # 拨测数据模型和仓储
+│   │   ├── inspection_mgmt/        # 巡检管理数据模型和仓储
+│   │   ├── rbac/                   # RBAC 数据模型和仓储
+│   │   └── system/                 # 系统配置数据模型和仓储
+│   │
+│   ├── service/                    # 服务层（Service）
+│   │   ├── asset/                  # 资产服务
+│   │   ├── audit/                  # 审计服务
+│   │   ├── identity/               # 身份认证服务
+│   │   ├── inspection/             # 拨测服务
+│   │   ├── inspection_mgmt/        # 巡检管理服务
+│   │   ├── rbac/                   # RBAC 服务
+│   │   └── system/                 # 系统配置服务
+│   │
+│   ├── server/                     # HTTP 服务层（Handler + Router）
+│   │   ├── agent/                  # Agent 管理 HTTP 处理器
+│   │   ├── asset/                  # 资产管理 HTTP 处理器
+│   │   ├── audit/                  # 审计 HTTP 处理器
+│   │   ├── identity/               # 身份认证 HTTP 处理器
+│   │   ├── inspection/             # 巡检/拨测 HTTP 处理器
+│   │   ├── rbac/                   # RBAC HTTP 处理器
+│   │   ├── system/                 # 系统配置 HTTP 处理器
+│   │   └── http.go                 # 主 HTTP 服务器，路由注册
+│   │
+│   ├── agent/                      # Agent Hub（管理所有 Agent 连接）
+│   ├── cache/                      # 缓存层
+│   └── plugin/                     # 插件管理器
+│
+├── plugins/                        # 后端插件目录
+│   ├── kubernetes/                 # K8s 管理插件
+│   │   ├── biz/                    # K8s 业务逻辑
+│   │   ├── data/                   # K8s 数据层
+│   │   ├── model/                  # K8s 数据模型
+│   │   ├── server/                 # K8s HTTP 处理器
+│   │   ├── service/                # K8s 服务层
+│   │   └── resources/              # K8s 资源定义
+│   │
+│   ├── task/                       # 任务执行插件
+│   │   ├── model/                  # 任务数据模型
+│   │   ├── repository/             # 任务仓储
+│   │   ├── server/                 # 任务 HTTP 处理器
+│   │   └── service/                # 任务服务（脚本执行、文件分发）
+│   │
+│   ├── monitor/                    # 监控告警插件
+│   │   ├── model/                  # 监控数据模型
+│   │   ├── repository/             # 监控仓储
+│   │   ├── server/                 # 监控 HTTP 处理器
+│   │   └── service/                # 监控服务
+│   │
+│   ├── nginx/                      # Nginx 日志分析插件
+│   │   ├── data/                   # Nginx 数据处理
+│   │   ├── model/                  # Nginx 数据模型
+│   │   ├── repository/             # Nginx 仓储
+│   │   ├── server/                 # Nginx HTTP 处理器
+│   │   └── service/                # Nginx 服务
+│   │
+│   ├── ssl-cert/                   # SSL 证书管理插件
+│   │   ├── deployer/               # 证书部署器
+│   │   ├── model/                  # 证书数据模型
+│   │   ├── provider/               # ACME 提供商
+│   │   ├── repository/             # 证书仓储
+│   │   ├── server/                 # 证书 HTTP 处理器
+│   │   └── service/                # 证书服务
+│   │
+│   ├── inspection/                 # 拨测插件
+│   │   ├── dto/                    # 数据传输对象
+│   │   ├── executor/               # 拨测执行器
+│   │   ├── model/                  # 拨测数据模型
+│   │   ├── repository/             # 拨测仓储
+│   │   ├── server/                 # 拨测 HTTP 处理器
+│   │   └── service/                # 拨测服务
+│   │
+│   └── test/                       # 测试插件示例
+│
+├── pkg/                            # 公共工具包（可导出）
+│   ├── agentproto/                 # Agent gRPC protobuf 定义
+│   ├── collector/                  # 主机信息采集器
+│   ├── error/                      # 错误定义
+│   ├── logger/                     # 日志工具（zap）
+│   ├── metrics/                    # 指标采集
+│   ├── middleware/                 # HTTP 中间件（认证、审计、CORS）
+│   ├── response/                   # 标准响应格式
+│   ├── scheduler/                  # 任务调度器
+│   ├── ssh/                        # SSH 客户端
+│   ├── utils/                      # 通用工具函数
+│   └── version/                    # 版本信息
+│
+├── web/                            # 前端项目（Vue 3 + TypeScript）
+│   ├── public/                     # 静态资源
+│   │   └── uploads/                # 上传文件目录
+│   │
+│   ├── src/
+│   │   ├── api/                    # API 客户端（按业务域组织）
+│   │   │   ├── agent.ts            # Agent API
+│   │   │   ├── asset.ts            # 资产 API
+│   │   │   ├── audit.ts            # 审计 API
+│   │   │   ├── inspection.ts       # 巡检/拨测 API
+│   │   │   ├── rbac.ts             # RBAC API
+│   │   │   └── system.ts           # 系统 API
+│   │   │
+│   │   ├── assets/                 # 静态资源（图片、字体等）
+│   │   │
+│   │   ├── components/             # 公共组件
+│   │   │
+│   │   ├── directives/             # 自定义指令
+│   │   │   └── permission.ts       # 权限指令 v-permission
+│   │   │
+│   │   ├── plugins/                # 前端插件
+│   │   │   ├── kubernetes/         # K8s 插件
+│   │   │   ├── monitor/            # 监控插件
+│   │   │   ├── nginx/              # Nginx 插件
+│   │   │   ├── ssl-cert/           # SSL 证书插件
+│   │   │   ├── task/               # 任务插件
+│   │   │   ├── test/               # 测试插件
+│   │   │   ├── manager.ts          # 插件管理器
+│   │   │   └── types.ts            # 插件类型定义
+│   │   │
+│   │   ├── router/                 # 路由配置
+│   │   │   └── index.ts            # 路由定义
+│   │   │
+│   │   ├── stores/                 # Pinia 状态管理
+│   │   │   ├── permission.ts       # 权限 store
+│   │   │   ├── user.ts             # 用户 store
+│   │   │   └── app.ts              # 应用 store
+│   │   │
+│   │   ├── styles/                 # 全局样式
+│   │   │   ├── arco-theme.css      # Arco Design 主题
+│   │   │   └── global.css          # 全局样式
+│   │   │
+│   │   ├── utils/                  # 工具函数
+│   │   │
+│   │   ├── views/                  # 页面视图（按业务域组织）
+│   │   │   ├── asset/              # 资产管理页面
+│   │   │   ├── audit/              # 审计页面
+│   │   │   ├── identity/           # 身份认证页面
+│   │   │   ├── inspection/         # 巡检/拨测页面
+│   │   │   ├── kubernetes/         # K8s 管理页面
+│   │   │   ├── plugin/             # 插件管理页面
+│   │   │   ├── system/             # 系统配置页面
+│   │   │   └── task/               # 任务执行页面
+│   │   │
+│   │   ├── App.vue                 # 根组件
+│   │   └── main.ts                 # 入口文件
+│   │
+│   ├── index.html                  # HTML 模板
+│   ├── vite.config.ts              # Vite 配置
+│   ├── tsconfig.json               # TypeScript 配置
+│   └── package.json                # 前端依赖
+│
+├── config/                         # 配置文件
+│   ├── config.yaml                 # 运行时配置
+│   └── config.yaml.example         # 配置示例
+│
+├── data/                           # 运行时数据目录
+│   ├── agent-binaries/             # Agent 安装包
+│   ├── agent-certs/                # Agent TLS 证书
+│   └── terminal-recordings/        # 终端录像
+│
+├── logs/                           # 日志目录
+│   └── app.log                     # 应用日志
+│
+├── api/                            # API 定义
+│   └── proto/                      # Protobuf 定义
+│
+├── docs/                           # 文档
+│   └── plugin-development/         # 插件开发文档
+│
+├── migrations/                     # 数据库迁移脚本
+├── scripts/                        # 工具脚本
+├── bin/                            # 编译产物
+│   └── opshub                      # 服务端二进制
+│
+├── docker-compose.yml              # Docker Compose 配置
+├── Dockerfile                      # Docker 镜像构建
+├── Makefile                        # 构建脚本
+├── go.mod                          # Go 依赖
+├── go.sum                          # Go 依赖校验
+├── main.go                         # 服务端入口
+├── CLAUDE.md                       # 本文件
+└── README.md                       # 项目说明
+```
+
 ## 常用命令
 
 ### 后端
@@ -256,6 +479,207 @@ type CommandExecutor interface {
 - 栅格布局使用 `a-row` + `a-col`（24 栅格）
 ## 开发规范
 
+### 目录结构规范
+
+#### 后端目录规范
+
+**核心业务模块**（位于 `internal/`）：
+- `biz/` - 业务逻辑层，包含 UseCase 和业务规则
+- `data/` - 数据访问层，包含 Repository 接口、实现和 GORM 模型
+- `service/` - 服务层，协调业务逻辑和数据访问
+- `server/` - HTTP 处理层，包含路由注册和请求处理
+
+**插件模块**（位于 `plugins/`）：
+每个插件遵循相同的目录结构：
+```
+plugins/plugin-name/
+├── model/          # 数据模型（GORM）
+├── repository/     # 数据仓储接口和实现
+├── service/        # 业务服务
+├── server/         # HTTP 处理器和路由
+├── biz/            # 业务逻辑（可选）
+└── plugin.go       # 插件注册入口
+```
+
+**Agent 模块**（位于 `agent/`）：
+```
+agent/
+├── cmd/            # 命令行入口
+├── internal/       # 内部实现
+│   ├── client/     # gRPC 客户端
+│   ├── config/     # 配置管理
+│   ├── executor/   # 命令执行
+│   ├── filemanager/# 文件管理
+│   ├── logger/     # 日志
+│   ├── prober/     # 健康检查
+│   └── terminal/   # 终端管理
+├── config/         # 配置文件
+└── build.sh        # 构建脚本
+```
+
+**公共包**（位于 `pkg/`）：
+- 所有 `pkg/` 下的包必须是可导出的，不依赖 `internal/`
+- 按功能划分子包：`logger/`、`middleware/`、`response/`、`ssh/`、`collector/` 等
+
+#### 前端目录规范
+
+**核心目录**（位于 `web/src/`）：
+```
+web/src/
+├── api/            # API 客户端，按业务域组织（asset.ts, rbac.ts 等）
+├── assets/         # 静态资源（图片、字体）
+├── components/     # 公共组件
+├── directives/     # 自定义指令（permission.ts）
+├── plugins/        # 前端插件，每个插件一个子目录
+├── router/         # 路由配置
+├── stores/         # Pinia 状态管理
+├── styles/         # 全局样式
+├── utils/          # 工具函数
+├── views/          # 页面视图，按业务域组织
+├── App.vue         # 根组件
+└── main.ts         # 入口文件
+```
+
+**插件目录**（位于 `web/src/plugins/`）：
+每个插件包含：
+- `index.ts` - 插件入口，导出 Plugin 对象
+- `routes.ts` - 插件路由定义
+- `views/` - 插件页面组件（可选）
+
+#### 文件命名规范
+
+**后端**：
+- Go 文件使用 snake_case：`user_service.go`、`host_repository.go`
+- 测试文件：`*_test.go`
+- 接口定义文件：通常在 `biz/` 或 `data/` 中，如 `user_repo.go`
+- HTTP 处理器：`http.go` 或 `*_handler.go`
+
+**前端**：
+- Vue 组件使用 PascalCase：`UserList.vue`、`HostDetail.vue`
+- TypeScript 文件使用 camelCase：`userApi.ts`、`permission.ts`
+- 类型定义文件：`types.ts` 或 `*.d.ts`
+- 工具函数：`utils.ts` 或按功能命名如 `dateUtils.ts`
+
+### 代码组织规范
+
+#### 后端三层架构
+
+**严格遵循依赖方向**：`Server → Service → Biz → Data`
+
+1. **Data 层**（`internal/data/`）：
+   - 定义 GORM 模型（struct）
+   - 定义 Repository 接口
+   - 实现 Repository 接口
+   - 只依赖数据库和缓存，不依赖业务逻辑
+
+2. **Biz 层**（`internal/biz/`）：
+   - 定义业务接口（UseCase）
+   - 实现业务逻辑
+   - 依赖 Repository 接口，不依赖具体实现
+   - 处理业务规则和数据转换
+
+3. **Service 层**（`internal/service/`）：
+   - 协调多个 UseCase
+   - 处理事务边界
+   - 数据格式转换（DTO ↔ Model）
+   - 依赖 Biz 层接口
+
+4. **Server 层**（`internal/server/`）：
+   - HTTP 请求处理
+   - 路由注册
+   - 参数验证
+   - 响应格式化
+   - 依赖 Service 层
+
+**示例**：
+```go
+// data/user_repository.go
+type UserRepository interface {
+    Create(ctx context.Context, user *User) error
+    GetByID(ctx context.Context, id uint) (*User, error)
+}
+
+// biz/user_usecase.go
+type UserUseCase interface {
+    CreateUser(ctx context.Context, req *CreateUserRequest) error
+}
+
+// service/user_service.go
+type UserService struct {
+    userUC UserUseCase
+}
+
+// server/user_handler.go
+func (s *HTTPServer) createUser(c *gin.Context) {
+    // 处理 HTTP 请求
+}
+```
+
+#### 依赖注入模式
+
+**使用工厂函数组装依赖链**：
+
+```go
+// internal/server/asset/http.go
+func NewAssetServices(db *gorm.DB) (*HTTPServer, error) {
+    // 1. 创建 Repository
+    hostRepo := assetdata.NewHostRepository(db)
+
+    // 2. 创建 UseCase
+    hostUC := assetbiz.NewHostUseCase(hostRepo)
+
+    // 3. 创建 Service
+    hostService := assetservice.NewHostService(hostUC)
+
+    // 4. 创建 HTTPServer
+    return &HTTPServer{
+        hostService: hostService,
+    }, nil
+}
+```
+
+**顶层组装**（`internal/server/http.go`）：
+```go
+func NewHTTPServer(db *gorm.DB, rdb *redis.Client) *HTTPServer {
+    // 初始化各业务域
+    assetServer, _ := asset.NewAssetServices(db)
+    rbacServer, _ := rbac.NewRBACServices(db, rdb)
+
+    return &HTTPServer{
+        assetServer: assetServer,
+        rbacServer:  rbacServer,
+    }
+}
+```
+
+#### 插件开发规范
+
+**后端插件**必须实现 `Plugin` 接口：
+```go
+type Plugin interface {
+    Name() string
+    Description() string
+    Version() string
+    Author() string
+    Enable(db *gorm.DB) error
+    Disable() error
+    RegisterRoutes(r *gin.RouterGroup)
+    GetMenus() []Menu
+}
+```
+
+**前端插件**必须导出 `Plugin` 对象：
+```typescript
+export default {
+    name: 'plugin-name',
+    version: '1.0.0',
+    install: () => { /* 安装逻辑 */ },
+    uninstall: () => { /* 卸载逻辑 */ },
+    getMenus: () => [ /* 菜单定义 */ ],
+    getRoutes: () => [ /* 路由定义 */ ]
+}
+```
+
 ### 项目记录
 
 使用 `/record-milestone` skill 记录项目开发过程：
@@ -294,3 +718,444 @@ type CommandExecutor interface {
 5. **优雅关闭**：
    - 服务关闭时主动关闭所有 Agent 连接
    - 使用 5 秒超时机制，超时后强制停止
+
+### API 开发规范
+
+#### 路由命名规范
+
+**RESTful 风格**：
+- 资源使用复数名词：`/api/v1/hosts`、`/api/v1/users`
+- 使用 HTTP 方法表示操作：
+  - `GET /api/v1/hosts` - 列表查询
+  - `GET /api/v1/hosts/:id` - 详情查询
+  - `POST /api/v1/hosts` - 创建
+  - `PUT /api/v1/hosts/:id` - 更新
+  - `DELETE /api/v1/hosts/:id` - 删除
+- 子资源嵌套：`/api/v1/hosts/:id/terminals`
+- 操作动词：`/api/v1/hosts/:id/connect`、`/api/v1/tasks/:id/execute`
+
+#### 请求参数规范
+
+**查询参数**（GET 请求）：
+```go
+type ListRequest struct {
+    Page     int    `form:"page" binding:"required,min=1"`
+    PageSize int    `form:"page_size" binding:"required,min=1,max=100"`
+    Keyword  string `form:"keyword"`
+    Status   string `form:"status"`
+}
+```
+
+**请求体**（POST/PUT 请求）：
+```go
+type CreateHostRequest struct {
+    Name     string `json:"name" binding:"required"`
+    IP       string `json:"ip" binding:"required,ip"`
+    Port     int    `json:"port" binding:"required,min=1,max=65535"`
+    Username string `json:"username" binding:"required"`
+}
+```
+
+#### 响应格式规范
+
+**成功响应**：
+```go
+// 单条数据
+response.Success(c, data)
+
+// 分页数据
+response.Pagination(c, total, page, pageSize, data)
+
+// 带消息
+response.SuccessWithMessage(c, "操作成功", data)
+```
+
+**错误响应**：
+```go
+// 使用标准错误码
+response.Error(c, appError.New(appError.ErrNotFound, "主机不存在"))
+
+// 简化版本
+response.ErrorCode(c, http.StatusBadRequest, "参数错误")
+```
+
+**标准响应结构**：
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {},
+  "timestamp": 1234567890
+}
+```
+
+**分页响应结构**：
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "total": 100,
+    "page": 1,
+    "page_size": 20,
+    "data": []
+  },
+  "timestamp": 1234567890
+}
+```
+
+#### 错误处理规范
+
+**使用统一的错误码**（`pkg/error/error.go`）：
+```go
+const (
+    Success            ErrorCode = 0
+    ErrBadRequest      ErrorCode = 400
+    ErrUnauthorized    ErrorCode = 401
+    ErrForbidden       ErrorCode = 403
+    ErrNotFound        ErrorCode = 404
+    ErrInternalServer  ErrorCode = 500
+    // 业务错误码 2000-2999
+    ErrHostNotFound    ErrorCode = 2001
+    ErrAgentOffline    ErrorCode = 2002
+)
+```
+
+**错误包装**：
+```go
+if err != nil {
+    return appError.Wrap(err, appError.ErrDatabase, "查询主机失败")
+}
+```
+
+### 数据库开发规范
+
+#### 模型定义规范
+
+**GORM 模型**：
+```go
+type Host struct {
+    ID        uint           `gorm:"primarykey" json:"id"`
+    CreatedAt time.Time      `json:"created_at"`
+    UpdatedAt time.Time      `json:"updated_at"`
+    DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+    Name     string `gorm:"size:100;not null" json:"name"`
+    IP       string `gorm:"size:50;not null;index" json:"ip"`
+    Port     int    `gorm:"not null;default:22" json:"port"`
+    Status   string `gorm:"size:20;default:'offline'" json:"status"`
+}
+
+func (Host) TableName() string {
+    return "asset_hosts"
+}
+```
+
+**字段规范**：
+- 主键使用 `uint` 类型的 `ID`
+- 必须包含 `CreatedAt`、`UpdatedAt`、`DeletedAt`（软删除）
+- 字符串字段指定 `size`
+- 必填字段添加 `not null`
+- 枚举字段使用 `default` 指定默认值
+- 外键字段添加 `index`
+
+#### Repository 规范
+
+**接口定义**：
+```go
+type HostRepository interface {
+    Create(ctx context.Context, host *Host) error
+    Update(ctx context.Context, host *Host) error
+    Delete(ctx context.Context, id uint) error
+    GetByID(ctx context.Context, id uint) (*Host, error)
+    List(ctx context.Context, page, pageSize int, filters map[string]interface{}) ([]*Host, int64, error)
+}
+```
+
+**实现规范**：
+```go
+type hostRepository struct {
+    db *gorm.DB
+}
+
+func NewHostRepository(db *gorm.DB) HostRepository {
+    return &hostRepository{db: db}
+}
+
+func (r *hostRepository) GetByID(ctx context.Context, id uint) (*Host, error) {
+    var host Host
+    err := r.db.WithContext(ctx).First(&host, id).Error
+    if err != nil {
+        return nil, err
+    }
+    return &host, nil
+}
+```
+
+**查询规范**：
+- 所有查询必须使用 `WithContext(ctx)`
+- 列表查询必须支持分页
+- 使用 `Preload` 预加载关联数据
+- 复杂查询使用链式调用构建
+
+#### 数据库迁移规范
+
+**自动迁移位置**：
+1. 核心系统表 → `cmd/server/server.go` 的 `autoMigrate()`
+2. 插件表 → 各插件的 `Enable()` 方法
+3. 身份认证表 → `internal/server/identity/http.go` 的 `NewIdentityServices()`
+
+**迁移示例**：
+```go
+func autoMigrate(db *gorm.DB) error {
+    return db.AutoMigrate(
+        &assetdata.Host{},
+        &assetdata.HostGroup{},
+        &rbacdata.User{},
+        &rbacdata.Role{},
+    )
+}
+```
+
+### 前端开发规范
+
+#### 组件开发规范
+
+**Vue 3 Composition API**：
+```vue
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { Message } from '@arco-design/web-vue'
+import { getHostList } from '@/api/asset'
+
+// 响应式数据
+const loading = ref(false)
+const dataList = ref([])
+const pagination = reactive({
+  page: 1,
+  pageSize: 20,
+  total: 0
+})
+
+// 方法
+const loadData = async () => {
+  loading.value = true
+  try {
+    const res = await getHostList(pagination)
+    dataList.value = res.data
+    pagination.total = res.total
+  } catch (error) {
+    Message.error('加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 生命周期
+onMounted(() => {
+  loadData()
+})
+</script>
+```
+
+**组件命名**：
+- 使用 PascalCase：`<HostList />`、`<UserForm />`
+- 多单词组件名：避免与 HTML 元素冲突
+
+#### API 调用规范
+
+**API 文件组织**（`web/src/api/`）：
+```typescript
+// asset.ts
+import request from '@/utils/request'
+
+export interface Host {
+  id: number
+  name: string
+  ip: string
+  port: number
+}
+
+export interface ListParams {
+  page: number
+  page_size: number
+  keyword?: string
+}
+
+export const getHostList = (params: ListParams) => {
+  return request.get('/api/v1/asset/hosts', { params })
+}
+
+export const getHostDetail = (id: number) => {
+  return request.get(`/api/v1/asset/hosts/${id}`)
+}
+
+export const createHost = (data: Partial<Host>) => {
+  return request.post('/api/v1/asset/hosts', data)
+}
+```
+
+**请求拦截器**（`web/src/utils/request.ts`）：
+- 自动添加 Authorization header
+- 统一错误处理
+- 响应数据解包
+
+#### 状态管理规范
+
+**Pinia Store**（`web/src/stores/`）：
+```typescript
+// user.ts
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+
+export const useUserStore = defineStore('user', () => {
+  const userInfo = ref(null)
+  const token = ref(localStorage.getItem('token') || '')
+
+  const setToken = (newToken: string) => {
+    token.value = newToken
+    localStorage.setItem('token', newToken)
+  }
+
+  const logout = () => {
+    token.value = ''
+    userInfo.value = null
+    localStorage.removeItem('token')
+  }
+
+  return {
+    userInfo,
+    token,
+    setToken,
+    logout
+  }
+})
+```
+
+#### 权限控制规范
+
+**使用 v-permission 指令**：
+```vue
+<template>
+  <a-button v-permission="'hosts:create'" @click="handleCreate">
+    新增主机
+  </a-button>
+
+  <a-button v-permission="'hosts:delete'" status="danger" @click="handleDelete">
+    删除
+  </a-button>
+</template>
+```
+
+**权限码命名**：
+- 格式：`资源:操作`
+- 示例：`hosts:create`、`hosts:edit`、`hosts:delete`、`users:view`
+
+### 测试规范
+
+#### 单元测试
+
+**后端测试**（使用 Go testing）：
+```go
+func TestHostRepository_Create(t *testing.T) {
+    db := setupTestDB(t)
+    repo := NewHostRepository(db)
+
+    host := &Host{
+        Name: "test-host",
+        IP:   "192.168.1.1",
+        Port: 22,
+    }
+
+    err := repo.Create(context.Background(), host)
+    assert.NoError(t, err)
+    assert.NotZero(t, host.ID)
+}
+```
+
+**前端测试**（使用 Vitest）：
+```typescript
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import HostList from '@/views/asset/HostList.vue'
+
+describe('HostList', () => {
+  it('renders properly', () => {
+    const wrapper = mount(HostList)
+    expect(wrapper.find('.host-list').exists()).toBe(true)
+  })
+})
+```
+
+### 安全规范
+
+1. **SQL 注入防护**：使用 GORM 参数化查询，禁止字符串拼接
+2. **XSS 防护**：前端使用 Vue 自动转义，后端返回数据不包含 HTML
+3. **CSRF 防护**：使用 JWT Token，不依赖 Cookie
+4. **权限校验**：所有 API 必须进行权限验证
+5. **敏感信息**：密码、密钥等敏感信息不记录日志，不返回前端
+6. **文件上传**：限制文件类型、大小，使用随机文件名
+
+### 性能优化规范
+
+1. **数据库查询**：
+   - 使用索引优化查询
+   - 避免 N+1 查询，使用 Preload
+   - 大数据量使用分页
+   - 使用 Redis 缓存热点数据
+
+2. **API 响应**：
+   - 使用 gzip 压缩
+   - 合理使用 HTTP 缓存
+   - 避免返回过大的数据
+
+3. **前端优化**：
+   - 路由懒加载
+   - 组件按需加载
+   - 图片懒加载
+   - 使用虚拟滚动处理大列表
+
+## 命令操作规范
+
+### 数据库操作
+
+如果需要操作数据库数据，使用 Docker 命令进入容器：
+
+```bash
+# 进入 MySQL 容器
+docker exec -it opshub-mysql mysql -uroot -p'OpsHub@2026' opshub
+
+# 执行 SQL 查询
+SELECT * FROM asset_hosts LIMIT 10;
+
+# 进入 Redis 容器
+docker exec -it opshub-redis redis-cli -a '1ujasdJ67Ps'
+
+# 执行 Redis 命令
+KEYS *
+GET key_name
+```
+
+### 服务启动
+
+```bash
+# 后端服务
+./bin/opshub server --config config/config.yaml
+
+# 前端开发服务
+cd web && npm run dev
+
+# Docker Compose 启动全栈
+docker-compose up -d
+```
+
+### 日志查看
+
+```bash
+# 查看应用日志
+tail -f logs/app.log
+
+# 查看 Docker 容器日志
+docker logs -f opshub-server
+docker logs -f opshub-mysql
+```

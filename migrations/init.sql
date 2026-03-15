@@ -1834,4 +1834,94 @@ VALUES
   (2, 90),   -- Web站点管理菜单（仅查看）
   (2, 377);  -- 访问站点按钮
 
+-- ============================================================
+-- 17. 智能巡检功能扩展（巡检管理、执行记录）
+-- ============================================================
+
+-- 17.1 页面菜单：在现有智能巡检模块(parent_id=352)下新增子菜单
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (389, '巡检管理', 'inspection_management', 2, 352, '/inspection/management', 'inspection/InspectionManagement', 'FolderAdd', 5, 1, 1, '', '', NOW(), NOW()),
+  (391, '执行记录', 'inspection_records', 2, 352, '/inspection/records', 'inspection/InspectionRecords', 'History', 7, 1, 1, '', '', NOW(), NOW());
+
+-- 17.2 按钮权限(type=3)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  -- 巡检管理按钮 (parent_id=389)
+  (392, '新增巡检组', 'inspection_management:create_group', 3, 389, '', '', '', 1, 1, 1, '/api/v1/inspection/groups', 'POST', NOW(), NOW()),
+  (393, '编辑巡检组', 'inspection_management:update_group', 3, 389, '', '', '', 2, 1, 1, '/api/v1/inspection/groups/:id', 'PUT', NOW(), NOW()),
+  (394, '删除巡检组', 'inspection_management:delete_group', 3, 389, '', '', '', 3, 1, 1, '/api/v1/inspection/groups/:id', 'DELETE', NOW(), NOW()),
+  (395, '新增巡检项', 'inspection_management:create_item', 3, 389, '', '', '', 4, 1, 1, '/api/v1/inspection/items', 'POST', NOW(), NOW()),
+  (396, '编辑巡检项', 'inspection_management:update_item', 3, 389, '', '', '', 5, 1, 1, '/api/v1/inspection/items/:id', 'PUT', NOW(), NOW()),
+  (397, '删除巡检项', 'inspection_management:delete_item', 3, 389, '', '', '', 6, 1, 1, '/api/v1/inspection/items/:id', 'DELETE', NOW(), NOW()),
+  (398, '测试运行', 'inspection_management:test', 3, 389, '', '', '', 7, 1, 1, '/api/v1/inspection/items/test-run', 'POST', NOW(), NOW());
+
+-- 17.3 菜单API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  -- 巡检管理页面需要的API
+  (389, '/api/v1/inspection/groups', 'GET', NOW(), NOW()),
+  (389, '/api/v1/inspection/groups/:id', 'GET', NOW(), NOW()),
+  (389, '/api/v1/inspection/groups/all', 'GET', NOW(), NOW()),
+  (389, '/api/v1/inspection/items', 'GET', NOW(), NOW()),
+  (389, '/api/v1/inspection/items/:id', 'GET', NOW(), NOW()),
+  (389, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+  (389, '/api/v1/hosts', 'GET', NOW(), NOW()),
+
+  -- 新增巡检组按钮关联的API
+  (392, '/api/v1/inspection/groups', 'POST', NOW(), NOW()),
+  (392, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+
+  -- 编辑巡检组按钮关联的API
+  (393, '/api/v1/inspection/groups/:id', 'PUT', NOW(), NOW()),
+  (393, '/api/v1/inspection/groups/:id', 'GET', NOW(), NOW()),
+  (393, '/api/v1/inspection/items', 'GET', NOW(), NOW()),
+  (393, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+
+  -- 删除巡检组按钮关联的API
+  (394, '/api/v1/inspection/groups/:id', 'DELETE', NOW(), NOW()),
+
+  -- 新增巡检项按钮关联的API
+  (395, '/api/v1/inspection/items', 'POST', NOW(), NOW()),
+  (395, '/api/v1/inspection/groups/all', 'GET', NOW(), NOW()),
+  (395, '/api/v1/hosts', 'GET', NOW(), NOW()),
+
+  -- 编辑巡检项按钮关联的API
+  (396, '/api/v1/inspection/items/:id', 'PUT', NOW(), NOW()),
+  (396, '/api/v1/inspection/items/:id', 'GET', NOW(), NOW()),
+  (396, '/api/v1/inspection/groups/all', 'GET', NOW(), NOW()),
+  (396, '/api/v1/hosts', 'GET', NOW(), NOW()),
+
+  -- 删除巡检项按钮关联的API
+  (397, '/api/v1/inspection/items/:id', 'DELETE', NOW(), NOW()),
+
+  -- 测试运行按钮关联的API
+  (398, '/api/v1/inspection/items/test-run', 'POST', NOW(), NOW()),
+
+  -- 执行记录页面需要的API
+  (391, '/api/v1/inspection/records', 'GET', NOW(), NOW()),
+  (391, '/api/v1/inspection/records/:id', 'GET', NOW(), NOW()),
+  (391, '/api/v1/inspection/groups/all', 'GET', NOW(), NOW()),
+  (391, '/api/v1/inspection/items', 'GET', NOW(), NOW()),
+  (391, '/api/v1/hosts', 'GET', NOW(), NOW());
+
+-- 17.4 为管理员角色(role_id=1)分配新增的巡检功能菜单和按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 389),  -- 巡检管理
+  (1, 391),  -- 执行记录
+  (1, 392),  -- 新增巡检组
+  (1, 393),  -- 编辑巡检组
+  (1, 394),  -- 删除巡检组
+  (1, 395),  -- 新增巡检项
+  (1, 396),  -- 编辑巡检项
+  (1, 397),  -- 删除巡检项
+  (1, 398);  -- 测试运行
+
+-- 17.5 为普通用户角色(role_id=2)分配基础查看权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (2, 389),  -- 巡检管理（仅查看）
+  (2, 391);  -- 执行记录（仅查看）
+
 SET FOREIGN_KEY_CHECKS = 1;
