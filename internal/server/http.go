@@ -45,6 +45,7 @@ import (
 	"github.com/ydcloud-dy/opshub/internal/service"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"github.com/ydcloud-dy/opshub/pkg/middleware"
+	inspectionplugin "github.com/ydcloud-dy/opshub/plugins/inspection"
 	k8splugin "github.com/ydcloud-dy/opshub/plugins/kubernetes"
 	monitorplugin "github.com/ydcloud-dy/opshub/plugins/monitor"
 	nginxplugin "github.com/ydcloud-dy/opshub/plugins/nginx"
@@ -205,6 +206,16 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		hostUseCase.SetAgentCommandFactory(agentserver.NewAgentCommandFactory(s.grpcServer.Hub()))
 	}
 
+	// 注册 Inspection 插件
+	inspectionPlugin := inspectionplugin.New()
+	if s.grpcServer != nil {
+		inspectionPlugin.SetAgentHub(s.grpcServer.Hub())
+	}
+	inspectionPlugin.SetHostRepo(hostRepo)
+	if err := s.pluginMgr.Register(inspectionPlugin); err != nil {
+		appLogger.Error("注册Inspection插件失败", zap.Error(err))
+	}
+
 	// 创建 WebsiteProxyHandler
 	var websiteProxyHandler *assetserver.WebsiteProxyHandler
 	if s.grpcServer != nil {
@@ -256,7 +267,11 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		}
 
 		// 注册 Inspection（智能巡检）路由
-		s.inspectionServer = inspectionserver.NewInspectionServices(s.db, s.redisClient, hostRepo, credentialRepo)
+		var agentHub *agentserver.AgentHub
+		if s.grpcServer != nil {
+			agentHub = s.grpcServer.Hub()
+		}
+		s.inspectionServer = inspectionserver.NewInspectionServices(s.db, s.redisClient, hostRepo, credentialRepo, agentHub)
 		s.inspectionServer.RegisterRoutes(v1)
 
 		// 设置Agent命令执行工厂，使拨测支持Agent方式

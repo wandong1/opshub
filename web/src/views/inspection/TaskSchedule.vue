@@ -12,6 +12,10 @@
 
     <div class="filter-bar">
       <a-input v-model="searchForm.keyword" placeholder="搜索任务名称" allow-clear style="width: 220px;" @press-enter="loadData" />
+      <a-select v-model="searchForm.taskType" placeholder="任务类型" allow-clear style="width: 120px;">
+        <a-option label="拨测任务" value="probe" />
+        <a-option label="巡检任务" value="inspection" />
+      </a-select>
       <a-select v-model="searchForm.status" placeholder="状态" allow-clear style="width: 120px;">
         <a-option label="启用" :value="1" />
         <a-option label="禁用" :value="0" />
@@ -25,11 +29,22 @@
     <a-table :data="taskList" :loading="loading" :bordered="{ cell: true }" stripe :pagination="{ current: pagination.page, pageSize: pagination.pageSize, total: pagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50] }" @page-change="(p: number) => { pagination.page = p; loadData() }" @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadData() }">
       <template #columns>
         <a-table-column title="任务名称" data-index="name" :width="140" />
-        <a-table-column title="关联拨测" :width="140">
+        <a-table-column title="任务类型" :width="100" align="center">
           <template #cell="{ record }">
-            <a-tooltip v-if="record.probeConfigIds?.length" position="top">
+            <a-tag size="small" :color="record.taskType === 'inspection' ? 'purple' : 'blue'">
+              {{ record.taskType === 'inspection' ? '巡检' : '拨测' }}
+            </a-tag>
+          </template>
+        </a-table-column>
+        <a-table-column title="关联配置" :width="140">
+          <template #cell="{ record }">
+            <a-tooltip v-if="record.taskType === 'probe' && record.probeConfigIds?.length" position="top">
               <template #content><div v-for="id in record.probeConfigIds" :key="id">{{ getProbeLabel(id) }}</div></template>
-              <a-tag size="small">{{ record.probeConfigIds.length }} 个配置</a-tag>
+              <a-tag size="small">{{ record.probeConfigIds.length }} 个拨测</a-tag>
+            </a-tooltip>
+            <a-tooltip v-else-if="record.taskType === 'inspection' && record.inspectionGroupIds?.length" position="top">
+              <template #content><div v-for="id in record.inspectionGroupIds" :key="id">{{ getInspectionGroupLabel(id) }}</div></template>
+              <a-tag size="small" color="purple">{{ record.inspectionGroupIds.length }} 个巡检组</a-tag>
             </a-tooltip>
             <span v-else>-</span>
           </template>
@@ -41,7 +56,7 @@
         </a-table-column>
         <a-table-column title="状态" :width="80" align="center">
           <template #cell="{ record }">
-            <a-tag size="small" :color="record.status === 1 ? 'green' : 'red'">{{ record.status === 1 ? '启用' : '禁用' }}</a-tag>
+            <a-tag size="small" :color="record.enabled ? 'green' : 'red'">{{ record.enabled ? '启用' : '禁用' }}</a-tag>
           </template>
         </a-table-column>
         <a-table-column title="最后执行" :width="170">
@@ -53,34 +68,66 @@
             <span v-else>-</span>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="220" fixed="right" align="center">
+        <a-table-column title="操作" :width="280" fixed="right" align="center">
           <template #cell="{ record }">
-            <a-button v-permission="'inspection:tasks:toggle'" type="text" size="small" status="warning" @click="handleToggle(record)">{{ record.status === 1 ? '禁用' : '启用' }}</a-button>
+            <a-button v-permission="'inspection:tasks:toggle'" type="text" size="small" status="warning" @click="handleToggle(record)">{{ record.enabled ? '禁用' : '启用' }}</a-button>
             <a-button v-permission="'inspection:tasks:update'" type="text" size="small" @click="handleEdit(record)">编辑</a-button>
             <a-button v-permission="'inspection:tasks:delete'" type="text" size="small" status="danger" @click="handleDelete(record)">删除</a-button>
             <a-button v-permission="'inspection:tasks:results'" type="text" size="small" @click="handleViewResults(record)">结果</a-button>
+            <a-button v-if="record.taskType === 'inspection'" type="text" size="small" @click="handleExport(record)">导出报告</a-button>
           </template>
         </a-table-column>
       </template>
     </a-table>
     <!-- 新建/编辑对话框 -->
-    <a-modal v-model:visible="dialogVisible" :title="isEdit ? '编辑任务' : '新增任务'" :width="660" unmount-on-close>
+    <a-modal v-model:visible="dialogVisible" :title="isEdit ? '编辑任务' : '新增任务'" :width="720" unmount-on-close>
       <a-form ref="formRef" :model="formData" :rules="formRules" layout="horizontal" auto-label-width>
         <a-form-item label="任务名称" field="name">
           <a-input v-model="formData.name" placeholder="请输入任务名称" />
         </a-form-item>
-        <a-form-item label="拨测分类">
-          <a-radio-group v-model="selectedCategory" type="button" @change="handleTaskCategoryChange">
-            <a-radio v-for="c in PROBE_CATEGORIES" :key="c.value" :value="c.value" :disabled="!c.enabled">{{ c.label }}</a-radio>
+
+        <!-- 任务类型选择 -->
+        <a-form-item label="任务类型" field="taskType">
+          <a-radio-group v-model="formData.taskType" type="button" @change="handleTaskTypeChange">
+            <a-radio value="probe">拨测任务</a-radio>
+            <a-radio value="inspection">巡检任务</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="拨测配置" field="probeConfigIds">
-          <a-select v-model="formData.probeConfigIds" multiple allow-search placeholder="选择拨测配置（可多选）" style="width: 100%;">
-            <a-option v-for="p in filteredProbeOptions" :key="p.id" :label="p.name" :value="p.id">
-              {{ p.name }} <span style="float: right; color: var(--ops-text-tertiary); font-size: 12px;">{{ p.type?.toUpperCase() }} · {{ p.target }}</span>
-            </a-option>
-          </a-select>
-        </a-form-item>
+
+        <!-- 拨测任务配置 -->
+        <template v-if="formData.taskType === 'probe'">
+          <a-form-item label="拨测分类">
+            <a-radio-group v-model="selectedCategory" type="button" @change="handleTaskCategoryChange">
+              <a-radio v-for="c in PROBE_CATEGORIES" :key="c.value" :value="c.value" :disabled="!c.enabled">{{ c.label }}</a-radio>
+            </a-radio-group>
+          </a-form-item>
+          <a-form-item label="拨测配置" field="probeConfigIds">
+            <a-select v-model="formData.probeConfigIds" multiple allow-search placeholder="选择拨测配置（可多选）" style="width: 100%;">
+              <a-option v-for="p in filteredProbeOptions" :key="p.id" :label="p.name" :value="p.id">
+                {{ p.name }} <span style="float: right; color: var(--ops-text-tertiary); font-size: 12px;">{{ p.type?.toUpperCase() }} · {{ p.target }}</span>
+              </a-option>
+            </a-select>
+          </a-form-item>
+        </template>
+
+        <!-- 巡检任务配置 -->
+        <template v-if="formData.taskType === 'inspection'">
+          <a-form-item label="巡检组" field="inspectionGroupIds">
+            <a-select v-model="formData.inspectionGroupIds" multiple allow-search placeholder="选择巡检组（可多选）" style="width: 100%;" @change="handleInspectionGroupChange">
+              <a-option v-for="g in inspectionGroupOptions" :key="g.id" :label="g.name" :value="g.id">
+                {{ g.name }} <span style="float: right; color: var(--ops-text-tertiary); font-size: 12px;">{{ g.itemCount || 0 }} 个巡检项</span>
+              </a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="指定巡检项" v-if="formData.inspectionGroupIds.length > 0">
+            <a-select v-model="formData.inspectionItemIds" multiple allow-search placeholder="不选则执行所有巡检项" style="width: 100%;">
+              <a-option v-for="item in filteredInspectionItems" :key="item.id" :label="item.name" :value="item.id">
+                {{ item.name }} <span style="float: right; color: var(--ops-text-tertiary); font-size: 12px;">{{ getInspectionGroupLabel(item.groupId) }}</span>
+              </a-option>
+            </a-select>
+          </a-form-item>
+        </template>
+
         <a-form-item label="执行计划" field="cronExpr">
           <div class="cron-picker">
             <div class="cron-presets">
@@ -94,7 +141,7 @@
             <div class="cron-description">{{ cronDescription }}</div>
           </div>
         </a-form-item>
-        <a-form-item label="并发数">
+        <a-form-item label="并发数" v-if="formData.taskType === 'probe'">
           <a-input-number v-model="formData.concurrency" :min="1" :max="50" />
           <span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">同时执行的最大拨测数</span>
         </a-form-item>
@@ -102,6 +149,9 @@
           <a-select v-model="formData.pushgatewayId" placeholder="选择Pushgateway（可选）" allow-clear style="width: 100%;">
             <a-option v-for="p in pgwOptions" :key="p.id" :label="p.name" :value="p.id" />
           </a-select>
+          <span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">
+            {{ formData.taskType === 'inspection' ? '推送巡检指标到 Prometheus' : '推送拨测指标到 Prometheus' }}
+          </span>
         </a-form-item>
         <a-form-item label="业务分组">
           <a-select v-model="formData.groupId" placeholder="选择业务分组" allow-clear allow-search style="width: 100%;">
@@ -112,7 +162,7 @@
           <a-textarea v-model="formData.description" :max-length="200" :auto-size="{ minRows: 2 }" />
         </a-form-item>
         <a-form-item label="状态">
-          <a-radio-group v-model="formData.status"><a-radio :value="1">启用</a-radio><a-radio :value="0">禁用</a-radio></a-radio-group>
+          <a-radio-group v-model="formData.enabled"><a-radio :value="true">启用</a-radio><a-radio :value="false">禁用</a-radio></a-radio-group>
         </a-form-item>
       </a-form>
       <template #footer>
@@ -123,7 +173,8 @@
 
     <!-- 执行结果抽屉 -->
     <a-drawer v-model:visible="resultsVisible" title="执行结果" :width="720" unmount-on-close>
-      <a-table :data="resultList" :loading="resultsLoading" :bordered="{ cell: true }" stripe :pagination="{ current: resultPagination.page, pageSize: resultPagination.pageSize, total: resultPagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50] }" @page-change="(p: number) => { resultPagination.page = p; loadResults() }" @page-size-change="(s: number) => { resultPagination.pageSize = s; resultPagination.page = 1; loadResults() }">
+      <!-- 拨测任务结果 -->
+      <a-table v-if="currentTaskType === 'probe'" :data="resultList" :loading="resultsLoading" :bordered="{ cell: true }" stripe :pagination="{ current: resultPagination.page, pageSize: resultPagination.pageSize, total: resultPagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50] }" @page-change="(p: number) => { resultPagination.page = p; loadResults() }" @page-size-change="(s: number) => { resultPagination.pageSize = s; resultPagination.page = 1; loadResults() }">
         <template #columns>
           <a-table-column title="时间" data-index="createdAt" :width="170" />
           <a-table-column title="成功" :width="80" align="center">
@@ -149,6 +200,28 @@
           <a-table-column title="错误信息" data-index="errorMessage" ellipsis tooltip />
         </template>
       </a-table>
+
+      <!-- 巡检任务结果 -->
+      <a-table v-else :data="resultList" :loading="resultsLoading" :bordered="{ cell: true }" stripe :pagination="{ current: resultPagination.page, pageSize: resultPagination.pageSize, total: resultPagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50] }" @page-change="(p: number) => { resultPagination.page = p; loadResults() }" @page-size-change="(s: number) => { resultPagination.pageSize = s; resultPagination.page = 1; loadResults() }">
+        <template #columns>
+          <a-table-column title="执行时间" data-index="executed_at" :width="170" />
+          <a-table-column title="巡检项" data-index="item_name" :width="150" ellipsis tooltip />
+          <a-table-column title="主机" data-index="host_name" :width="120" ellipsis tooltip />
+          <a-table-column title="状态" :width="80" align="center">
+            <template #cell="{ record }">
+              <a-tag size="small" :color="record.status === 'success' ? 'green' : 'red'">{{ record.status === 'success' ? '成功' : '失败' }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="耗时(ms)" :width="100" align="center" data-index="duration" />
+          <a-table-column title="断言结果" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-tag v-if="record.assertion_result" size="small" :color="record.assertion_result === 'pass' ? 'green' : 'red'">{{ record.assertion_result }}</a-tag>
+              <span v-else>-</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="错误信息" data-index="error_message" ellipsis tooltip />
+        </template>
+      </a-table>
     </a-drawer>
   </div>
 </template>
@@ -159,6 +232,8 @@ import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
 import { IconSchedule, IconSearch, IconRefresh, IconPlus } from '@arco-design/web-vue/es/icon'
 import { getTaskList, createTask, updateTask, deleteTask, toggleTask, getTaskResults, getProbeList, getPushgatewayList, PROBE_CATEGORIES, CATEGORY_LABEL_MAP } from '@/api/networkProbe'
+import { getAllInspectionGroups, getInspectionItems } from '@/api/inspectionManagement'
+import { getInspectionTaskList, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults } from '@/api/inspectionTask'
 import { getGroupTree } from '@/api/assetGroup'
 
 const loading = ref(false)
@@ -170,6 +245,8 @@ const taskList = ref<any[]>([])
 const probeOptions = ref<any[]>([])
 const pgwOptions = ref<any[]>([])
 const groupOptions = ref<any[]>([])
+const inspectionGroupOptions = ref<any[]>([])
+const inspectionItemOptions = ref<any[]>([])
 const resultsVisible = ref(false)
 const resultsLoading = ref(false)
 const resultList = ref<any[]>([])
@@ -178,7 +255,7 @@ const selectedCategory = ref('network')
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const resultPagination = reactive({ page: 1, pageSize: 20, total: 0 })
-const searchForm = reactive({ keyword: '', status: undefined as number | undefined })
+const searchForm = reactive({ keyword: '', taskType: undefined as string | undefined, status: undefined as number | undefined })
 
 const cronPresets = [
   { label: '每30秒', value: '0/30 * * * * ?' },
@@ -201,16 +278,30 @@ const cronDescriptionMap: Record<string, string> = {
 const cronDescription = computed(() => cronDescriptionMap[formData.cronExpr] || (formData.cronExpr ? '自定义 Cron 表达式' : ''))
 
 const defaultForm = () => ({
-  id: 0, name: '', probeConfigIds: [] as number[], groupId: 0, cronExpr: '',
-  pushgatewayId: undefined as number | undefined, concurrency: 5, status: 1, description: ''
+  id: 0, name: '', taskType: 'probe' as 'probe' | 'inspection',
+  probeConfigIds: [] as number[],
+  inspectionGroupIds: [] as number[],
+  inspectionItemIds: [] as number[],
+  groupId: 0, cronExpr: '',
+  pushgatewayId: undefined as number | undefined, concurrency: 5, enabled: true, description: ''
 })
 const formData = reactive(defaultForm())
 
-const formRules = {
-  name: [{ required: true, message: '请输入任务名称' }],
-  probeConfigIds: [{ required: true, type: 'array' as const, min: 1, message: '请选择至少一个拨测配置' }],
-  cronExpr: [{ required: true, message: '请输入或选择Cron表达式' }],
-}
+const formRules = computed(() => {
+  const rules: any = {
+    name: [{ required: true, message: '请输入任务名称' }],
+    taskType: [{ required: true, message: '请选择任务类型' }],
+    cronExpr: [{ required: true, message: '请输入或选择Cron表达式' }],
+  }
+
+  if (formData.taskType === 'probe') {
+    rules.probeConfigIds = [{ required: true, type: 'array' as const, min: 1, message: '请选择至少一个拨测配置' }]
+  } else if (formData.taskType === 'inspection') {
+    rules.inspectionGroupIds = [{ required: true, type: 'array' as const, min: 1, message: '请选择至少一个巡检组' }]
+  }
+
+  return rules
+})
 
 const filteredProbeOptions = computed(() => {
   return probeOptions.value.filter((p: any) => {
@@ -219,14 +310,65 @@ const filteredProbeOptions = computed(() => {
   })
 })
 
+const filteredInspectionItems = computed(() => {
+  if (formData.inspectionGroupIds.length === 0) return []
+  return inspectionItemOptions.value.filter((item: any) =>
+    formData.inspectionGroupIds.includes(item.groupId)
+  )
+})
+
 const getProbeLabel = (id: number) => probeOptions.value.find((p: any) => p.id === id)?.name || id
 const getPgwLabel = (id: number) => pgwOptions.value.find((p: any) => p.id === id)?.name || id || '-'
+const getInspectionGroupLabel = (id: number) => inspectionGroupOptions.value.find((g: any) => g.id === id)?.name || id
 
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await getTaskList({ page: pagination.page, page_size: pagination.pageSize, keyword: searchForm.keyword, status: searchForm.status })
-    taskList.value = res.data || []; pagination.total = res.total || 0
+    const res = await getInspectionTaskList({
+      page: pagination.page,
+      page_size: pagination.pageSize,
+      name: searchForm.keyword,
+      enabled: searchForm.status !== undefined ? searchForm.status === 1 : undefined
+    })
+
+    // 转换数据格式以兼容前端显示
+    taskList.value = (res.list || []).map((task: any) => {
+      const converted: any = {
+        id: task.id,
+        name: task.name,
+        description: task.description,
+        taskType: task.task_type || 'probe',
+        cronExpr: task.cron_expr,
+        enabled: task.enabled, // 使用 enabled 字段
+        concurrency: task.concurrency || 5,
+        pushgatewayId: task.pushgateway_id,
+        groupId: 0,
+        lastRunAt: task.last_run_at,
+        lastResult: task.last_run_status,
+        nextRunAt: task.next_run_at
+      }
+
+      // 解析配置ID
+      if (task.task_type === 'inspection') {
+        try {
+          converted.inspectionGroupIds = task.group_ids ? JSON.parse(task.group_ids) : []
+          converted.inspectionItemIds = task.item_ids ? JSON.parse(task.item_ids) : []
+        } catch (e) {
+          converted.inspectionGroupIds = []
+          converted.inspectionItemIds = []
+        }
+      } else {
+        try {
+          converted.probeConfigIds = task.item_ids ? JSON.parse(task.item_ids) : []
+        } catch (e) {
+          converted.probeConfigIds = []
+        }
+      }
+
+      return converted
+    })
+
+    pagination.total = res.total || 0
   } catch {} finally { loading.value = false }
 }
 
@@ -248,6 +390,37 @@ const loadOptions = async () => {
     const res = await getGroupTree()
     groupOptions.value = flattenGroups(res.data || res || [])
   } catch {}
+  try {
+    inspectionGroupOptions.value = await getAllInspectionGroups()
+  } catch {}
+}
+
+const loadInspectionItems = async (groupIds: number[]) => {
+  if (groupIds.length === 0) {
+    inspectionItemOptions.value = []
+    return
+  }
+  try {
+    const allItems: any[] = []
+    for (const groupId of groupIds) {
+      const res = await getInspectionItems({ groupId, pageSize: 100 })
+      allItems.push(...res.list)
+    }
+    inspectionItemOptions.value = allItems
+  } catch {}
+}
+
+const handleTaskTypeChange = () => {
+  formData.probeConfigIds = []
+  formData.inspectionGroupIds = []
+  formData.inspectionItemIds = []
+}
+
+const handleInspectionGroupChange = () => {
+  loadInspectionItems(formData.inspectionGroupIds)
+  formData.inspectionItemIds = formData.inspectionItemIds.filter(id =>
+    filteredInspectionItems.value.some((item: any) => item.id === id)
+  )
 }
 
 const handleTaskCategoryChange = () => {
@@ -256,7 +429,7 @@ const handleTaskCategoryChange = () => {
   )
 }
 
-const handleReset = () => { searchForm.keyword = ''; searchForm.status = undefined; pagination.page = 1; loadData() }
+const handleReset = () => { searchForm.keyword = ''; searchForm.taskType = undefined; searchForm.status = undefined; pagination.page = 1; loadData() }
 
 const handleCreate = async () => {
   isEdit.value = false; Object.assign(formData, defaultForm()); selectedCategory.value = 'network'
@@ -266,24 +439,32 @@ const handleCreate = async () => {
 const handleEdit = async (row: any) => {
   isEdit.value = true
   Object.assign(formData, {
-    id: row.id, name: row.name, probeConfigIds: row.probeConfigIds || [],
+    id: row.id, name: row.name,
+    taskType: row.taskType || 'probe',
+    probeConfigIds: row.probeConfigIds || [],
+    inspectionGroupIds: row.inspectionGroupIds || [],
+    inspectionItemIds: row.inspectionItemIds || [],
     groupId: row.groupId, cronExpr: row.cronExpr, pushgatewayId: row.pushgatewayId,
-    concurrency: row.concurrency || 5, status: row.status, description: row.description
+    concurrency: row.concurrency || 5, enabled: row.enabled, description: row.description
   })
   await loadOptions()
-  if (formData.probeConfigIds.length > 0) {
+
+  if (formData.taskType === 'probe' && formData.probeConfigIds.length > 0) {
     const firstConfig = probeOptions.value.find((p: any) => p.id === formData.probeConfigIds[0])
     if (firstConfig?.category) selectedCategory.value = firstConfig.category
+  } else if (formData.taskType === 'inspection' && formData.inspectionGroupIds.length > 0) {
+    await loadInspectionItems(formData.inspectionGroupIds)
   }
+
   dialogVisible.value = true
 }
 
 const handleDelete = (row: any) => {
-  Modal.warning({ title: '提示', content: '确定删除该任务？', hideCancel: false, onOk: async () => { await deleteTask(row.id); Message.success('删除成功'); loadData() } })
+  Modal.warning({ title: '提示', content: '确定删除该任务？', hideCancel: false, onOk: async () => { await deleteInspectionTask(row.id); Message.success('删除成功'); loadData() } })
 }
 
 const handleToggle = async (row: any) => {
-  try { await toggleTask(row.id); Message.success('操作成功'); loadData() } catch {}
+  try { await toggleInspectionTask(row.id); Message.success('操作成功'); loadData() } catch {}
 }
 
 const handleSubmit = async () => {
@@ -292,22 +473,109 @@ const handleSubmit = async () => {
   if (errors) return
   submitting.value = true
   try {
-    if (isEdit.value) { await updateTask(formData.id, formData); Message.success('更新成功') }
-    else { await createTask(formData); Message.success('创建成功') }
-    dialogVisible.value = false; loadData()
-  } catch {} finally { submitting.value = false }
+    // 构建请求数据
+    const requestData: any = {
+      name: formData.name,
+      description: formData.description,
+      task_type: formData.taskType,
+      cron_expr: formData.cronExpr,
+      enabled: formData.enabled,
+      pushgateway_id: formData.pushgatewayId || 0,
+      concurrency: formData.concurrency || 5
+    }
+
+    // 根据任务类型设置不同的配置
+    if (formData.taskType === 'inspection') {
+      requestData.group_ids = JSON.stringify(formData.inspectionGroupIds)
+      requestData.item_ids = JSON.stringify(formData.inspectionItemIds)
+    } else {
+      requestData.group_ids = JSON.stringify([formData.groupId])
+      requestData.item_ids = JSON.stringify(formData.probeConfigIds)
+    }
+
+    if (isEdit.value) {
+      await updateInspectionTask(formData.id, requestData)
+      Message.success('更新成功')
+    } else {
+      await createInspectionTask(requestData)
+      Message.success('创建成功')
+    }
+    dialogVisible.value = false
+    loadData()
+  } catch (error: any) {
+    Message.error(error.message || '操作失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
+const currentTaskType = ref<'probe' | 'inspection'>('probe')
+
 const handleViewResults = (row: any) => {
-  currentTaskId.value = row.id; resultPagination.page = 1; resultsVisible.value = true; loadResults()
+  currentTaskId.value = row.id
+  currentTaskType.value = row.taskType || 'probe'
+  resultPagination.page = 1
+  resultsVisible.value = true
+  loadResults()
 }
 
 const loadResults = async () => {
   resultsLoading.value = true
   try {
-    const res = await getTaskResults(currentTaskId.value, { page: resultPagination.page, page_size: resultPagination.pageSize })
-    resultList.value = res.data || []; resultPagination.total = res.total || 0
+    if (currentTaskType.value === 'inspection') {
+      const res = await getInspectionTaskResults(currentTaskId.value, { page: resultPagination.page, page_size: resultPagination.pageSize })
+      resultList.value = res.list || []
+      resultPagination.total = res.total || 0
+    } else {
+      const res = await getTaskResults(currentTaskId.value, { page: resultPagination.page, page_size: resultPagination.pageSize })
+      // 拨测任务使用 Pagination 响应格式，数据在 data.data 中
+      resultList.value = res.data?.data || []
+      resultPagination.total = res.data?.total || 0
+    }
   } catch {} finally { resultsLoading.value = false }
+}
+
+const handleExport = async (row: any) => {
+  try {
+    const token = localStorage.getItem('token')
+    const url = `/api/v1/inspection/mgmt-tasks/${row.id}/export`
+
+    // 使用 fetch 下载文件，携带 token
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error('下载失败')
+    }
+
+    // 获取文件名
+    const contentDisposition = response.headers.get('Content-Disposition')
+    let filename = `inspection_task_${row.id}.xlsx`
+    if (contentDisposition) {
+      const matches = /filename=([^;]+)/.exec(contentDisposition)
+      if (matches && matches[1]) {
+        filename = matches[1]
+      }
+    }
+
+    // 下载文件
+    const blob = await response.blob()
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = downloadUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(downloadUrl)
+
+    Message.success('下载成功')
+  } catch (error: any) {
+    Message.error(error.message || '下载失败')
+  }
 }
 
 onMounted(() => { loadData(); loadOptions() })

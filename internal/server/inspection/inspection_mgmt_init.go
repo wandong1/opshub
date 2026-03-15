@@ -1,0 +1,52 @@
+package inspection
+
+import (
+	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	inspectionmgmtbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection_mgmt"
+	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
+	"github.com/ydcloud-dy/opshub/internal/server/agent"
+	inspectionmgmtsvc "github.com/ydcloud-dy/opshub/internal/service/inspection_mgmt"
+	"gorm.io/gorm"
+)
+
+// InitInspectionMgmtServices 初始化巡检管理服务
+func InitInspectionMgmtServices(
+	db *gorm.DB,
+	hostRepo assetbiz.HostRepo,
+	agentHub *agent.AgentHub,
+) (
+	*inspectionmgmtsvc.GroupService,
+	*inspectionmgmtsvc.ItemService,
+	*inspectionmgmtsvc.RecordService,
+	*inspectionmgmtsvc.TaskService,
+	inspectionmgmtdata.GroupRepository,
+	inspectionmgmtdata.ItemRepository,
+	inspectionmgmtdata.RecordRepository,
+	inspectionmgmtdata.TaskRepository,
+) {
+	// 自动迁移数据库表
+	_ = db.AutoMigrate(
+		&inspectionmgmtdata.InspectionGroup{},
+		&inspectionmgmtdata.InspectionItem{},
+		&inspectionmgmtdata.InspectionTask{},
+		&inspectionmgmtdata.InspectionRecord{},
+	)
+
+	// 初始化 Repository
+	groupRepo := inspectionmgmtdata.NewGroupRepository(db)
+	itemRepo := inspectionmgmtdata.NewItemRepository(db)
+	recordRepo := inspectionmgmtdata.NewRecordRepository(db)
+	taskRepo := inspectionmgmtdata.NewTaskRepository(db)
+
+	// 初始化执行器
+	cmdExecutor := inspectionmgmtbiz.NewCommandExecutor(agentHub)
+
+	// 初始化 Service
+	groupService := inspectionmgmtsvc.NewGroupService(groupRepo, itemRepo)
+	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, cmdExecutor)
+	recordService := inspectionmgmtsvc.NewRecordService(recordRepo, itemRepo, groupRepo)
+	recordService.SetHostRepo(hostRepo)
+	taskService := inspectionmgmtsvc.NewTaskService(taskRepo)
+
+	return groupService, itemService, recordService, taskService, groupRepo, itemRepo, recordRepo, taskRepo
+}
