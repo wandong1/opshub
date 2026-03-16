@@ -46,12 +46,14 @@ func (s *HTTPServer) RegisterInspectionMgmtRoutes(r *gin.RouterGroup) {
 			items.POST("/test-run", s.testRunInspectionItems)
 		}
 
-		// 执行记录
-		records := inspection.Group("/records")
+		// 巡检执行记录
+		executionRecords := inspection.Group("/execution-records")
 		{
-			records.GET("/:id", s.getInspectionRecord)
-			records.GET("", s.listInspectionRecords)
-			records.GET("/:id/export", s.exportInspectionRecord)
+			executionRecords.GET("", s.listExecutionRecords)
+			executionRecords.GET("/:id", s.getExecutionRecord)
+			executionRecords.GET("/:id/details", s.getExecutionDetails)
+			executionRecords.GET("/:id/export", s.exportExecutionReport)
+			executionRecords.DELETE("/:id", s.deleteExecutionRecord)
 		}
 
 		// 定时任务
@@ -63,7 +65,6 @@ func (s *HTTPServer) RegisterInspectionMgmtRoutes(r *gin.RouterGroup) {
 			tasks.GET("/:id", s.getInspectionTask)
 			tasks.GET("", s.listInspectionTasks)
 			tasks.PUT("/:id/toggle", s.toggleInspectionTask)
-			tasks.GET("/:id/export", s.exportInspectionTask)
 		}
 
 		// 调度器管理
@@ -470,22 +471,10 @@ func (s *HTTPServer) testRunInspectionItems(c *gin.Context) {
 	})
 }
 
-// ==================== 执行记录 Handlers ====================
+// ==================== 巡检执行记录 Handlers ====================
 
-func (s *HTTPServer) getInspectionRecord(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-
-	record, err := s.inspectionRecordService.GetByID(c.Request.Context(), uint(id))
-	if err != nil {
-		response.ErrorCode(c, http.StatusNotFound, err.Error())
-		return
-	}
-
-	response.Success(c, record)
-}
-
-func (s *HTTPServer) listInspectionRecords(c *gin.Context) {
-	var req inspection_mgmt.RecordListRequest
+func (s *HTTPServer) listExecutionRecords(c *gin.Context) {
+	var req inspection_mgmt.ExecutionRecordListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		response.ErrorCode(c, http.StatusBadRequest, err.Error())
 		return
@@ -499,7 +488,7 @@ func (s *HTTPServer) listInspectionRecords(c *gin.Context) {
 		req.PageSize = 10
 	}
 
-	records, total, err := s.inspectionRecordService.List(c.Request.Context(), &req)
+	records, total, err := s.executionRecordService.List(c.Request.Context(), &req)
 	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, err.Error())
 		return
@@ -513,18 +502,42 @@ func (s *HTTPServer) listInspectionRecords(c *gin.Context) {
 	})
 }
 
-func (s *HTTPServer) exportInspectionRecord(c *gin.Context) {
+func (s *HTTPServer) getExecutionRecord(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+	record, err := s.executionRecordService.GetByID(c.Request.Context(), uint(id))
+	if err != nil {
+		response.ErrorCode(c, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(c, record)
+}
+
+func (s *HTTPServer) getExecutionDetails(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+	details, err := s.executionRecordService.GetDetails(c.Request.Context(), uint(id))
+	if err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(c, details)
+}
+
+func (s *HTTPServer) exportExecutionReport(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
 	// 生成 Excel 文件
-	f, err := s.inspectionRecordService.ExportRecordToExcel(c.Request.Context(), uint(id))
+	f, err := s.executionRecordService.ExportReport(c.Request.Context(), uint(id))
 	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// 设置响应头
-	filename := fmt.Sprintf("inspection_record_%d.xlsx", id)
+	filename := fmt.Sprintf("inspection_execution_report_%d.xlsx", id)
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	c.Header("Content-Transfer-Encoding", "binary")
@@ -533,6 +546,17 @@ func (s *HTTPServer) exportInspectionRecord(c *gin.Context) {
 	if err := f.Write(c.Writer); err != nil {
 		appLogger.Error("write excel failed", zap.Error(err))
 	}
+}
+
+func (s *HTTPServer) deleteExecutionRecord(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+
+	if err := s.executionRecordService.Delete(c.Request.Context(), uint(id)); err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(c, nil)
 }
 
 // ==================== 定时任务 Handlers ====================
@@ -688,33 +712,4 @@ func (s *HTTPServer) toggleInspectionTask(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "操作成功"})
-}
-
-func (s *HTTPServer) exportInspectionTask(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-
-	// 生成 Excel 文件
-	f, err := s.inspectionTaskService.ExportTaskToExcel(
-		c.Request.Context(),
-		uint(id),
-		s.hostRepo,
-		s.recordRepo,
-		s.itemRepo,
-		s.groupRepo,
-	)
-	if err != nil {
-		response.ErrorCode(c, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// 设置响应头
-	filename := fmt.Sprintf("inspection_task_%d.xlsx", id)
-	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	c.Header("Content-Transfer-Encoding", "binary")
-
-	// 写入响应
-	if err := f.Write(c.Writer); err != nil {
-		appLogger.Error("write excel failed", zap.Error(err))
-	}
 }

@@ -1,7 +1,23 @@
 import request from '@/utils/request'
 
+// 巡检任务接口
+export interface InspectionTask {
+  id: number
+  name: string
+  description: string
+  taskType: string
+  cronExpr: string
+  enabled: boolean
+  groupIds: number[]
+  itemIds: number[]
+  pushgatewayId?: number
+  concurrency: number
+  createdAt: string
+  updatedAt: string
+}
+
 // 获取巡检任务列表（包含拨测和巡检任务）
-export function getInspectionTaskList(params: any) {
+export function getInspectionTasks(params: any) {
   return request.get('/api/v1/inspection/mgmt-tasks', { params })
 }
 
@@ -39,3 +55,4 @@ export function getInspectionTaskResults(taskId: number, params: any) {
     }
   })
 }
+

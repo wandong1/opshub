@@ -74,7 +74,6 @@
             <a-button v-permission="'inspection:tasks:update'" type="text" size="small" @click="handleEdit(record)">编辑</a-button>
             <a-button v-permission="'inspection:tasks:delete'" type="text" size="small" status="danger" @click="handleDelete(record)">删除</a-button>
             <a-button v-permission="'inspection:tasks:results'" type="text" size="small" @click="handleViewResults(record)">结果</a-button>
-            <a-button v-if="record.taskType === 'inspection'" type="text" size="small" @click="handleExport(record)">导出报告</a-button>
           </template>
         </a-table-column>
       </template>
@@ -233,8 +232,11 @@ import type { FormInstance } from '@arco-design/web-vue'
 import { IconSchedule, IconSearch, IconRefresh, IconPlus } from '@arco-design/web-vue/es/icon'
 import { getTaskList, createTask, updateTask, deleteTask, toggleTask, getTaskResults, getProbeList, getPushgatewayList, PROBE_CATEGORIES, CATEGORY_LABEL_MAP } from '@/api/networkProbe'
 import { getAllInspectionGroups, getInspectionItems } from '@/api/inspectionManagement'
-import { getInspectionTaskList, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults } from '@/api/inspectionTask'
+import { getInspectionTasks, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults } from '@/api/inspectionTask'
 import { getGroupTree } from '@/api/assetGroup'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -324,7 +326,7 @@ const getInspectionGroupLabel = (id: number) => inspectionGroupOptions.value.fin
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await getInspectionTaskList({
+    const res = await getInspectionTasks({
       page: pagination.page,
       page_size: pagination.pageSize,
       name: searchForm.keyword,
@@ -512,6 +514,16 @@ const handleSubmit = async () => {
 const currentTaskType = ref<'probe' | 'inspection'>('probe')
 
 const handleViewResults = (row: any) => {
+  // 如果是巡检任务，直接跳转到执行记录页面
+  if (row.taskType === 'inspection') {
+    router.push({
+      path: '/inspection/records',
+      query: { taskId: row.id }
+    })
+    return
+  }
+
+  // 拨测任务显示抽屉
   currentTaskId.value = row.id
   currentTaskType.value = row.taskType || 'probe'
   resultPagination.page = 1
@@ -533,49 +545,6 @@ const loadResults = async () => {
       resultPagination.total = res.data?.total || 0
     }
   } catch {} finally { resultsLoading.value = false }
-}
-
-const handleExport = async (row: any) => {
-  try {
-    const token = localStorage.getItem('token')
-    const url = `/api/v1/inspection/mgmt-tasks/${row.id}/export`
-
-    // 使用 fetch 下载文件，携带 token
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-
-    if (!response.ok) {
-      throw new Error('下载失败')
-    }
-
-    // 获取文件名
-    const contentDisposition = response.headers.get('Content-Disposition')
-    let filename = `inspection_task_${row.id}.xlsx`
-    if (contentDisposition) {
-      const matches = /filename=([^;]+)/.exec(contentDisposition)
-      if (matches && matches[1]) {
-        filename = matches[1]
-      }
-    }
-
-    // 下载文件
-    const blob = await response.blob()
-    const downloadUrl = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = downloadUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(downloadUrl)
-
-    Message.success('下载成功')
-  } catch (error: any) {
-    Message.error(error.message || '下载失败')
-  }
 }
 
 onMounted(() => { loadData(); loadOptions() })

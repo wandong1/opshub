@@ -37,7 +37,7 @@ type InspectionExecutor struct {
 	taskRepo   inspectionmgmtdata.TaskRepository
 	groupRepo  inspectionmgmtdata.GroupRepository
 	itemRepo   inspectionmgmtdata.ItemRepository
-	recordRepo inspectionmgmtdata.RecordRepository
+	execRepo   inspectionmgmtdata.ExecutionRecordRepository
 	pgwRepo    PushgatewayRepo
 	itemSvc    *ItemService
 }
@@ -47,17 +47,17 @@ func NewInspectionExecutor(
 	taskRepo inspectionmgmtdata.TaskRepository,
 	groupRepo inspectionmgmtdata.GroupRepository,
 	itemRepo inspectionmgmtdata.ItemRepository,
-	recordRepo inspectionmgmtdata.RecordRepository,
+	execRepo inspectionmgmtdata.ExecutionRecordRepository,
 	pgwRepo PushgatewayRepo,
 	itemSvc *ItemService,
 ) *InspectionExecutor {
 	return &InspectionExecutor{
-		taskRepo:   taskRepo,
-		groupRepo:  groupRepo,
-		itemRepo:   itemRepo,
-		recordRepo: recordRepo,
-		pgwRepo:    pgwRepo,
-		itemSvc:    itemSvc,
+		taskRepo:  taskRepo,
+		groupRepo: groupRepo,
+		itemRepo:  itemRepo,
+		execRepo:  execRepo,
+		pgwRepo:   pgwRepo,
+		itemSvc:   itemSvc,
 	}
 }
 
@@ -141,11 +141,47 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 		return nil
 	}
 
-	// 并发执行巡检项
+	// 创建执行记录主表
+	startTime := time.Now()
+
+	// 收集巡检组名称
+	groupNames := make([]string, 0, len(groupIDs))
+	uniqueGroups := make(map[uint]bool)
+	for _, item := range itemsToExecute {
+		if !uniqueGroups[item.GroupID] {
+			uniqueGroups[item.GroupID] = true
+			group, err := e.groupRepo.GetByID(ctx, item.GroupID)
+			if err == nil {
+				groupNames = append(groupNames, group.Name)
+			}
+		}
+	}
+
+	groupIDsJSON, _ := json.Marshal(groupIDs)
+	groupNamesJSON, _ := json.Marshal(groupNames)
+
+	executionRecord := &inspectionmgmtdata.InspectionExecutionRecord{
+		TaskID:     payload.TaskID,
+		TaskName:   inspectionTask.Name,
+		TotalItems: len(itemsToExecute),
+		TotalHosts: 0, // 执行后更新
+		Status:     "running",
+		StartedAt:  startTime,
+		GroupIDs:   string(groupIDsJSON),
+		GroupNames: string(groupNamesJSON),
+	}
+
+	if err := e.execRepo.CreateRecord(ctx, executionRecord); err != nil {
+		appLogger.Error("create execution record failed", zap.Error(err))
+		return fmt.Errorf("create execution record: %w", err)
+	}
+
+	// 并发执行巡检项，收集明细
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var failCount int
-	results := make([]*inspectionmgmtdata.InspectionRecord, 0)
+	details := make([]*inspectionmgmtdata.InspectionExecutionDetail, 0)
+	hostSet := make(map[uint]bool)
 
 	for _, item := range itemsToExecute {
 		wg.Add(1)
@@ -165,17 +201,44 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 				return
 			}
 
+			// 获取巡检组信息
+			group, err := e.groupRepo.GetByID(ctx, itm.GroupID)
+			if err != nil {
+				appLogger.Error("get inspection group failed", zap.Error(err))
+				return
+			}
+
 			mu.Lock()
-			results = append(results, itemResults...)
-			// 统计失败数
-			for _, r := range itemResults {
-				if r.Status == "failed" {
+			// 将旧的 InspectionRecord 转换为新的 InspectionExecutionDetail
+			for _, oldRecord := range itemResults {
+				detail := &inspectionmgmtdata.InspectionExecutionDetail{
+					ExecutionID:        executionRecord.ID,
+					GroupID:            itm.GroupID,
+					GroupName:          group.Name,
+					ItemID:             itm.ID,
+					ItemName:           itm.Name,
+					HostID:             oldRecord.HostID,
+					HostName:           "", // 需要从 oldRecord 获取
+					HostIP:             "", // 需要从 oldRecord 获取
+					Status:             oldRecord.Status,
+					Output:             oldRecord.Output,
+					ErrorMessage:       oldRecord.ErrorMessage,
+					Duration:           oldRecord.Duration,
+					AssertionResult:    oldRecord.AssertionResult,
+					AssertionDetails:   oldRecord.AssertionDetails,
+					ExtractedVariables: oldRecord.ExtractedVariables,
+					ExecutedAt:         oldRecord.ExecutedAt,
+				}
+				details = append(details, detail)
+				hostSet[oldRecord.HostID] = true
+
+				if oldRecord.Status == "failed" {
 					failCount++
 				}
 			}
 			mu.Unlock()
 
-			// 推送 Metrics
+			// 推送 Metrics（使用旧记录格式）
 			if inspectionTask.PushgatewayID > 0 {
 				e.pushMetrics(ctx, inspectionTask, itm, itemResults)
 			}
@@ -184,12 +247,55 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 
 	wg.Wait()
 
-	// 更新任务执行状态
-	runResult := "success"
-	if failCount > 0 {
-		runResult = "failed"
+	// 批量保存明细
+	if len(details) > 0 {
+		if err := e.execRepo.BatchCreateDetails(ctx, details); err != nil {
+			appLogger.Error("batch create details failed", zap.Error(err))
+		}
 	}
 
+	// 更新执行记录统计
+	completedAt := time.Now()
+	executionRecord.TotalHosts = len(hostSet)
+	executionRecord.TotalExecutions = len(details)
+	executionRecord.SuccessCount = len(details) - failCount
+	executionRecord.FailedCount = failCount
+	executionRecord.Duration = completedAt.Sub(startTime).Seconds()
+	executionRecord.CompletedAt = &completedAt
+
+	// 计算断言统计
+	assertionPassCount := 0
+	assertionFailCount := 0
+	assertionSkipCount := 0
+	for _, detail := range details {
+		switch detail.AssertionResult {
+		case "pass":
+			assertionPassCount++
+		case "fail":
+			assertionFailCount++
+		case "skip":
+			assertionSkipCount++
+		}
+	}
+	executionRecord.AssertionPassCount = assertionPassCount
+	executionRecord.AssertionFailCount = assertionFailCount
+	executionRecord.AssertionSkipCount = assertionSkipCount
+
+	// 确定最终状态
+	if failCount == 0 {
+		executionRecord.Status = "success"
+	} else if failCount == len(details) {
+		executionRecord.Status = "failed"
+	} else {
+		executionRecord.Status = "partial"
+	}
+
+	if err := e.execRepo.UpdateRecord(ctx, executionRecord); err != nil {
+		appLogger.Error("update execution record failed", zap.Error(err))
+	}
+
+	// 更新任务执行状态
+	runResult := executionRecord.Status
 	now := time.Now()
 	inspectionTask.LastRunAt = &now
 	inspectionTask.LastRunStatus = runResult
@@ -207,8 +313,11 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 	appLogger.Info("inspection task executed",
 		zap.Uint("taskID", payload.TaskID),
 		zap.String("taskName", inspectionTask.Name),
+		zap.Uint("executionRecordID", executionRecord.ID),
 		zap.Int("totalItems", len(itemsToExecute)),
-		zap.Int("totalRecords", len(results)),
+		zap.Int("totalHosts", executionRecord.TotalHosts),
+		zap.Int("totalExecutions", len(details)),
+		zap.Int("successCount", executionRecord.SuccessCount),
 		zap.Int("failCount", failCount),
 		zap.String("result", runResult))
 

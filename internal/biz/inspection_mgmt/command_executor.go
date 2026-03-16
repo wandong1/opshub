@@ -8,19 +8,22 @@ import (
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	"github.com/ydcloud-dy/opshub/internal/server/agent"
 	"github.com/ydcloud-dy/opshub/pkg/agentproto"
+	sshclient "github.com/ydcloud-dy/opshub/pkg/ssh"
 
 	"github.com/google/uuid"
 )
 
 // CommandExecutor 命令执行器
 type CommandExecutor struct {
-	agentHub *agent.AgentHub
+	agentHub       *agent.AgentHub
+	credentialRepo assetbiz.CredentialRepo
 }
 
 // NewCommandExecutor 创建命令执行器
-func NewCommandExecutor(agentHub *agent.AgentHub) *CommandExecutor {
+func NewCommandExecutor(agentHub *agent.AgentHub, credentialRepo assetbiz.CredentialRepo) *CommandExecutor {
 	return &CommandExecutor{
-		agentHub: agentHub,
+		agentHub:       agentHub,
+		credentialRepo: credentialRepo,
 	}
 }
 
@@ -117,11 +120,62 @@ func (e *CommandExecutor) executeViaAgent(ctx context.Context, hostID uint, comm
 
 // executeViaSSH 通过 SSH 执行命令
 func (e *CommandExecutor) executeViaSSH(ctx context.Context, host *assetbiz.Host, command string, timeout int) (string, error) {
-	// 需要通过 CredentialRepo 获取凭证信息
-	// 由于这里没有直接访问凭证的方式，我们需要使用 SSHUser 和 CredentialID
-	// 实际使用时需要注入 CredentialRepo 来获取解密后的凭证
+	// 检查主机是否配置了凭证
+	if host.CredentialID == 0 {
+		return "", fmt.Errorf("主机未配置 SSH 凭证")
+	}
 
-	// 临时方案：返回错误提示需要通过其他方式获取凭证
-	return "", fmt.Errorf("SSH 执行需要凭证信息，请使用 Agent 方式或通过 HostUseCase 执行")
+	// 获取解密后的凭证信息
+	credential, err := e.credentialRepo.GetByIDDecrypted(ctx, host.CredentialID)
+	if err != nil {
+		return "", fmt.Errorf("获取凭证信息失败: %w", err)
+	}
+
+	// 创建 SSH 客户端
+	client, err := e.createSSHClient(host, credential)
+	if err != nil {
+		return "", fmt.Errorf("创建 SSH 客户端失败: %w", err)
+	}
+	defer client.Close()
+
+	// 执行命令
+	output, err := client.Execute(command)
+	if err != nil {
+		return output, fmt.Errorf("SSH 命令执行失败: %w", err)
+	}
+
+	return output, nil
+}
+
+// createSSHClient 创建SSH客户端
+func (e *CommandExecutor) createSSHClient(host *assetbiz.Host, credential *assetbiz.Credential) (*sshclient.Client, error) {
+	var privateKey []byte
+
+	// 检查凭证信息是否完整
+	if credential.Type == "password" && credential.Password == "" {
+		return nil, fmt.Errorf("凭证类型为密码认证，但未填写密码")
+	}
+	if credential.Type == "key" && credential.PrivateKey == "" {
+		return nil, fmt.Errorf("凭证类型为密钥认证，但未填写私钥")
+	}
+
+	// 如果是密钥认证，需要解密私钥
+	if credential.Type == "key" && credential.PrivateKey != "" {
+		privateKey = []byte(credential.PrivateKey)
+	}
+
+	client, err := sshclient.NewClient(
+		host.IP,
+		host.Port,
+		host.SSHUser,
+		credential.Password,
+		privateKey,
+		credential.Passphrase,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("创建SSH客户端失败: %w", err)
+	}
+
+	return client, nil
 }
 

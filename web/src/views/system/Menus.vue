@@ -49,7 +49,7 @@
       <a-table
         :data="filteredMenuList"
         :loading="loading"
-        :row-key="getRowKey"
+        row-key="ID"
         v-model:expanded-keys="expandedKeys"
         :pagination="false"
       >
@@ -276,9 +276,7 @@ const isEdit = ref(false)
 const editingPluginMenu = ref(false)
 const formRef = ref()
 const expandAll = ref(false)
-const expandedKeys = ref<(string | number)[]>([])
-
-const getRowKey = (row: any) => row.ID || row.id || row.path
+const expandedKeys = ref<number[]>([])
 
 // 搜索
 const searchForm = reactive({
@@ -328,13 +326,12 @@ const filterTree = (nodes: any[]): any[] => {
 }
 
 // 收集所有有children的节点key
-const collectAllKeys = (nodes: any[]): (string | number)[] => {
-  const keys: (string | number)[] = []
+const collectAllKeys = (nodes: any[]): number[] => {
+  const keys: number[] = []
   const traverse = (items: any[]) => {
     items.forEach(item => {
-      const key = getRowKey(item)
       if (item.children && item.children.length > 0) {
-        keys.push(key)
+        keys.push(item.ID)
         traverse(item.children)
       }
     })
@@ -346,8 +343,13 @@ const collectAllKeys = (nodes: any[]): (string | number)[] => {
 // 搜索时自动展开
 watch([() => searchForm.name, () => searchForm.status], () => {
   if (searchForm.name || searchForm.status !== undefined) {
-    expandAll.value = true
+    // 搜索时展开所有匹配的节点，但不改变 expandAll 状态
     expandedKeys.value = collectAllKeys(filteredMenuList.value)
+  } else {
+    // 清空搜索时，如果之前不是全部展开状态，则折叠所有
+    if (!expandAll.value) {
+      expandedKeys.value = []
+    }
   }
 })
 
@@ -415,8 +417,13 @@ const buildPluginMenuList = () => {
         const parentId = (menu.parentPath && menu.parentPath !== '') ? menu.parentPath : null
         const sort = customSort.get(menu.path) ?? menu.sort
 
+        // 为插件菜单生成数字ID（使用路径的哈希值）
+        const numericId = Math.abs(menu.path.split('').reduce((acc, char) => {
+          return ((acc << 5) - acc) + char.charCodeAt(0)
+        }, 0))
+
         pluginMenus.push({
-          ID: menu.path, id: menu.path,
+          ID: numericId, id: numericId,
           name: menu.name, code: menu.path.replace(/\//g, '_'),
           type: menu.parentPath && menu.parentPath !== '' ? 2 : 1,
           parentId, path: menu.path, component: '', icon: menu.icon,
@@ -430,9 +437,10 @@ const buildPluginMenuList = () => {
 }
 
 // 在树中查找菜单
-const findMenuInTree = (tree: any[], menuId: string | number): any => {
+const findMenuInTree = (tree: any[], menuId: string | number | null): any => {
+  if (menuId === null) return null
   for (const menu of tree) {
-    if ((menu.ID || menu.id) === menuId) return menu
+    if ((menu.ID || menu.id) === menuId || menu.path === menuId) return menu
     if (menu.children?.length) {
       const found = findMenuInTree(menu.children, menuId)
       if (found) return found

@@ -65,6 +65,48 @@ export interface InspectionRecord {
   executedAt: string
 }
 
+// 巡检执行记录（主表）
+export interface ExecutionRecord {
+  id: number
+  taskId: number
+  taskName: string
+  totalItems: number
+  totalHosts: number
+  totalExecutions: number
+  successCount: number
+  failedCount: number
+  assertionPassCount: number
+  assertionFailCount: number
+  assertionSkipCount: number
+  status: string
+  duration: number
+  startedAt: string
+  completedAt?: string
+  groupNames: string[]
+  createdAt: string
+}
+
+// 巡检执行明细
+export interface ExecutionDetail {
+  id: number
+  executionId: number
+  groupId: number
+  groupName: string
+  itemId: number
+  itemName: string
+  hostId: number
+  hostName: string
+  hostIp: string
+  status: string
+  output: string
+  errorMessage: string
+  duration: number
+  assertionResult: string
+  assertionDetails: string
+  extractedVariables: string
+  executedAt: string
+}
+
 export interface TestRunRequest {
   groupId: number
   itemIds?: number[]
@@ -239,7 +281,7 @@ export function testRunInspection(data: TestRunRequest) {
   })
 }
 
-// ==================== 执行记录 API ====================
+// ==================== 执行记录 API（旧版，保留兼容） ====================
 
 /**
  * 获取执行记录列表
@@ -291,6 +333,68 @@ export function deleteInspectionRecord(id: number) {
  */
 export function exportInspectionRecord(id: number) {
   return `/api/v1/inspection/records/${id}/export`
+}
+
+// ==================== 巡检执行记录 API（新版） ====================
+
+/**
+ * 获取巡检执行记录列表
+ */
+export function getExecutionRecords(params: {
+  taskId?: number
+  status?: string
+  startTime?: string
+  endTime?: string
+  page?: number
+  pageSize?: number
+}) {
+  return request<{
+    total: number
+    list: ExecutionRecord[]
+    page: number
+    pageSize: number
+  }>({
+    url: '/api/v1/inspection/execution-records',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 获取巡检执行记录详情
+ */
+export function getExecutionRecord(id: number) {
+  return request<ExecutionRecord>({
+    url: `/api/v1/inspection/execution-records/${id}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 获取巡检执行明细列表
+ */
+export function getExecutionDetails(id: number) {
+  return request<ExecutionDetail[]>({
+    url: `/api/v1/inspection/execution-records/${id}/details`,
+    method: 'get'
+  })
+}
+
+/**
+ * 删除巡检执行记录
+ */
+export function deleteExecutionRecord(id: number) {
+  return request({
+    url: `/api/v1/inspection/execution-records/${id}`,
+    method: 'delete'
+  })
+}
+
+/**
+ * 导出巡检执行报告为 Excel
+ */
+export function exportExecutionReport(id: number) {
+  return `/api/v1/inspection/execution-records/${id}/export`
 }
 
 // ==================== 统计 API ====================
