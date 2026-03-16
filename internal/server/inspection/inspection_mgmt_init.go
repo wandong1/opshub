@@ -13,16 +13,19 @@ import (
 func InitInspectionMgmtServices(
 	db *gorm.DB,
 	hostRepo assetbiz.HostRepo,
+	credentialRepo assetbiz.CredentialRepo,
 	agentHub *agent.AgentHub,
 ) (
 	*inspectionmgmtsvc.GroupService,
 	*inspectionmgmtsvc.ItemService,
 	*inspectionmgmtsvc.RecordService,
 	*inspectionmgmtsvc.TaskService,
+	*inspectionmgmtsvc.ExecutionRecordService,
 	inspectionmgmtdata.GroupRepository,
 	inspectionmgmtdata.ItemRepository,
 	inspectionmgmtdata.RecordRepository,
 	inspectionmgmtdata.TaskRepository,
+	inspectionmgmtdata.ExecutionRecordRepository,
 ) {
 	// 自动迁移数据库表
 	_ = db.AutoMigrate(
@@ -30,6 +33,8 @@ func InitInspectionMgmtServices(
 		&inspectionmgmtdata.InspectionItem{},
 		&inspectionmgmtdata.InspectionTask{},
 		&inspectionmgmtdata.InspectionRecord{},
+		&inspectionmgmtdata.InspectionExecutionRecord{},
+		&inspectionmgmtdata.InspectionExecutionDetail{},
 	)
 
 	// 初始化 Repository
@@ -37,9 +42,10 @@ func InitInspectionMgmtServices(
 	itemRepo := inspectionmgmtdata.NewItemRepository(db)
 	recordRepo := inspectionmgmtdata.NewRecordRepository(db)
 	taskRepo := inspectionmgmtdata.NewTaskRepository(db)
+	execRecordRepo := inspectionmgmtdata.NewExecutionRecordRepository(db)
 
 	// 初始化执行器
-	cmdExecutor := inspectionmgmtbiz.NewCommandExecutor(agentHub)
+	cmdExecutor := inspectionmgmtbiz.NewCommandExecutor(agentHub, credentialRepo)
 
 	// 初始化 Service
 	groupService := inspectionmgmtsvc.NewGroupService(groupRepo, itemRepo)
@@ -47,6 +53,7 @@ func InitInspectionMgmtServices(
 	recordService := inspectionmgmtsvc.NewRecordService(recordRepo, itemRepo, groupRepo)
 	recordService.SetHostRepo(hostRepo)
 	taskService := inspectionmgmtsvc.NewTaskService(taskRepo)
+	executionRecordService := inspectionmgmtsvc.NewExecutionRecordService(execRecordRepo)
 
-	return groupService, itemService, recordService, taskService, groupRepo, itemRepo, recordRepo, taskRepo
+	return groupService, itemService, recordService, taskService, executionRecordService, groupRepo, itemRepo, recordRepo, taskRepo, execRecordRepo
 }

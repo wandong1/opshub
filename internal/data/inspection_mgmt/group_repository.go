@@ -109,8 +109,11 @@ func (r *groupRepository) GetStats(ctx context.Context) (map[string]interface{},
 		return nil, err
 	}
 
-	// 统计巡检项总数
-	if err := r.db.WithContext(ctx).Model(&InspectionItem{}).Count(&itemCount).Error; err != nil {
+	// 统计巡检项总数 - 只统计属于现有巡检组的巡检项
+	// 使用子查询确保只统计有效巡检组的巡检项
+	if err := r.db.WithContext(ctx).Model(&InspectionItem{}).
+		Where("group_id IN (?)", r.db.Model(&InspectionGroup{}).Select("id")).
+		Count(&itemCount).Error; err != nil {
 		return nil, err
 	}
 

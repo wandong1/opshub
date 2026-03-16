@@ -30,16 +30,18 @@ type HTTPServer struct {
 	healthExecutor       *assetbiz.HostHealthExecutor
 
 	// 巡检管理服务
-	inspectionGroupService  *inspectionmgmtsvc.GroupService
-	inspectionItemService   *inspectionmgmtsvc.ItemService
-	inspectionRecordService *inspectionmgmtsvc.RecordService
-	inspectionTaskService   *inspectionmgmtsvc.TaskService
+	inspectionGroupService     *inspectionmgmtsvc.GroupService
+	inspectionItemService      *inspectionmgmtsvc.ItemService
+	inspectionRecordService    *inspectionmgmtsvc.RecordService
+	inspectionTaskService      *inspectionmgmtsvc.TaskService
+	executionRecordService     *inspectionmgmtsvc.ExecutionRecordService
 
 	// 巡检管理仓库（用于导出功能）
-	hostRepo   assetbiz.HostRepo
-	groupRepo  inspectionmgmtdata.GroupRepository
-	itemRepo   inspectionmgmtdata.ItemRepository
-	recordRepo inspectionmgmtdata.RecordRepository
+	hostRepo       assetbiz.HostRepo
+	groupRepo      inspectionmgmtdata.GroupRepository
+	itemRepo       inspectionmgmtdata.ItemRepository
+	recordRepo     inspectionmgmtdata.RecordRepository
+	execRecordRepo inspectionmgmtdata.ExecutionRecordRepository
 }
 
 // NewHTTPServer creates the HTTPServer.
@@ -55,10 +57,12 @@ func NewHTTPServer(
 	inspectionItemService *inspectionmgmtsvc.ItemService,
 	inspectionRecordService *inspectionmgmtsvc.RecordService,
 	inspectionTaskService *inspectionmgmtsvc.TaskService,
+	executionRecordService *inspectionmgmtsvc.ExecutionRecordService,
 	hostRepo assetbiz.HostRepo,
 	groupRepo inspectionmgmtdata.GroupRepository,
 	itemRepo inspectionmgmtdata.ItemRepository,
 	recordRepo inspectionmgmtdata.RecordRepository,
+	execRecordRepo inspectionmgmtdata.ExecutionRecordRepository,
 ) *HTTPServer {
 	return &HTTPServer{
 		probeConfigService:      probeConfigService,
@@ -72,10 +76,12 @@ func NewHTTPServer(
 		inspectionItemService:   inspectionItemService,
 		inspectionRecordService: inspectionRecordService,
 		inspectionTaskService:   inspectionTaskService,
+		executionRecordService:  executionRecordService,
 		hostRepo:                hostRepo,
 		groupRepo:               groupRepo,
 		itemRepo:                itemRepo,
 		recordRepo:              recordRepo,
+		execRecordRepo:          execRecordRepo,
 	}
 }
 
@@ -304,7 +310,7 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	sched.RegisterExecutor(healthExecutor)
 
 	// 初始化巡检管理服务
-	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _ := InitInspectionMgmtServices(db, hostRepo, agentHub)
+	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _, execRecordRepo := InitInspectionMgmtServices(db, hostRepo, credentialRepo, agentHub)
 
 	// 创建 Pushgateway 适配器
 	pgwAdapter := &pushgatewayAdapter{repo: pgwRepo}
@@ -314,7 +320,7 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 		inspectionTaskRepo,
 		inspectionGroupRepo,
 		inspectionItemRepo,
-		inspectionRecordRepo,
+		execRecordRepo,
 		pgwAdapter,
 		inspectionItemService,
 	)
@@ -346,7 +352,7 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	pgwSvc := svc.NewPushgatewayService(pgwUC)
 	variableSvc := svc.NewProbeVariableService(variableUC)
 
-	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, healthExecutor, inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, hostRepo, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo)
+	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, healthExecutor, inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, hostRepo, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, execRecordRepo)
 }
 
 // migrateData performs one-time data migration:
