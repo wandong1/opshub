@@ -105,9 +105,29 @@ func (s *ProbeConfigService) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	keyword := c.Query("keyword")
-	probeType := c.Query("type")
+	probeType := c.Query("probeType") // 支持 probeType 参数
+	if probeType == "" {
+		probeType = c.Query("type") // 兼容旧的 type 参数
+	}
 	category := c.Query("category")
-	groupID, _ := strconv.ParseUint(c.Query("group_id"), 10, 64)
+
+	// 支持单个 group_id 或逗号分隔的 groupId
+	groupIDStr := c.Query("groupId")
+	if groupIDStr == "" {
+		groupIDStr = c.Query("group_id")
+	}
+
+	var groupID uint
+	if groupIDStr != "" {
+		// 如果是逗号分隔的多个ID，取第一个（或者可以改为支持多个）
+		ids := strings.Split(groupIDStr, ",")
+		if len(ids) > 0 {
+			if id, err := strconv.ParseUint(strings.TrimSpace(ids[0]), 10, 64); err == nil {
+				groupID = uint(id)
+			}
+		}
+	}
+
 	var status *int8
 	if s := c.Query("status"); s != "" {
 		v, _ := strconv.ParseInt(s, 10, 8)
@@ -115,7 +135,7 @@ func (s *ProbeConfigService) List(c *gin.Context) {
 		status = &sv
 	}
 
-	configs, total, err := s.useCase.List(c.Request.Context(), page, pageSize, keyword, probeType, category, uint(groupID), status)
+	configs, total, err := s.useCase.List(c.Request.Context(), page, pageSize, keyword, probeType, category, groupID, status)
 	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "查询失败: "+err.Error())
 		return

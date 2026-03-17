@@ -81,6 +81,7 @@ type ItemExportData struct {
 	ScriptType        string   `json:"scriptType,omitempty" yaml:"scriptType,omitempty"`
 	ScriptContent     string   `json:"scriptContent,omitempty" yaml:"scriptContent,omitempty"`
 	ScriptFile        string   `json:"scriptFile,omitempty" yaml:"scriptFile,omitempty"`
+	ScriptArgs        string   `json:"scriptArgs,omitempty" yaml:"scriptArgs,omitempty"`
 	PromQLQuery       string   `json:"promqlQuery,omitempty" yaml:"promqlQuery,omitempty"`
 	HostMatchType     string   `json:"hostMatchType,omitempty" yaml:"hostMatchType,omitempty"`
 	HostTags          []string `json:"hostTags,omitempty" yaml:"hostTags,omitempty"`

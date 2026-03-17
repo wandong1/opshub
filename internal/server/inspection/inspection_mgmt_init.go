@@ -3,6 +3,7 @@ package inspection
 import (
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	inspectionmgmtbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection_mgmt"
+	inspectiondata "github.com/ydcloud-dy/opshub/internal/data/inspection"
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
 	"github.com/ydcloud-dy/opshub/internal/server/agent"
 	inspectionmgmtsvc "github.com/ydcloud-dy/opshub/internal/service/inspection_mgmt"
@@ -47,9 +48,13 @@ func InitInspectionMgmtServices(
 	// 初始化执行器
 	cmdExecutor := inspectionmgmtbiz.NewCommandExecutor(agentHub, credentialRepo)
 
+	// 初始化拨测配置仓储和拨测执行器
+	probeConfigRepo := inspectiondata.NewProbeConfigRepo(db)
+	probeExecutor := inspectionmgmtsvc.NewProbeExecutor(probeConfigRepo)
+
 	// 初始化 Service
 	groupService := inspectionmgmtsvc.NewGroupService(groupRepo, itemRepo)
-	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, cmdExecutor)
+	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, cmdExecutor, probeExecutor)
 	recordService := inspectionmgmtsvc.NewRecordService(recordRepo, itemRepo, groupRepo)
 	recordService.SetHostRepo(hostRepo)
 	taskService := inspectionmgmtsvc.NewTaskService(taskRepo)

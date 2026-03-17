@@ -47,8 +47,14 @@ func (r *probeConfigRepo) List(ctx context.Context, page, pageSize int, keyword,
 	if category != "" {
 		query = query.Where("category = ?", category)
 	}
+	// group_id = 0 表示对所有分组可见（通用配置）
+	// 当传入 groupID > 0 时，查询 group_id = 0 或 group_id = 指定ID
+	// 当传入 groupID = 0 时，只查询 group_id = 0（通用配置）
 	if groupID > 0 {
-		query = query.Where("group_id = ?", groupID)
+		query = query.Where("group_id = 0 OR group_id = ?", groupID)
+	} else {
+		// 不添加 group_id 过滤，返回所有配置（包括通用配置和专属配置）
+		// 或者只返回通用配置：query = query.Where("group_id = 0")
 	}
 	if status != nil {
 		query = query.Where("status = ?", *status)

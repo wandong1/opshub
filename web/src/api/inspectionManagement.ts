@@ -31,7 +31,11 @@ export interface InspectionItem {
   scriptType?: string
   scriptContent?: string
   scriptFile?: string
+  scriptArgs?: string
   promqlQuery?: string
+  probeCategory?: string
+  probeType?: string
+  probeConfigId?: number
   hostMatchType: string
   hostTags?: string[]
   hostIds?: number[]
@@ -116,6 +120,20 @@ export interface TestRunResult {
   success: boolean
   message: string
   results: InspectionRecord[]
+}
+
+// 拨测配置接口
+export interface ProbeConfig {
+  id: number
+  name: string
+  type: string
+  category: string
+  target: string
+  port: number
+  groupId: number
+  groupIds: string
+  description: string
+  status: number
 }
 
 // ==================== 巡检组 API ====================
@@ -464,6 +482,36 @@ export function importInspectionGroupFile(file: File) {
     data: formData,
     headers: {
       'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+// ==================== 拨测配置 API ====================
+
+/**
+ * 获取拨测配置列表（用于巡检项选择）
+ */
+export function getProbeConfigsForInspection(params: {
+  groupIds: number[]
+  category?: string
+  type?: string
+  status?: number
+}) {
+  return request<{
+    total: number
+    page: number
+    page_size: number
+    data: ProbeConfig[]
+  }>({
+    url: '/api/v1/inspection/probes',
+    method: 'get',
+    params: {
+      groupId: params.groupIds.join(','),
+      category: params.category,
+      probeType: params.type,
+      status: params.status !== undefined ? params.status : 1,
+      page: 1,
+      pageSize: 1000
     }
   })
 }

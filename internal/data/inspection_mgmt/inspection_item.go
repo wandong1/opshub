@@ -28,12 +28,18 @@ type InspectionItem struct {
 	Command string `gorm:"type:text" json:"command"`
 
 	// 脚本执行
-	ScriptType    string `gorm:"size:20" json:"script_type"`    // shell/python
+	ScriptType    string `gorm:"size:20" json:"script_type"`     // shell/python/binary
 	ScriptContent string `gorm:"type:text" json:"script_content"`
 	ScriptFile    string `gorm:"size:200" json:"script_file"`
+	ScriptArgs    string `gorm:"size:500" json:"script_args"` // 脚本位置参数
 
 	// PromQL 查询
 	PromQLQuery string `gorm:"type:text" json:"promql_query"`
+
+	// 拨测执行
+	ProbeCategory string `gorm:"size:20" json:"probe_category"`       // network/layer4/application/workflow
+	ProbeType     string `gorm:"size:20" json:"probe_type"`           // ping/tcp/udp/http/https/websocket
+	ProbeConfigID uint   `gorm:"default:0;index" json:"probe_config_id"` // 关联拨测配置ID
 
 	// 主机匹配
 	HostMatchType string `gorm:"size:20;default:'tag'" json:"host_match_type"` // tag/name/id
