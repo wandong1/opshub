@@ -138,7 +138,14 @@ func (s *GroupService) GetAll(ctx context.Context) ([]*GroupResponse, error) {
 
 	responses := make([]*GroupResponse, len(groups))
 	for i, group := range groups {
-		responses[i] = s.toResponse(group)
+		// 查询该巡检组的巡检项数量
+		items, err := s.itemRepo.GetByGroupID(ctx, group.ID)
+		itemCount := 0
+		if err == nil {
+			itemCount = len(items)
+		}
+
+		responses[i] = s.toResponseWithCount(group, itemCount)
 	}
 
 	return responses, nil
@@ -158,6 +165,26 @@ func (s *GroupService) toResponse(group *inspectionmgmtdata.InspectionGroup) *Gr
 		Concurrency:       group.Concurrency,
 		GroupIDs:          group.GroupIDs,
 		ItemCount:         0,
+		ItemNames:         []string{},
+		CreatedAt:         group.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         group.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+func (s *GroupService) toResponseWithCount(group *inspectionmgmtdata.InspectionGroup, itemCount int) *GroupResponse {
+	return &GroupResponse{
+		ID:                group.ID,
+		Name:              group.Name,
+		Description:       group.Description,
+		Status:            group.Status,
+		Sort:              group.Sort,
+		PrometheusURL:     group.PrometheusURL,
+		PrometheusUsername: group.PrometheusUsername,
+		ExecutionMode:     group.ExecutionMode,
+		ExecutionStrategy: group.ExecutionStrategy,
+		Concurrency:       group.Concurrency,
+		GroupIDs:          group.GroupIDs,
+		ItemCount:         itemCount,
 		ItemNames:         []string{},
 		CreatedAt:         group.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:         group.UpdatedAt.Format(time.RFC3339),
@@ -421,7 +448,7 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 		}
 
 		// 需要注入 ItemService 来创建巡检项
-		itemService := NewItemService(s.itemRepo, s.groupRepo, nil, nil, nil)
+		itemService := NewItemService(s.itemRepo, s.groupRepo, nil, nil, nil, nil)
 		if _, err := itemService.Create(ctx, itemReq); err != nil {
 			// 如果创建巡检项失败，删除已创建的巡检组
 			s.groupRepo.Delete(ctx, groupID)

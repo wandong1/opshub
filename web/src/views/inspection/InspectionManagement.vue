@@ -291,23 +291,25 @@
                   </a-col>
                   <a-col :span="12">
                     <a-form-item label="执行类型" :label-col-flex="'100px'">
-                      <a-select v-model="item.executionType">
+                      <a-select v-model="item.executionType" @change="handleExecutionTypeChange(item)">
                         <a-option value="command">命令</a-option>
                         <a-option value="script">脚本</a-option>
                         <a-option value="promql">PromQL</a-option>
+                        <a-option value="probe">拨测</a-option>
                       </a-select>
                     </a-form-item>
                   </a-col>
                 </a-row>
 
-                <!-- 主机匹配配置 -->
-                <a-form-item label="主机匹配方式" :label-col-flex="'100px'">
-                  <a-radio-group v-model="item.hostMatchType" @change="loadHostsForItem(item)">
-                    <a-radio value="tag">按标签匹配</a-radio>
-                    <a-radio value="name">按主机名匹配</a-radio>
-                    <a-radio value="id">按主机ID匹配</a-radio>
-                  </a-radio-group>
-                </a-form-item>
+                <!-- 主机匹配配置（拨测类型不需要） -->
+                <template v-if="item.executionType !== 'probe'">
+                  <a-form-item label="主机匹配方式" :label-col-flex="'100px'">
+                    <a-radio-group v-model="item.hostMatchType" @change="loadHostsForItem(item)">
+                      <a-radio value="tag">按标签匹配</a-radio>
+                      <a-radio value="name">按主机名匹配</a-radio>
+                      <a-radio value="id">按主机ID匹配</a-radio>
+                    </a-radio-group>
+                  </a-form-item>
 
                 <a-form-item v-if="item.hostMatchType === 'tag'" label="主机标签" :label-col-flex="'100px'">
                   <a-select
@@ -370,6 +372,7 @@
                     </span>
                   </template>
                 </a-form-item>
+                </template>
 
                 <!-- 命令执行 -->
                 <template v-if="item.executionType === 'command'">
@@ -381,13 +384,65 @@
                 <!-- 脚本执行 -->
                 <template v-if="item.executionType === 'script'">
                   <a-form-item label="脚本类型" :label-col-flex="'100px'">
-                    <a-select v-model="item.scriptType" style="width: 150px;">
+                    <a-select v-model="item.scriptType" style="width: 200px;">
                       <a-option value="shell">Shell</a-option>
                       <a-option value="python">Python</a-option>
+                      <a-option value="binary">二进制</a-option>
                     </a-select>
                   </a-form-item>
-                  <a-form-item label="脚本内容" :label-col-flex="'100px'">
-                    <a-textarea v-model="item.scriptContent" placeholder="请输入脚本内容" :rows="6" />
+
+                  <a-form-item label="脚本来源" :label-col-flex="'100px'">
+                    <a-radio-group v-model="item.scriptSource" @change="handleScriptSourceChange(item)">
+                      <a-radio value="content">直接输入</a-radio>
+                      <a-radio value="file">文件上传</a-radio>
+                    </a-radio-group>
+                  </a-form-item>
+
+                  <a-form-item v-if="item.scriptSource === 'content'" label="脚本内容" :label-col-flex="'100px'">
+                    <a-textarea
+                      v-model="item.scriptContent"
+                      :placeholder="item.scriptType === 'shell' ? '#!/bin/bash\\necho Hello World' : item.scriptType === 'python' ? '#!/usr/bin/env python3\\nprint(Hello World)' : '请上传二进制文件'"
+                      :rows="8"
+                      :disabled="item.scriptType === 'binary'"
+                    />
+                    <template #extra>
+                      <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                        {{ item.scriptType === 'binary' ? '二进制文件请使用文件上传方式' : '脚本内容将在目标主机上执行' }}
+                      </span>
+                    </template>
+                  </a-form-item>
+
+                  <a-form-item v-if="item.scriptSource === 'file'" label="上传脚本" :label-col-flex="'100px'">
+                    <a-upload
+                      :auto-upload="false"
+                      :show-file-list="true"
+                      :limit="1"
+                      @change="(fileList) => handleScriptFileChange(item, fileList)"
+                    >
+                      <template #upload-button>
+                        <a-button type="outline">
+                          <template #icon><icon-upload /></template>
+                          选择文件
+                        </a-button>
+                      </template>
+                    </a-upload>
+                    <template #extra>
+                      <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                        {{ item.scriptFile ? `已上传: ${item.scriptFile}` : '支持 .sh、.py、二进制文件等' }}
+                      </span>
+                    </template>
+                  </a-form-item>
+
+                  <a-form-item label="脚本参数" :label-col-flex="'100px'">
+                    <a-input
+                      v-model="item.scriptArgs"
+                      placeholder="如：arg1 arg2 arg3（空格分隔的位置参数）"
+                    />
+                    <template #extra>
+                      <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                        脚本执行时的位置参数，多个参数用空格分隔
+                      </span>
+                    </template>
                   </a-form-item>
                 </template>
 
@@ -398,39 +453,100 @@
                   </a-form-item>
                 </template>
 
-                <!-- 断言配置 -->
-                <a-form-item label="断言规则" :label-col-flex="'100px'">
-                  <a-row :gutter="8">
-                    <a-col :span="10">
-                      <a-select v-model="item.assertionType" placeholder="选择断言类型" allow-clear>
-                        <a-option value="gt">大于 (&gt;)</a-option>
-                        <a-option value="gte">大于等于 (&gt;=)</a-option>
-                        <a-option value="lt">小于 (&lt;)</a-option>
-                        <a-option value="lte">小于等于 (&lt;=)</a-option>
-                        <a-option value="eq">等于 (==)</a-option>
-                        <a-option value="contains">包含</a-option>
-                        <a-option value="not_contains">不包含</a-option>
-                        <a-option value="regex">正则匹配</a-option>
-                        <a-option value="not_regex">反正则匹配</a-option>
-                      </a-select>
-                    </a-col>
-                    <a-col :span="14">
-                      <a-input v-model="item.assertionValue" placeholder="断言值" :disabled="!item.assertionType" />
-                    </a-col>
-                  </a-row>
-                </a-form-item>
+                <!-- 拨测配置 -->
+                <template v-if="item.executionType === 'probe'">
+                  <a-form-item label="拨测分类" :label-col-flex="'100px'">
+                    <a-select
+                      v-model="item.probeCategory"
+                      placeholder="请选择拨测分类"
+                      @change="handleProbeCategoryChange(item)"
+                    >
+                      <a-option value="network">基础网络</a-option>
+                      <a-option value="layer4">四层协议</a-option>
+                      <a-option value="application">应用服务</a-option>
+                      <a-option value="workflow">业务流程</a-option>
+                    </a-select>
+                  </a-form-item>
 
-                <!-- 变量提取 -->
-                <a-form-item label="变量提取" :label-col-flex="'100px'">
-                  <a-row :gutter="8">
-                    <a-col :span="10">
-                      <a-input v-model="item.variableName" placeholder="变量名（如：token）" />
-                    </a-col>
-                    <a-col :span="14">
-                      <a-input v-model="item.variableRegex" placeholder="提取正则（如：token=(.+)）" />
-                    </a-col>
-                  </a-row>
-                </a-form-item>
+                  <a-form-item v-if="item.probeCategory" label="拨测类型" :label-col-flex="'100px'">
+                    <a-select
+                      v-model="item.probeType"
+                      placeholder="请选择拨测类型（可选）"
+                      allow-clear
+                      @change="handleProbeTypeChange(item)"
+                    >
+                      <a-option
+                        v-for="type in getProbeTypesByCategory(item.probeCategory)"
+                        :key="type"
+                        :value="type"
+                      >
+                        {{ type.toUpperCase() }}
+                      </a-option>
+                    </a-select>
+                  </a-form-item>
+
+                  <a-form-item v-if="item.probeCategory" label="拨测配置" :label-col-flex="'100px'">
+                    <a-select
+                      v-model="item.probeConfigId"
+                      placeholder="请选择拨测配置"
+                      :loading="probeConfigsLoading"
+                      allow-search
+                      :filter-option="false"
+                    >
+                      <template #empty>
+                        <a-empty description="暂无可用的拨测配置" />
+                      </template>
+                      <a-option
+                        v-for="config in getFilteredProbeConfigs(item)"
+                        :key="config.id"
+                        :value="config.id"
+                      >
+                        <div style="display: flex; justify-content: space-between;">
+                          <span>{{ config.name }}</span>
+                          <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                            {{ config.target }}{{ config.port ? ':' + config.port : '' }}
+                          </span>
+                        </div>
+                      </a-option>
+                    </a-select>
+                  </a-form-item>
+                </template>
+
+                <!-- 断言配置和变量提取（拨测类型不需要） -->
+                <template v-if="item.executionType !== 'probe'">
+                  <a-form-item label="断言规则" :label-col-flex="'100px'">
+                    <a-row :gutter="8">
+                      <a-col :span="10">
+                        <a-select v-model="item.assertionType" placeholder="选择断言类型" allow-clear>
+                          <a-option value="gt">大于 (&gt;)</a-option>
+                          <a-option value="gte">大于等于 (&gt;=)</a-option>
+                          <a-option value="lt">小于 (&lt;)</a-option>
+                          <a-option value="lte">小于等于 (&lt;=)</a-option>
+                          <a-option value="eq">等于 (==)</a-option>
+                          <a-option value="contains">包含</a-option>
+                          <a-option value="not_contains">不包含</a-option>
+                          <a-option value="regex">正则匹配</a-option>
+                          <a-option value="not_regex">反正则匹配</a-option>
+                        </a-select>
+                      </a-col>
+                      <a-col :span="14">
+                        <a-input v-model="item.assertionValue" placeholder="断言值" :disabled="!item.assertionType" />
+                      </a-col>
+                    </a-row>
+                  </a-form-item>
+
+                  <!-- 变量提取 -->
+                  <a-form-item label="变量提取" :label-col-flex="'100px'">
+                    <a-row :gutter="8">
+                      <a-col :span="10">
+                        <a-input v-model="item.variableName" placeholder="变量名（如：token）" />
+                      </a-col>
+                      <a-col :span="14">
+                        <a-input v-model="item.variableRegex" placeholder="提取正则（如：token=(.+)）" />
+                      </a-col>
+                    </a-row>
+                  </a-form-item>
+                </template>
 
                 <a-row :gutter="12">
                   <a-col :span="12">
@@ -624,6 +740,7 @@ import {
   exportAllInspectionGroups,
   importInspectionGroup,
   importInspectionGroupFile,
+  getProbeConfigsForInspection,
   type InspectionGroup,
   type InspectionItem
 } from '@/api/inspectionManagement'
@@ -710,7 +827,8 @@ const getExecutionTypeText = (type: string) => {
   const map: Record<string, string> = {
     command: '命令',
     script: '脚本',
-    promql: 'PromQL'
+    promql: 'PromQL',
+    probe: '拨测'
   }
   return map[type] || type
 }
@@ -719,7 +837,8 @@ const getExecutionTypeColor = (type: string) => {
   const map: Record<string, string> = {
     command: 'arcoblue',
     script: 'green',
-    promql: 'orange'
+    promql: 'orange',
+    probe: 'purple'
   }
   return map[type] || 'gray'
 }
@@ -847,7 +966,13 @@ const handleEdit = async (record: any) => {
         command: item.command || '',
         scriptType: item.scriptType || 'shell',
         scriptContent: item.scriptContent || '',
+        scriptFile: item.scriptFile || '',
+        scriptSource: item.scriptFile ? 'file' : 'content',
+        scriptArgs: item.scriptArgs || '',
         promqlQuery: item.promqlQuery || '',
+        probeCategory: item.probeCategory || '',
+        probeType: item.probeType || '',
+        probeConfigId: item.probeConfigId || undefined,
         assertionType: item.assertionType || '',
         assertionValue: item.assertionValue || '',
         variableName: item.variableName || '',
@@ -865,6 +990,11 @@ const handleEdit = async (record: any) => {
   } catch (error: any) {
     console.error('加载巡检项失败:', error)
     Message.error(error.message || '加载巡检项失败')
+  }
+
+  // 加载拨测配置列表（如果有拨测类型的巡检项）
+  if (groupIds.length > 0) {
+    await fetchProbeConfigs()
   }
 
   dialogVisible.value = true
@@ -1321,7 +1451,13 @@ const addInspectionItem = () => {
     command: '',
     scriptType: 'shell',
     scriptContent: '',
+    scriptFile: '',
+    scriptSource: 'content',
+    scriptArgs: '',
     promqlQuery: '',
+    probeCategory: '',
+    probeType: '',
+    probeConfigId: undefined,
     assertionType: '',
     assertionValue: '',
     variableName: '',
@@ -1334,6 +1470,67 @@ const addInspectionItem = () => {
     hostIds: []
   })
   activeItemIndex.value = inspectionItems.value.length - 1
+}
+
+const handleScriptSourceChange = (item: any) => {
+  // 切换脚本来源时清空相关字段
+  if (item.scriptSource === 'content') {
+    item.scriptFile = ''
+  } else {
+    item.scriptContent = ''
+  }
+}
+
+const handleExecutionTypeChange = (item: any) => {
+  // 清除其他类型的字段
+  if (item.executionType !== 'command') {
+    item.command = ''
+  }
+  if (item.executionType !== 'script') {
+    item.scriptType = 'shell'
+    item.scriptContent = ''
+    item.scriptFile = ''
+    item.scriptSource = 'content'
+    item.scriptArgs = ''
+  }
+  if (item.executionType !== 'promql') {
+    item.promqlQuery = ''
+  }
+  if (item.executionType !== 'probe') {
+    item.probeCategory = ''
+    item.probeType = ''
+    item.probeConfigId = undefined
+  }
+
+  // 如果切换到拨测类型，加载拨测配置
+  if (item.executionType === 'probe') {
+    fetchProbeConfigs()
+  }
+}
+
+const handleScriptFileChange = async (item: any, fileList: any[]) => {
+  if (fileList.length === 0) {
+    item.scriptFile = ''
+    return
+  }
+
+  const file = fileList[0].file
+  if (!file) return
+
+  // 读取文件内容（对于文本文件）或保存文件名（对于二进制文件）
+  if (item.scriptType === 'binary') {
+    // 二进制文件：只保存文件名，实际上传由后端处理
+    item.scriptFile = file.name
+    item.scriptFileObject = file
+  } else {
+    // 文本文件：读取内容
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      item.scriptContent = e.target?.result as string
+      item.scriptFile = file.name
+    }
+    reader.readAsText(file)
+  }
 }
 
 const deleteInspectionItem = (index: number) => {
@@ -1431,6 +1628,9 @@ const handleCopy = async (record: InspectionGroup) => {
         scriptType: item.scriptType || 'shell',
         scriptContent: item.scriptContent || '',
         promqlQuery: item.promqlQuery || '',
+        probeCategory: item.probeCategory || '',
+        probeType: item.probeType || '',
+        probeConfigId: item.probeConfigId || undefined,
         assertionType: item.assertionType || '',
         assertionValue: item.assertionValue || '',
         variableName: item.variableName || '',
@@ -1477,6 +1677,74 @@ const onItemDragOver = (index: number) => {
 
 const onItemDrop = (index: number) => {
   itemDragIndex.value = -1
+}
+
+// 拨测相关
+const probeConfigsLoading = ref(false)
+const probeConfigs = ref<any[]>([])
+
+// 拨测类型映射
+const CATEGORY_TYPE_MAP: Record<string, string[]> = {
+  network: ['ping'],
+  layer4: ['tcp', 'udp'],
+  application: ['http', 'https', 'websocket'],
+  workflow: ['workflow']
+}
+
+// 获取分类对应的拨测类型
+const getProbeTypesByCategory = (category: string) => {
+  return CATEGORY_TYPE_MAP[category] || []
+}
+
+// 获取过滤后的拨测配置
+const getFilteredProbeConfigs = (item: any) => {
+  let configs = probeConfigs.value
+
+  // 按分类过滤
+  if (item.probeCategory) {
+    configs = configs.filter((c: any) => c.category === item.probeCategory)
+  }
+
+  // 按类型过滤（可选）
+  if (item.probeType) {
+    configs = configs.filter((c: any) => c.type === item.probeType)
+  }
+
+  return configs
+}
+
+// 拨测分类变更处理
+const handleProbeCategoryChange = (item: any) => {
+  item.probeType = ''
+  item.probeConfigId = undefined
+  fetchProbeConfigs()
+}
+
+// 拨测类型变更处理
+const handleProbeTypeChange = (item: any) => {
+  item.probeConfigId = undefined
+}
+
+// 获取拨测配置列表
+const fetchProbeConfigs = async () => {
+  probeConfigsLoading.value = true
+  try {
+    // 如果没有选择业务分组，传递空数组，后端会返回所有 group_id = 0 的通用配置
+    const groupIds = formData.groupIds && formData.groupIds.length > 0 ? formData.groupIds : [0]
+
+    const res = await getProbeConfigsForInspection({
+      groupIds: groupIds,
+      status: 1
+    })
+    probeConfigs.value = res.data || []
+    console.log('[fetchProbeConfigs] 加载拨测配置:', res.data?.length || 0, '条', 'groupIds:', groupIds)
+  } catch (error: any) {
+    console.error('[fetchProbeConfigs] 获取拨测配置失败:', error)
+    Message.error('获取拨测配置失败: ' + (error.message || '未知错误'))
+    probeConfigs.value = []
+  } finally {
+    probeConfigsLoading.value = false
+  }
 }
 
 // 初始化加载数据

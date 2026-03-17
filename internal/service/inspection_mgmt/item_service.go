@@ -12,14 +12,15 @@ import (
 )
 
 type ItemService struct {
-	itemRepo    inspectionmgmtdata.ItemRepository
-	groupRepo   inspectionmgmtdata.GroupRepository
-	recordRepo  inspectionmgmtdata.RecordRepository
-	hostRepo    assetbiz.HostRepo
-	cmdExecutor *inspectionmgmtbiz.CommandExecutor
-	validator   *inspectionmgmtbiz.AssertionValidator
-	extractor   *inspectionmgmtbiz.VariableExtractor
-	replacer    *inspectionmgmtbiz.VariableReplacer
+	itemRepo      inspectionmgmtdata.ItemRepository
+	groupRepo     inspectionmgmtdata.GroupRepository
+	recordRepo    inspectionmgmtdata.RecordRepository
+	hostRepo      assetbiz.HostRepo
+	cmdExecutor   *inspectionmgmtbiz.CommandExecutor
+	probeExecutor *ProbeExecutor
+	validator     *inspectionmgmtbiz.AssertionValidator
+	extractor     *inspectionmgmtbiz.VariableExtractor
+	replacer      *inspectionmgmtbiz.VariableReplacer
 }
 
 func NewItemService(
@@ -28,16 +29,18 @@ func NewItemService(
 	recordRepo inspectionmgmtdata.RecordRepository,
 	hostRepo assetbiz.HostRepo,
 	cmdExecutor *inspectionmgmtbiz.CommandExecutor,
+	probeExecutor *ProbeExecutor,
 ) *ItemService {
 	return &ItemService{
-		itemRepo:    itemRepo,
-		groupRepo:   groupRepo,
-		recordRepo:  recordRepo,
-		hostRepo:    hostRepo,
-		cmdExecutor: cmdExecutor,
-		validator:   &inspectionmgmtbiz.AssertionValidator{},
-		extractor:   &inspectionmgmtbiz.VariableExtractor{},
-		replacer:    &inspectionmgmtbiz.VariableReplacer{},
+		itemRepo:      itemRepo,
+		groupRepo:     groupRepo,
+		recordRepo:    recordRepo,
+		hostRepo:      hostRepo,
+		cmdExecutor:   cmdExecutor,
+		probeExecutor: probeExecutor,
+		validator:     &inspectionmgmtbiz.AssertionValidator{},
+		extractor:     &inspectionmgmtbiz.VariableExtractor{},
+		replacer:      &inspectionmgmtbiz.VariableReplacer{},
 	}
 }
 
@@ -61,7 +64,11 @@ func (s *ItemService) Create(ctx context.Context, req *ItemCreateRequest) (uint,
 		ScriptType:        req.ScriptType,
 		ScriptContent:     req.ScriptContent,
 		ScriptFile:        req.ScriptFile,
+		ScriptArgs:        req.ScriptArgs,
 		PromQLQuery:       req.PromQLQuery,
+		ProbeCategory:     req.ProbeCategory,
+		ProbeType:         req.ProbeType,
+		ProbeConfigID:     req.ProbeConfigID,
 		HostMatchType:     req.HostMatchType,
 		HostTags:          req.HostTags,
 		HostIDs:           req.HostIDs,
@@ -113,12 +120,60 @@ func (s *ItemService) Update(ctx context.Context, id uint, req *ItemUpdateReques
 	}
 	if req.ExecutionType != "" {
 		item.ExecutionType = req.ExecutionType
+		// 切换执行类型时清空其他类型的字段
+		switch req.ExecutionType {
+		case "command":
+			// 切换到命令：清空脚本、PromQL 和拨测字段
+			item.ScriptType = ""
+			item.ScriptContent = ""
+			item.ScriptFile = ""
+			item.ScriptArgs = ""
+			item.PromQLQuery = ""
+			item.ProbeCategory = ""
+			item.ProbeType = ""
+			item.ProbeConfigID = 0
+		case "script":
+			// 切换到脚本：清空命令、PromQL 和拨测字段
+			item.Command = ""
+			item.PromQLQuery = ""
+			item.ProbeCategory = ""
+			item.ProbeType = ""
+			item.ProbeConfigID = 0
+		case "promql":
+			// 切换到 PromQL：清空命令、脚本和拨测字段
+			item.Command = ""
+			item.ScriptType = ""
+			item.ScriptContent = ""
+			item.ScriptFile = ""
+			item.ScriptArgs = ""
+			item.ProbeCategory = ""
+			item.ProbeType = ""
+			item.ProbeConfigID = 0
+		case "probe":
+			// 切换到拨测：清空命令、脚本和 PromQL 字段
+			item.Command = ""
+			item.ScriptType = ""
+			item.ScriptContent = ""
+			item.ScriptFile = ""
+			item.ScriptArgs = ""
+			item.PromQLQuery = ""
+		}
 	}
-	item.Command = req.Command
-	item.ScriptType = req.ScriptType
-	item.ScriptContent = req.ScriptContent
-	item.ScriptFile = req.ScriptFile
-	item.PromQLQuery = req.PromQLQuery
+	// 只有在执行类型匹配时才更新对应字段
+	if item.ExecutionType == "command" {
+		item.Command = req.Command
+	} else if item.ExecutionType == "script" {
+		item.ScriptType = req.ScriptType
+		item.ScriptContent = req.ScriptContent
+		item.ScriptFile = req.ScriptFile
+		item.ScriptArgs = req.ScriptArgs
+	} else if item.ExecutionType == "promql" {
+		item.PromQLQuery = req.PromQLQuery
+	} else if item.ExecutionType == "probe" {
+		item.ProbeCategory = req.ProbeCategory
+		item.ProbeType = req.ProbeType
+		item.ProbeConfigID = req.ProbeConfigID
+	}
 	item.HostMatchType = req.HostMatchType
 	// 修复：即使是空字符串也要更新
 	item.HostTags = req.HostTags
@@ -176,7 +231,14 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 			continue
 		}
 
-		// 匹配主机
+		// 拨测类型不需要主机匹配，直接执行
+		if item.ExecutionType == "probe" {
+			result := s.executeItem(ctx, item, group, nil, nil)
+			results = append(results, result)
+			continue
+		}
+
+		// 匹配主机（非拨测类型）
 		hosts, err := s.matchHosts(ctx, item, group)
 		if err != nil {
 			continue
@@ -196,16 +258,66 @@ func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.
 	result := &TestRunResponse{
 		ItemID:   item.ID,
 		ItemName: item.Name,
-		HostID:   host.ID,
-		HostName: host.Name,
-		HostIp:   host.IP,
 	}
 
-	// 替换变量
-	command := s.replacer.Replace(item.Command, variables)
+	// 拨测类型不需要主机信息
+	if host != nil {
+		result.HostID = host.ID
+		result.HostName = host.Name
+		result.HostIp = host.IP
+		fmt.Printf("[ItemService] executeItem - itemID: %d, itemName: %s, executionType: %s, hostID: %d\n",
+			item.ID, item.Name, item.ExecutionType, host.ID)
+	} else {
+		fmt.Printf("[ItemService] executeItem - itemID: %d, itemName: %s, executionType: %s (no host)\n",
+			item.ID, item.Name, item.ExecutionType)
+	}
 
-	// 执行命令
-	execResult := s.cmdExecutor.Execute(ctx, host, command, group.ExecutionMode, item.Timeout)
+	var execResult *inspectionmgmtbiz.ExecuteResult
+
+	// 根据执行类型选择执行方式
+	switch item.ExecutionType {
+	case "command":
+		// 命令执行
+		fmt.Printf("[ItemService] Executing command: %s\n", item.Command)
+		command := s.replacer.Replace(item.Command, variables)
+		execResult = s.cmdExecutor.Execute(ctx, host, command, group.ExecutionMode, item.Timeout)
+
+	case "script":
+		// 脚本执行
+		fmt.Printf("[ItemService] Executing script - type: %s, hasContent: %v, hasFile: %v, args: %s\n",
+			item.ScriptType, item.ScriptContent != "", item.ScriptFile != "", item.ScriptArgs)
+
+		scriptReq := &inspectionmgmtbiz.ScriptExecuteRequest{
+			ScriptType:    item.ScriptType,
+			ScriptContent: item.ScriptContent,
+			ScriptFile:    item.ScriptFile,
+			ScriptArgs:    item.ScriptArgs,
+		}
+		execResult = s.cmdExecutor.ExecuteScript(ctx, host, scriptReq, group.ExecutionMode, item.Timeout)
+
+	case "promql":
+		// PromQL 查询（暂不实现）
+		fmt.Printf("[ItemService] PromQL execution not implemented yet\n")
+		execResult = &inspectionmgmtbiz.ExecuteResult{
+			Output:   "",
+			Error:    fmt.Errorf("PromQL 执行暂未实现"),
+			Duration: 0,
+		}
+
+	case "probe":
+		// 拨测执行
+		fmt.Printf("[ItemService] Executing probe - configID: %d\n", item.ProbeConfigID)
+		execResult = s.probeExecutor.Execute(ctx, item.ProbeConfigID, item.Timeout)
+
+	default:
+		fmt.Printf("[ItemService] Unknown execution type: %s\n", item.ExecutionType)
+		execResult = &inspectionmgmtbiz.ExecuteResult{
+			Output:   "",
+			Error:    fmt.Errorf("未知的执行类型: %s", item.ExecutionType),
+			Duration: 0,
+		}
+	}
+
 	result.Duration = execResult.Duration
 	result.Output = execResult.Output
 
@@ -213,10 +325,12 @@ func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.
 		result.Status = "failed"
 		result.ErrorMessage = execResult.Error.Error()
 		result.AssertionResult = "skip"
+		fmt.Printf("[ItemService] Execution failed - error: %v\n", execResult.Error)
 		return result
 	}
 
 	result.Status = "success"
+	fmt.Printf("[ItemService] Execution success - output length: %d\n", len(execResult.Output))
 
 	// 断言校验
 	assertionResult := s.validator.Validate(item.AssertionType, item.AssertionValue, execResult.Output)
@@ -424,7 +538,11 @@ func (s *ItemService) toResponse(item *inspectionmgmtdata.InspectionItem) *ItemR
 		ScriptType:        item.ScriptType,
 		ScriptContent:     item.ScriptContent,
 		ScriptFile:        item.ScriptFile,
+		ScriptArgs:        item.ScriptArgs,
 		PromQLQuery:       item.PromQLQuery,
+		ProbeCategory:     item.ProbeCategory,
+		ProbeType:         item.ProbeType,
+		ProbeConfigID:     item.ProbeConfigID,
 		HostMatchType:     item.HostMatchType,
 		HostTags:          item.HostTags,
 		HostIDs:           item.HostIDs,
@@ -470,7 +588,41 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 		return nil, fmt.Errorf("get inspection group failed: %w", err)
 	}
 
-	// 获取目标主机列表
+	// 拨测类型不需要主机匹配，直接执行
+	if item.ExecutionType == "probe" {
+		variables := make(map[string]string)
+		result := s.executeItem(ctx, item, group, nil, variables)
+
+		// 转换 AssertionDetails 为 JSON 字符串
+		assertionDetailsJSON := ""
+		if result.AssertionDetails != nil {
+			if data, err := json.Marshal(result.AssertionDetails); err == nil {
+				assertionDetailsJSON = string(data)
+			}
+		}
+
+		// 保存执行记录（拨测类型 HostID 为 0）
+		record := &inspectionmgmtdata.InspectionRecord{
+			GroupID:          item.GroupID,
+			ItemID:           item.ID,
+			HostID:           0, // 拨测类型不关联主机
+			Status:           result.Status,
+			Output:           result.Output,
+			ErrorMessage:     result.ErrorMessage,
+			Duration:         result.Duration,
+			AssertionResult:  result.AssertionResult,
+			AssertionDetails: assertionDetailsJSON,
+			ExecutedAt:       time.Now(),
+		}
+
+		if err := s.recordRepo.Create(ctx, record); err != nil {
+			return nil, fmt.Errorf("save inspection record failed: %w", err)
+		}
+
+		return []*inspectionmgmtdata.InspectionRecord{record}, nil
+	}
+
+	// 获取目标主机列表（非拨测类型）
 	hosts, err := s.matchHosts(ctx, item, group)
 	if err != nil {
 		return nil, fmt.Errorf("match hosts failed: %w", err)

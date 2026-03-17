@@ -13,7 +13,11 @@ type ItemCreateRequest struct {
 	ScriptType        string `json:"scriptType"`
 	ScriptContent     string `json:"scriptContent"`
 	ScriptFile        string `json:"scriptFile"`
+	ScriptArgs        string `json:"scriptArgs"`
 	PromQLQuery       string `json:"promqlQuery"`
+	ProbeCategory     string `json:"probeCategory"`
+	ProbeType         string `json:"probeType"`
+	ProbeConfigID     uint   `json:"probeConfigId"`
 	HostMatchType     string `json:"hostMatchType"`
 	HostTags          string `json:"hostTags"`
 	HostIDs           string `json:"hostIds"`
@@ -37,7 +41,11 @@ type ItemUpdateRequest struct {
 	ScriptType        string `json:"scriptType"`
 	ScriptContent     string `json:"scriptContent"`
 	ScriptFile        string `json:"scriptFile"`
+	ScriptArgs        string `json:"scriptArgs"`
 	PromQLQuery       string `json:"promqlQuery"`
+	ProbeCategory     string `json:"probeCategory"`
+	ProbeType         string `json:"probeType"`
+	ProbeConfigID     uint   `json:"probeConfigId"`
 	HostMatchType     string `json:"hostMatchType"`
 	HostTags          string `json:"hostTags"`
 	HostIDs           string `json:"hostIds"`
@@ -71,7 +79,11 @@ type ItemResponse struct {
 	ScriptType        string `json:"scriptType"`
 	ScriptContent     string `json:"scriptContent"`
 	ScriptFile        string `json:"scriptFile"`
+	ScriptArgs        string `json:"scriptArgs"`
 	PromQLQuery       string `json:"promqlQuery"`
+	ProbeCategory     string `json:"probeCategory"`
+	ProbeType         string `json:"probeType"`
+	ProbeConfigID     uint   `json:"probeConfigId"`
 	HostMatchType     string `json:"hostMatchType"`
 	HostTags          string `json:"hostTags"`
 	HostIDs           string `json:"hostIds"`

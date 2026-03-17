@@ -60,9 +60,15 @@
             <a-tag size="small" :color="record.type === 'ping' ? 'arcoblue' : record.type === 'tcp' ? 'orangered' : 'gray'">{{ record.type.toUpperCase() }}</a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="目标" data-index="target" :width="160" ellipsis tooltip />
+        <a-table-column title="目标" :width="160" ellipsis tooltip>
+          <template #cell="{ record }">
+            {{ record.category === 'application' ? (record.url || record.target) : record.target }}
+          </template>
+        </a-table-column>
         <a-table-column title="端口" :width="80" align="center">
-          <template #cell="{ record }">{{ record.type === 'ping' ? '-' : record.port }}</template>
+          <template #cell="{ record }">
+            {{ (record.type === 'tcp' || record.type === 'udp') ? record.port : '-' }}
+          </template>
         </a-table-column>
         <a-table-column title="超时(s)" data-index="timeout" :width="90" align="center" />
         <a-table-column title="标签" data-index="tags" :width="140" ellipsis tooltip />
@@ -933,10 +939,8 @@ const buildProbeData = () => {
     data.wsMessageType = WS_MESSAGE_TYPES.find(t => t.value === formData.wsMessageFormat)?.wireType || 1
     data.wsMessageFormat = formData.wsMessageFormat
     data.wsReadTimeout = formData.wsReadTimeout
-    // Auto-fill target for all application types if not set
-    if (!data.target) {
-      data.target = data.url || (data.type === 'websocket' ? 'websocket' : 'http')
-    }
+    // 应用服务类型：target 字段始终使用 URL 的值
+    data.target = data.url || data.target || (data.type === 'websocket' ? 'websocket' : 'http')
   }
   if (data.category === 'workflow') {
     const vars: Record<string, string> = {}
