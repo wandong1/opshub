@@ -29,13 +29,17 @@ import (
 
 // HTTPServer 系统配置HTTP服务器
 type HTTPServer struct {
-	configService *systemservice.ConfigService
+	configService  *systemservice.ConfigService
+	grafanaProxy   *GrafanaProxyHandler
 }
 
 // NewHTTPServer 创建系统配置HTTP服务器
 func NewHTTPServer(configService *systemservice.ConfigService) *HTTPServer {
+	// 创建 Grafana 代理（复用 configUseCase）
+	grafanaProxy := NewGrafanaProxyHandler(configService.GetConfigUseCase())
 	return &HTTPServer{
 		configService: configService,
+		grafanaProxy:  grafanaProxy,
 	}
 }
 
@@ -53,10 +57,22 @@ func (s *HTTPServer) RegisterRoutes(auth *gin.RouterGroup, public *gin.RouterGro
 			config.PUT("/security", s.configService.SaveSecurityConfig)
 			config.POST("/logo", s.configService.UploadLogo)
 		}
+
+		// 集成管理路由
+		integration := system.Group("/integrations")
+		{
+			integration.GET("", s.configService.GetIntegrationConfig)
+			integration.PUT("", s.configService.SaveIntegrationConfig)
+		}
 	}
 
 	// 公开路由（无需认证）
 	public.GET("/config", s.configService.GetPublicConfig)
+}
+
+// RegisterGrafanaProxy 在根路由注册 Grafana 代理（路径与 Grafana sub_path 一致，无需认证）
+func (s *HTTPServer) RegisterGrafanaProxy(router *gin.Engine) {
+	s.grafanaProxy.RegisterProxyRoute(router)
 }
 
 // NewSystemServices 创建系统服务依赖

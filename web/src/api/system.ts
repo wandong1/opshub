@@ -50,3 +50,25 @@ export const uploadLogo = (file: File) => {
 export const getPublicConfig = () => {
   return request.get('/api/v1/public/config')
 }
+
+// ========== 集成管理 ==========
+
+export interface GrafanaIntegration {
+  enabled: boolean
+  url: string
+  subpath: string
+}
+
+export interface IntegrationConfig {
+  grafana: GrafanaIntegration
+}
+
+// 获取集成配置
+export const getIntegrationConfig = () => {
+  return request.get('/api/v1/system/integrations')
+}
+
+// 保存集成配置
+export const saveIntegrationConfig = (data: { grafana?: GrafanaIntegration }) => {
+  return request.put('/api/v1/system/integrations', data)
+}

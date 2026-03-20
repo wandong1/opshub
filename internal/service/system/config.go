@@ -304,3 +304,52 @@ func (s *ConfigService) GetPublicConfig(c *gin.Context) {
 func (s *ConfigService) GetConfigUseCase() *system.ConfigUseCase {
 	return s.configUseCase
 }
+
+// GetIntegrationConfig 获取集成配置
+// @Summary 获取集成配置
+// @Tags 系统配置
+// @Security Bearer
+// @Success 200 {object} response.Response{} "获取成功"
+// @Router /api/v1/system/integrations [get]
+func (s *ConfigService) GetIntegrationConfig(c *gin.Context) {
+	grafanaConfig, err := s.configUseCase.GetGrafanaConfig(c.Request.Context())
+	if err != nil {
+		appLogger.Error("获取Grafana集成配置失败", zap.Error(err))
+		grafanaConfig = &system.GrafanaIntegrationConfig{
+			Enabled: true,
+			URL:     "http://grafana_mon:3000/grafana_2syulinm/",
+			Subpath: "/grafana_2syulinm/",
+		}
+	}
+
+	response.Success(c, gin.H{
+		"grafana": grafanaConfig,
+	})
+}
+
+// SaveIntegrationConfig 保存集成配置
+// @Summary 保存集成配置
+// @Tags 系统配置
+// @Security Bearer
+// @Success 200 {object} response.Response{} "保存成功"
+// @Router /api/v1/system/integrations [put]
+func (s *ConfigService) SaveIntegrationConfig(c *gin.Context) {
+	var req struct {
+		Grafana *system.GrafanaIntegrationConfig `json:"grafana"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
+		return
+	}
+
+	if req.Grafana != nil {
+		if err := s.configUseCase.SaveGrafanaConfig(c.Request.Context(), req.Grafana); err != nil {
+			appLogger.Error("保存Grafana集成配置失败", zap.Error(err))
+			response.ErrorCode(c, http.StatusInternalServerError, "保存配置失败")
+			return
+		}
+	}
+
+	response.Success(c, nil)
+}

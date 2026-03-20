@@ -229,6 +229,39 @@ func (uc *ConfigUseCase) InitDefaultConfigs(ctx context.Context) error {
 	return uc.configRepo.InitDefaultConfigs(ctx)
 }
 
+// GetGrafanaConfig 获取 Grafana 集成配置
+func (uc *ConfigUseCase) GetGrafanaConfig(ctx context.Context) (*GrafanaIntegrationConfig, error) {
+	configs, err := uc.configRepo.GetByGroup(ctx, ConfigGroupIntegrationGrafana)
+	if err != nil {
+		return nil, err
+	}
+
+	configMap := make(map[string]string)
+	for _, c := range configs {
+		configMap[c.Key] = c.Value
+	}
+
+	return &GrafanaIntegrationConfig{
+		Enabled: getBoolValue(configMap, ConfigKeyGrafanaEnabled, true),
+		URL:     getStringValue(configMap, ConfigKeyGrafanaURL, "http://grafana_mon:3000/grafana_2syulinm/"),
+		Subpath: getStringValue(configMap, ConfigKeyGrafanaSubpath, "/grafana_2syulinm/"),
+	}, nil
+}
+
+// SaveGrafanaConfig 保存 Grafana 集成配置
+func (uc *ConfigUseCase) SaveGrafanaConfig(ctx context.Context, config *GrafanaIntegrationConfig) error {
+	enabledStr := "false"
+	if config.Enabled {
+		enabledStr = "true"
+	}
+	configs := map[string]string{
+		ConfigKeyGrafanaEnabled: enabledStr,
+		ConfigKeyGrafanaURL:     config.URL,
+		ConfigKeyGrafanaSubpath: config.Subpath,
+	}
+	return uc.configRepo.BatchSaveOrUpdate(ctx, configs)
+}
+
 // 辅助函数
 func getStringValue(m map[string]string, key, defaultValue string) string {
 	if v, ok := m[key]; ok && v != "" {

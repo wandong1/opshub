@@ -136,6 +136,43 @@ var DefaultConfigs = map[string]SysConfig{
 		Group:  ConfigGroupSecurity,
 		Remark: "账户锁定时间(秒)",
 	},
+	// Grafana 集成默认配置
+	ConfigKeyGrafanaEnabled: {
+		Key:    ConfigKeyGrafanaEnabled,
+		Value:  "true",
+		Type:   "bool",
+		Group:  ConfigGroupIntegrationGrafana,
+		Remark: "是否启用 Grafana 集成",
+	},
+	ConfigKeyGrafanaURL: {
+		Key:    ConfigKeyGrafanaURL,
+		Value:  "http://grafana_mon:3000/grafana_2syulinm/",
+		Type:   "string",
+		Group:  ConfigGroupIntegrationGrafana,
+		Remark: "Grafana 访问地址",
+	},
+	ConfigKeyGrafanaSubpath: {
+		Key:    ConfigKeyGrafanaSubpath,
+		Value:  "/grafana_2syulinm/",
+		Type:   "string",
+		Group:  ConfigGroupIntegrationGrafana,
+		Remark: "Grafana Sub-path",
+	},
+}
+
+// 集成配置 Key 常量
+const (
+	ConfigGroupIntegrationGrafana       = "integration.grafana"
+	ConfigKeyGrafanaEnabled             = "integration.grafana.enabled"
+	ConfigKeyGrafanaURL                 = "integration.grafana.url"
+	ConfigKeyGrafanaSubpath             = "integration.grafana.subpath"
+)
+
+// GrafanaIntegrationConfig Grafana 集成配置
+type GrafanaIntegrationConfig struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`
+	Subpath string `json:"subpath"`
 }
 
 // BasicConfig 基础配置响应结构
