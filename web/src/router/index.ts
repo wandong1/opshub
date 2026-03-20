@@ -240,6 +240,18 @@ const router = createRouter({
           name: 'InspectionRecords',
           component: () => import('@/views/inspection/InspectionRecords.vue'),
           meta: { title: '执行记录' }
+        },
+        {
+          path: 'system/integrations',
+          name: 'Integrations',
+          component: () => import('@/views/system/Integrations.vue'),
+          meta: { title: '集成管理' }
+        },
+        {
+          path: 'monitor/grafana',
+          name: 'GrafanaDashboard',
+          component: () => import('@/views/monitor/GrafanaDashboard.vue'),
+          meta: { title: '监控大屏' }
         }
       ]
     }

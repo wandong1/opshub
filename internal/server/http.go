@@ -286,6 +286,8 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		// 系统配置路由
 		systemHTTPServer := systemserver.NewHTTPServer(configService)
 		systemHTTPServer.RegisterRoutes(v1, public)
+		// Grafana 代理：路由路径与 Grafana sub_path 一致，注册在根路由（无需认证）
+		systemHTTPServer.RegisterGrafanaProxy(router)
 
 		// Agent路由
 		if s.grpcServer != nil {
