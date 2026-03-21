@@ -35,6 +35,9 @@ type InspectionExecutionRecord struct {
 	StartedAt   time.Time  `gorm:"not null;index:idx_started_at" json:"startedAt"`
 	CompletedAt *time.Time `json:"completedAt,omitempty"`
 
+	// 触发方式
+	TriggerType string `gorm:"size:20;default:'scheduled'" json:"triggerType"` // scheduled/manual
+
 	// 配置快照
 	GroupIDs   string `gorm:"type:json" json:"groupIds"`   // JSON数组
 	GroupNames string `gorm:"type:json" json:"groupNames"` // JSON数组

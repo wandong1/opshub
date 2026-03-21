@@ -227,6 +227,64 @@
           </a-radio-group>
         </a-form-item>
 
+        <a-divider>自定义变量</a-divider>
+
+        <a-form-item label="自定义变量" field="customVariables">
+          <div style="width: 100%;">
+            <div v-for="(item, index) in customVariablesList" :key="index" style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <a-input v-model="item.key" placeholder="变量名（如：api_host）" style="flex: 1;" />
+              <a-input v-model="item.value" placeholder="变量值" style="flex: 2;" />
+              <a-button type="text" status="danger" @click="removeCustomVariable(index)">
+                <template #icon><icon-delete /></template>
+              </a-button>
+            </div>
+            <a-button type="dashed" long @click="addCustomVariable">
+              <template #icon><icon-plus /></template>
+              添加变量
+            </a-button>
+          </div>
+          <template #extra>
+            <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+              自定义变量仅在当前巡检组的巡检项中可用，优先级高于全局变量
+            </span>
+          </template>
+        </a-form-item>
+
+        <a-form-item label="自定义标签">
+          <div class="label-input-area">
+            <div class="label-tags">
+              <a-tag
+                v-for="(label, idx) in labelList"
+                :key="label + idx"
+                closable
+                color="arcoblue"
+                style="margin: 3px;"
+                @close="() => removeLabel(idx)"
+              >{{ label }}</a-tag>
+            </div>
+            <div class="label-add-row">
+              <template v-if="labelInputVisible">
+                <a-input
+                  ref="labelInputRef"
+                  v-model="labelInputValue"
+                  size="small"
+                  style="width: 150px"
+                  placeholder="如 env:prod"
+                  @blur="confirmLabelInput"
+                  @press-enter="confirmLabelInput"
+                />
+                <a-button size="small" type="primary" @click="confirmLabelInput">确认</a-button>
+                <a-button size="small" @click="cancelLabelInput">取消</a-button>
+              </template>
+              <a-button v-else size="small" @click="showLabelInput">
+                <template #icon><icon-plus /></template>
+                添加标签
+              </a-button>
+            </div>
+            <div class="label-hint">标签格式：key:value，如 env:prod、team:ops，用于 metric 指标标识</div>
+          </div>
+        </a-form-item>
+
         <a-divider>巡检项配置</a-divider>
 
         <!-- 执行策略配置 -->
@@ -377,7 +435,17 @@
                 <!-- 命令执行 -->
                 <template v-if="item.executionType === 'command'">
                   <a-form-item label="执行命令" :label-col-flex="'100px'">
-                    <a-textarea v-model="item.command" placeholder="如：uptime" :rows="3" />
+                    <VariableInput
+                      v-model="item.command"
+                      placeholder="如：uptime 或 echo {{api_host}}"
+                      :variables="variableOptions"
+                      :multiline="true"
+                    />
+                    <template #extra>
+                      <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                        支持变量引用，输入 / 可选择变量
+                      </span>
+                    </template>
                   </a-form-item>
                 </template>
 
@@ -399,15 +467,23 @@
                   </a-form-item>
 
                   <a-form-item v-if="item.scriptSource === 'content'" label="脚本内容" :label-col-flex="'100px'">
-                    <a-textarea
+                    <VariableInput
+                      v-if="item.scriptType !== 'binary'"
                       v-model="item.scriptContent"
-                      :placeholder="item.scriptType === 'shell' ? '#!/bin/bash\\necho Hello World' : item.scriptType === 'python' ? '#!/usr/bin/env python3\\nprint(Hello World)' : '请上传二进制文件'"
+                      :placeholder="item.scriptType === 'shell' ? '#!/bin/bash\necho Hello {{username}}' : '#!/usr/bin/env python3\nprint(Hello {{username}})'"
+                      :variables="variableOptions"
+                      :multiline="true"
+                    />
+                    <a-textarea
+                      v-else
+                      v-model="item.scriptContent"
+                      placeholder="请上传二进制文件"
                       :rows="8"
-                      :disabled="item.scriptType === 'binary'"
+                      disabled
                     />
                     <template #extra>
                       <span style="color: var(--ops-text-tertiary); font-size: 12px;">
-                        {{ item.scriptType === 'binary' ? '二进制文件请使用文件上传方式' : '脚本内容将在目标主机上执行' }}
+                        {{ item.scriptType === 'binary' ? '二进制文件请使用文件上传方式' : '脚本内容将在目标主机上执行，支持变量引用，输入 / 可选择变量' }}
                       </span>
                     </template>
                   </a-form-item>
@@ -434,13 +510,14 @@
                   </a-form-item>
 
                   <a-form-item label="脚本参数" :label-col-flex="'100px'">
-                    <a-input
+                    <VariableInput
                       v-model="item.scriptArgs"
-                      placeholder="如：arg1 arg2 arg3（空格分隔的位置参数）"
+                      placeholder="如：{{env}} {{region}} prod（支持变量引用）"
+                      :variables="variableOptions"
                     />
                     <template #extra>
                       <span style="color: var(--ops-text-tertiary); font-size: 12px;">
-                        脚本执行时的位置参数，多个参数用空格分隔
+                        脚本执行时的位置参数，多个参数用空格分隔，支持变量引用
                       </span>
                     </template>
                   </a-form-item>
@@ -449,7 +526,17 @@
                 <!-- PromQL 查询 -->
                 <template v-if="item.executionType === 'promql'">
                   <a-form-item label="PromQL查询" :label-col-flex="'100px'">
-                    <a-textarea v-model="item.promqlQuery" placeholder="如：node_cpu_usage_percent" :rows="3" />
+                    <VariableInput
+                      v-model="item.promqlQuery"
+                      placeholder="如：node_cpu_usage_percent{instance='{{instance}}'}"
+                      :variables="variableOptions"
+                      :multiline="true"
+                    />
+                    <template #extra>
+                      <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                        支持变量引用，输入 / 可选择变量
+                      </span>
+                    </template>
                   </a-form-item>
                 </template>
 
@@ -707,7 +794,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import {
   IconCheckCircle,
@@ -746,6 +833,8 @@ import {
 } from '@/api/inspectionManagement'
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
+import { getVariableList } from '@/api/networkProbe'
+import VariableInput from '@/components/VariableInput.vue'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -762,6 +851,9 @@ const testRunning = ref(false)
 const testLogs = ref<any[]>([])
 const availableTags = ref<string[]>([])
 const availableHostNames = ref<string[]>([])
+
+// 变量选项（用于 VariableInput 组件）
+const variableOptions = ref<Array<{ name: string; description?: string }>>([])
 
 // 导入导出相关
 const exportDialogVisible = ref(false)
@@ -804,10 +896,38 @@ const formData = reactive({
   prometheusUsername: '',
   prometheusPassword: '',
   sort: 0,
-  groupIds: [] as number[]
+  groupIds: [] as number[],
+  customVariables: '{}' // 自定义变量（JSON 字符串）
 })
 
 const inspectionItems = ref<any[]>([])
+
+// 自定义变量列表（用于表单编辑）
+const customVariablesList = ref<Array<{ key: string; value: string }>>([])
+
+// 自定义标签
+const labelList = ref<string[]>([])
+const labelInputVisible = ref(false)
+const labelInputValue = ref('')
+const labelInputRef = ref()
+
+const showLabelInput = () => {
+  labelInputVisible.value = true
+  nextTick(() => labelInputRef.value?.focus())
+}
+const confirmLabelInput = () => {
+  const val = labelInputValue.value.trim()
+  if (val && !labelList.value.includes(val)) labelList.value.push(val)
+  labelInputVisible.value = false
+  labelInputValue.value = ''
+}
+const cancelLabelInput = () => {
+  labelInputVisible.value = false
+  labelInputValue.value = ''
+}
+const removeLabel = (idx: number) => {
+  labelList.value.splice(idx, 1)
+}
 
 const formRules = {
   name: [{ required: true, message: '请输入巡检组名称' }],
@@ -885,9 +1005,12 @@ const handleCreate = async () => {
     prometheusUsername: '',
     prometheusPassword: '',
     sort: 0,
-    groupIds: []
+    groupIds: [],
+    customVariables: '{}'
   })
   inspectionItems.value = []
+  customVariablesList.value = []
+  labelList.value = []
   await loadAssetGroups()
   dialogVisible.value = true
 }
@@ -907,6 +1030,28 @@ const handleEdit = async (record: any) => {
       console.error('解析 groupIds 失败:', e, record.groupIds)
       groupIds = []
     }
+  }
+
+  // 解析 customVariables
+  let customVars: Record<string, string> = {}
+  if (record.customVariables) {
+    try {
+      customVars = typeof record.customVariables === 'string' ? JSON.parse(record.customVariables) : record.customVariables
+      console.log('解析后的 customVariables:', customVars)
+    } catch (e) {
+      console.error('解析 customVariables 失败:', e, record.customVariables)
+      customVars = {}
+    }
+  }
+
+  // 转换为列表格式
+  customVariablesList.value = Object.entries(customVars).map(([key, value]) => ({ key, value }))
+
+  // 解析 labels
+  try {
+    labelList.value = record.labels ? (typeof record.labels === 'string' ? JSON.parse(record.labels) : record.labels) : []
+  } catch {
+    labelList.value = []
   }
 
   Object.assign(formData, {
@@ -1246,6 +1391,8 @@ const handleTestRunItem = async (itemIndex: number) => {
     }
 
     // 保存巡检项
+    console.log('[TestRun] item.scriptContent:', JSON.stringify(item.scriptContent))
+    console.log('[TestRun] item.executionType:', item.executionType)
     const itemData = {
       ...item,
       groupId: groupId,
@@ -1305,6 +1452,14 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
+    // 将自定义变量列表转换为 JSON 对象
+    const customVarsObj: Record<string, string> = {}
+    customVariablesList.value.forEach(item => {
+      if (item.key && item.value) {
+        customVarsObj[item.key] = item.value
+      }
+    })
+
     // 准备巡检组数据
     const groupData: any = {
       name: formData.name,
@@ -1316,7 +1471,9 @@ const handleSubmit = async () => {
       prometheusUrl: formData.prometheusUrl,
       prometheusUsername: formData.prometheusUsername,
       prometheusPassword: formData.prometheusPassword,
-      groupIds: JSON.stringify(formData.groupIds)
+      groupIds: JSON.stringify(formData.groupIds),
+      customVariables: JSON.stringify(customVarsObj),
+      labels: JSON.stringify(labelList.value)
     }
 
     console.log('保存巡检组数据:', groupData)
@@ -1569,6 +1726,20 @@ const handleCopy = async (record: InspectionGroup) => {
     }
   }
 
+  // 解析 customVariables
+  let customVars: Record<string, string> = {}
+  if (record.customVariables) {
+    try {
+      customVars = typeof record.customVariables === 'string' ? JSON.parse(record.customVariables) : record.customVariables
+    } catch (e) {
+      console.error('解析 customVariables 失败:', e)
+      customVars = {}
+    }
+  }
+
+  // 转换为列表格式
+  customVariablesList.value = Object.entries(customVars).map(([key, value]) => ({ key, value }))
+
   Object.assign(formData, {
     id: undefined,
     name: record.name + '_副本',
@@ -1679,6 +1850,15 @@ const onItemDrop = (index: number) => {
   itemDragIndex.value = -1
 }
 
+// 自定义变量管理
+const addCustomVariable = () => {
+  customVariablesList.value.push({ key: '', value: '' })
+}
+
+const removeCustomVariable = (index: number) => {
+  customVariablesList.value.splice(index, 1)
+}
+
 // 拨测相关
 const probeConfigsLoading = ref(false)
 const probeConfigs = ref<any[]>([])
@@ -1747,6 +1927,55 @@ const fetchProbeConfigs = async () => {
   }
 }
 
+// 加载变量选项（全局变量 + 巡检组自定义变量）
+const loadVariableOptions = async () => {
+  const options: Array<{ name: string; description?: string }> = []
+
+  try {
+    // 1. 加载全局环境变量
+    const res = await getVariableList({
+      page: 1,
+      pageSize: 1000
+    })
+
+    if (res.data && Array.isArray(res.data)) {
+      res.data.forEach((v: any) => {
+        options.push({
+          name: v.name,
+          description: v.description || '全局变量'
+        })
+      })
+    }
+  } catch (error: any) {
+    console.error('加载全局变量失败:', error)
+  }
+
+  // 2. 添加巡检组自定义变量
+  customVariablesList.value.forEach(item => {
+    if (item.key) {
+      options.push({
+        name: item.key,
+        description: '组变量'
+      })
+    }
+  })
+
+  variableOptions.value = options
+  console.log('[loadVariableOptions] 加载变量选项:', options.length, '个')
+}
+
+// 监听自定义变量列表变化，更新变量选项
+watch(customVariablesList, () => {
+  loadVariableOptions()
+}, { deep: true })
+
+// 监听对话框打开，加载变量选项
+watch(dialogVisible, (visible) => {
+  if (visible) {
+    loadVariableOptions()
+  }
+})
+
 // 初始化加载数据
 onMounted(() => {
   loadData()
@@ -1756,6 +1985,30 @@ onMounted(() => {
 <style scoped>
 .inspection-management-container {
   padding: 20px;
+}
+
+.label-input-area {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: 4px;
+  background: #fafafa;
+}
+.label-tags {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 4px;
+  margin-bottom: 6px;
+}
+.label-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.label-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #86909c;
 }
 
 .page-header {

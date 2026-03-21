@@ -66,10 +66,15 @@ func (e *InspectionExecutor) Type() string { return "inspection_task" }
 // Execute 执行巡检任务
 func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) error {
 	var payload struct {
-		TaskID uint `json:"task_id"`
+		TaskID      uint   `json:"task_id"`
+		TriggerType string `json:"trigger_type"`
 	}
 	if err := json.Unmarshal([]byte(task.Payload), &payload); err != nil {
 		return fmt.Errorf("parse payload: %w", err)
+	}
+	triggerType := payload.TriggerType
+	if triggerType == "" {
+		triggerType = "scheduled"
 	}
 
 	// 获取任务配置
@@ -161,14 +166,15 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 	groupNamesJSON, _ := json.Marshal(groupNames)
 
 	executionRecord := &inspectionmgmtdata.InspectionExecutionRecord{
-		TaskID:     payload.TaskID,
-		TaskName:   inspectionTask.Name,
-		TotalItems: len(itemsToExecute),
-		TotalHosts: 0, // 执行后更新
-		Status:     "running",
-		StartedAt:  startTime,
-		GroupIDs:   string(groupIDsJSON),
-		GroupNames: string(groupNamesJSON),
+		TaskID:      payload.TaskID,
+		TaskName:    inspectionTask.Name,
+		TotalItems:  len(itemsToExecute),
+		TotalHosts:  0, // 执行后更新
+		Status:      "running",
+		StartedAt:   startTime,
+		GroupIDs:    string(groupIDsJSON),
+		GroupNames:  string(groupNamesJSON),
+		TriggerType: triggerType,
 	}
 
 	if err := e.execRepo.CreateRecord(ctx, executionRecord); err != nil {

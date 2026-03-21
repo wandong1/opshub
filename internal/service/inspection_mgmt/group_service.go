@@ -35,6 +35,8 @@ func (s *GroupService) Create(ctx context.Context, req *GroupCreateRequest) (uin
 		ExecutionStrategy: req.ExecutionStrategy,
 		Concurrency:       req.Concurrency,
 		GroupIDs:          req.GroupIDs,
+		CustomVariables:   req.CustomVariables,
+		Labels:            req.Labels,
 	}
 
 	if group.Status == "" {
@@ -86,6 +88,8 @@ func (s *GroupService) Update(ctx context.Context, id uint, req *GroupUpdateRequ
 	}
 	// 修复：即使是空字符串也要更新，因为前端可能清空了选择
 	group.GroupIDs = req.GroupIDs
+	group.CustomVariables = req.CustomVariables
+	group.Labels = req.Labels
 
 	return s.groupRepo.Update(ctx, group)
 }
@@ -164,6 +168,8 @@ func (s *GroupService) toResponse(group *inspectionmgmtdata.InspectionGroup) *Gr
 		ExecutionStrategy: group.ExecutionStrategy,
 		Concurrency:       group.Concurrency,
 		GroupIDs:          group.GroupIDs,
+		CustomVariables:   group.CustomVariables,
+		Labels:            group.Labels,
 		ItemCount:         0,
 		ItemNames:         []string{},
 		CreatedAt:         group.CreatedAt.Format(time.RFC3339),
@@ -184,6 +190,8 @@ func (s *GroupService) toResponseWithCount(group *inspectionmgmtdata.InspectionG
 		ExecutionStrategy: group.ExecutionStrategy,
 		Concurrency:       group.Concurrency,
 		GroupIDs:          group.GroupIDs,
+		CustomVariables:   group.CustomVariables,
+		Labels:            group.Labels,
 		ItemCount:         itemCount,
 		ItemNames:         []string{},
 		CreatedAt:         group.CreatedAt.Format(time.RFC3339),
@@ -276,6 +284,14 @@ func (s *GroupService) buildExportData(group *inspectionmgmtdata.InspectionGroup
 		var groupIDs []uint
 		if err := json.Unmarshal([]byte(group.GroupIDs), &groupIDs); err == nil {
 			exportData.GroupIDs = groupIDs
+		}
+	}
+
+	// 解析 CustomVariables
+	if group.CustomVariables != "" {
+		var customVars map[string]string
+		if err := json.Unmarshal([]byte(group.CustomVariables), &customVars); err == nil {
+			exportData.CustomVariables = customVars
 		}
 	}
 
@@ -390,6 +406,13 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 		groupIDsJSON = string(groupIDsBytes)
 	}
 
+	// 序列化 CustomVariables
+	customVarsJSON := "{}"
+	if len(exportData.CustomVariables) > 0 {
+		customVarsBytes, _ := json.Marshal(exportData.CustomVariables)
+		customVarsJSON = string(customVarsBytes)
+	}
+
 	// 创建巡检组
 	createReq := &GroupCreateRequest{
 		Name:              exportData.Name,
@@ -401,6 +424,7 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 		ExecutionStrategy: exportData.ExecutionStrategy,
 		Concurrency:       exportData.Concurrency,
 		GroupIDs:          groupIDsJSON,
+		CustomVariables:   customVarsJSON,
 	}
 
 	groupID, err := s.Create(ctx, createReq)
@@ -448,7 +472,7 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 		}
 
 		// 需要注入 ItemService 来创建巡检项
-		itemService := NewItemService(s.itemRepo, s.groupRepo, nil, nil, nil, nil)
+		itemService := NewItemService(s.itemRepo, s.groupRepo, nil, nil, nil, nil, nil)
 		if _, err := itemService.Create(ctx, itemReq); err != nil {
 			// 如果创建巡检项失败，删除已创建的巡检组
 			s.groupRepo.Delete(ctx, groupID)

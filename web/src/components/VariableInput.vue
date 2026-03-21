@@ -169,29 +169,88 @@ function valueToHtml(val: string): string {
   })
   // Step 2: Replace {{var}} with variable pills
   processed = processed.replace(/\{\{(\w+)\}\}/g, (_, name) => pillHtml(name))
+  // Step 3: Replace newlines with <br> for multiline display
+  processed = processed.replace(/\n/g, '<br>')
   return processed
 }
 
 function htmlToValue(el: HTMLElement): string {
-  let result = ''
-  for (const node of Array.from(el.childNodes)) {
+  // Extract text content from a single node (not handling block-level newlines)
+  function extractNodeText(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) {
-      result += node.textContent || ''
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const elem = node as HTMLElement
-      if (elem.classList.contains('var-pill')) {
-        result += `{{${elem.dataset.var || ''}}}`
-      } else if (elem.classList.contains('var-collapse-pill')) {
-        const id = elem.dataset.collapseId || ''
-        result += collapsedMap.get(id) || ''
-      } else if (elem.tagName === 'BR') {
-        result += '\n'
-      } else {
-        result += elem.textContent || ''
+      return node.textContent || ''
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return ''
+    const elem = node as HTMLElement
+    if (elem.classList.contains('var-pill')) {
+      return `{{${elem.dataset.var || ''}}}`
+    }
+    if (elem.classList.contains('var-collapse-pill')) {
+      const id = elem.dataset.collapseId || ''
+      return collapsedMap.get(id) || ''
+    }
+    if (elem.tagName === 'BR') {
+      return '\n'
+    }
+    // Recursively extract text from all children
+    let inner = ''
+    Array.from(elem.childNodes).forEach(child => {
+      inner += extractNodeText(child)
+    })
+    return inner
+  }
+
+  // Split top-level children into "lines" based on block elements (DIV/P)
+  // Browser wraps each new line in a <div> when contenteditable is used
+  const children = Array.from(el.childNodes)
+
+  // Check if there are any block-level elements at top level
+  const hasBlockElements = children.some(child => {
+    if (child.nodeType !== Node.ELEMENT_NODE) return false
+    const tag = (child as HTMLElement).tagName
+    return tag === 'DIV' || tag === 'P'
+  })
+
+  if (!hasBlockElements) {
+    // Simple case: no block elements, just extract text directly
+    let result = ''
+    children.forEach(child => {
+      result += extractNodeText(child)
+    })
+    return result.replace(/\u200B/g, '')
+  }
+
+  // Complex case: block elements present
+  // Browser wraps each new line in a <div>; initial text before first div is separate
+  const lines: string[] = []
+  let prefixText = ''
+  let seenBlock = false
+
+  children.forEach(child => {
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const elem = child as HTMLElement
+      if (elem.tagName === 'DIV' || elem.tagName === 'P') {
+        if (!seenBlock) {
+          // First block: flush any text before it as first line
+          if (prefixText !== '') lines.push(prefixText)
+          seenBlock = true
+        }
+        // Extract this block's content as a line
+        let lineContent = ''
+        Array.from(elem.childNodes).forEach(innerChild => {
+          lineContent += extractNodeText(innerChild)
+        })
+        lines.push(lineContent)
+        return
       }
     }
-  }
-  return result.replace(/\u200B/g, '')
+    // Non-block content before first block
+    if (!seenBlock) {
+      prefixText += extractNodeText(child)
+    }
+  })
+
+  return lines.join('\n').replace(/\u200B/g, '')
 }
 
 function syncFromModel() {
@@ -329,6 +388,8 @@ function handleBlur(e: FocusEvent) {
   const related = e.relatedTarget as HTMLElement
   if (dropdownRef.value?.contains(related)) return
   if (searchInputRef.value === related) return
+  // 失焦时确保最新值被 emit
+  emitValue()
   isFocused.value = false
   setTimeout(() => {
     if (!isFocused.value) popoverVisible.value = false
@@ -514,6 +575,8 @@ function handleOutsideClick(e: MouseEvent) {
 
 watch(() => props.modelValue, (val) => {
   if (!editorRef.value) return
+  // 只在失焦状态下同步，避免打断用户输入
+  if (isFocused.value) return
   const current = htmlToValue(editorRef.value)
   if (current !== val) syncFromModel()
 })

@@ -102,6 +102,9 @@ type ProbeTask struct {
 	CreatedAt     time.Time      `json:"createdAt"`
 	UpdatedAt     time.Time      `json:"updatedAt"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+
+	// 运行时字段（不持久化），用于区分调度触发和手动触发
+	TriggerType   string         `gorm:"-" json:"triggerType"`
 }
 
 func (ProbeTask) TableName() string { return "probe_tasks" }
@@ -140,6 +143,7 @@ type ProbeResult struct {
 	Detail          string    `gorm:"type:text" json:"detail"`
 	AgentHostID     uint      `gorm:"default:0" json:"agentHostId"`   // 执行的Agent主机ID，0=本地
 	RetryAttempt    int       `gorm:"default:0" json:"retryAttempt"`  // 实际重试次数
+	TriggerType     string    `gorm:"size:20;default:'scheduled'" json:"triggerType"` // scheduled/manual
 
 	// Performance breakdown metrics
 	DNSLookupTime       float64 `json:"dnsLookupTime"`
