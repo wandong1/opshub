@@ -1,14 +1,18 @@
 package inspection
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ydcloud-dy/opshub/internal/service/inspection_mgmt"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"github.com/ydcloud-dy/opshub/pkg/response"
+	"github.com/ydcloud-dy/opshub/pkg/scheduler"
 	"go.uber.org/zap"
 )
 
@@ -65,6 +69,8 @@ func (s *HTTPServer) RegisterInspectionMgmtRoutes(r *gin.RouterGroup) {
 			tasks.GET("/:id", s.getInspectionTask)
 			tasks.GET("", s.listInspectionTasks)
 			tasks.PUT("/:id/toggle", s.toggleInspectionTask)
+			tasks.POST("/:id/run", s.runInspectionTask)
+			tasks.POST("/:id/stop", s.stopInspectionTask)
 		}
 
 		// 调度器管理
@@ -439,6 +445,10 @@ func (s *HTTPServer) batchSaveInspectionItems(c *gin.Context) {
 	for i, item := range req.Items {
 		fmt.Printf("[DEBUG] Item %d:\n", i+1)
 		fmt.Printf("  Name: %s\n", item.Name)
+		fmt.Printf("  ExecutionType: %s\n", item.ExecutionType)
+		fmt.Printf("  ScriptContent: %q\n", item.ScriptContent)
+		fmt.Printf("  ScriptType: %s\n", item.ScriptType)
+		fmt.Printf("  ScriptFile: %s\n", item.ScriptFile)
 		fmt.Printf("  HostMatchType: %s\n", item.HostMatchType)
 		fmt.Printf("  HostTags: %s\n", item.HostTags)
 		fmt.Printf("  HostIDs: %s\n", item.HostIDs)
@@ -712,4 +722,88 @@ func (s *HTTPServer) toggleInspectionTask(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "操作成功"})
+}
+
+// runInspectionTask 手动触发巡检任务立即执行一次
+func (s *HTTPServer) runInspectionTask(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+	taskID := uint(id)
+
+	// 检查任务是否存在
+	task, err := s.inspectionTaskService.GetByID(c.Request.Context(), taskID)
+	if err != nil {
+		response.ErrorCode(c, http.StatusNotFound, "任务不存在: "+err.Error())
+		return
+	}
+
+	// 检查是否已在运行
+	s.runningTasksMu.Lock()
+	if _, running := s.runningTasks[taskID]; running {
+		s.runningTasksMu.Unlock()
+		response.ErrorCode(c, http.StatusConflict, "任务已在运行中，请先停止")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*60*time.Second)
+	s.runningTasks[taskID] = cancel
+	s.runningTasksMu.Unlock()
+
+	// 异步执行，立即返回
+	go func() {
+		defer func() {
+			s.runningTasksMu.Lock()
+			delete(s.runningTasks, taskID)
+			s.runningTasksMu.Unlock()
+			cancel()
+		}()
+
+		payload, _ := json.Marshal(map[string]interface{}{"task_id": taskID, "trigger_type": "manual"})
+		schedTask := scheduler.Task{
+			ID:      taskID,
+			Name:    task.Name,
+			Type:    "inspection_task",
+			Payload: string(payload),
+			Enabled: true,
+		}
+
+		var execErr error
+		if task.TaskType == "inspection" && s.inspectionExecutor != nil {
+			execErr = s.inspectionExecutor.Execute(ctx, schedTask)
+		} else if task.TaskType == "probe" && s.probeV2Executor != nil {
+			schedTask.Type = "network_probe_v2"
+			execErr = s.probeV2Executor.Execute(ctx, schedTask)
+		} else {
+			appLogger.Warn("手动运行：未找到对应执行器", zap.String("taskType", task.TaskType))
+			return
+		}
+
+		if execErr != nil {
+			appLogger.Error("手动运行任务失败", zap.Uint("taskID", taskID), zap.Error(execErr))
+		} else {
+			appLogger.Info("手动运行任务完成", zap.Uint("taskID", taskID), zap.String("name", task.Name))
+		}
+	}()
+
+	response.Success(c, gin.H{"message": "任务已开始执行"})
+}
+
+// stopInspectionTask 停止正在手动运行的巡检任务
+func (s *HTTPServer) stopInspectionTask(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+	taskID := uint(id)
+
+	s.runningTasksMu.Lock()
+	cancel, running := s.runningTasks[taskID]
+	if running {
+		cancel()
+		delete(s.runningTasks, taskID)
+	}
+	s.runningTasksMu.Unlock()
+
+	if !running {
+		response.ErrorCode(c, http.StatusNotFound, "任务当前未在手动运行状态")
+		return
+	}
+
+	appLogger.Info("手动停止任务", zap.Uint("taskID", taskID))
+	response.Success(c, gin.H{"message": "任务已停止"})
 }

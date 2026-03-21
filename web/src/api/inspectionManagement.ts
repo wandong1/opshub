@@ -14,6 +14,7 @@ export interface InspectionGroup {
   prometheusUsername?: string
   prometheusPassword?: string
   groupIds?: number[]
+  customVariables?: string  // JSON 字符串格式的自定义变量
   itemCount?: number
   itemNames?: string[]
   createdAt?: string

@@ -52,9 +52,13 @@ func InitInspectionMgmtServices(
 	probeConfigRepo := inspectiondata.NewProbeConfigRepo(db)
 	probeExecutor := inspectionmgmtsvc.NewProbeExecutor(probeConfigRepo)
 
+	// 初始化变量仓储和变量解析器
+	variableRepo := inspectiondata.NewProbeVariableRepo(db)
+	variableResolver := inspectionmgmtsvc.NewVariableResolver(variableRepo, groupRepo)
+
 	// 初始化 Service
 	groupService := inspectionmgmtsvc.NewGroupService(groupRepo, itemRepo)
-	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, cmdExecutor, probeExecutor)
+	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, cmdExecutor, probeExecutor, variableResolver)
 	recordService := inspectionmgmtsvc.NewRecordService(recordRepo, itemRepo, groupRepo)
 	recordService.SetHostRepo(hostRepo)
 	taskService := inspectionmgmtsvc.NewTaskService(taskRepo)

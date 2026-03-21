@@ -56,3 +56,13 @@ export function getInspectionTaskResults(taskId: number, params: any) {
   })
 }
 
+// 手动运行任务
+export function runInspectionTask(id: number) {
+  return request.post(`/api/v1/inspection/mgmt-tasks/${id}/run`)
+}
+
+// 停止手动运行的任务
+export function stopInspectionTask(id: number) {
+  return request.post(`/api/v1/inspection/mgmt-tasks/${id}/stop`)
+}
+

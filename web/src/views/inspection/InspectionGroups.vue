@@ -3,7 +3,7 @@
     <a-card class="search-card">
       <a-form :model="searchForm" layout="inline">
         <a-form-item label="巡检组名称">
-          <a-input v-model="searchForm.name" placeholder="请输入巡检组名称" style="width: 200px" />
+          <a-input v-model="searchForm.name" placeholder="请输入巡检组名称" style="width: 200px" @press-enter="handleSearch" />
         </a-form-item>
         <a-form-item label="状态">
           <a-select v-model="searchForm.status" placeholder="请选择状态" style="width: 120px" allow-clear>
@@ -49,6 +49,13 @@
           <a-tag>{{ getExecutionModeText(record.executionMode) }}</a-tag>
         </template>
 
+        <template #labels="{ record }">
+          <template v-if="parseLabels(record.labels).length">
+            <a-tag v-for="label in parseLabels(record.labels)" :key="label" color="arcoblue" size="small" style="margin: 2px;">{{ label }}</a-tag>
+          </template>
+          <span v-else style="color: #86909c;">-</span>
+        </template>
+
         <template #operations="{ record }">
           <a-space>
             <a-button type="text" size="small" @click="handleEdit(record)" v-permission="'inspection_groups:update'">
@@ -66,64 +73,130 @@
     <a-modal
       v-model:visible="modalVisible"
       :title="modalTitle"
-      width="600px"
+      width="640px"
+      :confirm-loading="submitting"
+      :body-style="{ maxHeight: '70vh', overflowY: 'auto' }"
       @ok="handleSubmit"
       @cancel="handleCancel"
     >
       <a-form :model="formData" :rules="formRules" ref="formRef" layout="vertical">
-        <a-form-item label="巡检组名称" field="name">
-          <a-input v-model="formData.name" placeholder="请输入巡检组名称" />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="巡检组名称" field="name">
+              <a-input v-model="formData.name" placeholder="请输入巡检组名称" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="状态" field="status">
+              <a-radio-group v-model="formData.status">
+                <a-radio value="enabled">启用</a-radio>
+                <a-radio value="disabled">禁用</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
 
         <a-form-item label="描述" field="description">
-          <a-textarea v-model="formData.description" placeholder="请输入描述" :rows="3" />
+          <a-textarea v-model="formData.description" placeholder="请输入描述" :rows="2" />
         </a-form-item>
 
-        <a-form-item label="状态" field="status">
-          <a-radio-group v-model="formData.status">
-            <a-radio value="enabled">启用</a-radio>
-            <a-radio value="disabled">禁用</a-radio>
-          </a-radio-group>
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="执行方式" field="executionMode">
+              <a-select v-model="formData.executionMode" placeholder="请选择执行方式">
+                <a-option value="auto">自动（优先Agent）</a-option>
+                <a-option value="agent">仅Agent</a-option>
+                <a-option value="ssh">仅SSH</a-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="排序" field="sort">
+              <a-input-number v-model="formData.sort" :min="0" style="width: 100%" placeholder="数字越小越靠前" />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <a-form-item label="执行方式" field="executionMode">
-          <a-select v-model="formData.executionMode" placeholder="请选择执行方式">
-            <a-option value="auto">自动（优先Agent）</a-option>
-            <a-option value="agent">仅Agent</a-option>
-            <a-option value="ssh">仅SSH</a-option>
-          </a-select>
+        <a-form-item label="自定义标签">
+          <div class="label-input-area">
+            <div class="label-tags">
+              <a-tag
+                v-for="(label, idx) in labelList"
+                :key="label + idx"
+                closable
+                color="arcoblue"
+                style="margin: 3px;"
+                @close="() => removeLabel(idx)"
+              >{{ label }}</a-tag>
+            </div>
+            <div class="label-add-row">
+              <template v-if="labelInputVisible">
+                <a-input
+                  ref="labelInputRef"
+                  v-model="labelInputValue"
+                  size="small"
+                  style="width: 150px"
+                  placeholder="如 env:prod"
+                  @blur="confirmLabelInput"
+                  @press-enter="confirmLabelInput"
+                />
+                <a-button size="small" type="primary" @click="confirmLabelInput">确认</a-button>
+                <a-button size="small" @click="cancelLabelInput">取消</a-button>
+              </template>
+              <a-button v-else size="small" @click="showLabelInput">
+                <template #icon><icon-plus /></template>
+                添加标签
+              </a-button>
+            </div>
+            <div class="label-hint">标签格式：key:value，如 env:prod、team:ops，用于 metric 指标标识</div>
+          </div>
         </a-form-item>
 
         <a-form-item label="Prometheus地址" field="prometheusUrl">
           <a-input v-model="formData.prometheusUrl" placeholder="http://prometheus:9090" />
         </a-form-item>
 
-        <a-form-item label="Prometheus用户名" field="prometheusUsername">
-          <a-input v-model="formData.prometheusUsername" placeholder="可选" />
-        </a-form-item>
-
-        <a-form-item label="Prometheus密码" field="prometheusPassword">
-          <a-input-password v-model="formData.prometheusPassword" placeholder="可选" />
-        </a-form-item>
-
-        <a-form-item label="排序" field="sort">
-          <a-input-number v-model="formData.sort" :min="0" placeholder="数字越小越靠前" />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Prometheus用户名" field="prometheusUsername">
+              <a-input v-model="formData.prometheusUsername" placeholder="可选" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Prometheus密码" field="prometheusPassword">
+              <a-input-password v-model="formData.prometheusPassword" placeholder="可选" />
+            </a-form-item>
+          </a-col>
+        </a-row>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { ref, reactive, nextTick, onMounted } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { IconPlus } from '@arco-design/web-vue/es/icon'
+import {
+  getInspectionGroups,
+  createInspectionGroup,
+  updateInspectionGroup,
+  deleteInspectionGroup
+} from '@/api/inspectionManagement'
 
 const loading = ref(false)
-const tableData = ref([])
+const submitting = ref(false)
+const tableData = ref<any[]>([])
 const modalVisible = ref(false)
 const modalTitle = ref('新增巡检组')
 const formRef = ref()
+const editingId = ref<number | null>(null)
+
+// 标签输入
+const labelList = ref<string[]>([])
+const labelInputVisible = ref(false)
+const labelInputValue = ref('')
+const labelInputRef = ref()
 
 const searchForm = reactive({
   name: '',
@@ -139,7 +212,6 @@ const pagination = reactive({
 })
 
 const formData = reactive({
-  id: 0,
   name: '',
   description: '',
   status: 'enabled',
@@ -147,8 +219,7 @@ const formData = reactive({
   prometheusUrl: '',
   prometheusUsername: '',
   prometheusPassword: '',
-  sort: 0,
-  groupIds: '[]'
+  sort: 0
 })
 
 const formRules = {
@@ -162,6 +233,7 @@ const columns = [
   { title: '描述', dataIndex: 'description', ellipsis: true, tooltip: true },
   { title: '状态', slotName: 'status', width: 100 },
   { title: '执行方式', slotName: 'executionMode', width: 120 },
+  { title: '自定义标签', slotName: 'labels', width: 200 },
   { title: '排序', dataIndex: 'sort', width: 80 },
   { title: '创建时间', dataIndex: 'createdAt', width: 180 },
   { title: '操作', slotName: 'operations', width: 150, fixed: 'right' }
@@ -176,24 +248,52 @@ const getExecutionModeText = (mode: string) => {
   return map[mode] || mode
 }
 
+const parseLabels = (labels: string): string[] => {
+  if (!labels) return []
+  try {
+    return JSON.parse(labels)
+  } catch {
+    return []
+  }
+}
+
+// 标签操作
+const showLabelInput = () => {
+  labelInputVisible.value = true
+  nextTick(() => labelInputRef.value?.focus())
+}
+
+const confirmLabelInput = () => {
+  const val = labelInputValue.value.trim()
+  if (val && !labelList.value.includes(val)) {
+    labelList.value.push(val)
+  }
+  labelInputVisible.value = false
+  labelInputValue.value = ''
+}
+
+const cancelLabelInput = () => {
+  labelInputVisible.value = false
+  labelInputValue.value = ''
+}
+
+const removeLabel = (idx: number) => {
+  labelList.value.splice(idx, 1)
+}
+
 const fetchData = async () => {
   loading.value = true
   try {
-    // TODO: 调用API获取数据
-    // const response = await getInspectionGroups({
-    //   page: pagination.current,
-    //   pageSize: pagination.pageSize,
-    //   ...searchForm
-    // })
-    // tableData.value = response.data.list
-    // pagination.total = response.data.total
-
-    // 临时模拟数据
-    tableData.value = []
-    pagination.total = 0
-    Message.info('API接口待实现')
-  } catch (error) {
-    Message.error('获取数据失败')
+    const res = await getInspectionGroups({
+      keyword: searchForm.name,
+      status: searchForm.status || undefined,
+      page: pagination.current,
+      pageSize: pagination.pageSize
+    }) as any
+    tableData.value = res?.list || res?.data?.list || []
+    pagination.total = res?.total || res?.data?.total || 0
+  } catch {
+    Message.error('加载失败')
   } finally {
     loading.value = false
   }
@@ -207,7 +307,8 @@ const handleSearch = () => {
 const handleReset = () => {
   searchForm.name = ''
   searchForm.status = ''
-  handleSearch()
+  pagination.current = 1
+  fetchData()
 }
 
 const handlePageChange = (page: number) => {
@@ -222,45 +323,78 @@ const handlePageSizeChange = (pageSize: number) => {
 }
 
 const handleAdd = () => {
+  editingId.value = null
   modalTitle.value = '新增巡检组'
   Object.assign(formData, {
-    id: 0,
-    name: '',
-    description: '',
-    status: 'enabled',
-    executionMode: 'auto',
-    prometheusUrl: '',
-    prometheusUsername: '',
-    prometheusPassword: '',
-    sort: 0,
-    groupIds: '[]'
+    name: '', description: '', status: 'enabled',
+    executionMode: 'auto', prometheusUrl: '', prometheusUsername: '', prometheusPassword: '', sort: 0
   })
+  labelList.value = []
   modalVisible.value = true
 }
 
 const handleEdit = (record: any) => {
+  editingId.value = record.id
   modalTitle.value = '编辑巡检组'
-  Object.assign(formData, record)
+  Object.assign(formData, {
+    name: record.name,
+    description: record.description || '',
+    status: record.status || 'enabled',
+    executionMode: record.executionMode || 'auto',
+    prometheusUrl: record.prometheusUrl || '',
+    prometheusUsername: record.prometheusUsername || '',
+    prometheusPassword: '',
+    sort: record.sort || 0
+  })
+  labelList.value = parseLabels(record.labels)
   modalVisible.value = true
 }
 
-const handleDelete = async (record: any) => {
-  // TODO: 调用删除API
-  Message.info('删除功能待实现')
+const handleDelete = (record: any) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除巡检组「${record.name}」吗？此操作不可撤销。`,
+    onOk: async () => {
+      try {
+        await deleteInspectionGroup(record.id)
+        Message.success('删除成功')
+        fetchData()
+      } catch {
+        Message.error('删除失败')
+      }
+    }
+  })
 }
 
 const handleSubmit = async () => {
   const valid = await formRef.value?.validate()
-  if (!valid) {
-    // TODO: 调用创建/更新API
-    Message.info('提交功能待实现')
+  if (valid) return
+  submitting.value = true
+  try {
+    const payload: any = {
+      ...formData,
+      labels: JSON.stringify(labelList.value)
+    }
+    if (editingId.value) {
+      await updateInspectionGroup(editingId.value, payload)
+      Message.success('更新成功')
+    } else {
+      await createInspectionGroup(payload)
+      Message.success('创建成功')
+    }
     modalVisible.value = false
+    fetchData()
+  } catch (e: any) {
+    Message.error(e?.response?.data?.message || '操作失败')
+  } finally {
+    submitting.value = false
   }
 }
 
 const handleCancel = () => {
   modalVisible.value = false
   formRef.value?.resetFields()
+  labelList.value = []
 }
 
 onMounted(() => {
@@ -279,5 +413,36 @@ onMounted(() => {
 
 .table-card {
   background: #fff;
+}
+
+.label-input-area {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.label-tags {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 24px;
+  margin-bottom: 6px;
+}
+
+.label-tags:empty {
+  margin-bottom: 0;
+}
+
+.label-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.label-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #86909c;
 }
 </style>

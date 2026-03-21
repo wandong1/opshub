@@ -12,15 +12,16 @@ import (
 )
 
 type ItemService struct {
-	itemRepo      inspectionmgmtdata.ItemRepository
-	groupRepo     inspectionmgmtdata.GroupRepository
-	recordRepo    inspectionmgmtdata.RecordRepository
-	hostRepo      assetbiz.HostRepo
-	cmdExecutor   *inspectionmgmtbiz.CommandExecutor
-	probeExecutor *ProbeExecutor
-	validator     *inspectionmgmtbiz.AssertionValidator
-	extractor     *inspectionmgmtbiz.VariableExtractor
-	replacer      *inspectionmgmtbiz.VariableReplacer
+	itemRepo         inspectionmgmtdata.ItemRepository
+	groupRepo        inspectionmgmtdata.GroupRepository
+	recordRepo       inspectionmgmtdata.RecordRepository
+	hostRepo         assetbiz.HostRepo
+	cmdExecutor      *inspectionmgmtbiz.CommandExecutor
+	probeExecutor    *ProbeExecutor
+	validator        *inspectionmgmtbiz.AssertionValidator
+	extractor        *inspectionmgmtbiz.VariableExtractor
+	replacer         *VariableReplacer
+	variableResolver *VariableResolver
 }
 
 func NewItemService(
@@ -30,17 +31,19 @@ func NewItemService(
 	hostRepo assetbiz.HostRepo,
 	cmdExecutor *inspectionmgmtbiz.CommandExecutor,
 	probeExecutor *ProbeExecutor,
+	variableResolver *VariableResolver,
 ) *ItemService {
 	return &ItemService{
-		itemRepo:      itemRepo,
-		groupRepo:     groupRepo,
-		recordRepo:    recordRepo,
-		hostRepo:      hostRepo,
-		cmdExecutor:   cmdExecutor,
-		probeExecutor: probeExecutor,
-		validator:     &inspectionmgmtbiz.AssertionValidator{},
-		extractor:     &inspectionmgmtbiz.VariableExtractor{},
-		replacer:      &inspectionmgmtbiz.VariableReplacer{},
+		itemRepo:         itemRepo,
+		groupRepo:        groupRepo,
+		recordRepo:       recordRepo,
+		hostRepo:         hostRepo,
+		cmdExecutor:      cmdExecutor,
+		probeExecutor:    probeExecutor,
+		validator:        &inspectionmgmtbiz.AssertionValidator{},
+		extractor:        &inspectionmgmtbiz.VariableExtractor{},
+		replacer:         NewVariableReplacer(),
+		variableResolver: variableResolver,
 	}
 }
 
@@ -48,6 +51,10 @@ func (s *ItemService) Create(ctx context.Context, req *ItemCreateRequest) (uint,
 	// 添加日志
 	fmt.Printf("[DEBUG] Create InspectionItem:\n")
 	fmt.Printf("  Name: %s\n", req.Name)
+	fmt.Printf("  ExecutionType: %s\n", req.ExecutionType)
+	fmt.Printf("  ScriptContent: %q\n", req.ScriptContent)
+	fmt.Printf("  ScriptType: %s\n", req.ScriptType)
+	fmt.Printf("  ScriptFile: %s\n", req.ScriptFile)
 	fmt.Printf("  HostMatchType: %s\n", req.HostMatchType)
 	fmt.Printf("  HostTags: %s\n", req.HostTags)
 	fmt.Printf("  HostIDs: %s\n", req.HostIDs)
@@ -254,7 +261,7 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 	return results, nil
 }
 
-func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.InspectionItem, group *inspectionmgmtdata.InspectionGroup, host *assetbiz.Host, variables map[string]string) *TestRunResponse {
+func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.InspectionItem, group *inspectionmgmtdata.InspectionGroup, host *assetbiz.Host, runtimeVariables map[string]string) *TestRunResponse {
 	result := &TestRunResponse{
 		ItemID:   item.ID,
 		ItemName: item.Name,
@@ -272,32 +279,58 @@ func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.
 			item.ID, item.Name, item.ExecutionType)
 	}
 
+	// 解析变量（合并全局变量、巡检组自定义变量、运行时变量）
+	var variables map[string]string
+	if runtimeVariables == nil {
+		variables = make(map[string]string)
+	} else {
+		variables = runtimeVariables
+	}
+
+	// 尝试解析变量，如果失败则使用空变量继续执行
+	if s.variableResolver != nil {
+		resolvedVars, err := s.variableResolver.ResolveVariables(ctx, group.ID, runtimeVariables)
+		if err != nil {
+			fmt.Printf("[ItemService] Failed to resolve variables: %v, continuing with empty variables\n", err)
+		} else {
+			variables = resolvedVars
+		}
+	}
+
 	var execResult *inspectionmgmtbiz.ExecuteResult
 
 	// 根据执行类型选择执行方式
 	switch item.ExecutionType {
 	case "command":
-		// 命令执行
+		// 命令执行 - 替换变量
 		fmt.Printf("[ItemService] Executing command: %s\n", item.Command)
-		command := s.replacer.Replace(item.Command, variables)
+		command := s.replacer.ReplaceCommand(item.Command, variables)
+		fmt.Printf("[ItemService] Command after variable replacement: %s\n", command)
 		execResult = s.cmdExecutor.Execute(ctx, host, command, group.ExecutionMode, item.Timeout)
 
 	case "script":
-		// 脚本执行
+		// 脚本执行 - 替换脚本内容中的变量
 		fmt.Printf("[ItemService] Executing script - type: %s, hasContent: %v, hasFile: %v, args: %s\n",
 			item.ScriptType, item.ScriptContent != "", item.ScriptFile != "", item.ScriptArgs)
 
+		scriptContent := s.replacer.ReplaceScriptContent(item.ScriptContent, variables)
+		scriptArgs := s.replacer.Replace(item.ScriptArgs, variables)
+
 		scriptReq := &inspectionmgmtbiz.ScriptExecuteRequest{
 			ScriptType:    item.ScriptType,
-			ScriptContent: item.ScriptContent,
+			ScriptContent: scriptContent,
 			ScriptFile:    item.ScriptFile,
-			ScriptArgs:    item.ScriptArgs,
+			ScriptArgs:    scriptArgs,
 		}
 		execResult = s.cmdExecutor.ExecuteScript(ctx, host, scriptReq, group.ExecutionMode, item.Timeout)
 
 	case "promql":
-		// PromQL 查询（暂不实现）
-		fmt.Printf("[ItemService] PromQL execution not implemented yet\n")
+		// PromQL 查询 - 替换查询中的变量
+		fmt.Printf("[ItemService] Executing PromQL: %s\n", item.PromQLQuery)
+		promql := s.replacer.ReplacePromQL(item.PromQLQuery, variables)
+		fmt.Printf("[ItemService] PromQL after variable replacement: %s\n", promql)
+
+		// PromQL 执行（暂不实现）
 		execResult = &inspectionmgmtbiz.ExecuteResult{
 			Output:   "",
 			Error:    fmt.Errorf("PromQL 执行暂未实现"),

@@ -31,6 +31,12 @@ type InspectionGroup struct {
 
 	// 关联分组（JSON 数组）
 	GroupIDs string `gorm:"type:text" json:"group_ids"` // [1,2,3]
+
+	// 自定义变量（JSON 对象）
+	CustomVariables string `gorm:"type:text" json:"custom_variables"` // {"key1":"value1","key2":"value2"}
+
+	// 自定义标签（JSON 数组，用于 metric 标签）
+	Labels string `gorm:"type:text" json:"labels"` // ["env:prod","team:ops"]
 }
 
 func (InspectionGroup) TableName() string {

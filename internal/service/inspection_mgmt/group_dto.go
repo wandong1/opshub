@@ -13,6 +13,8 @@ type GroupCreateRequest struct {
 	ExecutionStrategy string `json:"executionStrategy"`
 	Concurrency       int    `json:"concurrency"`
 	GroupIDs          string `json:"groupIds"`
+	CustomVariables   string `json:"customVariables"` // JSON 对象格式的自定义变量
+	Labels            string `json:"labels"`          // JSON 数组格式的自定义标签 ["env:prod","team:ops"]
 }
 
 // GroupUpdateRequest 更新巡检组请求
@@ -28,6 +30,8 @@ type GroupUpdateRequest struct {
 	ExecutionStrategy string `json:"executionStrategy"`
 	Concurrency       int    `json:"concurrency"`
 	GroupIDs          string `json:"groupIds"`
+	CustomVariables   string `json:"customVariables"` // JSON 对象格式的自定义变量
+	Labels            string `json:"labels"`          // JSON 数组格式的自定义标签 ["env:prod","team:ops"]
 }
 
 // GroupListRequest 巡检组列表请求
@@ -51,6 +55,8 @@ type GroupResponse struct {
 	ExecutionStrategy string   `json:"executionStrategy"`
 	Concurrency       int      `json:"concurrency"`
 	GroupIDs          string   `json:"groupIds"`
+	CustomVariables   string   `json:"customVariables"` // JSON 对象格式的自定义变量
+	Labels            string   `json:"labels"`          // JSON 数组格式的自定义标签
 	ItemCount         int      `json:"itemCount"`
 	ItemNames         []string `json:"itemNames"`
 	CreatedAt         string   `json:"createdAt"`
@@ -68,6 +74,7 @@ type GroupExportData struct {
 	ExecutionStrategy string                  `json:"executionStrategy" yaml:"executionStrategy"`
 	Concurrency       int                     `json:"concurrency" yaml:"concurrency"`
 	GroupIDs          []uint                  `json:"groupIds,omitempty" yaml:"groupIds,omitempty"`
+	CustomVariables   map[string]string       `json:"customVariables,omitempty" yaml:"customVariables,omitempty"` // 自定义变量
 	Items             []ItemExportData        `json:"items" yaml:"items"`
 }
 

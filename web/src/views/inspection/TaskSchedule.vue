@@ -68,12 +68,44 @@
             <span v-else>-</span>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="280" fixed="right" align="center">
+        <a-table-column title="操作" :width="380" fixed="right" align="center">
           <template #cell="{ record }">
-            <a-button v-permission="'inspection:tasks:toggle'" type="text" size="small" status="warning" @click="handleToggle(record)">{{ record.enabled ? '禁用' : '启用' }}</a-button>
-            <a-button v-permission="'inspection:tasks:update'" type="text" size="small" @click="handleEdit(record)">编辑</a-button>
-            <a-button v-permission="'inspection:tasks:delete'" type="text" size="small" status="danger" @click="handleDelete(record)">删除</a-button>
-            <a-button v-permission="'inspection:tasks:results'" type="text" size="small" @click="handleViewResults(record)">结果</a-button>
+            <a-tooltip content="启用/禁用">
+              <a-button v-permission="'inspection:tasks:toggle'" type="text" size="small" :status="record.enabled ? 'warning' : 'normal'" @click="handleToggle(record)">
+                <template #icon><icon-poweroff /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip content="编辑">
+              <a-button v-permission="'inspection:tasks:update'" type="text" size="small" @click="handleEdit(record)">
+                <template #icon><icon-edit /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip content="删除">
+              <a-button v-permission="'inspection:tasks:delete'" type="text" size="small" status="danger" @click="handleDelete(record)">
+                <template #icon><icon-delete /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip content="查看结果">
+              <a-button v-permission="'inspection:tasks:results'" type="text" size="small" @click="handleViewResults(record)">
+                <template #icon><icon-eye /></template>
+              </a-button>
+            </a-tooltip>
+            <template v-if="runningTaskIds.has(record.id)">
+              <a-tooltip content="终止运行">
+                <a-button v-permission="'inspection:tasks:run'" type="text" size="small" status="danger" @click="handleStop(record)">
+                  <template #icon><icon-stop /></template>
+                  <span class="running-text">运行中</span>
+                </a-button>
+              </a-tooltip>
+            </template>
+            <template v-else>
+              <a-tooltip content="立即运行一次">
+                <a-button v-permission="'inspection:tasks:run'" type="text" size="small" status="success" @click="handleRun(record)">
+                  <template #icon><icon-play-arrow /></template>
+                  立即运行
+                </a-button>
+              </a-tooltip>
+            </template>
           </template>
         </a-table-column>
       </template>
@@ -176,6 +208,11 @@
       <a-table v-if="currentTaskType === 'probe'" :data="resultList" :loading="resultsLoading" :bordered="{ cell: true }" stripe :pagination="{ current: resultPagination.page, pageSize: resultPagination.pageSize, total: resultPagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50] }" @page-change="(p: number) => { resultPagination.page = p; loadResults() }" @page-size-change="(s: number) => { resultPagination.pageSize = s; resultPagination.page = 1; loadResults() }">
         <template #columns>
           <a-table-column title="时间" data-index="createdAt" :width="170" />
+          <a-table-column title="触发方式" :width="90" align="center">
+            <template #cell="{ record }">
+              <a-tag size="small" :color="record.triggerType === 'manual' ? 'orange' : 'arcoblue'">{{ record.triggerType === 'manual' ? '手动' : '调度' }}</a-tag>
+            </template>
+          </a-table-column>
           <a-table-column title="成功" :width="80" align="center">
             <template #cell="{ record }">
               <a-tag size="small" :color="record.success ? 'green' : 'red'">{{ record.success ? '是' : '否' }}</a-tag>
@@ -204,6 +241,11 @@
       <a-table v-else :data="resultList" :loading="resultsLoading" :bordered="{ cell: true }" stripe :pagination="{ current: resultPagination.page, pageSize: resultPagination.pageSize, total: resultPagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50] }" @page-change="(p: number) => { resultPagination.page = p; loadResults() }" @page-size-change="(s: number) => { resultPagination.pageSize = s; resultPagination.page = 1; loadResults() }">
         <template #columns>
           <a-table-column title="执行时间" data-index="executed_at" :width="170" />
+          <a-table-column title="触发方式" :width="90" align="center">
+            <template #cell="{ record }">
+              <a-tag size="small" :color="record.trigger_type === 'manual' ? 'orange' : 'arcoblue'">{{ record.trigger_type === 'manual' ? '手动' : '调度' }}</a-tag>
+            </template>
+          </a-table-column>
           <a-table-column title="巡检项" data-index="item_name" :width="150" ellipsis tooltip />
           <a-table-column title="主机" data-index="host_name" :width="120" ellipsis tooltip />
           <a-table-column title="状态" :width="80" align="center">
@@ -229,10 +271,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
-import { IconSchedule, IconSearch, IconRefresh, IconPlus } from '@arco-design/web-vue/es/icon'
+import { IconSchedule, IconSearch, IconRefresh, IconPlus, IconEdit, IconDelete, IconPoweroff, IconPlayArrow, IconStop, IconEye } from '@arco-design/web-vue/es/icon'
 import { getTaskList, createTask, updateTask, deleteTask, toggleTask, getTaskResults, getProbeList, getPushgatewayList, PROBE_CATEGORIES, CATEGORY_LABEL_MAP } from '@/api/networkProbe'
 import { getAllInspectionGroups, getInspectionItems } from '@/api/inspectionManagement'
-import { getInspectionTasks, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults } from '@/api/inspectionTask'
+import { getInspectionTasks, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults, runInspectionTask, stopInspectionTask } from '@/api/inspectionTask'
 import { getGroupTree } from '@/api/assetGroup'
 import { useRouter } from 'vue-router'
 
@@ -254,6 +296,7 @@ const resultsLoading = ref(false)
 const resultList = ref<any[]>([])
 const currentTaskId = ref(0)
 const selectedCategory = ref('network')
+const runningTaskIds = ref<Set<number>>(new Set())
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const resultPagination = reactive({ page: 1, pageSize: 20, total: 0 })
@@ -531,6 +574,33 @@ const handleViewResults = (row: any) => {
   loadResults()
 }
 
+const handleRun = async (row: any) => {
+  try {
+    await runInspectionTask(row.id)
+    runningTaskIds.value = new Set([...runningTaskIds.value, row.id])
+    Message.success('任务已开始执行')
+    setTimeout(() => {
+      runningTaskIds.value.delete(row.id)
+      runningTaskIds.value = new Set(runningTaskIds.value)
+      loadData()
+    }, 3000)
+  } catch (e: any) {
+    Message.error(e?.response?.data?.message || '启动任务失败')
+  }
+}
+
+const handleStop = async (row: any) => {
+  try {
+    await stopInspectionTask(row.id)
+    runningTaskIds.value.delete(row.id)
+    runningTaskIds.value = new Set(runningTaskIds.value)
+    Message.success('任务已停止')
+    loadData()
+  } catch (e: any) {
+    Message.error(e?.response?.data?.message || '停止任务失败')
+  }
+}
+
 const loadResults = async () => {
   resultsLoading.value = true
   try {
@@ -560,4 +630,14 @@ onMounted(() => { loadData(); loadOptions() })
 .cron-picker { width: 100%; }
 .cron-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .cron-description { font-size: 12px; color: var(--ops-success); margin-top: 4px; min-height: 18px; }
+
+/* 运行中动画 */
+@keyframes running-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.running-text {
+  animation: running-pulse 1.2s ease-in-out infinite;
+  font-size: 12px;
+}
 </style>

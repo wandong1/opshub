@@ -3,6 +3,7 @@ package inspection
 import (
 	"context"
 	"encoding/json"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -27,6 +28,7 @@ type HTTPServer struct {
 	probeVariableService *svc.ProbeVariableService
 	scheduler            *scheduler.Scheduler
 	executor             *biz.NetworkProbeExecutor
+	probeV2Executor      *biz.NetworkProbeV2Executor
 	healthExecutor       *assetbiz.HostHealthExecutor
 
 	// 巡检管理服务
@@ -35,6 +37,11 @@ type HTTPServer struct {
 	inspectionRecordService    *inspectionmgmtsvc.RecordService
 	inspectionTaskService      *inspectionmgmtsvc.TaskService
 	executionRecordService     *inspectionmgmtsvc.ExecutionRecordService
+	inspectionExecutor         *inspectionmgmtsvc.InspectionExecutor
+
+	// 手动运行中的任务取消函数（taskID → cancel）
+	runningTasksMu sync.Mutex
+	runningTasks   map[uint]context.CancelFunc
 
 	// 巡检管理仓库（用于导出功能）
 	hostRepo       assetbiz.HostRepo
@@ -52,12 +59,14 @@ func NewHTTPServer(
 	probeVariableService *svc.ProbeVariableService,
 	sched *scheduler.Scheduler,
 	executor *biz.NetworkProbeExecutor,
+	probeV2Executor *biz.NetworkProbeV2Executor,
 	healthExecutor *assetbiz.HostHealthExecutor,
 	inspectionGroupService *inspectionmgmtsvc.GroupService,
 	inspectionItemService *inspectionmgmtsvc.ItemService,
 	inspectionRecordService *inspectionmgmtsvc.RecordService,
 	inspectionTaskService *inspectionmgmtsvc.TaskService,
 	executionRecordService *inspectionmgmtsvc.ExecutionRecordService,
+	inspectionExecutor *inspectionmgmtsvc.InspectionExecutor,
 	hostRepo assetbiz.HostRepo,
 	groupRepo inspectionmgmtdata.GroupRepository,
 	itemRepo inspectionmgmtdata.ItemRepository,
@@ -71,12 +80,15 @@ func NewHTTPServer(
 		probeVariableService:    probeVariableService,
 		scheduler:               sched,
 		executor:                executor,
+		probeV2Executor:         probeV2Executor,
 		healthExecutor:          healthExecutor,
 		inspectionGroupService:  inspectionGroupService,
 		inspectionItemService:   inspectionItemService,
 		inspectionRecordService: inspectionRecordService,
 		inspectionTaskService:   inspectionTaskService,
 		executionRecordService:  executionRecordService,
+		inspectionExecutor:      inspectionExecutor,
+		runningTasks:            make(map[uint]context.CancelFunc),
 		hostRepo:                hostRepo,
 		groupRepo:               groupRepo,
 		itemRepo:                itemRepo,
@@ -89,6 +101,9 @@ func NewHTTPServer(
 func (s *HTTPServer) SetAgentCommandFactory(f biz.AgentCommandFactory) {
 	if s.executor != nil {
 		s.executor.SetAgentCommandFactory(f)
+	}
+	if s.probeV2Executor != nil {
+		s.probeV2Executor.SetAgentCommandFactory(f)
 	}
 	if s.probeConfigService != nil {
 		s.probeConfigService.SetAgentCommandFactory(f)
@@ -352,7 +367,7 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	pgwSvc := svc.NewPushgatewayService(pgwUC)
 	variableSvc := svc.NewProbeVariableService(variableUC)
 
-	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, healthExecutor, inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, hostRepo, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, execRecordRepo)
+	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, probeV2Executor, healthExecutor, inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, inspectionExecutor, hostRepo, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, execRecordRepo)
 }
 
 // migrateData performs one-time data migration:

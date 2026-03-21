@@ -209,6 +209,7 @@ func (e *NetworkProbeExecutor) executeAndSaveNetworkProbe(ctx context.Context, p
 		ErrorMessage:    result.Error,
 		AgentHostID:     agentHostID,
 		RetryAttempt:    retryAttempt,
+		TriggerType:     probeTask.TriggerType,
 	}
 	if err := e.resultRepo.Create(ctx, dbResult); err != nil {
 		appLogger.Error("save probe result failed", zap.Error(err))
@@ -273,6 +274,7 @@ func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probe
 		AssertionPassCount: appResult.AssertionPassCount,
 		AssertionFailCount: appResult.AssertionFailCount,
 		AssertionEvalTime:  appResult.AssertionEvalTime,
+		TriggerType:        probeTask.TriggerType,
 	}
 	if err := e.resultRepo.Create(ctx, dbResult); err != nil {
 		appLogger.Error("save app probe result failed", zap.Error(err))
@@ -487,6 +489,7 @@ func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, 
 		Latency:       wfResult.TotalLatency,
 		ErrorMessage:  wfResult.Error,
 		Detail:        detail,
+		TriggerType:   probeTask.TriggerType,
 	}
 	if err := e.resultRepo.Create(ctx, dbResult); err != nil {
 		appLogger.Error("save workflow probe result failed", zap.Error(err))
@@ -1469,10 +1472,15 @@ func (e *NetworkProbeV2Executor) Type() string { return "network_probe_v2" }
 // Execute runs a probe task from inspection_tasks table.
 func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Task) error {
 	var payload struct {
-		TaskID uint `json:"task_id"`
+		TaskID      uint   `json:"task_id"`
+		TriggerType string `json:"trigger_type"`
 	}
 	if err := json.Unmarshal([]byte(task.Payload), &payload); err != nil {
 		return fmt.Errorf("parse payload: %w", err)
+	}
+	triggerType := payload.TriggerType
+	if triggerType == "" {
+		triggerType = "scheduled"
 	}
 
 	inspectionTask, err := e.inspectionTaskRepo.GetByID(ctx, payload.TaskID)
@@ -1512,6 +1520,7 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 		Name:          inspectionTask.Name,
 		PushgatewayID: inspectionTask.PushgatewayID,
 		Concurrency:   concurrency,
+		TriggerType:   triggerType,
 	}
 
 	sem := make(chan struct{}, concurrency)
