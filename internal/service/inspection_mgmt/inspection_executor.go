@@ -34,12 +34,18 @@ type PushgatewayRepo interface {
 
 // InspectionExecutor 巡检任务执行器
 type InspectionExecutor struct {
-	taskRepo   inspectionmgmtdata.TaskRepository
-	groupRepo  inspectionmgmtdata.GroupRepository
-	itemRepo   inspectionmgmtdata.ItemRepository
-	execRepo   inspectionmgmtdata.ExecutionRecordRepository
-	pgwRepo    PushgatewayRepo
-	itemSvc    *ItemService
+	taskRepo     inspectionmgmtdata.TaskRepository
+	groupRepo    inspectionmgmtdata.GroupRepository
+	itemRepo     inspectionmgmtdata.ItemRepository
+	execRepo     inspectionmgmtdata.ExecutionRecordRepository
+	pgwRepo      PushgatewayRepo
+	itemSvc      *ItemService
+	redisCounter *metrics.RedisCounter
+}
+
+// SetRedisCounter injects a Redis-backed counter for persistent metric counting.
+func (e *InspectionExecutor) SetRedisCounter(rc *metrics.RedisCounter) {
+	e.redisCounter = rc
 }
 
 // NewInspectionExecutor 创建巡检执行器
@@ -246,7 +252,7 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 
 			// 推送 Metrics（使用旧记录格式）
 			if inspectionTask.PushgatewayID > 0 {
-				e.pushMetrics(ctx, inspectionTask, itm, itemResults)
+				e.pushMetrics(ctx, inspectionTask, itm, itemResults, triggerType)
 			}
 		}(item)
 	}
@@ -336,10 +342,19 @@ func (e *InspectionExecutor) pushMetrics(
 	task *inspectionmgmtdata.InspectionTask,
 	item *inspectionmgmtdata.InspectionItem,
 	records []*inspectionmgmtdata.InspectionRecord,
+	triggerType string,
 ) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
-	if err != nil || pgw.Status != 1 {
-		appLogger.Error("get pushgateway config failed", zap.Error(err))
+	if err != nil {
+		appLogger.Error("pushMetrics: get pushgateway config failed",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.Error(err))
+		return
+	}
+	if pgw.Status != 1 {
+		appLogger.Warn("pushMetrics: pushgateway disabled",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.String("pgwURL", pgw.URL))
 		return
 	}
 
@@ -352,55 +367,100 @@ func (e *InspectionExecutor) pushMetrics(
 		return
 	}
 
+	scheduleMode := triggerType
+	if scheduleMode == "" {
+		scheduleMode = "scheduled"
+	}
+
 	// 为每个执行记录推送指标
 	for _, record := range records {
-		// 构建标签
-		labels := prometheus.Labels{
+		baseLabels := map[string]string{
+			"task_id":        fmt.Sprintf("%d", task.ID),
 			"task_name":      task.Name,
-			"group_name":     group.Name,
-			"item_name":      item.Name,
-			"host_id":        fmt.Sprintf("%d", record.HostID),
-			"execution_type": item.ExecutionType,
-			"execution_mode": group.ExecutionMode,
+			"task_type":      "inspect",
+			"business_group": group.Name,
+			"owner":          task.Owner,
+			"schedule_mode":  scheduleMode,
 		}
 
-		labelNames := make([]string, 0, len(labels))
-		labelValues := make([]string, 0, len(labels))
-		for k, v := range labels {
+		// metric label 不含 task_id/host_id（已在 grouping 中，避免冲突）
+		allLabels := prometheus.Labels{
+			"task_name":      task.Name,
+			"task_type":      "inspect",
+			"business_group": group.Name,
+			"owner":          task.Owner,
+			"schedule_mode":  scheduleMode,
+			"check_group":    group.Name,
+			"check_item":     item.Name,
+			"check_level":    "medium",
+		}
+
+		labelNames := make([]string, 0, len(allLabels))
+		labelValues := make([]string, 0, len(allLabels))
+		for k, v := range allLabels {
 			labelNames = append(labelNames, k)
 			labelValues = append(labelValues, v)
 		}
 
-		collectors := make([]prometheus.Collector, 0)
+		samples := make([]metrics.MetricSample, 0, 16)
 		addGauge := func(name, help string, value float64) {
-			g := prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: name, Help: help}, labelNames)
-			g.WithLabelValues(labelValues...).Set(value)
-			collectors = append(collectors, g)
+			samples = append(samples, metrics.MetricSample{
+				Name: name, Help: help,
+				LabelNames: labelNames, LabelValues: labelValues,
+				Value: value,
+			})
+		}
+		addCounter := func(name, help string) {
+			if e.redisCounter == nil {
+				return
+			}
+			val := e.redisCounter.Inc(ctx, name, baseLabels)
+			samples = append(samples, metrics.MetricSample{
+				Name: name, Help: help,
+				LabelNames: labelNames, LabelValues: labelValues,
+				Value: val,
+			})
 		}
 
-		// 主要指标：巡检结果（1=通过，0=不通过）
+		// 通用 Counter
+		addCounter("srehub_inspect_task_exec_total", "Total task executions")
+		if record.Status == "success" {
+			addCounter("srehub_inspect_task_success_total", "Total task successes")
+			addCounter("srehub_inspect_check_pass_total", "Inspection check pass count")
+		} else {
+			addCounter("srehub_inspect_task_fail_total", "Total task failures")
+			addCounter("srehub_inspect_check_fail_total", "Inspection check fail count")
+			addCounter("srehub_inspect_check_abnormal_total", "Inspection abnormal count")
+		}
+
+		// 通用 Gauge
 		successVal := 0.0
 		if record.Status == "success" {
 			successVal = 1.0
 		}
-		addGauge("opshub_inspection_result", "Inspection result (1=pass 0=fail)", successVal)
+		addGauge("srehub_inspect_task_availability_gauge", "Inspection result for this execution (1=pass 0=fail)", successVal)
+		addGauge("srehub_inspect_task_exec_duration_seconds", "Task execution duration seconds", float64(record.Duration)/1000.0)
+		if e.redisCounter != nil {
+			total := e.redisCounter.Get(ctx, "srehub_inspect_task_exec_total", baseLabels)
+			success := e.redisCounter.Get(ctx, "srehub_inspect_task_success_total", baseLabels)
+			if total > 0 {
+				addGauge("srehub_inspect_task_availability", "Task availability ratio (success/total)", success/total)
+			}
+		}
 
-		// 执行时长（秒）
-		durationSeconds := float64(record.Duration) / 1000.0
-		addGauge("opshub_inspection_duration_seconds", "Inspection execution duration in seconds", durationSeconds)
+		// 智能巡检专属 Gauge
+		addGauge("srehub_inspect_check_status", "Inspection check status (1=pass 0=fail)", successVal)
+		addGauge("srehub_inspect_check_duration_seconds", "Inspection check execution duration seconds", float64(record.Duration)/1000.0)
 
-		// 断言结果（如果有）
+		// 断言结果
 		if record.AssertionResult != "" {
 			assertionVal := 0.0
 			if record.AssertionResult == "pass" {
 				assertionVal = 1.0
 			}
-			addGauge("opshub_inspection_assertion_result", "Inspection assertion result (1=pass 0=fail)", assertionVal)
+			addGauge("srehub_inspect_check_assertion_result", "Inspection check assertion result (1=pass 0=fail)", assertionVal)
 		}
 
-		// 推送分组信息
-		// 注意：grouping 只包含固定标签，用于标识唯一的监控对象
-		// 不包含 record_id，这样新数据会覆盖旧数据，避免 Pushgateway 中累积大量历史记录
 		hostname, _ := os.Hostname()
 		grouping := map[string]string{
 			"instance": hostname,
@@ -410,7 +470,7 @@ func (e *InspectionExecutor) pushMetrics(
 			"host_id":  fmt.Sprintf("%d", record.HostID),
 		}
 
-		if err := pusher.Push("opshub_inspection", grouping, collectors...); err != nil {
+		if err := pusher.PushSamples("srehub", grouping, samples); err != nil {
 			appLogger.Error("push inspection metrics failed",
 				zap.Uint("taskID", task.ID),
 				zap.Uint("itemID", item.ID),

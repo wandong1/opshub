@@ -140,7 +140,7 @@ type ProbeResult struct {
 	AssertionSuccess  bool    `json:"assertionSuccess"`
 	AssertionDetail   string  `gorm:"type:text" json:"assertionDetail"`
 	ErrorMessage    string    `gorm:"type:text" json:"errorMessage"`
-	Detail          string    `gorm:"type:text" json:"detail"`
+	Detail          string    `gorm:"type:mediumtext" json:"detail"`
 	AgentHostID     uint      `gorm:"default:0" json:"agentHostId"`   // 执行的Agent主机ID，0=本地
 	RetryAttempt    int       `gorm:"default:0" json:"retryAttempt"`  // 实际重试次数
 	TriggerType     string    `gorm:"size:20;default:'scheduled'" json:"triggerType"` // scheduled/manual

@@ -11,6 +11,7 @@ type TaskCreateRequest struct {
 	ItemIDs       string `json:"item_ids"`
 	PushgatewayID uint   `json:"pushgateway_id"`
 	Concurrency   int    `json:"concurrency"`
+	Owner         string `json:"owner"`
 }
 
 // TaskUpdateRequest 更新定时任务请求
@@ -24,6 +25,7 @@ type TaskUpdateRequest struct {
 	ItemIDs       string `json:"item_ids"`
 	PushgatewayID uint   `json:"pushgateway_id"`
 	Concurrency   int    `json:"concurrency"`
+	Owner         string `json:"owner"`
 }
 
 // TaskListRequest 定时任务列表请求
@@ -47,6 +49,7 @@ type TaskResponse struct {
 	ItemIDs       string `json:"item_ids"`
 	PushgatewayID uint   `json:"pushgateway_id"`
 	Concurrency   int    `json:"concurrency"`
+	Owner         string `json:"owner"`
 	LastRunAt     string `json:"last_run_at"`
 	LastRunStatus string `json:"last_run_status"`
 	NextRunAt     string `json:"next_run_at"`

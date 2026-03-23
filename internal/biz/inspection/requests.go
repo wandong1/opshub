@@ -155,24 +155,34 @@ func (r *PushgatewayConfigRequest) ToModel() *PushgatewayConfig {
 
 // ProbeConfigImportExport is used for YAML/JSON import/export.
 type ProbeConfigImportExport struct {
-	Name          string `json:"name" yaml:"name"`
-	Type          string `json:"type" yaml:"type"`
-	Category      string `json:"category" yaml:"category"`
-	Target        string `json:"target" yaml:"target"`
-	Port          int    `json:"port" yaml:"port"`
-	Timeout       int    `json:"timeout" yaml:"timeout"`
-	GroupIDs      string `json:"groupIds" yaml:"group_ids"`
-	Count         int    `json:"count" yaml:"count"`
-	PacketSize    int    `json:"packetSize" yaml:"packet_size"`
-	Description   string `json:"description" yaml:"description"`
-	Tags          string `json:"tags" yaml:"tags"`
-	ExecMode      string `json:"execMode" yaml:"exec_mode"`
-	AgentHostIDs  string `json:"agentHostIds" yaml:"agent_host_ids"`
-	RetryCount    int    `json:"retryCount" yaml:"retry_count"`
-	SkipVerify    *bool  `json:"skipVerify" yaml:"skip_verify"`
-	WSMessage     string `json:"wsMessage" yaml:"ws_message"`
-	WSMessageType int    `json:"wsMessageType" yaml:"ws_message_type"`
-	WSReadTimeout int    `json:"wsReadTimeout" yaml:"ws_read_timeout"`
+	Name            string `json:"name" yaml:"name"`
+	Type            string `json:"type" yaml:"type"`
+	Category        string `json:"category" yaml:"category"`
+	Target          string `json:"target" yaml:"target"`
+	Port            int    `json:"port" yaml:"port"`
+	Timeout         int    `json:"timeout" yaml:"timeout"`
+	GroupIDs        string `json:"groupIds" yaml:"group_ids"`
+	Count           int    `json:"count" yaml:"count"`
+	PacketSize      int    `json:"packetSize" yaml:"packet_size"`
+	Description     string `json:"description" yaml:"description"`
+	Tags            string `json:"tags" yaml:"tags"`
+	ExecMode        string `json:"execMode" yaml:"exec_mode"`
+	AgentHostIDs    string `json:"agentHostIds" yaml:"agent_host_ids"`
+	RetryCount      int    `json:"retryCount" yaml:"retry_count"`
+	SkipVerify      *bool  `json:"skipVerify" yaml:"skip_verify"`
+	// Application / Workflow fields
+	Method          string `json:"method,omitempty" yaml:"method,omitempty"`
+	URL             string `json:"url,omitempty" yaml:"url,omitempty"`
+	Headers         string `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Params          string `json:"params,omitempty" yaml:"params,omitempty"`
+	Body            string `json:"body,omitempty" yaml:"body,omitempty"`
+	ProxyURL        string `json:"proxyUrl,omitempty" yaml:"proxy_url,omitempty"`
+	Assertions      string `json:"assertions,omitempty" yaml:"assertions,omitempty"`
+	ContentType     string `json:"contentType,omitempty" yaml:"content_type,omitempty"`
+	WSMessage       string `json:"wsMessage,omitempty" yaml:"ws_message,omitempty"`
+	WSMessageType   int    `json:"wsMessageType,omitempty" yaml:"ws_message_type,omitempty"`
+	WSMessageFormat string `json:"wsMessageFormat,omitempty" yaml:"ws_message_format,omitempty"`
+	WSReadTimeout   int    `json:"wsReadTimeout,omitempty" yaml:"ws_read_timeout,omitempty"`
 }
 
 // ProbeVariableRequest is the DTO for creating/updating a probe variable.

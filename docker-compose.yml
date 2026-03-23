@@ -217,6 +217,83 @@ services:
     networks:
       - opshub-network
 
+  prom_skyeye:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: prom_skyeye
+    restart: always
+    networks:
+      - opshub-network
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./config/prometheus/web-config.yml:/etc/prometheus/web-config.yml
+      - ./config/prometheus/conf.d:/etc/prometheus/conf.d
+      - ./third_party_data/prom_data:/prometheus/data
+    command: --config.file=/etc/prometheus/prometheus.yml --web.config.file=/etc/prometheus/web-config.yml --web.enable-lifecycle --web.enable-remote-write-receiver --storage.tsdb.retention.time=30d
+    security_opt:
+      - seccomp=unconfined
+    privileged: true
+    user: "root:root"
+  
+  prometheus-mcp-server:
+    image: ghcr.io/tjhop/prometheus-mcp-server:latest
+    container_name: prometheus-mcp-server
+    restart: unless-stopped
+    ports:
+      - "18080:8080"
+    command:
+      - --prometheus.url
+      - "http://prom_skyeye:9090"
+      - --http.config
+      - "/etc/prometheus-http-config.yml" 
+      - --mcp.transport
+      - "http"
+      - --web.listen-address
+      - ":8080"
+    volumes:
+      # 将本地的 HTTP 配置文件挂载到容器内
+      - ./config/prometheus/prometheus-http-config-mcp.yml:/etc/prometheus-http-config.yml:ro
+    networks:
+      - opshub-network
+
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    container_name: grafana_mon
+    restart: always
+    volumes:
+      - ./third_party_data/skyeye_grafana_data:/var/lib/grafana
+      - ./config/grafana/plugins:/var/lib/grafana/plugins
+      - ./config/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./config/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+    labels:
+      - skyeye=true
+    security_opt:
+      - seccomp=unconfined
+    networks:
+      - opshub-network
+    ports:
+      - "3000:3000"
+    privileged: true
+    user: "root:root"
+
+  n8n:
+    image: n8nio/n8n  # 对应原命令的镜像名
+    container_name: n8n  # 对应原命令的 --name n8n
+    restart: always  # 推荐添加：容器退出时自动重启，增强可用性
+    networks:
+      - opshub-network
+    ports:
+      - "5678:5678" 
+    environment:
+      # 时区相关环境变量
+      - GENERIC_TIMEZONE=Asia/Shanghai
+      - TZ=Asia/Shanghai
+      # N8N配置相关
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RUNNERS_ENABLED=true
+    volumes:
+      - ./third_party_data/n8n_data:/home/node/.n8n
+
 #        #  backend:
 #        #    image: dyclouds/opshub-api:latest
 #        #    container_name: opshub-backend

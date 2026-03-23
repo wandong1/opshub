@@ -28,6 +28,7 @@ func (s *TaskService) Create(ctx context.Context, req *TaskCreateRequest) error 
 		ItemIDs:       req.ItemIDs,
 		PushgatewayID: req.PushgatewayID,
 		Concurrency:   req.Concurrency,
+		Owner:         req.Owner,
 		Status:        "pending",
 	}
 
@@ -63,6 +64,7 @@ func (s *TaskService) Update(ctx context.Context, id uint, req *TaskUpdateReques
 	if req.Concurrency > 0 {
 		task.Concurrency = req.Concurrency
 	}
+	task.Owner = req.Owner
 
 	return s.taskRepo.Update(ctx, task)
 }
@@ -107,6 +109,7 @@ func (s *TaskService) toResponse(task *inspectionmgmtdata.InspectionTask) *TaskR
 		ItemIDs:       task.ItemIDs,
 		PushgatewayID: task.PushgatewayID,
 		Concurrency:   task.Concurrency,
+		Owner:         task.Owner,
 		LastRunStatus: task.LastRunStatus,
 		CreatedAt:     task.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     task.UpdatedAt.Format(time.RFC3339),
