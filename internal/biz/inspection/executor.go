@@ -30,6 +30,7 @@ type NetworkProbeExecutor struct {
 	groupLookup      func(ctx context.Context, id uint) string // returns group name
 	agentFactory     AgentCommandFactory
 	variableResolver *VariableResolver
+	redisCounter     *metrics.RedisCounter
 }
 
 // NewNetworkProbeExecutor creates a new executor.
@@ -55,6 +56,11 @@ func (e *NetworkProbeExecutor) SetAgentCommandFactory(f AgentCommandFactory) {
 // SetVariableResolver injects variable resolver capability.
 func (e *NetworkProbeExecutor) SetVariableResolver(r *VariableResolver) {
 	e.variableResolver = r
+}
+
+// SetRedisCounter injects a Redis-backed counter for persistent metric counting.
+func (e *NetworkProbeExecutor) SetRedisCounter(rc *metrics.RedisCounter) {
+	e.redisCounter = rc
 }
 
 func (e *NetworkProbeExecutor) Type() string { return "network_probe" }
@@ -481,6 +487,10 @@ func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, 
 	detail := ""
 	if b, err := json.Marshal(wfResult); err == nil {
 		detail = string(b)
+		// Truncate to avoid DB column overflow (mediumtext = 16MB)
+		if len(detail) > 1048576 {
+			detail = detail[:1048576] + "...(truncated)"
+		}
 	}
 	dbResult := &ProbeResult{
 		ProbeTaskID:   probeTask.ID,
@@ -1010,81 +1020,187 @@ var timeAfter = func(d int) <-chan struct{} {
 
 func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.Result) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
-	if err != nil || pgw.Status != 1 {
+	if err != nil {
+		appLogger.Error("pushMetrics: get pushgateway config failed",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.Error(err))
+		return
+	}
+	if pgw.Status != 1 {
+		appLogger.Warn("pushMetrics: pushgateway disabled",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.String("pgwURL", pgw.URL))
 		return
 	}
 
 	pusher := metrics.NewPusher(pgw.URL, pgw.Username, pgw.Password)
 
-	// Build labels
 	groupName := ""
 	if e.groupLookup != nil && task.GroupID > 0 {
 		groupName = e.groupLookup(ctx, task.GroupID)
 	}
-
-	labels := prometheus.Labels{
-		"probe_name": config.Name,
-		"probe_type": config.Type,
-		"target":     config.Target,
-		"port":       fmt.Sprintf("%d", config.Port),
-		"group_name": groupName,
-		"task_name":  task.Name,
-		"exec_mode":  config.ExecMode,
+	owner := task.TriggerType // TriggerType is reused; Owner comes from InspectionTask, not ProbeTask
+	_ = owner
+	scheduleMode := task.TriggerType
+	if scheduleMode == "" {
+		scheduleMode = "scheduled"
 	}
 
-	// Parse custom tags (key=value,key=value)
+	// 通用标签（用于 Redis Counter key）
+	baseLabels := map[string]string{
+		"task_id":        fmt.Sprintf("%d", task.ID),
+		"task_name":      task.Name,
+		"task_type":      config.Type,
+		"business_group": groupName,
+		"schedule_mode":  scheduleMode,
+	}
+
+	// metric label 不含 task_id（已在 grouping 中，避免冲突）
+	allLabels := prometheus.Labels{
+		"task_name":      task.Name,
+		"task_type":      config.Type,
+		"business_group": groupName,
+		"schedule_mode":  scheduleMode,
+		"target":         config.Target,
+		"probe_name":     config.Name,
+	}
+
+	// 解析自定义 tags
 	if config.Tags != "" {
 		for _, tag := range strings.Split(config.Tags, ",") {
 			parts := strings.SplitN(strings.TrimSpace(tag), "=", 2)
 			if len(parts) == 2 {
-				labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+				allLabels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 			}
 		}
 	}
 
-	labelNames := make([]string, 0, len(labels))
-	labelValues := make([]string, 0, len(labels))
-	for k, v := range labels {
+	labelNames := make([]string, 0, len(allLabels))
+	labelValues := make([]string, 0, len(allLabels))
+	for k, v := range allLabels {
 		labelNames = append(labelNames, k)
 		labelValues = append(labelValues, v)
 	}
 
-	collectors := make([]prometheus.Collector, 0)
+	samples := make([]metrics.MetricSample, 0, 32)
 	addGauge := func(name, help string, value float64) {
-		g := prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: name, Help: help}, labelNames)
-		g.WithLabelValues(labelValues...).Set(value)
-		collectors = append(collectors, g)
+		samples = append(samples, metrics.MetricSample{
+			Name: name, Help: help,
+			LabelNames: labelNames, LabelValues: labelValues,
+			Value: value,
+		})
+	}
+	addCounter := func(name, help string) {
+		if e.redisCounter == nil {
+			return
+		}
+		val := e.redisCounter.Inc(ctx, name, baseLabels)
+		samples = append(samples, metrics.MetricSample{
+			Name: name, Help: help,
+			LabelNames: labelNames, LabelValues: labelValues,
+			Value: val,
+		})
 	}
 
-	// Common metrics
+	// 通用 Counter 指标
+	addCounter("srehub_inspect_task_exec_total", "Total task executions")
+	if result.Success {
+		addCounter("srehub_inspect_task_success_total", "Total task successes")
+	} else {
+		addCounter("srehub_inspect_task_fail_total", "Total task failures")
+	}
+	if result.RetryAttempt > 0 {
+		for i := 0; i < result.RetryAttempt; i++ {
+			if e.redisCounter != nil {
+				e.redisCounter.Inc(ctx, "srehub_inspect_task_retry_total", baseLabels)
+			}
+		}
+		if e.redisCounter != nil {
+			val := e.redisCounter.Get(ctx, "srehub_inspect_task_retry_total", baseLabels)
+			samples = append(samples, metrics.MetricSample{
+				Name: "srehub_inspect_task_retry_total", Help: "Total task retries",
+				LabelNames: labelNames, LabelValues: labelValues,
+				Value: val,
+			})
+		}
+	}
+
+	// 通用 Gauge 指标
 	successVal := 0.0
 	if result.Success {
 		successVal = 1.0
 	}
-	addGauge("opshub_probe_success", "Probe success (1=ok 0=fail)", successVal)
-	addGauge("opshub_probe_duration_seconds", "Probe total duration in seconds", result.Latency/1000.0)
+	addGauge("srehub_inspect_task_exec_duration_seconds", "Task execution duration in seconds", result.Latency/1000.0)
 
-	// Type-specific metrics
-	switch config.Type {
-	case "ping":
-		addGauge("opshub_probe_ping_rtt_seconds", "Ping avg RTT seconds", result.PingRttAvg/1000.0)
-		addGauge("opshub_probe_ping_rtt_min_seconds", "Ping min RTT seconds", result.PingRttMin/1000.0)
-		addGauge("opshub_probe_ping_rtt_max_seconds", "Ping max RTT seconds", result.PingRttMax/1000.0)
-		addGauge("opshub_probe_ping_packet_loss_ratio", "Ping packet loss ratio", result.PacketLoss)
-		addGauge("opshub_probe_ping_packets_sent", "Ping packets sent", float64(result.PingPacketsSent))
-		addGauge("opshub_probe_ping_packets_received", "Ping packets received", float64(result.PingPacketsRecv))
-		addGauge("opshub_probe_ping_stddev_seconds", "Ping RTT stddev seconds", result.PingStddev/1000.0)
-	case "tcp":
-		addGauge("opshub_probe_tcp_connect_seconds", "TCP connect time seconds", result.TCPConnectTime/1000.0)
-	case "udp":
-		addGauge("opshub_probe_udp_write_seconds", "UDP write time seconds", result.UDPWriteTime/1000.0)
-		addGauge("opshub_probe_udp_read_seconds", "UDP read time seconds", result.UDPReadTime/1000.0)
-	case "http", "https", "websocket":
-		// These are handled by pushAppMetrics; should not reach here
+	// 可用性（成功/总执行）
+	if e.redisCounter != nil {
+		total := e.redisCounter.Get(ctx, "srehub_inspect_task_exec_total", baseLabels)
+		success := e.redisCounter.Get(ctx, "srehub_inspect_task_success_total", baseLabels)
+		if total > 0 {
+			addGauge("srehub_inspect_task_availability", "Task availability ratio (success/total)", success/total)
+		}
 	}
 
-	// Retry attempt metric (for network probes)
-	addGauge("opshub_probe_retry_attempt", "Retry attempts", float64(result.RetryAttempt))
+	// 类型专属指标
+	switch config.Type {
+	case "ping":
+		addGauge("srehub_inspect_ping_avg_rtt_seconds", "Ping average RTT seconds", result.PingRttAvg/1000.0)
+		addGauge("srehub_inspect_ping_min_rtt_seconds", "Ping min RTT seconds", result.PingRttMin/1000.0)
+		addGauge("srehub_inspect_ping_max_rtt_seconds", "Ping max RTT seconds", result.PingRttMax/1000.0)
+		addGauge("srehub_inspect_ping_jitter_seconds", "Ping RTT jitter (stddev) seconds", result.PingStddev/1000.0)
+		addGauge("srehub_inspect_ping_loss_ratio", "Ping packet loss ratio", result.PacketLoss)
+		if e.redisCounter != nil {
+			pingSentLabels := map[string]string{"task_id": baseLabels["task_id"], "task_name": baseLabels["task_name"], "task_type": baseLabels["task_type"], "business_group": baseLabels["business_group"], "schedule_mode": baseLabels["schedule_mode"]}
+			// note: pingSentLabels used only for Redis key; gauge uses allLabels (no task_id)
+			for i := 0; i < result.PingPacketsSent; i++ {
+				e.redisCounter.Inc(ctx, "srehub_inspect_ping_packet_send_total", pingSentLabels)
+			}
+			for i := 0; i < result.PingPacketsRecv; i++ {
+				e.redisCounter.Inc(ctx, "srehub_inspect_ping_packet_recv_total", pingSentLabels)
+			}
+			sentVal := e.redisCounter.Get(ctx, "srehub_inspect_ping_packet_send_total", pingSentLabels)
+			recvVal := e.redisCounter.Get(ctx, "srehub_inspect_ping_packet_recv_total", pingSentLabels)
+			addGauge("srehub_inspect_ping_packet_send_total", "Ping total packets sent (cumulative)", sentVal)
+			addGauge("srehub_inspect_ping_packet_recv_total", "Ping total packets received (cumulative)", recvVal)
+		}
+	case "tcp":
+		addGauge("srehub_inspect_tcp_connect_duration_seconds", "TCP connect duration seconds", result.TCPConnectTime/1000.0)
+		portReachable := 0.0
+		if result.Success {
+			portReachable = 1.0
+		}
+		addGauge("srehub_inspect_tcp_port_reachable", "TCP port reachable (1=yes 0=no)", portReachable)
+		if e.redisCounter != nil {
+			if result.Success {
+				e.redisCounter.Inc(ctx, "srehub_inspect_tcp_connect_success_total", baseLabels)
+			} else {
+				e.redisCounter.Inc(ctx, "srehub_inspect_tcp_connect_fail_total", baseLabels)
+			}
+			sVal := e.redisCounter.Get(ctx, "srehub_inspect_tcp_connect_success_total", baseLabels)
+			fVal := e.redisCounter.Get(ctx, "srehub_inspect_tcp_connect_fail_total", baseLabels)
+			addGauge("srehub_inspect_tcp_connect_success_total", "TCP connect success count (cumulative)", sVal)
+			addGauge("srehub_inspect_tcp_connect_fail_total", "TCP connect fail count (cumulative)", fVal)
+		}
+	case "udp":
+		addGauge("srehub_inspect_udp_transfer_delay_seconds", "UDP transfer delay seconds", (result.UDPWriteTime+result.UDPReadTime)/1000.0)
+		if e.redisCounter != nil {
+			e.redisCounter.Inc(ctx, "srehub_inspect_udp_send_total", baseLabels)
+			if result.Success {
+				e.redisCounter.Inc(ctx, "srehub_inspect_udp_recv_total", baseLabels)
+			} else {
+				e.redisCounter.Inc(ctx, "srehub_inspect_udp_loss_total", baseLabels)
+			}
+			sVal := e.redisCounter.Get(ctx, "srehub_inspect_udp_send_total", baseLabels)
+			rVal := e.redisCounter.Get(ctx, "srehub_inspect_udp_recv_total", baseLabels)
+			lVal := e.redisCounter.Get(ctx, "srehub_inspect_udp_loss_total", baseLabels)
+			addGauge("srehub_inspect_udp_send_total", "UDP packets sent (cumulative)", sVal)
+			addGauge("srehub_inspect_udp_recv_total", "UDP packets received (cumulative)", rVal)
+			addGauge("srehub_inspect_udp_loss_total", "UDP packets lost (cumulative)", lVal)
+		}
+	}
+
+	// 总成功/失败可用性
+	addGauge("srehub_inspect_task_availability_gauge", "Probe success (1=ok 0=fail) for this execution", successVal)
 
 	hostname, _ := os.Hostname()
 	grouping := map[string]string{
@@ -1093,7 +1209,7 @@ func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask,
 		"config_id": fmt.Sprintf("%d", config.ID),
 	}
 
-	if err := pusher.Push("opshub_probe", grouping, collectors...); err != nil {
+	if err := pusher.PushSamples("srehub", grouping, samples); err != nil {
 		appLogger.Error("push metrics failed",
 			zap.Uint("taskID", task.ID),
 			zap.Error(err),
@@ -1103,7 +1219,16 @@ func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask,
 
 func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.AppResult, retryAttempt int) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
-	if err != nil || pgw.Status != 1 {
+	if err != nil {
+		appLogger.Error("pushAppMetrics: get pushgateway config failed",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.Error(err))
+		return
+	}
+	if pgw.Status != 1 {
+		appLogger.Warn("pushAppMetrics: pushgateway disabled",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.String("pgwURL", pgw.URL))
 		return
 	}
 
@@ -1113,97 +1238,171 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 	if e.groupLookup != nil && task.GroupID > 0 {
 		groupName = e.groupLookup(ctx, task.GroupID)
 	}
+	scheduleMode := task.TriggerType
+	if scheduleMode == "" {
+		scheduleMode = "scheduled"
+	}
 
-	labels := prometheus.Labels{
-		"probe_name": config.Name,
-		"probe_type": config.Type,
-		"target":     config.Target,
-		"group_name": groupName,
-		"task_name":  task.Name,
-		"exec_mode":  config.ExecMode,
+	// 类型扩展标签（HTTP/HTTPS/WebSocket）
+	httpMethod := ""
+	httpPath := "/"
+	statusCodeStr := strconv.Itoa(result.HTTPStatusCode)
+	if config.Method != "" {
+		httpMethod = config.Method
+	}
+
+	baseLabels := map[string]string{
+		"task_id":        fmt.Sprintf("%d", task.ID),
+		"task_name":      task.Name,
+		"task_type":      config.Type,
+		"business_group": groupName,
+		"schedule_mode":  scheduleMode,
+	}
+
+	// metric label 不含 task_id（已在 grouping 中，避免冲突）
+	allLabels := prometheus.Labels{
+		"task_name":      task.Name,
+		"task_type":      config.Type,
+		"business_group": groupName,
+		"schedule_mode":  scheduleMode,
+		"target":         config.Target,
+		"probe_name":     config.Name,
+		"http_method":    httpMethod,
+		"http_path":      httpPath,
+		"status_code":    statusCodeStr,
 	}
 	if config.Tags != "" {
 		for _, tag := range strings.Split(config.Tags, ",") {
 			parts := strings.SplitN(strings.TrimSpace(tag), "=", 2)
 			if len(parts) == 2 {
-				labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+				allLabels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 			}
 		}
 	}
 
-	labelNames := make([]string, 0, len(labels))
-	labelValues := make([]string, 0, len(labels))
-	for k, v := range labels {
+	labelNames := make([]string, 0, len(allLabels))
+	labelValues := make([]string, 0, len(allLabels))
+	for k, v := range allLabels {
 		labelNames = append(labelNames, k)
 		labelValues = append(labelValues, v)
 	}
 
-	collectors := make([]prometheus.Collector, 0)
+	samples := make([]metrics.MetricSample, 0, 32)
 	addGauge := func(name, help string, value float64) {
-		g := prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: name, Help: help}, labelNames)
-		g.WithLabelValues(labelValues...).Set(value)
-		collectors = append(collectors, g)
+		samples = append(samples, metrics.MetricSample{
+			Name: name, Help: help,
+			LabelNames: labelNames, LabelValues: labelValues,
+			Value: value,
+		})
+	}
+	addCounter := func(name, help string) {
+		if e.redisCounter == nil {
+			return
+		}
+		val := e.redisCounter.Inc(ctx, name, baseLabels)
+		samples = append(samples, metrics.MetricSample{
+			Name: name, Help: help,
+			LabelNames: labelNames, LabelValues: labelValues,
+			Value: val,
+		})
 	}
 
+	// 通用 Counter
+	addCounter("srehub_inspect_task_exec_total", "Total task executions")
+	if result.Success {
+		addCounter("srehub_inspect_task_success_total", "Total task successes")
+	} else {
+		addCounter("srehub_inspect_task_fail_total", "Total task failures")
+	}
+	if retryAttempt > 0 {
+		for i := 0; i < retryAttempt; i++ {
+			if e.redisCounter != nil {
+				e.redisCounter.Inc(ctx, "srehub_inspect_task_retry_total", baseLabels)
+			}
+		}
+		if e.redisCounter != nil {
+			retryVal := e.redisCounter.Get(ctx, "srehub_inspect_task_retry_total", baseLabels)
+			samples = append(samples, metrics.MetricSample{
+				Name: "srehub_inspect_task_retry_total", Help: "Total task retries",
+				LabelNames: labelNames, LabelValues: labelValues,
+				Value: retryVal,
+			})
+		}
+	}
+
+	// 通用 Gauge
 	successVal := 0.0
 	if result.Success {
 		successVal = 1.0
 	}
-	addGauge("opshub_probe_success", "Probe success (1=ok 0=fail)", successVal)
-	addGauge("opshub_probe_duration_seconds", "Probe total duration in seconds", result.Latency/1000.0)
-	addGauge("opshub_probe_http_response_seconds", "HTTP real response time", result.HTTPResponseTime/1000.0)
-	addGauge("opshub_probe_http_status_code", "HTTP status code", float64(result.HTTPStatusCode))
-	addGauge("opshub_probe_http_content_length", "HTTP content length", float64(result.HTTPContentLength))
+	addGauge("srehub_inspect_task_availability_gauge", "Probe success for this execution (1=ok 0=fail)", successVal)
+	addGauge("srehub_inspect_task_exec_duration_seconds", "Task execution duration seconds", result.Latency/1000.0)
+	if e.redisCounter != nil {
+		total := e.redisCounter.Get(ctx, "srehub_inspect_task_exec_total", baseLabels)
+		success := e.redisCounter.Get(ctx, "srehub_inspect_task_success_total", baseLabels)
+		if total > 0 {
+			addGauge("srehub_inspect_task_availability", "Task availability ratio (success/total)", success/total)
+		}
+	}
 
+	// HTTP/HTTPS 专属指标
+	addGauge("srehub_inspect_http_response_duration_seconds", "HTTP response duration seconds", result.HTTPResponseTime/1000.0)
+	addGauge("srehub_inspect_http_dns_duration_seconds", "HTTP DNS lookup duration seconds", result.DNSLookupTime/1000.0)
+	addGauge("srehub_inspect_http_tls_duration_seconds", "HTTP TLS handshake duration seconds", result.TLSHandshakeTime/1000.0)
+	addGauge("srehub_inspect_http_first_byte_seconds", "HTTP TTFB seconds", result.TTFB/1000.0)
 	assertVal := 0.0
 	if result.AssertionSuccess {
 		assertVal = 1.0
 	}
-	addGauge("opshub_probe_assertion_success", "Assertion success", assertVal)
+	addGauge("srehub_inspect_http_assertion_result", "HTTP assertion result (1=pass 0=fail)", assertVal)
 
-	// Performance breakdown metrics
-	if result.DNSLookupTime > 0 {
-		addGauge("opshub_probe_dns_lookup_seconds", "DNS lookup time", result.DNSLookupTime/1000.0)
-	}
-	if result.TCPConnectTime > 0 {
-		addGauge("opshub_probe_tcp_connect_seconds", "TCP connect time", result.TCPConnectTime/1000.0)
-	}
-	if result.TLSHandshakeTime > 0 {
-		addGauge("opshub_probe_tls_handshake_seconds", "TLS handshake time", result.TLSHandshakeTime/1000.0)
-	}
-	if result.TTFB > 0 {
-		addGauge("opshub_probe_ttfb_seconds", "Time to first byte", result.TTFB/1000.0)
-	}
-	if result.ContentTransferTime > 0 {
-		addGauge("opshub_probe_content_transfer_seconds", "Content transfer time", result.ContentTransferTime/1000.0)
-	}
-
-	// Certificate monitoring
+	// HTTPS 证书剩余天数
 	if result.SSLCertNotAfter > 0 {
-		addGauge("opshub_probe_ssl_cert_not_after_seconds", "SSL cert expiry timestamp", float64(result.SSLCertNotAfter))
+		validDays := float64(result.SSLCertNotAfter-time.Now().Unix()) / 86400.0
+		if validDays < 0 {
+			validDays = 0
+		}
+		addGauge("srehub_inspect_https_cert_valid_days", "HTTPS certificate remaining valid days", validDays)
 	}
 
-	// HTTP details
-	if result.RedirectCount > 0 {
-		addGauge("opshub_probe_http_redirect_count", "HTTP redirect count", float64(result.RedirectCount))
-		addGauge("opshub_probe_http_redirect_time_seconds", "HTTP redirect time", result.RedirectTime/1000.0)
-	}
-	if result.ResponseHeaderBytes > 0 {
-		addGauge("opshub_probe_http_response_header_bytes", "Response header size", float64(result.ResponseHeaderBytes))
-	}
-	if result.ResponseBodyBytes > 0 {
-		addGauge("opshub_probe_http_response_body_bytes", "Response body size", float64(result.ResponseBodyBytes))
+	// WebSocket 专属指标（当类型为 websocket 时附加）
+	if config.Type == "websocket" {
+		connEstablished := 0.0
+		if result.Success {
+			connEstablished = 1.0
+		}
+		addGauge("srehub_inspect_ws_connection_established", "WebSocket connection established (1=yes 0=no)", connEstablished)
+		// 握手耗时用 HTTP response time 近似
+		addGauge("srehub_inspect_ws_handshake_duration_seconds", "WebSocket handshake duration seconds", result.HTTPResponseTime/1000.0)
+		if e.redisCounter != nil {
+			if result.Success {
+				e.redisCounter.Inc(ctx, "srehub_inspect_ws_handshake_success_total", baseLabels)
+			} else {
+				e.redisCounter.Inc(ctx, "srehub_inspect_ws_disconnect_total", baseLabels)
+			}
+			handshakeVal := e.redisCounter.Get(ctx, "srehub_inspect_ws_handshake_success_total", baseLabels)
+			disconnectVal := e.redisCounter.Get(ctx, "srehub_inspect_ws_disconnect_total", baseLabels)
+			addGauge("srehub_inspect_ws_handshake_success_total", "WebSocket handshake success count (cumulative)", handshakeVal)
+			addGauge("srehub_inspect_ws_disconnect_total", "WebSocket disconnect count (cumulative)", disconnectVal)
+		}
 	}
 
-	// Assertion statistics
-	addGauge("opshub_probe_assertion_pass_count", "Passed assertions", float64(result.AssertionPassCount))
-	addGauge("opshub_probe_assertion_fail_count", "Failed assertions", float64(result.AssertionFailCount))
-	if result.AssertionEvalTime > 0 {
-		addGauge("opshub_probe_assertion_eval_seconds", "Assertion evaluation time", result.AssertionEvalTime/1000.0)
+	// HTTP Counter：状态码分布
+	if e.redisCounter != nil && result.HTTPStatusCode > 0 {
+		statusLabels := map[string]string{
+			"task_id": baseLabels["task_id"], "task_name": baseLabels["task_name"],
+			"task_type": baseLabels["task_type"], "business_group": baseLabels["business_group"],
+			"schedule_mode": baseLabels["schedule_mode"], "status_code": statusCodeStr,
+		}
+		statusVal := e.redisCounter.Inc(ctx, "srehub_inspect_http_status_code_total", statusLabels)
+		statusLabelNames := []string{"task_name", "task_type", "business_group", "schedule_mode", "status_code"}
+		statusLabelValues := []string{statusLabels["task_name"], statusLabels["task_type"], statusLabels["business_group"], statusLabels["schedule_mode"], statusCodeStr}
+		samples = append(samples, metrics.MetricSample{
+			Name: "srehub_inspect_http_status_code_total", Help: "HTTP status code distribution (cumulative)",
+			LabelNames: statusLabelNames, LabelValues: statusLabelValues,
+			Value: statusVal,
+		})
 	}
-
-	// Retry attempt metric
-	addGauge("opshub_probe_retry_attempt", "Retry attempts", float64(retryAttempt))
 
 	hostname, _ := os.Hostname()
 	grouping := map[string]string{
@@ -1212,7 +1411,7 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 		"config_id": fmt.Sprintf("%d", config.ID),
 	}
 
-	if err := pusher.Push("opshub_probe", grouping, collectors...); err != nil {
+	if err := pusher.PushSamples("srehub", grouping, samples); err != nil {
 		appLogger.Error("push app metrics failed",
 			zap.Uint("taskID", task.ID),
 			zap.Error(err),
@@ -1222,7 +1421,16 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 
 func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *WorkflowResult) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
-	if err != nil || pgw.Status != 1 {
+	if err != nil {
+		appLogger.Error("pushWorkflowMetrics: get pushgateway config failed",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.Error(err))
+		return
+	}
+	if pgw.Status != 1 {
+		appLogger.Warn("pushWorkflowMetrics: pushgateway disabled",
+			zap.Uint("pgwID", task.PushgatewayID),
+			zap.String("pgwURL", pgw.URL))
 		return
 	}
 
@@ -1232,54 +1440,134 @@ func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *Pr
 	if e.groupLookup != nil && task.GroupID > 0 {
 		groupName = e.groupLookup(ctx, task.GroupID)
 	}
-
-	labels := prometheus.Labels{
-		"probe_name": config.Name,
-		"probe_type": config.Type,
-		"target":     config.Target,
-		"group_name": groupName,
-		"task_name":  task.Name,
-		"exec_mode":  config.ExecMode,
-	}
-	if config.Tags != "" {
-		for _, tag := range strings.Split(config.Tags, ",") {
-			parts := strings.SplitN(strings.TrimSpace(tag), "=", 2)
-			if len(parts) == 2 {
-				labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-			}
-		}
+	scheduleMode := task.TriggerType
+	if scheduleMode == "" {
+		scheduleMode = "scheduled"
 	}
 
-	labelNames := make([]string, 0, len(labels))
-	labelValues := make([]string, 0, len(labels))
-	for k, v := range labels {
+	baseLabels := map[string]string{
+		"task_id":        fmt.Sprintf("%d", task.ID),
+		"task_name":      task.Name,
+		"task_type":      "probe_flow",
+		"business_group": groupName,
+		"schedule_mode":  scheduleMode,
+	}
+
+	// metric label 不含 task_id（已在 grouping 中，避免冲突）
+	allLabels := prometheus.Labels{
+		"task_name":      task.Name,
+		"task_type":      "probe_flow",
+		"business_group": groupName,
+		"schedule_mode":  scheduleMode,
+		"probe_name":     config.Name,
+		"flow_id":        fmt.Sprintf("%d", config.ID),
+	}
+
+	labelNames := make([]string, 0, len(allLabels))
+	labelValues := make([]string, 0, len(allLabels))
+	for k, v := range allLabels {
 		labelNames = append(labelNames, k)
 		labelValues = append(labelValues, v)
 	}
 
-	collectors := make([]prometheus.Collector, 0)
+	samples := make([]metrics.MetricSample, 0, 32)
 	addGauge := func(name, help string, value float64) {
-		g := prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: name, Help: help}, labelNames)
-		g.WithLabelValues(labelValues...).Set(value)
-		collectors = append(collectors, g)
+		samples = append(samples, metrics.MetricSample{
+			Name: name, Help: help,
+			LabelNames: labelNames, LabelValues: labelValues,
+			Value: value,
+		})
+	}
+	addCounter := func(name, help string) {
+		if e.redisCounter == nil {
+			return
+		}
+		val := e.redisCounter.Inc(ctx, name, baseLabels)
+		samples = append(samples, metrics.MetricSample{
+			Name: name, Help: help,
+			LabelNames: labelNames, LabelValues: labelValues,
+			Value: val,
+		})
 	}
 
+	// 通用 Counter
+	addCounter("srehub_inspect_task_exec_total", "Total task executions")
+	if result.Success {
+		addCounter("srehub_inspect_task_success_total", "Total task successes")
+	} else {
+		addCounter("srehub_inspect_task_fail_total", "Total task failures")
+	}
+
+	// 通用 Gauge
 	successVal := 0.0
 	if result.Success {
 		successVal = 1.0
 	}
-	addGauge("opshub_probe_success", "Probe success (1=ok 0=fail)", successVal)
-	addGauge("opshub_probe_duration_seconds", "Probe total duration in seconds", result.TotalLatency/1000.0)
-
-	totalSteps := len(result.StepResults)
-	failedSteps := 0
-	for _, sr := range result.StepResults {
-		if !sr.Success && !sr.Skipped {
-			failedSteps++
+	addGauge("srehub_inspect_task_availability_gauge", "Probe success for this execution (1=ok 0=fail)", successVal)
+	addGauge("srehub_inspect_task_exec_duration_seconds", "Task execution duration seconds", result.TotalLatency/1000.0)
+	if e.redisCounter != nil {
+		total := e.redisCounter.Get(ctx, "srehub_inspect_task_exec_total", baseLabels)
+		success := e.redisCounter.Get(ctx, "srehub_inspect_task_success_total", baseLabels)
+		if total > 0 {
+			addGauge("srehub_inspect_task_availability", "Task availability ratio (success/total)", success/total)
 		}
 	}
-	addGauge("opshub_probe_workflow_step_count", "Workflow total step count", float64(totalSteps))
-	addGauge("opshub_probe_workflow_failed_step_count", "Workflow failed step count", float64(failedSteps))
+
+	// 业务编排步骤级指标
+	for i, sr := range result.StepResults {
+		stepLabels := map[string]string{
+			"task_id": baseLabels["task_id"], "task_name": baseLabels["task_name"],
+			"task_type": baseLabels["task_type"], "business_group": baseLabels["business_group"],
+			"schedule_mode": baseLabels["schedule_mode"],
+			"flow_id": fmt.Sprintf("%d", config.ID),
+			"step_id": fmt.Sprintf("%d", i),
+			"step_name": sr.StepName,
+		}
+		stepLabelNames := []string{"task_name", "task_type", "business_group", "schedule_mode", "flow_id", "step_id", "step_name"}
+		stepLabelValues := []string{
+			stepLabels["task_name"], stepLabels["task_type"],
+			stepLabels["business_group"], stepLabels["schedule_mode"],
+			stepLabels["flow_id"], stepLabels["step_id"], stepLabels["step_name"],
+		}
+		addStepGauge := func(name, help string, val float64) {
+			samples = append(samples, metrics.MetricSample{
+				Name: name, Help: help,
+				LabelNames: stepLabelNames, LabelValues: stepLabelValues,
+				Value: val,
+			})
+		}
+
+		if e.redisCounter != nil {
+			e.redisCounter.Inc(ctx, "srehub_inspect_flow_step_exec_total", stepLabels)
+			if !sr.Success && !sr.Skipped {
+				e.redisCounter.Inc(ctx, "srehub_inspect_flow_step_fail_total", stepLabels)
+			}
+			execVal := e.redisCounter.Get(ctx, "srehub_inspect_flow_step_exec_total", stepLabels)
+			failVal := e.redisCounter.Get(ctx, "srehub_inspect_flow_step_fail_total", stepLabels)
+			addStepGauge("srehub_inspect_flow_step_exec_total", "Flow step execution count (cumulative)", execVal)
+			addStepGauge("srehub_inspect_flow_step_fail_total", "Flow step failure count (cumulative)", failVal)
+		}
+
+		stepStatus := 0.0
+		if sr.Success {
+			stepStatus = 1.0
+		} else if sr.Skipped {
+			stepStatus = 2.0
+		}
+		addStepGauge("srehub_inspect_flow_step_status", "Flow step status (1=success 0=fail 2=skipped)", stepStatus)
+		addStepGauge("srehub_inspect_flow_step_exec_duration", "Flow step execution duration seconds", sr.Latency/1000.0)
+
+		assertResult := -1.0
+		for _, ar := range sr.AssertionResults {
+			if ar.Success {
+				assertResult = 1.0
+			} else {
+				assertResult = 0.0
+				break
+			}
+		}
+		addStepGauge("srehub_inspect_flow_step_assert_result", "Flow step assertion result (1=pass 0=fail -1=no_assertion)", assertResult)
+	}
 
 	hostname, _ := os.Hostname()
 	grouping := map[string]string{
@@ -1288,7 +1576,7 @@ func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *Pr
 		"config_id": fmt.Sprintf("%d", config.ID),
 	}
 
-	if err := pusher.Push("opshub_probe", grouping, collectors...); err != nil {
+	if err := pusher.PushSamples("srehub", grouping, samples); err != nil {
 		appLogger.Error("push workflow metrics failed",
 			zap.Uint("taskID", task.ID),
 			zap.Error(err),
@@ -1419,6 +1707,7 @@ type NetworkProbeV2Executor struct {
 	groupLookup        func(ctx context.Context, id uint) string
 	agentFactory       AgentCommandFactory
 	variableResolver   *VariableResolver
+	redisCounter       *metrics.RedisCounter
 }
 
 // InspectionTaskRepo interface for accessing inspection_tasks table
@@ -1465,6 +1754,11 @@ func (e *NetworkProbeV2Executor) SetAgentCommandFactory(f AgentCommandFactory) {
 // SetVariableResolver injects variable resolver capability.
 func (e *NetworkProbeV2Executor) SetVariableResolver(r *VariableResolver) {
 	e.variableResolver = r
+}
+
+// SetRedisCounter injects a Redis-backed counter for persistent metric counting.
+func (e *NetworkProbeV2Executor) SetRedisCounter(rc *metrics.RedisCounter) {
+	e.redisCounter = rc
 }
 
 func (e *NetworkProbeV2Executor) Type() string { return "network_probe_v2" }
@@ -1551,6 +1845,7 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 				groupLookup:      e.groupLookup,
 				agentFactory:     e.agentFactory,
 				variableResolver: e.variableResolver,
+				redisCounter:     e.redisCounter,
 			}
 
 			if resolvedCfg.Category == ProbeCategoryApplication {

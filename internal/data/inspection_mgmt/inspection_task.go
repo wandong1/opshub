@@ -29,6 +29,9 @@ type InspectionTask struct {
 	// 拨测任务专用字段
 	Concurrency int `gorm:"default:5" json:"concurrency"` // 并发数
 
+	// 负责人
+	Owner string `gorm:"size:100" json:"owner"`
+
 	// 执行记录
 	LastRunAt     *time.Time `json:"last_run_at"`
 	LastRunStatus string     `gorm:"size:20" json:"last_run_status"` // success/failed

@@ -704,6 +704,7 @@ func (s *HTTPServer) toggleInspectionTask(c *gin.Context) {
 		ItemIDs:       task.ItemIDs,
 		PushgatewayID: task.PushgatewayID,
 		Concurrency:   task.Concurrency,
+		Owner:         task.Owner,
 	}
 
 	err = s.inspectionTaskService.Update(c.Request.Context(), uint(id), updateReq)

@@ -191,8 +191,12 @@ func (s *ProbeConfigService) Import(c *gin.Context) {
 			PacketSize: item.PacketSize, Description: item.Description,
 			Tags: item.Tags, GroupIDs: item.GroupIDs,
 			ExecMode: item.ExecMode, AgentHostIDs: item.AgentHostIDs, RetryCount: item.RetryCount,
-			SkipVerify: item.SkipVerify, WSMessage: item.WSMessage,
-			WSMessageType: item.WSMessageType, WSReadTimeout: item.WSReadTimeout,
+			SkipVerify: item.SkipVerify,
+			Method: item.Method, URL: item.URL, Headers: item.Headers, Params: item.Params,
+			Body: item.Body, ProxyURL: item.ProxyURL, Assertions: item.Assertions,
+			ContentType: item.ContentType,
+			WSMessage: item.WSMessage, WSMessageType: item.WSMessageType,
+			WSMessageFormat: item.WSMessageFormat, WSReadTimeout: item.WSReadTimeout,
 			Status: 1,
 		}
 		if cfg.Timeout == 0 {
@@ -229,8 +233,12 @@ func (s *ProbeConfigService) Export(c *gin.Context) {
 			PacketSize: cfg.PacketSize, Description: cfg.Description,
 			Tags: cfg.Tags, GroupIDs: cfg.GroupIDs,
 			ExecMode: cfg.ExecMode, AgentHostIDs: cfg.AgentHostIDs, RetryCount: cfg.RetryCount,
-			SkipVerify: cfg.SkipVerify, WSMessage: cfg.WSMessage,
-			WSMessageType: cfg.WSMessageType, WSReadTimeout: cfg.WSReadTimeout,
+			SkipVerify: cfg.SkipVerify,
+			Method: cfg.Method, URL: cfg.URL, Headers: cfg.Headers, Params: cfg.Params,
+			Body: cfg.Body, ProxyURL: cfg.ProxyURL, Assertions: cfg.Assertions,
+			ContentType: cfg.ContentType,
+			WSMessage: cfg.WSMessage, WSMessageType: cfg.WSMessageType,
+			WSMessageFormat: cfg.WSMessageFormat, WSReadTimeout: cfg.WSReadTimeout,
 		})
 	}
 

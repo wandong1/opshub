@@ -189,6 +189,9 @@
             <a-option v-for="g in groupOptions" :key="g.id" :label="g.name" :value="g.id" />
           </a-select>
         </a-form-item>
+        <a-form-item label="负责人">
+          <a-input v-model="formData.owner" placeholder="请输入负责人（可选，用于 Metric 标签）" allow-clear />
+        </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model="formData.description" :max-length="200" :auto-size="{ minRows: 2 }" />
         </a-form-item>
@@ -328,7 +331,7 @@ const defaultForm = () => ({
   inspectionGroupIds: [] as number[],
   inspectionItemIds: [] as number[],
   groupId: 0, cronExpr: '',
-  pushgatewayId: undefined as number | undefined, concurrency: 5, enabled: true, description: ''
+  pushgatewayId: undefined as number | undefined, concurrency: 5, enabled: true, description: '', owner: ''
 })
 const formData = reactive(defaultForm())
 
@@ -384,9 +387,10 @@ const loadData = async () => {
         description: task.description,
         taskType: task.task_type || 'probe',
         cronExpr: task.cron_expr,
-        enabled: task.enabled, // 使用 enabled 字段
+        enabled: task.enabled,
         concurrency: task.concurrency || 5,
         pushgatewayId: task.pushgateway_id,
+        owner: task.owner || '',
         groupId: 0,
         lastRunAt: task.last_run_at,
         lastResult: task.last_run_status,
@@ -407,6 +411,12 @@ const loadData = async () => {
           converted.probeConfigIds = task.item_ids ? JSON.parse(task.item_ids) : []
         } catch (e) {
           converted.probeConfigIds = []
+        }
+        try {
+          const gids = task.group_ids ? JSON.parse(task.group_ids) : []
+          converted.groupId = gids.length > 0 ? gids[0] : 0
+        } catch (e) {
+          converted.groupId = 0
         }
       }
 
@@ -490,7 +500,7 @@ const handleEdit = async (row: any) => {
     inspectionGroupIds: row.inspectionGroupIds || [],
     inspectionItemIds: row.inspectionItemIds || [],
     groupId: row.groupId, cronExpr: row.cronExpr, pushgatewayId: row.pushgatewayId,
-    concurrency: row.concurrency || 5, enabled: row.enabled, description: row.description
+    concurrency: row.concurrency || 5, enabled: row.enabled, description: row.description, owner: row.owner || ''
   })
   await loadOptions()
 
@@ -526,7 +536,8 @@ const handleSubmit = async () => {
       cron_expr: formData.cronExpr,
       enabled: formData.enabled,
       pushgateway_id: formData.pushgatewayId || 0,
-      concurrency: formData.concurrency || 5
+      concurrency: formData.concurrency || 5,
+      owner: formData.owner || ''
     }
 
     // 根据任务类型设置不同的配置

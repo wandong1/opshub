@@ -1,0 +1,96 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+rule_files:
+  - "/etc/prometheus/conf.d/aifn_alert.yaml"
+scrape_configs:
+  - job_name: "prometheus"
+    basic_auth:
+      username: prometheus
+      password: VH@skyeye01
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: "nacos_http_sd"
+    http_sd_configs:
+      - url: http://nacos_skyeye:8848/nacos/prometheus
+  - job_name: "otel-self"
+    static_configs:
+      - targets: ["otel_skyeye:8888"]
+  - job_name: "otel-monitor"
+    static_configs:
+      - targets: ["otel_skyeye:8889"]
+  - job_name: "jaeger-collector"
+    static_configs:
+      - targets: ["jc_skyeye:14269"]
+  - job_name: "pushgateway"
+    scrape_interval: 5s
+    honor_labels: true   #避免收集数据本身的 job 和 instance被pushgateway实例信息覆盖
+    static_configs:
+    - targets: ['pushgateway_skyeye:9091']
+      labels:
+        instance: pushgateway
+  - job_name: 'prometheus-k8s'
+    scrape_interval: 10s
+    honor_labels: true
+    metrics_path: '/federate'
+    params:
+     'match[]':
+      - '{job="prometheus"}'
+      - '{__name__=~"job:.*"}'
+      - '{__name__=~"node.*"}'
+      - '{__name__=~".*"}'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/prometheus-k8s.yaml"
+  - job_name: 'sms'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/sms.yaml"
+  - job_name: 'gpu'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/gpu.yaml"
+  - job_name: 'mysql'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/mysql.yaml"
+  - job_name: 'redis'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/redis.yaml"
+  - job_name: 'kafka'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/kafka.yaml"
+  - job_name: 'clickhouse'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/clickhouse.yaml"
+  - job_name: 'zookeeper'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/zookeeper.yaml"
+  - job_name: 'ceph'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/ceph.yaml"
+  - job_name: 'mongodb'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/mongodb.yaml"
+  - job_name: 'etcd'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/etcd.yaml"
+  - job_name: 'iaas'
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/iaas.yaml"
+  - job_name: "eop-nginx"
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/eop-nginx.yml"
+  - job_name: "obi_opentelemetry"
+    file_sd_configs:
+       - files:
+          - "/etc/prometheus/conf.d/obi_opentelemetry.yaml"

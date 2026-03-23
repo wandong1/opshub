@@ -15,6 +15,7 @@ import (
 	svc "github.com/ydcloud-dy/opshub/internal/service/inspection"
 	inspectionmgmtsvc "github.com/ydcloud-dy/opshub/internal/service/inspection_mgmt"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
+	"github.com/ydcloud-dy/opshub/pkg/metrics"
 	"github.com/ydcloud-dy/opshub/pkg/scheduler"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -352,6 +353,12 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	)
 	probeV2Executor.SetVariableResolver(variableResolver)
 	sched.RegisterExecutor(probeV2Executor)
+
+	// 初始化 Redis Counter 并注入各执行器
+	redisCounter := metrics.NewRedisCounter(redisClient, "srehub:counter")
+	executor.SetRedisCounter(redisCounter)
+	probeV2Executor.SetRedisCounter(redisCounter)
+	inspectionExecutor.SetRedisCounter(redisCounter)
 
 	// Start scheduler（所有执行器注册完成后启动）
 	if err := sched.Start(context.Background()); err != nil {

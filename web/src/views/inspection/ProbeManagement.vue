@@ -82,10 +82,11 @@
             <a-tag size="small" :color="record.status === 1 ? 'green' : 'red'">{{ record.status === 1 ? '启用' : '禁用' }}</a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="200" fixed="right" align="center">
+        <a-table-column title="操作" :width="250" fixed="right" align="center">
           <template #cell="{ record }">
             <a-button v-permission="'inspection:probes:execute'" type="text" size="small" @click="handleRunOnce(record)">执行</a-button>
             <a-button v-permission="'inspection:probes:update'" type="text" size="small" @click="handleEdit(record)">编辑</a-button>
+            <a-button v-permission="'inspection:probes:create'" type="text" size="small" @click="handleCopy(record)">复制</a-button>
             <a-button v-permission="'inspection:probes:delete'" type="text" size="small" status="danger" @click="handleDelete(record)">删除</a-button>
           </template>
         </a-table-column>
@@ -208,6 +209,7 @@
                   <span style="flex:1;" />
                   <a-tag v-if="step.stepType && step.stepType !== 'http'" size="small" :color="STEP_TYPE_COLORS[step.stepType] || 'gray'">{{ STEP_TYPE_LABELS[step.stepType] || step.stepType }}</a-tag>
                   <a-tag v-else-if="step.method" size="small" color="arcoblue">{{ step.method }}</a-tag>
+                  <a-button v-if="canCopyStep(step)" type="text" size="mini" title="复制步骤" @click.stop="copyWorkflowStep(si)"><icon-copy /></a-button>
                   <a-button type="text" status="danger" size="mini" @click.stop="deleteWorkflowStep(si)"><icon-minus /></a-button>
                   <icon-down v-if="activeStepIndex !== si" style="color: var(--ops-text-tertiary);" />
                   <icon-up v-else style="color: var(--ops-text-tertiary);" />
@@ -736,6 +738,30 @@ const canDeleteStep = (si: number) => {
   return true
 }
 
+// ws_connect / ws_disconnect steps cannot be copied when the probe type is websocket
+const canCopyStep = (step: any) => {
+  if (formData.type === 'websocket') {
+    if (step.stepType === 'ws_connect' || step.stepType === 'ws_disconnect') return false
+  }
+  return true
+}
+
+const copyWorkflowStep = (si: number) => {
+  const src = workflowSteps[si]
+  if (!src) return
+  const copy = JSON.parse(JSON.stringify(src))
+  copy.name = (copy.name || `步骤 ${si + 1}`) + '_副本'
+  // Insert copy right after the current step, but never after ws_disconnect when ws flow
+  let insertAt = si + 1
+  if (hasWSFlow.value) {
+    const di = wsDisconnectIndex.value
+    // If inserting after ws_disconnect, clamp to before it
+    if (insertAt > di) insertAt = di
+  }
+  workflowSteps.splice(insertAt, 0, copy)
+  activeStepIndex.value = insertAt
+}
+
 const deleteWorkflowStep = (si: number) => {
   const step = workflowSteps[si]
   if (step.stepType === 'ws_connect' || step.stepType === 'ws_disconnect') {
@@ -908,6 +934,57 @@ const handleEdit = (row: any) => {
 
 const handleDelete = (row: any) => {
   Modal.warning({ title: '提示', content: '确定删除该拨测配置？', hideCancel: false, onOk: async () => { await deleteProbe(row.id); Message.success('删除成功'); loadData() } })
+}
+
+const handleCopy = (row: any) => {
+  isEdit.value = false
+  Object.assign(formData, {
+    ...row, id: 0, category: row.category || 'network', execMode: row.execMode || 'local',
+    name: (row.name || '') + '_副本',
+    agentHostIds: row.agentHostIds || '', retryCount: row.retryCount || 0, groupIds: row.groupIds || '',
+    method: row.method || 'GET', url: row.url || '', body: row.body || '',
+    proxyUrl: row.proxyUrl || '', contentType: row.contentType || '',
+    headers: row.headers || '', params: row.params || '', assertions: row.assertions || '',
+    skipVerify: row.skipVerify !== undefined ? row.skipVerify : true,
+    wsMessage: row.wsMessage || '', wsMessageType: row.wsMessageType || 1,
+    wsMessageFormat: row.wsMessageFormat || (row.wsMessageType === 2 ? 'binary' : 'text'),
+    wsReadTimeout: row.wsReadTimeout || 5
+  })
+  appHeaders.length = 0
+  if (row.headers) { try { const h = JSON.parse(row.headers); for (const [k, v] of Object.entries(h)) appHeaders.push({ key: k, value: v as string }) } catch {} }
+  appParams.length = 0
+  if (row.params) { try { const p = JSON.parse(row.params); for (const [k, v] of Object.entries(p)) appParams.push({ key: k, value: v as string }) } catch {} }
+  appAssertions.length = 0
+  if (row.assertions) { try { const a = JSON.parse(row.assertions); for (const item of a) appAssertions.push({ ...item }) } catch {} }
+  workflowVariables.length = 0; workflowSteps.length = 0; workflowStopOnFailure.value = true; activeStepIndex.value = -1
+  if (row.category === 'workflow' && row.body) {
+    try {
+      const def = JSON.parse(row.body)
+      workflowStopOnFailure.value = def.stopOnFailure !== false
+      if (def.variables) { for (const [k, v] of Object.entries(def.variables)) workflowVariables.push({ key: k, value: v as string }) }
+      if (def.steps) {
+        for (const s of def.steps) {
+          const step = newWorkflowStep()
+          step.name = s.name || ''; step.stepType = s.stepType || 'http'; step.delay = s.delay || 0; step.method = s.method || 'GET'
+          step.url = s.url || ''; step.contentType = s.contentType || ''; step.body = s.body || ''
+          step.timeout = s.timeout || 10; step.wsUrl = s.wsUrl || ''; step.wsMessage = s.wsMessage || ''
+          step.wsMessageFormat = s.wsMessageFormat || 'text'; step.wsReadTimeout = s.wsReadTimeout || 5
+          step.wsReceiveMode = s.wsReceiveMode || 'single'; step.skipVerify = s.skipVerify !== undefined ? s.skipVerify : true
+          step.execMode = s.execMode || ''; step.proxyUrl = s.proxyUrl || ''
+          if (s.headers && typeof s.headers === 'object' && !Array.isArray(s.headers)) {
+            step.headers = Object.entries(s.headers).map(([k, v]) => ({ key: k, value: v as string }))
+          } else if (Array.isArray(s.headers)) { step.headers = s.headers }
+          if (s.params && typeof s.params === 'object' && !Array.isArray(s.params)) {
+            step.params = Object.entries(s.params).map(([k, v]) => ({ key: k, value: v as string }))
+          } else if (Array.isArray(s.params)) { step.params = s.params }
+          if (s.assertions) step.assertions = s.assertions.map((a: any) => ({ ...a }))
+          if (s.extractions) step.extractions = s.extractions.map((e: any) => ({ ...e }))
+          workflowSteps.push(step)
+        }
+      }
+    } catch {}
+  }
+  loadGroups(); loadHosts(); loadVariables(); dialogVisible.value = true
 }
 
 const handleSubmit = async () => {

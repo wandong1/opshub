@@ -1,0 +1,3 @@
+basic_auth:
+  username: "prometheus"  # 替换为实际的 Prometheus 用户名
+  password: "VH@skyeye01" 
