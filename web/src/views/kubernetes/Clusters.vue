@@ -719,10 +719,10 @@ const rules = {
       required: true,
       content: '请输入 KubeConfig',
       trigger: 'blur',
-      validator: (rule: any, value: any, callback: any) => {
+      validator: (value: any, callback: any) => {
         // 新增模式必须填写，编辑模式可以留空
         if (!isEdit.value && authType.value === 'config' && !value) {
-          callback(new Error('请输入 KubeConfig'))
+          callback('请输入 KubeConfig')
         } else {
           callback()
         }
@@ -734,10 +734,10 @@ const rules = {
       required: true,
       content: '请输入 API Endpoint',
       trigger: 'blur',
-      validator: (rule: any, value: any, callback: any) => {
+      validator: (value: any, callback: any) => {
         // 新增模式必须填写，编辑模式可以留空
         if (!isEdit.value && authType.value === 'token' && !value) {
-          callback(new Error('请输入 API Endpoint'))
+          callback('请输入 API Endpoint')
         } else {
           callback()
         }
@@ -749,10 +749,10 @@ const rules = {
       required: true,
       content: '请输入 Token',
       trigger: 'blur',
-      validator: (rule: any, value: any, callback: any) => {
+      validator: (value: any, callback: any) => {
         // 新增模式必须填写，编辑模式可以留空
         if (!isEdit.value && authType.value === 'token' && !value) {
-          callback(new Error('请输入 Token'))
+          callback('请输入 Token')
         } else {
           callback()
         }
@@ -1165,8 +1165,8 @@ const handleFileChange = (event: Event) => {
 const handleSubmit = async () => {
   if (!formRef.value) return
 
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
+  await formRef.value.validate(async (errors) => {
+    if (!errors) {
       submitLoading.value = true
       try {
         let kubeConfig = clusterForm.kubeConfig

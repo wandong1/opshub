@@ -1,7 +1,7 @@
 <template>
   <a-row :gutter="20">
     <a-col :span="12">
-      <a-form label-position="top" size="default">
+      <a-form :model="localContainer" label-position="top" size="default">
         <a-form-item label="容器名称">
           <a-input v-model="localContainer.name" placeholder="输入容器名称" @input="update">
             <template #prefix>
@@ -19,7 +19,7 @@
       </a-form>
     </a-col>
     <a-col :span="12">
-      <a-form label-position="top" size="default">
+      <a-form :model="localContainer" label-position="top" size="default">
         <a-form-item label="拉取策略">
           <a-select v-model="localContainer.imagePullPolicy" style="width: 100%" placeholder="选择拉取策略" @change="update">
             <a-option label="IfNotPresent - 本地不存在时拉取" value="IfNotPresent" />

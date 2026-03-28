@@ -174,7 +174,7 @@
                     </a-button>
                   </div>
                 </div>
-                <a-table :data="formData.data" border class="form-table" :columns="tableColumns3">
+                <a-table :data="formData.data" border class="form-table" :columns="tableColumns3" row-key="_id">
           <template #col_Key="{ record }">
                       <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
@@ -201,7 +201,7 @@
                     <icon-plus /> 添加
                   </a-button>
                 </div>
-                <a-table :data="formData.labels" border class="form-table" :columns="tableColumns2">
+                <a-table :data="formData.labels" border class="form-table" :columns="tableColumns2" row-key="_id">
           <template #col_Key="{ record }">
                       <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
@@ -223,7 +223,7 @@
                     <icon-plus /> 添加
                   </a-button>
                 </div>
-                <a-table :data="formData.annotations" border class="form-table" :columns="tableColumns">
+                <a-table :data="formData.annotations" border class="form-table" :columns="tableColumns" row-key="_id">
           <template #col_Key="{ record }">
                       <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
@@ -304,7 +304,11 @@ interface SecretInfo {
 interface KeyValueRow {
   key: string
   value: string
+  _id?: number
 }
+
+let _rowIdCounter = 0
+const nextRowId = () => ++_rowIdCounter
 
 const props = defineProps<{
   clusterId?: number
@@ -751,7 +755,7 @@ const isBase64 = (str: string): boolean => {
 
 // 数据行操作
 const addDataRow = () => {
-  formData.value.data.push({ key: '', value: '' })
+  formData.value.data.push({ key: '', value: '', _id: nextRowId() })
 }
 
 const removeDataRow = (index: number) => {
@@ -811,7 +815,7 @@ const handleFileChange = (event: Event) => {
           }
         }
 
-        formData.value.data.push({ key: keyName, value: base64Content })
+        formData.value.data.push({ key: keyName, value: base64Content, _id: nextRowId() })
         Message.success(`文件上传成功 (${keyName})`)
       } catch (error) {
         Message.error('文件编码失败')
@@ -825,7 +829,7 @@ const handleFileChange = (event: Event) => {
 
 // 标签行操作
 const addLabelRow = () => {
-  formData.value.labels.push({ key: '', value: '' })
+  formData.value.labels.push({ key: '', value: '', _id: nextRowId() })
 }
 
 const removeLabelRow = (index: number) => {
@@ -834,7 +838,7 @@ const removeLabelRow = (index: number) => {
 
 // 注解行操作
 const addAnnotationRow = () => {
-  formData.value.annotations.push({ key: '', value: '' })
+  formData.value.annotations.push({ key: '', value: '', _id: nextRowId() })
 }
 
 const removeAnnotationRow = (index: number) => {
