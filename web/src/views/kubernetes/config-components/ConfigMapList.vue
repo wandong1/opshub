@@ -142,7 +142,7 @@
                     <icon-plus /> 添加数据
                   </a-button>
                 </div>
-                <a-table :data="formData.data" border class="form-table" :columns="tableColumns4">
+                <a-table :data="formData.data" border class="form-table" :columns="tableColumns4" row-key="_id">
           <template #col_Key="{ record }">
                       <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
@@ -165,7 +165,7 @@
                     <icon-plus /> 添加二进制数据
                   </a-button>
                 </div>
-                <a-table :data="formData.binaryData" border class="form-table" :columns="tableColumns3">
+                <a-table :data="formData.binaryData" border class="form-table" :columns="tableColumns3" row-key="_id">
           <template #col_Key="{ record }">
                       <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
@@ -192,7 +192,7 @@
                     <icon-plus /> 添加
                   </a-button>
                 </div>
-                <a-table :data="formData.labels" border class="form-table" :columns="tableColumns2">
+                <a-table :data="formData.labels" border class="form-table" :columns="tableColumns2" row-key="_id">
           <template #col_Key="{ record }">
                       <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>
@@ -214,7 +214,7 @@
                     <icon-plus /> 添加
                   </a-button>
                 </div>
-                <a-table :data="formData.annotations" border class="form-table" :columns="tableColumns">
+                <a-table :data="formData.annotations" border class="form-table" :columns="tableColumns" row-key="_id">
           <template #col_Key="{ record }">
                       <a-input v-model="record.key" placeholder="请输入 Key" />
                     </template>

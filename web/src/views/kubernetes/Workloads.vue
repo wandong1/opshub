@@ -157,9 +157,11 @@
         :data="paginatedWorkloadList"
         :loading="loading"
         :bordered="false"
+        row-key="_key"
         @selection-change="handleSelectionChange"
-       :columns="tableColumns7" :row-selection="{ type: 'checkbox', showCheckedAll: true }"
-       :pagination="false">
+        :columns="tableColumns7"
+        :row-selection="{ type: 'checkbox', showCheckedAll: true, selectedRowKeys: selectedRowKeys }"
+        :pagination="false">
           <template #name="{ record }">
             <div class="workload-name-cell">
               <div class="workload-type-icon-box" :class="`icon-${(record.type || selectedType).toLowerCase()}`">
@@ -1467,6 +1469,7 @@ const createYamlLoading = ref(false)
 
 // 批量操作
 const selectedWorkloads = ref<Workload[]>([])
+const selectedRowKeys = ref<string[]>([])
 const batchActionLoading = ref(false)
 
 // 工作负载类型模板
@@ -1853,6 +1856,7 @@ const handleClusterChange = async () => {
 const handleTypeChange = (type: string | number | boolean) => {
   selectedType.value = type as string
   currentPage.value = 1
+  clearSelection()
   loadWorkloads()
 }
 
@@ -2048,7 +2052,10 @@ const loadWorkloads = async () => {
         headers: { Authorization: `Bearer ${token}` }
       }
     )
-    const allWorkloads = response.data.data || []
+    const allWorkloads = (response.data.data || []).map((w: Workload) => ({
+      ...w,
+      _key: `${w.namespace}/${w.type}/${w.name}`
+    }))
 
     // 根据选中的类型过滤
     if (selectedType.value) {
@@ -2220,12 +2227,16 @@ const handleWorkloadDelete = (row: Workload) => {
 }
 
 // 批量操作相关函数
-const handleSelectionChange = (selection: Workload[]) => {
-  selectedWorkloads.value = selection
+const handleSelectionChange = (rowKeys: string[]) => {
+  selectedRowKeys.value = rowKeys
+  selectedWorkloads.value = workloadList.value.filter(
+    (w: any) => rowKeys.includes(w._key)
+  )
 }
 
 const clearSelection = () => {
   selectedWorkloads.value = []
+  selectedRowKeys.value = []
 }
 
 const handleBatchDelete = async () => {
@@ -7564,6 +7575,32 @@ onMounted(() => {
 }
 
 .yaml-textarea:focus {
+  outline: none;
+}
+
+.code-textarea {
+  flex: 1;
+  background-color: #000000;
+  color: #d4af37;
+  border: none;
+  outline: none;
+  padding: 16px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: none;
+  min-height: 500px;
+  width: 0;
+  overflow: auto;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+.code-textarea::placeholder {
+  color: #555;
+}
+
+.code-textarea:focus {
   outline: none;
 }
 
