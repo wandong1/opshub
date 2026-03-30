@@ -262,6 +262,32 @@ func (uc *ConfigUseCase) SaveGrafanaConfig(ctx context.Context, config *GrafanaI
 	return uc.configRepo.BatchSaveOrUpdate(ctx, configs)
 }
 
+// GetTeleAIAuthConfig 获取 TeleAI Authorization 自动填充全局开关
+func (uc *ConfigUseCase) GetTeleAIAuthConfig(ctx context.Context) (*TeleAIAuthConfig, error) {
+	configs, err := uc.configRepo.GetByGroup(ctx, ConfigGroupCustom)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]string, len(configs))
+	for _, c := range configs {
+		m[c.Key] = c.Value
+	}
+	return &TeleAIAuthConfig{
+		Enabled: getBoolValue(m, ConfigKeyCustomTeleAIAuthEnabled, false),
+	}, nil
+}
+
+// SaveTeleAIAuthConfig 保存 TeleAI Authorization 自动填充全局开关
+func (uc *ConfigUseCase) SaveTeleAIAuthConfig(ctx context.Context, cfg *TeleAIAuthConfig) error {
+	enabledStr := "false"
+	if cfg.Enabled {
+		enabledStr = "true"
+	}
+	return uc.configRepo.BatchSaveOrUpdate(ctx, map[string]string{
+		ConfigKeyCustomTeleAIAuthEnabled: enabledStr,
+	})
+}
+
 // 辅助函数
 func getStringValue(m map[string]string, key, defaultValue string) string {
 	if v, ok := m[key]; ok && v != "" {

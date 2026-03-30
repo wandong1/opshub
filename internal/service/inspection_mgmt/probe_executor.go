@@ -93,7 +93,7 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 
 	case "workflow":
 		// workflow 类型执行
-		wfResult := inspectionbiz.ExecuteWorkflowProbe(ctx, config, nil, nil)
+		wfResult := inspectionbiz.ExecuteWorkflowProbe(ctx, config, nil, nil, false)
 		output = e.formatWorkflowResult(wfResult)
 		if !wfResult.Success {
 			execErr = fmt.Errorf(wfResult.Error)

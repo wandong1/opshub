@@ -22,6 +22,7 @@ type ProbeConfigService struct {
 	useCase          *biz.ProbeConfigUseCase
 	agentFactory     biz.AgentCommandFactory
 	variableResolver *biz.VariableResolver
+	teleAIEnabled    bool
 }
 
 func NewProbeConfigService(uc *biz.ProbeConfigUseCase) *ProbeConfigService {
@@ -36,6 +37,11 @@ func (s *ProbeConfigService) SetAgentCommandFactory(f biz.AgentCommandFactory) {
 // SetVariableResolver injects variable resolver for RunOnce.
 func (s *ProbeConfigService) SetVariableResolver(r *biz.VariableResolver) {
 	s.variableResolver = r
+}
+
+// SetTeleAIEnabled sets the global TeleAI Authorization auto-fill switch.
+func (s *ProbeConfigService) SetTeleAIEnabled(enabled bool) {
+	s.teleAIEnabled = enabled
 }
 
 func (s *ProbeConfigService) Create(c *gin.Context) {
@@ -281,7 +287,7 @@ func (s *ProbeConfigService) RunOnce(c *gin.Context) {
 
 	// Workflow probe
 	if resolvedConfig.Category == biz.ProbeCategoryWorkflow {
-		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver, nil)
+		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver, s.agentFactory, s.teleAIEnabled)
 		response.Success(c, wfResult)
 		return
 	}
@@ -334,14 +340,45 @@ func (s *ProbeConfigService) RunOnce(c *gin.Context) {
 
 // runOnceApp executes a single application probe and returns the result.
 func (s *ProbeConfigService) runOnceApp(c *gin.Context, resolvedConfig, origConfig *biz.ProbeConfig) {
+	var appResult *probers.AppResult
+	var agentHostID uint
+
+	if resolvedConfig.ExecMode == biz.ExecModeAgent && s.agentFactory != nil {
+		appResult, agentHostID = s.runOnceAppViaAgent(resolvedConfig)
+		retryAttempt := 0
+		for !appResult.Success && retryAttempt < origConfig.RetryCount {
+			retryAttempt++
+			appResult, agentHostID = s.runOnceAppViaAgent(resolvedConfig)
+		}
+		response.Success(c, gin.H{
+			"Success":           appResult.Success,
+			"Latency":           appResult.Latency,
+			"Error":             appResult.Error,
+			"HTTPStatusCode":    appResult.HTTPStatusCode,
+			"HTTPResponseTime":  appResult.HTTPResponseTime,
+			"HTTPContentLength": appResult.HTTPContentLength,
+			"AssertionSuccess":  appResult.AssertionSuccess,
+			"AssertionResults":  appResult.AssertionResults,
+			"ResponseBody":      appResult.ResponseBody,
+			"ResponseHeaders":   appResult.ResponseHeaders,
+			"agentHostId":       agentHostID,
+			"retryAttempt":      0,
+		})
+		return
+	}
+
 	appCfg := buildAppProbeConfig(resolvedConfig)
+	if s.teleAIEnabled && resolvedConfig.TeleAIEnabled {
+		biz.InjectTeleAIAuthHeader(true, resolvedConfig.TeleAIAppKey, resolvedConfig.TeleAIRegion, appCfg)
+	}
 	prober, err := probers.GetAppProber(resolvedConfig.Type)
 	if err != nil {
 		response.ErrorCode(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	appResult := prober.ProbeApp(appCfg)
+	appResult = prober.ProbeApp(appCfg)
+	_ = agentHostID
 	retryAttempt := 0
 	for !appResult.Success && retryAttempt < origConfig.RetryCount {
 		retryAttempt++
@@ -359,8 +396,37 @@ func (s *ProbeConfigService) runOnceApp(c *gin.Context, resolvedConfig, origConf
 		"AssertionResults":  appResult.AssertionResults,
 		"ResponseBody":      appResult.ResponseBody,
 		"ResponseHeaders":   appResult.ResponseHeaders,
+		"RequestHeaders":    appCfg.Headers,
 		"retryAttempt":      retryAttempt,
 	})
+}
+
+// runOnceAppViaAgent picks a random online agent and executes an application probe via it.
+func (s *ProbeConfigService) runOnceAppViaAgent(config *biz.ProbeConfig) (*probers.AppResult, uint) {
+	hostIDs := parseHostIDs(config.AgentHostIDs)
+	if len(hostIDs) == 0 {
+		return &probers.AppResult{Error: "no agent host IDs configured"}, 0
+	}
+	var onlineIDs []uint
+	for _, id := range hostIDs {
+		if s.agentFactory.IsOnline(id) {
+			onlineIDs = append(onlineIDs, id)
+		}
+	}
+	if len(onlineIDs) == 0 {
+		return &probers.AppResult{Error: "no online agent available"}, 0
+	}
+	hostID := onlineIDs[rand.Intn(len(onlineIDs))]
+	appCfg := buildAppProbeConfig(config)
+	if s.teleAIEnabled && config.TeleAIEnabled {
+		biz.InjectTeleAIAuthHeader(true, config.TeleAIAppKey, config.TeleAIRegion, appCfg)
+	}
+	probeReq := biz.BuildProbeRequest(config, appCfg)
+	pbResult, err := s.agentFactory.SendProbeRequest(hostID, probeReq)
+	if err != nil {
+		return &probers.AppResult{Error: err.Error()}, hostID
+	}
+	return biz.ConvertProbeResultToAppResult(pbResult), hostID
 }
 
 func buildAppProbeConfig(cfg *biz.ProbeConfig) *probers.AppProbeConfig {
@@ -516,7 +582,7 @@ func (s *ProbeConfigService) TestProbe(c *gin.Context) {
 
 	// Workflow probe
 	if resolvedConfig.Category == biz.ProbeCategoryWorkflow {
-		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver, nil)
+		wfResult := biz.ExecuteWorkflowProbe(c.Request.Context(), resolvedConfig, s.variableResolver, s.agentFactory, s.teleAIEnabled)
 		response.Success(c, wfResult)
 		return
 	}

@@ -136,6 +136,14 @@ var DefaultConfigs = map[string]SysConfig{
 		Group:  ConfigGroupSecurity,
 		Remark: "账户锁定时间(秒)",
 	},
+	// 定制功能默认配置
+	ConfigKeyCustomTeleAIAuthEnabled: {
+		Key:    ConfigKeyCustomTeleAIAuthEnabled,
+		Value:  "false",
+		Type:   "bool",
+		Group:  ConfigGroupCustom,
+		Remark: "是否启用 TeleAI Authorization 自动填充",
+	},
 	// Grafana 集成默认配置
 	ConfigKeyGrafanaEnabled: {
 		Key:    ConfigKeyGrafanaEnabled,
@@ -167,6 +175,17 @@ const (
 	ConfigKeyGrafanaURL                 = "integration.grafana.url"
 	ConfigKeyGrafanaSubpath             = "integration.grafana.subpath"
 )
+
+// 定制功能配置 Key 常量
+const (
+	ConfigGroupCustom                = "custom"
+	ConfigKeyCustomTeleAIAuthEnabled = "custom.teleai_auth.enabled"
+)
+
+// TeleAIAuthConfig 定制 TeleAI Authorization 自动填充全局开关
+type TeleAIAuthConfig struct {
+	Enabled bool `json:"enabled"`
+}
 
 // GrafanaIntegrationConfig Grafana 集成配置
 type GrafanaIntegrationConfig struct {

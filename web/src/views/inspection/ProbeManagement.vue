@@ -142,6 +142,21 @@
               <span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">0 = 不等待接收响应</span>
             </a-form-item>
           </template>
+          <!-- TeleAI 步骤级开关（应用服务，仅系统总开关开启时显示） -->
+          <template v-if="teleAIEnabled">
+            <a-form-item label="TeleAI注入">
+              <a-switch v-model="formData.teleAIEnabled" />
+              <span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">启用后自动注入 Authorization（需包含 X-APP-ID Header）</span>
+            </a-form-item>
+            <template v-if="formData.teleAIEnabled">
+              <a-form-item label="AppKey">
+                <a-input-password v-model="formData.teleAIAppKey" placeholder="X-APP-KEY" allow-clear style="width: 260px;" />
+              </a-form-item>
+              <a-form-item label="省份编码">
+                <a-input v-model="formData.teleAIRegion" placeholder="如 QG（全国）、BJ（北京）" style="width: 220px;" />
+              </a-form-item>
+            </template>
+          </template>
           <a-form-item label="Headers">
             <div style="width: 100%;">
               <div v-for="(h, i) in appHeaders" :key="i" style="display: flex; gap: 8px; margin-bottom: 4px;">
@@ -170,8 +185,8 @@
             <div style="width: 100%;">
               <div v-for="(a, i) in appAssertions" :key="i" style="display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
                 <a-input v-model="a.name" placeholder="名称" style="width: 100px;" />
-                <a-select v-model="a.source" style="width: 90px;"><a-option value="body">Body</a-option><a-option value="header">Header</a-option></a-select>
-                <a-input v-model="a.path" placeholder="路径 $.data.id" style="width: 130px;" />
+                <a-select v-model="a.source" style="width: 100px;"><a-option value="body">Body</a-option><a-option value="header">Header</a-option><a-option value="response">Response</a-option></a-select>
+                <a-input v-if="a.source !== 'response'" v-model="a.path" placeholder="路径 $.data.id" style="width: 130px;" />
                 <a-select v-model="a.condition" style="width: 110px;">
                   <a-option v-for="c in assertConditions" :key="c.value" :value="c.value">{{ c.label }}</a-option>
                 </a-select>
@@ -181,6 +196,17 @@
               <a-button type="text" size="small" @click="appAssertions.push({ name: '', source: 'body', path: '', condition: '==', value: '' })"><icon-plus /> 添加断言</a-button>
             </div>
           </a-form-item>
+          <!-- TeleAI Authorization 自动填充（全局开关开启后显示） -->
+          <!-- <template v-if="teleAIEnabled">
+            <a-divider style="margin: 8px 0;" />
+            <a-form-item label="TeleAI AppKey">
+              <a-input-password v-model="formData.teleAIAppKey" placeholder="X-APP-KEY" allow-clear style="width: 260px;" />
+              <span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">请求包含 X-APP-ID Header 时自动填充 Authorization</span>
+            </a-form-item>
+            <a-form-item label="TeleAI 省份编码">
+              <a-input v-model="formData.teleAIRegion" placeholder="如 QG（全国）、BJ（北京）" style="width: 220px;" />
+            </a-form-item>
+          </template> -->
         </template>
         <!-- 业务流程专属字段 -->
         <template v-if="formData.category === 'workflow'">
@@ -242,6 +268,21 @@
                   <a-form-item v-if="step.url && (step.url.startsWith('https') || step.url.startsWith('wss'))" label="跳过证书" :label-col-flex="'100px'">
                     <a-switch v-model="step.skipVerify" /><span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">跳过 TLS 证书验证</span>
                   </a-form-item>
+                  <!-- TeleAI 步骤级开关（HTTP步骤） -->
+                  <template v-if="teleAIEnabled">
+                    <a-form-item label="TeleAI注入" :label-col-flex="'100px'">
+                      <a-switch v-model="step.teleAIEnabled" @change="onStepTeleAIToggle(si)" />
+                      <span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">启用后自动注入 Authorization（需包含 X-APP-ID Header）</span>
+                    </a-form-item>
+                    <template v-if="step.teleAIEnabled">
+                      <a-form-item label="AppKey" :label-col-flex="'100px'">
+                        <a-input-password v-model="step.teleAIAppKey" placeholder="X-APP-KEY" allow-clear style="width: 240px;" />
+                      </a-form-item>
+                      <a-form-item label="省份编码" :label-col-flex="'100px'">
+                        <a-input v-model="step.teleAIRegion" placeholder="如 QG（全国）、BJ（北京）" style="width: 200px;" />
+                      </a-form-item>
+                    </template>
+                  </template>
                   <a-form-item label="Headers" :label-col-flex="'100px'">
                     <div style="width: 100%;">
                       <div v-for="(h, hi) in step.headers" :key="hi" style="display: flex; gap: 8px; margin-bottom: 4px;">
@@ -272,6 +313,21 @@
                     <a-form-item v-if="step.url && step.url.startsWith('wss')" label="跳过证书" :label-col-flex="'100px'">
                       <a-switch v-model="step.skipVerify" /><span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">跳过 TLS 证书验证</span>
                     </a-form-item>
+                    <!-- TeleAI 步骤级开关（WS连接步骤） -->
+                    <template v-if="teleAIEnabled">
+                      <a-form-item label="TeleAI注入" :label-col-flex="'100px'">
+                        <a-switch v-model="step.teleAIEnabled" @change="onStepTeleAIToggle(si)" />
+                        <span style="margin-left: 8px; font-size: 12px; color: var(--ops-text-tertiary);">启用后自动注入 Authorization 到握手请求（需包含 X-APP-ID Header）</span>
+                      </a-form-item>
+                      <template v-if="step.teleAIEnabled">
+                        <a-form-item label="AppKey" :label-col-flex="'100px'">
+                          <a-input-password v-model="step.teleAIAppKey" placeholder="X-APP-KEY" allow-clear style="width: 240px;" />
+                        </a-form-item>
+                        <a-form-item label="省份编码" :label-col-flex="'100px'">
+                          <a-input v-model="step.teleAIRegion" placeholder="如 QG（全国）、BJ（北京）" style="width: 200px;" />
+                        </a-form-item>
+                      </template>
+                    </template>
                     <a-form-item label="Headers" :label-col-flex="'100px'">
                       <div style="width: 100%;">
                         <div v-for="(h, hi) in step.headers" :key="hi" style="display: flex; gap: 8px; margin-bottom: 4px;">
@@ -325,11 +381,12 @@
                     <div style="width: 100%;">
                       <div v-for="(a, ai) in step.assertions" :key="ai" style="display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
                         <a-input v-model="a.name" placeholder="名称" style="width: 90px;" />
-                        <a-select v-model="a.source" style="width: 85px;">
+                        <a-select v-model="a.source" style="width: 100px;">
                           <a-option v-if="step.stepType !== 'ws_connect'" value="body">Body</a-option>
                           <a-option value="header">Header</a-option>
+                          <a-option value="response">Response</a-option>
                         </a-select>
-                        <a-input v-model="a.path" placeholder="路径" style="width: 120px;" />
+                        <a-input v-if="a.source !== 'response'" v-model="a.path" placeholder="路径" style="width: 120px;" />
                         <a-select v-model="a.condition" style="width: 100px;">
                           <a-option v-for="c in assertConditions" :key="c.value" :value="c.value">{{ c.label }}</a-option>
                         </a-select>
@@ -343,11 +400,12 @@
                     <div style="width: 100%;">
                       <div v-for="(ex, ei) in step.extractions" :key="ei" style="display: flex; gap: 8px; margin-bottom: 4px;">
                         <a-input v-model="ex.name" placeholder="变量名" style="flex: 1;" />
-                        <a-select v-model="ex.source" style="width: 90px;">
+                        <a-select v-model="ex.source" style="width: 100px;">
                           <a-option v-if="step.stepType !== 'ws_connect'" value="body">Body</a-option>
                           <a-option value="header">Header</a-option>
+                          <a-option value="response">Response</a-option>
                         </a-select>
-                        <a-input v-model="ex.path" placeholder="GJSON路径 / Header名" style="flex: 1;" />
+                        <a-input v-if="ex.source !== 'response'" v-model="ex.path" placeholder="GJSON路径 / Header名" style="flex: 1;" />
                         <a-button type="text" status="danger" size="small" @click="step.extractions.splice(ei, 1)"><icon-minus /></a-button>
                       </div>
                       <a-button type="text" size="small" @click="step.extractions.push({ name: '', source: step.stepType === 'ws_connect' ? 'header' : 'body', path: '' })"><icon-plus /> 添加提取</a-button>
@@ -530,6 +588,18 @@
               </template>
             </a-descriptions>
           </template>
+          <!-- 实际请求Headers（含注入的 Authorization） -->
+          <template v-if="currentRecord?.category === 'application' && runResult.RequestHeaders && Object.keys(runResult.RequestHeaders).length">
+            <div class="result-section-title">实际请求Headers</div>
+            <a-descriptions :column="1" bordered size="small">
+              <a-descriptions-item label="请求Headers">
+                <div v-for="(val, key) in runResult.RequestHeaders" :key="key" class="kv-row">
+                  <span :class="['kv-key', key === 'Authorization' ? 'kv-key-highlight' : '']">{{ key }}:</span>
+                  <span class="kv-val">{{ val }}</span>
+                </div>
+              </a-descriptions-item>
+            </a-descriptions>
+          </template>
           <!-- 响应信息 -->
           <template v-if="runResult.ResponseHeaders || runResult.ResponseBody">
             <div class="result-section-title">响应信息</div>
@@ -578,8 +648,10 @@ import { getProbeList, createProbe, updateProbe, deleteProbe, importProbes, expo
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
 import { getAgentStatuses } from '@/api/agent'
+import { getCustomConfig } from '@/api/system'
 import VariableInput from '@/components/VariableInput.vue'
 
+const teleAIEnabled = ref(false)
 const loading = ref(false)
 const submitting = ref(false)
 const testing = ref(false)
@@ -605,7 +677,8 @@ const defaultForm = () => ({
   timeout: 5, count: 4, packetSize: 64, description: '', tags: '', status: 1,
   execMode: 'local', agentHostIds: '', retryCount: 0,
   method: 'GET', url: '', headers: '', params: '', body: '', proxyUrl: '', assertions: '', contentType: '',
-  skipVerify: true, wsMessage: '', wsMessageType: 1, wsMessageFormat: 'text', wsReadTimeout: 5
+  skipVerify: true, wsMessage: '', wsMessageType: 1, wsMessageFormat: 'text', wsReadTimeout: 5,
+  teleAIEnabled: false, teleAIAppKey: '', teleAIRegion: ''
 })
 const formData = reactive(defaultForm())
 
@@ -699,8 +772,26 @@ const newWorkflowStep = () => ({
   body: '', timeout: 10, skipVerify: true, wsMessage: '', wsMessageType: 1, wsMessageFormat: 'text', wsReadTimeout: 5, wsReceiveMode: 'single',
   assertions: [] as { name: string; source: string; path: string; condition: string; value: string }[],
   extractions: [] as { name: string; source: string; path: string }[],
-  execMode: '', proxyUrl: ''
+  execMode: '', proxyUrl: '',
+  teleAIEnabled: false, teleAIAppKey: '', teleAIRegion: ''
 })
+
+// Get the last step before index si that has TeleAI enabled, for auto-fill
+const getLastTeleAIStep = (si: number) => {
+  for (let i = si - 1; i >= 0; i--) {
+    if (workflowSteps[i]?.teleAIEnabled) return workflowSteps[i]
+  }
+  return null
+}
+
+const onStepTeleAIToggle = (si: number) => {
+  const step = workflowSteps[si]
+  if (!step.teleAIEnabled) return
+  if (si === 0 || (!step.teleAIAppKey && !step.teleAIRegion)) {
+    const prev = getLastTeleAIStep(si)
+    if (prev) { step.teleAIAppKey = prev.teleAIAppKey; step.teleAIRegion = prev.teleAIRegion }
+  }
+}
 const addWorkflowStep = () => { workflowSteps.push(newWorkflowStep()); activeStepIndex.value = workflowSteps.length - 1 }
 
 // WS flow constraints
@@ -889,7 +980,8 @@ const handleEdit = (row: any) => {
     skipVerify: row.skipVerify !== undefined ? row.skipVerify : true,
     wsMessage: row.wsMessage || '', wsMessageType: row.wsMessageType || 1,
     wsMessageFormat: row.wsMessageFormat || (row.wsMessageType === 2 ? 'binary' : 'text'),
-    wsReadTimeout: row.wsReadTimeout || 5
+    wsReadTimeout: row.wsReadTimeout || 5,
+    teleAIEnabled: row.teleAIEnabled || false, teleAIAppKey: row.teleAIAppKey || '', teleAIRegion: row.teleAIRegion || ''
   })
   // Parse JSON fields into reactive arrays
   appHeaders.length = 0
@@ -916,6 +1008,9 @@ const handleEdit = (row: any) => {
           step.wsMessageFormat = s.wsMessageFormat || (s.wsMessageType === 2 ? 'binary' : 'text')
           step.wsReadTimeout = s.wsReadTimeout || 5
           step.wsReceiveMode = s.wsReceiveMode || 'single'
+          step.teleAIEnabled = s.teleAIEnabled || false
+          step.teleAIAppKey = s.teleAIAppKey || ''
+          step.teleAIRegion = s.teleAIRegion || ''
           if (s.headers && typeof s.headers === 'object' && !Array.isArray(s.headers)) {
             step.headers = Object.entries(s.headers).map(([k, v]) => ({ key: k, value: v as string }))
           } else if (Array.isArray(s.headers)) { step.headers = s.headers }
@@ -948,7 +1043,8 @@ const handleCopy = (row: any) => {
     skipVerify: row.skipVerify !== undefined ? row.skipVerify : true,
     wsMessage: row.wsMessage || '', wsMessageType: row.wsMessageType || 1,
     wsMessageFormat: row.wsMessageFormat || (row.wsMessageType === 2 ? 'binary' : 'text'),
-    wsReadTimeout: row.wsReadTimeout || 5
+    wsReadTimeout: row.wsReadTimeout || 5,
+    teleAIEnabled: row.teleAIEnabled || false, teleAIAppKey: row.teleAIAppKey || '', teleAIRegion: row.teleAIRegion || ''
   })
   appHeaders.length = 0
   if (row.headers) { try { const h = JSON.parse(row.headers); for (const [k, v] of Object.entries(h)) appHeaders.push({ key: k, value: v as string }) } catch {} }
@@ -971,6 +1067,9 @@ const handleCopy = (row: any) => {
           step.wsMessageFormat = s.wsMessageFormat || 'text'; step.wsReadTimeout = s.wsReadTimeout || 5
           step.wsReceiveMode = s.wsReceiveMode || 'single'; step.skipVerify = s.skipVerify !== undefined ? s.skipVerify : true
           step.execMode = s.execMode || ''; step.proxyUrl = s.proxyUrl || ''
+          step.teleAIEnabled = s.teleAIEnabled || false
+          step.teleAIAppKey = s.teleAIAppKey || ''
+          step.teleAIRegion = s.teleAIRegion || ''
           if (s.headers && typeof s.headers === 'object' && !Array.isArray(s.headers)) {
             step.headers = Object.entries(s.headers).map(([k, v]) => ({ key: k, value: v as string }))
           } else if (Array.isArray(s.headers)) { step.headers = s.headers }
@@ -1039,7 +1138,10 @@ const buildProbeData = () => {
         wsReceiveMode: s.wsReceiveMode || 'single',
         assertions: (s.assertions || []).filter((a: any) => a.name || a.path),
         extractions: (s.extractions || []).filter((e: any) => e.name),
-        execMode: s.execMode || '', proxyUrl: s.proxyUrl || ''
+        execMode: s.execMode || '', proxyUrl: s.proxyUrl || '',
+        teleAIEnabled: s.teleAIEnabled || false,
+        teleAIAppKey: s.teleAIAppKey || '',
+        teleAIRegion: s.teleAIRegion || ''
       }
     })
     data.body = JSON.stringify({ variables: vars, stopOnFailure: workflowStopOnFailure.value, steps })
@@ -1158,7 +1260,12 @@ const handleExport = async () => {
   } catch {}
 }
 
-onMounted(() => { loadData() })
+onMounted(() => {
+  loadData()
+  getCustomConfig().then(res => {
+    if (res?.teleaiAuth) teleAIEnabled.value = res.teleaiAuth.enabled || false
+  }).catch(() => {})
+})
 </script>
 
 <style scoped>
@@ -1176,6 +1283,7 @@ onMounted(() => { loadData() })
 .result-section-title { font-size: 14px; font-weight: 600; color: var(--ops-text-primary); margin: 16px 0 8px; padding-left: 8px; border-left: 3px solid var(--ops-primary); }
 .kv-row { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; font-size: 13px; line-height: 20px; }
 .kv-key { color: var(--ops-text-secondary); font-weight: 500; flex-shrink: 0; }
+.kv-key-highlight { color: var(--ops-primary); font-weight: 600; }
 .kv-val { color: var(--ops-text-primary); word-break: break-all; }
 .kv-val-truncated { color: var(--ops-text-tertiary); font-style: italic; word-break: break-all; }
 .response-body-pre { margin: 0; padding: 8px; background: var(--color-fill-1, #f7f8fa); border-radius: 4px; font-size: 12px; line-height: 1.5; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; }

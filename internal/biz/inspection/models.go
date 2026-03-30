@@ -77,6 +77,9 @@ type ProbeConfig struct {
 	SkipVerify   *bool          `gorm:"default:true" json:"skipVerify"`
 	WSMessage    string         `gorm:"type:text" json:"wsMessage"`
 	WSMessageType int           `gorm:"default:1" json:"wsMessageType"`
+	TeleAIEnabled bool          `gorm:"default:false" json:"teleAIEnabled"`              // 应用服务类型的步骤级 TeleAI 开关
+	TeleAIAppKey string         `gorm:"type:varchar(200);default:''" json:"teleAIAppKey"` // 每个拨测的 TeleAI AppKey
+	TeleAIRegion string         `gorm:"type:varchar(50);default:''" json:"teleAIRegion"`  // 每个拨测的省份编码
 	WSMessageFormat string      `gorm:"type:varchar(20);default:'text'" json:"wsMessageFormat"`
 	WSReadTimeout int           `gorm:"default:5" json:"wsReadTimeout"`
 	Status       int8           `gorm:"default:1" json:"status"`                               // 1=enabled 0=disabled
@@ -245,13 +248,16 @@ type WorkflowStep struct {
 	Extractions   []StepExtraction        `json:"extractions"`
 	ExecMode      string                  `json:"execMode"`
 	ProxyURL      string                  `json:"proxyUrl"`
+	TeleAIEnabled bool                    `json:"teleAIEnabled"` // 步骤级 TeleAI 开关
+	TeleAIAppKey  string                  `json:"teleAIAppKey"`  // 步骤级 AppKey
+	TeleAIRegion  string                  `json:"teleAIRegion"`  // 步骤级省份编码
 }
 
 // StepExtraction defines how to extract a variable from a step's response.
 type StepExtraction struct {
 	Name   string `json:"name"`   // variable name
-	Source string `json:"source"` // "body" or "header"
-	Path   string `json:"path"`   // GJSON path for body, header name for header
+	Source string `json:"source"` // "body", "header", or "response"
+	Path   string `json:"path"`   // GJSON path for body, header name for header, unused for response
 }
 
 // WorkflowResult holds the outcome of a workflow probe execution.

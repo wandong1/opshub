@@ -39,7 +39,7 @@ var runCmd = &cobra.Command{
 		if logFile == "" {
 			logFile = "/var/log/srehub-agent/agent.log"
 		}
-		if err := logger.Init(logFile, cfg.LogMaxSize, cfg.LogMaxBackups, cfg.LogLevel); err != nil {
+		if err := logger.Init(logFile, cfg.LogMaxSize, cfg.LogMaxBackups, cfg.LogMaxAge, cfg.LogLevel); err != nil {
 			fmt.Printf("初始化日志失败: %v\n", err)
 			os.Exit(1)
 		}
@@ -47,7 +47,7 @@ var runCmd = &cobra.Command{
 		logger.Info("SREHub Agent 启动中...")
 		logger.Info("AgentID: %s", cfg.AgentID)
 		logger.Info("Server: %s", cfg.ServerAddr)
-		logger.Info("日志文件: %s (最大: %dMB, 保留: %d个备份)", logFile, cfg.LogMaxSize, cfg.LogMaxBackups)
+		logger.Info("日志文件: %s (最大: %dMB, 保留: %d个备份, 最大 %d 天)", logFile, cfg.LogMaxSize, cfg.LogMaxBackups, cfg.LogMaxAge)
 
 		grpcClient := client.NewGRPCClient(cfg)
 

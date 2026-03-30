@@ -180,7 +180,7 @@
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item label="手机号" field="phone">
+              <a-form-item label="手机号" field="phone" :rules="[{ required: true, message: '请输入手机号' }]">
                 <a-input v-model="userForm.phone" placeholder="请输入手机号" />
               </a-form-item>
             </a-col>

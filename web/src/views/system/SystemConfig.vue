@@ -117,6 +117,21 @@
             </a-form-item>
           </a-form>
         </div>
+
+        <!-- 定制配置 -->
+        <div v-show="activeNav === 2" class="config-section">
+          <div class="section-header">
+            <icon-code class="section-icon" />
+            <span>定制配置</span>
+          </div>
+          <a-form :model="customConfig" layout="horizontal" :label-col-props="{ span: 5 }" :wrapper-col-props="{ span: 16 }">
+            <div class="section-sub-header">TeleAI Authorization 自动填充</div>
+            <a-form-item label="启用自动填充">
+              <a-switch v-model="customConfig.teleaiAuthEnabled" checked-text="开启" unchecked-text="关闭" />
+              <span class="form-tip" style="margin-left: 8px;">开启后，应用服务与业务流程拨测表单中将显示 AppKey / 省份编码配置项，自动生成 Authorization</span>
+            </a-form-item>
+          </a-form>
+        </div>
       </a-card>
     </div>
   </div>
@@ -132,12 +147,15 @@ import {
   IconLock,
   IconPlus,
   IconDelete,
+  IconCode,
 } from '@arco-design/web-vue/es/icon'
 import {
   getAllConfig,
   saveBasicConfig,
   saveSecurityConfig,
-  uploadLogo
+  uploadLogo,
+  getCustomConfig,
+  saveCustomConfig,
 } from '@/api/system'
 import { useSystemStore } from '@/stores/system'
 
@@ -147,7 +165,8 @@ const activeNav = ref(0)
 
 const navItems = [
   { label: '基础配置', icon: IconHome },
-  { label: '安全配置', icon: IconLock }
+  { label: '安全配置', icon: IconLock },
+  { label: '定制配置', icon: IconCode },
 ]
 
 const config = reactive({
@@ -159,6 +178,10 @@ const config = reactive({
   enableCaptcha: true,
   maxLoginAttempts: 5,
   lockoutDuration: 300
+})
+
+const customConfig = reactive({
+  teleaiAuthEnabled: false,
 })
 
 const loadConfig = async () => {
@@ -181,6 +204,14 @@ const loadConfig = async () => {
   } catch (error) {
     console.error('加载配置失败', error)
   }
+  try {
+    const res = await getCustomConfig()
+    if (res?.teleaiAuth) {
+      customConfig.teleaiAuthEnabled = res.teleaiAuth.enabled || false
+    }
+  } catch (error) {
+    console.error('加载定制配置失败', error)
+  }
 }
 
 const handleSave = async () => {
@@ -198,6 +229,14 @@ const handleSave = async () => {
       enableCaptcha: config.enableCaptcha,
       maxLoginAttempts: config.maxLoginAttempts,
       lockoutDuration: config.lockoutDuration
+    })
+
+    await saveCustomConfig({
+      teleaiAuth: {
+        enabled: customConfig.teleaiAuthEnabled,
+        appKey: '',
+        region: '',
+      }
     })
 
     systemStore.updateConfig({
@@ -395,6 +434,16 @@ onMounted(() => {
 .form-tip {
   font-size: 12px;
   color: var(--ops-text-tertiary, #86909c);
+}
+
+.section-sub-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ops-text-secondary, #4e5969);
+  margin-bottom: 16px;
+  padding-left: 2px;
+  border-left: 3px solid var(--ops-primary, #165dff);
+  padding-left: 8px;
 }
 
 /* Logo上传 */

@@ -72,3 +72,21 @@ export const getIntegrationConfig = () => {
 export const saveIntegrationConfig = (data: { grafana?: GrafanaIntegration }) => {
   return request.put('/api/v1/system/integrations', data)
 }
+
+// ========== 定制配置 ==========
+
+export interface TeleAIAuthConfig {
+  enabled: boolean
+  appKey?: string
+  region?: string
+}
+
+// 获取定制配置
+export const getCustomConfig = () => {
+  return request.get('/api/v1/system/custom')
+}
+
+// 保存定制配置
+export const saveCustomConfig = (data: { teleaiAuth?: TeleAIAuthConfig }) => {
+  return request.put('/api/v1/system/custom', data)
+}
