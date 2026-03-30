@@ -3,6 +3,7 @@ package prober
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +12,23 @@ import (
 	"github.com/gorilla/websocket"
 	pb "github.com/ydcloud-dy/opshub/pkg/agentproto"
 )
+
+// wsAction mirrors inspection.WsAction (JSON-encoded in ProbeRequest.Body).
+type wsAction struct {
+	Type        string `json:"type"`        // "send" or "receive"
+	Message     string `json:"message"`
+	MessageType int    `json:"msgType"`     // 1=text, 2=binary
+	ReadTimeout int    `json:"readTimeout"` // seconds
+	ReceiveMode string `json:"receiveMode"` // "" / "single" = one message; "stream" = collect all until timeout
+}
+
+// wsActionResult mirrors inspection.WsActionResult.
+type wsActionResult struct {
+	Success      bool    `json:"success"`
+	ResponseBody string  `json:"body"`
+	Latency      float64 `json:"latency"`
+	Error        string  `json:"error"`
+}
 
 // WebSocketProber WebSocket 拨测器
 type WebSocketProber struct{}
@@ -75,6 +93,93 @@ func (p *WebSocketProber) Probe(ctx context.Context, req *pb.ProbeRequest) *pb.P
 
 	result.HttpStatusCode = int32(resp.StatusCode)
 	result.FinalUrl = wsURL
+
+	// Multi-step mode: Body carries a JSON-encoded []wsAction
+	if req.Body != "" {
+		var actions []wsAction
+		if err := json.Unmarshal([]byte(req.Body), &actions); err != nil {
+			result.Success = false
+			result.Error = fmt.Sprintf("WebSocket multi-step: failed to parse actions: %v", err)
+			result.Latency = float64(time.Since(start).Milliseconds())
+			return result
+		}
+		stepResults := make([]wsActionResult, 0, len(actions))
+		for _, action := range actions {
+			ar := wsActionResult{}
+			actionStart := time.Now()
+			switch action.Type {
+			case "send":
+				msgType := websocket.TextMessage
+				if action.MessageType == 2 {
+					msgType = websocket.BinaryMessage
+				}
+				if writeErr := conn.WriteMessage(msgType, []byte(action.Message)); writeErr != nil {
+					ar.Error = fmt.Sprintf("send failed: %v", writeErr)
+				} else {
+					ar.Success = true
+				}
+			case "receive":
+				timeout := action.ReadTimeout
+				if timeout <= 0 {
+					timeout = 5
+				}
+				deadline := time.Now().Add(time.Duration(timeout) * time.Second)
+				conn.SetReadDeadline(deadline)
+				if action.ReceiveMode == "stream" {
+					// Collect all messages until read deadline
+					var msgs []string
+					var totalLen int
+					const maxTotal = 65536
+					for {
+						_, msg, readErr := conn.ReadMessage()
+						if readErr != nil {
+							// Deadline exceeded = normal end of stream
+							break
+						}
+						if totalLen+len(msg) > maxTotal {
+							msg = msg[:maxTotal-totalLen]
+							msgs = append(msgs, string(msg))
+							break
+						}
+						totalLen += len(msg)
+						msgs = append(msgs, string(msg))
+					}
+					ar.Success = true
+					encoded, _ := json.Marshal(msgs)
+					ar.ResponseBody = string(encoded)
+				} else {
+					_, msg, readErr := conn.ReadMessage()
+					if readErr != nil {
+						ar.Error = fmt.Sprintf("receive failed: %v", readErr)
+					} else {
+						if len(msg) > 4096 {
+							msg = msg[:4096]
+						}
+						ar.Success = true
+						ar.ResponseBody = string(msg)
+					}
+				}
+			}
+			ar.Latency = float64(time.Since(actionStart).Milliseconds())
+			stepResults = append(stepResults, ar)
+		}
+		// Encode step results into ResponseBody
+		encoded, _ := json.Marshal(stepResults)
+		result.ResponseBody = encoded
+		// Fill response headers
+		result.ResponseHeaders = make(map[string]string)
+		for k, v := range resp.Header {
+			if len(v) > 0 {
+				result.ResponseHeaders[k] = v[0]
+			}
+		}
+		result.Latency = float64(time.Since(start).Milliseconds())
+		result.HttpResponseTime = result.Latency
+		result.Success = true
+		result.AssertionSuccess = true
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		return result
+	}
 
 	// 如果需要发送消息
 	if req.WsMessage != "" {

@@ -240,61 +240,80 @@ func (c *GRPCClient) handleServerMessage(msg *pb.ServerMessage) {
 	switch payload := msg.Payload.(type) {
 	case *pb.ServerMessage_RegisterAck:
 		if payload.RegisterAck.Success {
-			fmt.Printf("注册成功: %s\n", payload.RegisterAck.Message)
+			logger.Info("注册成功: %s", payload.RegisterAck.Message)
 			if payload.RegisterAck.HeartbeatInterval > 0 {
 				c.intervalMu.Lock()
 				c.heartbeatInterval = payload.RegisterAck.HeartbeatInterval
 				c.intervalMu.Unlock()
-				fmt.Printf("心跳间隔已更新为: %d 秒\n", payload.RegisterAck.HeartbeatInterval)
+				logger.Info("心跳间隔已更新为: %d 秒", payload.RegisterAck.HeartbeatInterval)
 			}
 		} else {
-			fmt.Printf("注册失败: %s\n", payload.RegisterAck.Message)
+			logger.Warn("注册失败: %s", payload.RegisterAck.Message)
 		}
 
 	case *pb.ServerMessage_HeartbeatAck:
-		// 心跳确认，无需处理
+		logger.Debug("收到心跳确认")
 
 	case *pb.ServerMessage_TermOpen:
 		if c.termHandler != nil {
+			logger.Info("打开终端会话: sessionID=%s, cols=%d, rows=%d", payload.TermOpen.SessionId, payload.TermOpen.Cols, payload.TermOpen.Rows)
 			c.termHandler.Open(payload.TermOpen.SessionId, payload.TermOpen.Cols, payload.TermOpen.Rows)
 		}
 	case *pb.ServerMessage_TermInput:
 		if c.termHandler != nil {
+			logger.Debug("终端输入: sessionID=%s, len=%d", payload.TermInput.SessionId, len(payload.TermInput.Data))
 			c.termHandler.Input(payload.TermInput.SessionId, payload.TermInput.Data)
 		}
 	case *pb.ServerMessage_TermResize:
 		if c.termHandler != nil {
+			logger.Debug("终端调整大小: sessionID=%s, cols=%d, rows=%d", payload.TermResize.SessionId, payload.TermResize.Cols, payload.TermResize.Rows)
 			c.termHandler.Resize(payload.TermResize.SessionId, payload.TermResize.Cols, payload.TermResize.Rows)
 		}
 	case *pb.ServerMessage_TermClose:
 		if c.termHandler != nil {
+			logger.Info("关闭终端会话: sessionID=%s", payload.TermClose.SessionId)
 			c.termHandler.Close(payload.TermClose.SessionId)
 		}
 
 	case *pb.ServerMessage_FileRequest:
 		if c.fileHandler != nil {
 			req := payload.FileRequest
+			logger.Info("收到文件请求: action=%s, path=%s, filename=%s, requestID=%s", req.Action, req.Path, req.Filename, req.RequestId)
 			resp, err := c.fileHandler.HandleRequest(req.RequestId, req.Action, req.Path, req.Filename, req.Data)
 			if err != nil {
+				logger.Error("文件操作失败: action=%s, path=%s, err=%v", req.Action, req.Path, err)
 				resp = &pb.AgentMessage{
 					Payload: &pb.AgentMessage_FileChunk{
 						FileChunk: &pb.FileChunk{RequestId: req.RequestId, Error: err.Error()},
 					},
 				}
+			} else {
+				logger.Debug("文件操作完成: action=%s, path=%s", req.Action, req.Path)
 			}
 			c.SendMessage(resp)
 		}
 
 	case *pb.ServerMessage_CmdRequest:
 		if c.cmdHandler != nil {
+			logger.Info("收到命令请求: requestID=%s, command=%s", payload.CmdRequest.RequestId, payload.CmdRequest.Command)
 			resp := c.cmdHandler.Execute(payload.CmdRequest.RequestId, payload.CmdRequest.Command, payload.CmdRequest.Timeout)
+			logger.Debug("命令执行完成: requestID=%s", payload.CmdRequest.RequestId)
 			c.SendMessage(resp)
 		}
 
 	case *pb.ServerMessage_ProbeRequest:
 		if c.probeHandler != nil {
-			logger.Info("收到拨测请求: type=%s, target=%s", payload.ProbeRequest.ProbeType, payload.ProbeRequest.Target)
+			logger.Info("收到拨测请求: type=%s, target=%s, url=%s, requestID=%s",
+				payload.ProbeRequest.ProbeType, payload.ProbeRequest.Target,
+				payload.ProbeRequest.Url, payload.ProbeRequest.RequestId)
 			result := c.probeHandler.Probe(payload.ProbeRequest)
+			if result.Success {
+				logger.Info("拨测完成: type=%s, success=true, latency=%.2fms, requestID=%s",
+					payload.ProbeRequest.ProbeType, result.Latency, payload.ProbeRequest.RequestId)
+			} else {
+				logger.Warn("拨测完成: type=%s, success=false, error=%s, requestID=%s",
+					payload.ProbeRequest.ProbeType, result.Error, payload.ProbeRequest.RequestId)
+			}
 			resp := &pb.AgentMessage{
 				Payload: &pb.AgentMessage_ProbeResult{
 					ProbeResult: result,

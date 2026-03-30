@@ -31,6 +31,9 @@ type ProbeConfigRequest struct {
 	WSMessage     string `json:"wsMessage"`
 	WSMessageType int    `json:"wsMessageType"`
 	WSReadTimeout int    `json:"wsReadTimeout"`
+	TeleAIEnabled bool   `json:"teleAIEnabled"`
+	TeleAIAppKey  string `json:"teleAIAppKey"`
+	TeleAIRegion  string `json:"teleAIRegion"`
 }
 
 // ToModel converts the request to a ProbeConfig model.
@@ -72,6 +75,9 @@ func (r *ProbeConfigRequest) ToModel() *ProbeConfig {
 		WSMessage:    r.WSMessage,
 		WSMessageType: r.WSMessageType,
 		WSReadTimeout: r.WSReadTimeout,
+		TeleAIEnabled: r.TeleAIEnabled,
+		TeleAIAppKey: r.TeleAIAppKey,
+		TeleAIRegion: r.TeleAIRegion,
 	}
 	if m.ExecMode == "" {
 		m.ExecMode = ExecModeLocal

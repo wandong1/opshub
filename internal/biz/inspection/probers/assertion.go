@@ -13,8 +13,8 @@ import (
 // Assertion defines a single assertion rule.
 type Assertion struct {
 	Name      string `json:"name"`
-	Source    string `json:"source"`    // body / header
-	Path      string `json:"path"`      // body: GJSON path, header: header name
+	Source    string `json:"source"`    // body / header / response
+	Path      string `json:"path"`      // body: GJSON path, header: header name, response: unused
 	Condition string `json:"condition"` // == > >= < <= contains notcontains regexp notregexp
 	Value     string `json:"value"`
 }
@@ -50,6 +50,8 @@ func EvaluateAssertions(assertions []Assertion, body string, headers http.Header
 
 func extractValue(source, path, body string, headers http.Header) (string, error) {
 	switch source {
+	case "response":
+		return body, nil
 	case "body":
 		// Convert $.x.y style to gjson path x.y
 		gjsonPath := path

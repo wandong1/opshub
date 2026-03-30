@@ -33,6 +33,7 @@ import (
 	"github.com/ydcloud-dy/opshub/internal/biz"
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	auditmodel "github.com/ydcloud-dy/opshub/internal/biz/audit"
+	alertbiz "github.com/ydcloud-dy/opshub/internal/biz/alert"
 	inspectionbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
 	rbacmodel "github.com/ydcloud-dy/opshub/internal/biz/rbac"
 	systemmodel "github.com/ydcloud-dy/opshub/internal/biz/system"
@@ -160,6 +161,9 @@ func runServer() (*conf.Config, error) {
 		return nil, fmt.Errorf("初始化默认数据失败: %w", err)
 	}
 
+	// 每次启动都幂等执行菜单初始化（确保菜单数据最新）
+	initAlertMenus(data.DB())
+
 	// 启动Agent gRPC服务器（在HTTP服务器之前创建，以便注册路由）
 	var grpcServer *agentserver.GRPCServer
 	if cfg.Agent.Enabled {
@@ -241,6 +245,16 @@ func autoMigrate(db *gorm.DB) error {
 		&assetbiz.Website{},
 		&assetbiz.WebsiteGroup{},
 		&assetbiz.WebsiteAgent{},
+		// 告警管理表
+		&alertbiz.AlertDataSource{},
+		&alertbiz.AlertRuleGroup{},
+		&alertbiz.AlertRule{},
+		&alertbiz.AlertEvent{},
+		&alertbiz.AlertNotifyChannel{},
+		&alertbiz.AlertSubscription{},
+		&alertbiz.AlertSubscriptionRule{},
+		&alertbiz.AlertSubscriptionChannel{},
+		&alertbiz.AlertSubscriptionUser{},
 	); err != nil {
 		return err
 	}
@@ -356,6 +370,9 @@ func initDefaultData(db *gorm.DB) error {
 	// 初始化服务标签菜单
 	initServiceLabelMenus(db)
 
+	// 初始化告警管理菜单
+	initAlertMenus(db)
+
 	return nil
 }
 
@@ -454,6 +471,114 @@ func initServiceLabelMenus(db *gorm.DB) {
 	}
 
 	appLogger.Info("服务标签菜单初始化完成")
+}
+
+// initAlertMenus 初始化告警管理菜单（幂等）
+func initAlertMenus(db *gorm.DB) {
+	var count int64
+	db.Model(&rbacmodel.SysMenu{}).Where("code = ?", "alert-management").Count(&count)
+	if count > 0 {
+		return
+	}
+
+	// 获取管理员角色
+	var adminRole rbacmodel.SysRole
+	hasAdmin := db.Where("code = ?", "admin").First(&adminRole).Error == nil
+
+	assignToAdmin := func(menuID uint) {
+		if hasAdmin {
+			db.Exec("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRole.ID, menuID)
+		}
+	}
+
+	// 一级目录：告警管理
+	root := &rbacmodel.SysMenu{
+		Name: "告警管理", Code: "alert-management", Type: 1,
+		ParentID: 0, Path: "/alert", Icon: "IconBell", Sort: 55, Visible: 1, Status: 1,
+	}
+	db.Create(root)
+	assignToAdmin(root.ID)
+
+	// 二级菜单 helper
+	type btnDef struct {
+		name, code, apiPath, apiMethod string
+		sort                           int
+	}
+	type menuDef struct {
+		name, code, path, component string
+		sort                         int
+		buttons                      []btnDef
+	}
+
+	menus := []menuDef{
+		{
+			name: "告警规则", code: "alert-rules", path: "/alert/rules", component: "alert/RuleManagement", sort: 1,
+			buttons: []btnDef{
+				{"新增规则", "alert:rules:create", "/api/v1/alert/rules", "POST", 1},
+				{"编辑规则", "alert:rules:edit", "/api/v1/alert/rules/:id", "PUT", 2},
+				{"删除规则", "alert:rules:delete", "/api/v1/alert/rules/:id", "DELETE", 3},
+				{"启用禁用", "alert:rules:toggle", "/api/v1/alert/rules/:id/toggle", "PUT", 4},
+				{"测试规则", "alert:rules:test", "/api/v1/alert/rules/:id/test", "POST", 5},
+				{"克隆规则", "alert:rules:clone", "/api/v1/alert/rules/:id/clone", "POST", 6},
+				{"导入导出", "alert:rules:import-export", "/api/v1/alert/rules/import", "POST", 7},
+			},
+		},
+		{
+			name: "数据源管理", code: "alert-datasources", path: "/alert/datasources", component: "alert/DataSources", sort: 2,
+			buttons: []btnDef{
+				{"新增数据源", "alert:datasources:create", "/api/v1/alert/datasources", "POST", 1},
+				{"编辑数据源", "alert:datasources:edit", "/api/v1/alert/datasources/:id", "PUT", 2},
+				{"删除数据源", "alert:datasources:delete", "/api/v1/alert/datasources/:id", "DELETE", 3},
+			},
+		},
+		{
+			name: "实时告警", code: "alert-events", path: "/alert/events", component: "alert/ActiveEvents", sort: 3,
+			buttons: []btnDef{
+				{"屏蔽告警", "alert:events:silence", "/api/v1/alert/events/:id/silence", "POST", 1},
+				{"手动处理", "alert:events:handle", "/api/v1/alert/events/:id/handle", "POST", 2},
+			},
+		},
+		{
+			name: "历史告警", code: "alert-history", path: "/alert/history", component: "alert/HistoryEvents", sort: 4,
+		},
+		{
+			name: "告警通道", code: "alert-channels", path: "/alert/channels", component: "alert/Channels", sort: 5,
+			buttons: []btnDef{
+				{"新增通道", "alert:channels:create", "/api/v1/alert/channels", "POST", 1},
+				{"编辑通道", "alert:channels:edit", "/api/v1/alert/channels/:id", "PUT", 2},
+				{"删除通道", "alert:channels:delete", "/api/v1/alert/channels/:id", "DELETE", 3},
+			},
+		},
+		{
+			name: "告警订阅", code: "alert-subscriptions", path: "/alert/subscriptions", component: "alert/Subscriptions", sort: 6,
+			buttons: []btnDef{
+				{"新增订阅", "alert:subscriptions:create", "/api/v1/alert/subscriptions", "POST", 1},
+				{"编辑订阅", "alert:subscriptions:edit", "/api/v1/alert/subscriptions/:id", "PUT", 2},
+				{"删除订阅", "alert:subscriptions:delete", "/api/v1/alert/subscriptions/:id", "DELETE", 3},
+			},
+		},
+	}
+
+	for _, m := range menus {
+		menu := &rbacmodel.SysMenu{
+			Name: m.name, Code: m.code, Type: 2, ParentID: root.ID,
+			Path: m.path, Component: m.component, Sort: m.sort, Visible: 1, Status: 1,
+		}
+		db.Create(menu)
+		assignToAdmin(menu.ID)
+		for _, b := range m.buttons {
+			btn := &rbacmodel.SysMenu{
+				Name: b.name, Code: b.code, Type: 3, ParentID: menu.ID,
+				Sort: b.sort, Visible: 1, Status: 1, ApiPath: b.apiPath, ApiMethod: b.apiMethod,
+			}
+			db.Create(btn)
+			assignToAdmin(btn.ID)
+			if b.apiPath != "" {
+				db.Create(&rbacmodel.SysMenuAPI{MenuID: btn.ID, ApiPath: b.apiPath, ApiMethod: b.apiMethod})
+			}
+		}
+	}
+	appLogger.Info("告警管理菜单初始化完成")
 }
 
 func stopServer(ctx context.Context, cfg *conf.Config) error {

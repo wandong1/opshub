@@ -39,6 +39,7 @@ import (
 	agentserver "github.com/ydcloud-dy/opshub/internal/server/agent"
 	auditserver "github.com/ydcloud-dy/opshub/internal/server/audit"
 	identityserver "github.com/ydcloud-dy/opshub/internal/server/identity"
+	alertserver "github.com/ydcloud-dy/opshub/internal/server/alert"
 	inspectionserver "github.com/ydcloud-dy/opshub/internal/server/inspection"
 	"github.com/ydcloud-dy/opshub/internal/server/rbac"
 	systemserver "github.com/ydcloud-dy/opshub/internal/server/system"
@@ -65,9 +66,11 @@ type HTTPServer struct {
 	pluginMgr        *plugin.Manager
 	uploadSrv        *UploadServer
 	inspectionServer *inspectionserver.HTTPServer
+	alertServer      *alertserver.HTTPServer
 	grpcServer       *agentserver.GRPCServer
 	cacheManager     *cache.CacheManager
 	scheduler        *cache.CacheSyncScheduler
+	evalCancel       context.CancelFunc // 告警评估引擎的 cancel 函数
 }
 
 // NewHTTPServer 创建HTTP服务器
@@ -279,6 +282,11 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 			s.inspectionServer.SetAgentCommandFactory(agentserver.NewAgentCommandFactory(s.grpcServer.Hub()))
 		}
 
+		// 注入 TeleAI Authorization 自动填充全局开关（per-probe 的 appKey/region 存储在拨测配置中）
+		if teleAICfg, err := configUseCase.GetTeleAIAuthConfig(context.Background()); err == nil && teleAICfg.Enabled {
+			s.inspectionServer.SetTeleAIEnabled(true)
+		}
+
 		// 上传接口
 		v1.POST("/upload/avatar", s.uploadSrv.UploadAvatar)
 		v1.PUT("/profile/avatar", s.uploadSrv.UpdateUserAvatar)
@@ -296,6 +304,10 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 			agentHTTPServer := agentserver.NewHTTPServer(s.grpcServer, hostUseCase, s.db, authMiddleware)
 			agentHTTPServer.RegisterRoutes(v1)
 		}
+
+		// 注册 Alert（告警管理）路由
+		s.alertServer = alertserver.NewAlertServices(s.db, s.redisClient)
+		s.alertServer.RegisterRoutes(v1)
 	}
 
 	// 插件路由
@@ -515,6 +527,14 @@ func (s *HTTPServer) Start() error {
 		zap.String("mode", s.conf.Server.Mode),
 	)
 
+	// 启动告警评估引擎
+	if s.alertServer != nil {
+		evalCtx, cancel := context.WithCancel(context.Background())
+		s.evalCancel = cancel
+		go s.alertServer.GetEvalEngine().Start(evalCtx)
+		appLogger.Info("告警评估引擎已启动")
+	}
+
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("HTTP服务器启动失败: %w", err)
 	}
@@ -524,6 +544,12 @@ func (s *HTTPServer) Start() error {
 
 // Stop 停止服务器
 func (s *HTTPServer) Stop(ctx context.Context) error {
+	// 停止告警评估引擎
+	if s.evalCancel != nil {
+		s.evalCancel()
+		appLogger.Info("告警评估引擎已停止")
+	}
+
 	// 停止缓存调度器
 	if s.scheduler != nil {
 		s.scheduler.Stop()

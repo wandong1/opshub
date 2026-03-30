@@ -124,6 +124,19 @@ func (s *HTTPServer) SetVariableResolver(r *biz.VariableResolver) {
 	}
 }
 
+// SetTeleAIEnabled sets the global TeleAI Authorization auto-fill switch.
+func (s *HTTPServer) SetTeleAIEnabled(enabled bool) {
+	if s.executor != nil {
+		s.executor.SetTeleAIEnabled(enabled)
+	}
+	if s.probeV2Executor != nil {
+		s.probeV2Executor.SetTeleAIEnabled(enabled)
+	}
+	if s.probeConfigService != nil {
+		s.probeConfigService.SetTeleAIEnabled(enabled)
+	}
+}
+
 // RegisterRoutes registers all inspection routes under the given group.
 func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 	inspection := r.Group("/inspection")

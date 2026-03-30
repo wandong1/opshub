@@ -41,7 +41,7 @@ var (
 )
 
 // Init 初始化日志
-func Init(logFile string, maxSize, maxBackups int, level string) error {
+func Init(logFile string, maxSize, maxBackups, maxAge int, level string) error {
 	var err error
 	once.Do(func() {
 		// 确保日志目录存在
@@ -55,7 +55,7 @@ func Init(logFile string, maxSize, maxBackups int, level string) error {
 			Filename:   logFile,
 			MaxSize:    maxSize,    // MB
 			MaxBackups: maxBackups, // 保留的旧日志文件数量
-			MaxAge:     30,         // 天
+			MaxAge:     maxAge,     // 天（自动清理超过此天数的旧日志）
 			Compress:   true,       // 压缩旧日志
 			LocalTime:  true,       // 使用本地时间
 		}

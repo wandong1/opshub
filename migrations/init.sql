@@ -1924,4 +1924,145 @@ VALUES
   (2, 389),  -- 巡检管理（仅查看）
   (2, 391);  -- 执行记录（仅查看）
 
+-- ============================================================
+-- 18. 告警管理模块菜单与权限
+-- ============================================================
+
+-- 18.1 顶级目录：告警管理
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (404, '告警管理', 'alert-management', 1, 0, '/alert', '', 'IconBell', 55, 1, 1, '', '', NOW(), NOW());
+
+-- 18.2 二级菜单 (parent_id=404)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (405, '告警规则', 'alert-rules', 2, 404, '/alert/rules', 'alert/RuleManagement', 'Robot', 1, 1, 1, '', '', NOW(), NOW()),
+  (406, '数据源管理', 'alert-datasources', 2, 404, '/alert/datasources', 'alert/DataSources', 'Storage', 2, 1, 1, '', '', NOW(), NOW()),
+  (407, '实时告警', 'alert-events', 2, 404, '/alert/events', 'alert/ActiveEvents', 'Alert', 3, 1, 1, '', '', NOW(), NOW()),
+  (408, '历史告警', 'alert-history', 2, 404, '/alert/history', 'alert/HistoryEvents', 'Archive', 4, 1, 1, '', '', NOW(), NOW()),
+  (409, '告警通道', 'alert-channels', 2, 404, '/alert/channels', 'alert/Channels', 'Notification', 5, 1, 1, '', '', NOW(), NOW()),
+  (410, '告警订阅', 'alert-subscriptions', 2, 404, '/alert/subscriptions', 'alert/Subscriptions', 'Bookmark', 6, 1, 1, '', '', NOW(), NOW());
+
+-- 18.3 告警规则按钮权限 (parent_id=405)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (411, '新增规则', 'alert:rules:create', 3, 405, '', '', '', 1, 1, 1, '/api/v1/alert/rules', 'POST', NOW(), NOW()),
+  (412, '编辑规则', 'alert:rules:edit', 3, 405, '', '', '', 2, 1, 1, '/api/v1/alert/rules/:id', 'PUT', NOW(), NOW()),
+  (413, '删除规则', 'alert:rules:delete', 3, 405, '', '', '', 3, 1, 1, '/api/v1/alert/rules/:id', 'DELETE', NOW(), NOW()),
+  (414, '启用禁用', 'alert:rules:toggle', 3, 405, '', '', '', 4, 1, 1, '/api/v1/alert/rules/:id/toggle', 'PUT', NOW(), NOW()),
+  (415, '测试规则', 'alert:rules:test', 3, 405, '', '', '', 5, 1, 1, '/api/v1/alert/rules/:id/test', 'POST', NOW(), NOW()),
+  (416, '克隆规则', 'alert:rules:clone', 3, 405, '', '', '', 6, 1, 1, '/api/v1/alert/rules/:id/clone', 'POST', NOW(), NOW()),
+  (417, '导入导出', 'alert:rules:import-export', 3, 405, '', '', '', 7, 1, 1, '/api/v1/alert/rules/import', 'POST', NOW(), NOW());
+
+-- 18.4 数据源管理按钮权限 (parent_id=406)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (418, '新增数据源', 'alert:datasources:create', 3, 406, '', '', '', 1, 1, 1, '/api/v1/alert/datasources', 'POST', NOW(), NOW()),
+  (419, '编辑数据源', 'alert:datasources:edit', 3, 406, '', '', '', 2, 1, 1, '/api/v1/alert/datasources/:id', 'PUT', NOW(), NOW()),
+  (420, '删除数据源', 'alert:datasources:delete', 3, 406, '', '', '', 3, 1, 1, '/api/v1/alert/datasources/:id', 'DELETE', NOW(), NOW());
+
+-- 18.5 实时告警按钮权限 (parent_id=407)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (421, '屏蔽告警', 'alert:events:silence', 3, 407, '', '', '', 1, 1, 1, '/api/v1/alert/events/:id/silence', 'POST', NOW(), NOW()),
+  (422, '手动处理', 'alert:events:handle', 3, 407, '', '', '', 2, 1, 1, '/api/v1/alert/events/:id/handle', 'POST', NOW(), NOW());
+
+-- 18.6 告警通道按钮权限 (parent_id=409)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (423, '新增通道', 'alert:channels:create', 3, 409, '', '', '', 1, 1, 1, '/api/v1/alert/channels', 'POST', NOW(), NOW()),
+  (424, '编辑通道', 'alert:channels:edit', 3, 409, '', '', '', 2, 1, 1, '/api/v1/alert/channels/:id', 'PUT', NOW(), NOW()),
+  (425, '删除通道', 'alert:channels:delete', 3, 409, '', '', '', 3, 1, 1, '/api/v1/alert/channels/:id', 'DELETE', NOW(), NOW());
+
+-- 18.7 告警订阅按钮权限 (parent_id=410)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (426, '新增订阅', 'alert:subscriptions:create', 3, 410, '', '', '', 1, 1, 1, '/api/v1/alert/subscriptions', 'POST', NOW(), NOW()),
+  (427, '编辑订阅', 'alert:subscriptions:edit', 3, 410, '', '', '', 2, 1, 1, '/api/v1/alert/subscriptions/:id', 'PUT', NOW(), NOW()),
+  (428, '删除订阅', 'alert:subscriptions:delete', 3, 410, '', '', '', 3, 1, 1, '/api/v1/alert/subscriptions/:id', 'DELETE', NOW(), NOW());
+
+-- 18.8 sys_menu_api 关联记录（补充页面读取类 API + 多API按钮绑定）
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  -- 告警规则页面（读取类）
+  (405, '/api/v1/alert/rules', 'GET', NOW(), NOW()),
+  (405, '/api/v1/alert/rule-groups', 'GET', NOW(), NOW()),
+  (405, '/api/v1/alert/datasources', 'GET', NOW(), NOW()),
+  (405, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+  (405, '/api/v1/alert/rule-groups', 'POST', NOW(), NOW()),
+  (405, '/api/v1/alert/rule-groups/:id', 'PUT', NOW(), NOW()),
+  (405, '/api/v1/alert/rule-groups/:id', 'DELETE', NOW(), NOW()),
+  -- 告警规则按钮补充
+  (411, '/api/v1/alert/rules', 'POST', NOW(), NOW()),
+  (412, '/api/v1/alert/rules/:id', 'PUT', NOW(), NOW()),
+  (413, '/api/v1/alert/rules/:id', 'DELETE', NOW(), NOW()),
+  (414, '/api/v1/alert/rules/:id/toggle', 'PUT', NOW(), NOW()),
+  (415, '/api/v1/alert/rules/:id/test', 'POST', NOW(), NOW()),
+  (416, '/api/v1/alert/rules/:id/clone', 'POST', NOW(), NOW()),
+  (417, '/api/v1/alert/rules/import', 'POST', NOW(), NOW()),
+  (417, '/api/v1/alert/rules/export', 'GET', NOW(), NOW()),
+  -- 数据源页面（读取类）
+  (406, '/api/v1/alert/datasources', 'GET', NOW(), NOW()),
+  (406, '/api/v1/alert/datasources/:id/test', 'POST', NOW(), NOW()),
+  -- 数据源按钮补充
+  (418, '/api/v1/alert/datasources', 'POST', NOW(), NOW()),
+  (419, '/api/v1/alert/datasources/:id', 'PUT', NOW(), NOW()),
+  (420, '/api/v1/alert/datasources/:id', 'DELETE', NOW(), NOW()),
+  -- 实时告警页面（读取类）
+  (407, '/api/v1/alert/events/active', 'GET', NOW(), NOW()),
+  (407, '/api/v1/alert/events/stats', 'GET', NOW(), NOW()),
+  (407, '/api/v1/alert/events/trend', 'GET', NOW(), NOW()),
+  -- 实时告警按钮
+  (421, '/api/v1/alert/events/:id/silence', 'POST', NOW(), NOW()),
+  (422, '/api/v1/alert/events/:id/handle', 'POST', NOW(), NOW()),
+  -- 历史告警页面（读取类）
+  (408, '/api/v1/alert/events/history', 'GET', NOW(), NOW()),
+  -- 告警通道页面（读取类）
+  (409, '/api/v1/alert/channels', 'GET', NOW(), NOW()),
+  (409, '/api/v1/alert/channels/:id/test', 'POST', NOW(), NOW()),
+  -- 告警通道按钮
+  (423, '/api/v1/alert/channels', 'POST', NOW(), NOW()),
+  (424, '/api/v1/alert/channels/:id', 'PUT', NOW(), NOW()),
+  (425, '/api/v1/alert/channels/:id', 'DELETE', NOW(), NOW()),
+  -- 告警订阅页面（读取类）
+  (410, '/api/v1/alert/subscriptions', 'GET', NOW(), NOW()),
+  (410, '/api/v1/alert/subscriptions/:id', 'GET', NOW(), NOW()),
+  (410, '/api/v1/alert/rules', 'GET', NOW(), NOW()),
+  (410, '/api/v1/alert/channels', 'GET', NOW(), NOW()),
+  (410, '/api/v1/users', 'GET', NOW(), NOW()),
+  (410, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+  -- 告警订阅按钮
+  (426, '/api/v1/alert/subscriptions', 'POST', NOW(), NOW()),
+  (427, '/api/v1/alert/subscriptions/:id', 'PUT', NOW(), NOW()),
+  (428, '/api/v1/alert/subscriptions/:id', 'DELETE', NOW(), NOW());
+
+-- 18.9 为管理员角色(role_id=1)分配告警管理所有菜单和按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 404),  -- 告警管理（目录）
+  (1, 405),  -- 告警规则
+  (1, 406),  -- 数据源管理
+  (1, 407),  -- 实时告警
+  (1, 408),  -- 历史告警
+  (1, 409),  -- 告警通道
+  (1, 410),  -- 告警订阅
+  (1, 411),  -- 新增规则
+  (1, 412),  -- 编辑规则
+  (1, 413),  -- 删除规则
+  (1, 414),  -- 启用禁用
+  (1, 415),  -- 测试规则
+  (1, 416),  -- 克隆规则
+  (1, 417),  -- 导入导出
+  (1, 418),  -- 新增数据源
+  (1, 419),  -- 编辑数据源
+  (1, 420),  -- 删除数据源
+  (1, 421),  -- 屏蔽告警
+  (1, 422),  -- 手动处理
+  (1, 423),  -- 新增通道
+  (1, 424),  -- 编辑通道
+  (1, 425),  -- 删除通道
+  (1, 426),  -- 新增订阅
+  (1, 427),  -- 编辑订阅
+  (1, 428);  -- 删除订阅
+
 SET FOREIGN_KEY_CHECKS = 1;

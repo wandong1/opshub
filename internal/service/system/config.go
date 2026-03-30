@@ -353,3 +353,32 @@ func (s *ConfigService) SaveIntegrationConfig(c *gin.Context) {
 
 	response.Success(c, nil)
 }
+
+// GetCustomConfig 获取定制功能配置
+func (s *ConfigService) GetCustomConfig(c *gin.Context) {
+	cfg, err := s.configUseCase.GetTeleAIAuthConfig(c.Request.Context())
+	if err != nil {
+		appLogger.Error("获取定制配置失败", zap.Error(err))
+		cfg = &system.TeleAIAuthConfig{}
+	}
+	response.Success(c, gin.H{"teleaiAuth": cfg})
+}
+
+// SaveCustomConfig 保存定制功能配置
+func (s *ConfigService) SaveCustomConfig(c *gin.Context) {
+	var req struct {
+		TeleAIAuth *system.TeleAIAuthConfig `json:"teleaiAuth"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
+		return
+	}
+	if req.TeleAIAuth != nil {
+		if err := s.configUseCase.SaveTeleAIAuthConfig(c.Request.Context(), req.TeleAIAuth); err != nil {
+			appLogger.Error("保存定制配置失败", zap.Error(err))
+			response.ErrorCode(c, http.StatusInternalServerError, "保存配置失败")
+			return
+		}
+	}
+	response.Success(c, nil)
+}

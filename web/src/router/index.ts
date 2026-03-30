@@ -252,6 +252,43 @@ const router = createRouter({
           name: 'GrafanaDashboard',
           component: () => import('@/views/monitor/GrafanaDashboard.vue'),
           meta: { title: '监控大屏' }
+        },
+        // 告警管理
+        {
+          path: 'alert/rules',
+          name: 'AlertMgmtRules',
+          component: () => import('@/views/alert/RuleManagement.vue'),
+          meta: { title: '告警规则' }
+        },
+        {
+          path: 'alert/datasources',
+          name: 'AlertMgmtDataSources',
+          component: () => import('@/views/alert/DataSources.vue'),
+          meta: { title: '数据源管理' }
+        },
+        {
+          path: 'alert/events',
+          name: 'AlertMgmtEvents',
+          component: () => import('@/views/alert/ActiveEvents.vue'),
+          meta: { title: '实时告警' }
+        },
+        {
+          path: 'alert/history',
+          name: 'AlertMgmtHistory',
+          component: () => import('@/views/alert/HistoryEvents.vue'),
+          meta: { title: '历史告警' }
+        },
+        {
+          path: 'alert/channels',
+          name: 'AlertMgmtChannels',
+          component: () => import('@/views/alert/Channels.vue'),
+          meta: { title: '告警通道' }
+        },
+        {
+          path: 'alert/subscriptions',
+          name: 'AlertMgmtSubscriptions',
+          component: () => import('@/views/alert/Subscriptions.vue'),
+          meta: { title: '告警订阅' }
         }
       ]
     }

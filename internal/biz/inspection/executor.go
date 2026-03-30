@@ -31,6 +31,7 @@ type NetworkProbeExecutor struct {
 	agentFactory     AgentCommandFactory
 	variableResolver *VariableResolver
 	redisCounter     *metrics.RedisCounter
+	teleAIEnabled    bool // global TeleAI auth switch
 }
 
 // NewNetworkProbeExecutor creates a new executor.
@@ -61,6 +62,11 @@ func (e *NetworkProbeExecutor) SetVariableResolver(r *VariableResolver) {
 // SetRedisCounter injects a Redis-backed counter for persistent metric counting.
 func (e *NetworkProbeExecutor) SetRedisCounter(rc *metrics.RedisCounter) {
 	e.redisCounter = rc
+}
+
+// SetTeleAIEnabled sets the global TeleAI Authorization auto-fill switch.
+func (e *NetworkProbeExecutor) SetTeleAIEnabled(enabled bool) {
+	e.teleAIEnabled = enabled
 }
 
 func (e *NetworkProbeExecutor) Type() string { return "network_probe" }
@@ -296,6 +302,9 @@ func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probe
 // executeAppProbe runs a single application probe.
 func (e *NetworkProbeExecutor) executeAppProbe(cfg *ProbeConfig) (*probers.AppResult, uint) {
 	appCfg := buildAppProbeConfig(cfg)
+	if e.teleAIEnabled && cfg.TeleAIEnabled {
+		InjectTeleAIAuthHeader(true, cfg.TeleAIAppKey, cfg.TeleAIRegion, appCfg)
+	}
 
 	appLogger.Info("executeAppProbe called",
 		zap.String("probe_name", cfg.Name),
@@ -361,7 +370,7 @@ func (e *NetworkProbeExecutor) executeAppProbe(cfg *ProbeConfig) (*probers.AppRe
 		)
 
 		// Build ProbeRequest
-		probeReq := buildProbeRequest(cfg, appCfg)
+		probeReq := BuildProbeRequest(cfg, appCfg)
 
 		appLogger.Info("Sending probe request to agent",
 			zap.String("probe_name", cfg.Name),
@@ -385,7 +394,7 @@ func (e *NetworkProbeExecutor) executeAppProbe(cfg *ProbeConfig) (*probers.AppRe
 		}
 
 		// Convert pb.ProbeResult to probers.AppResult
-		appResult := convertProbeResultToAppResult(pbResult)
+		appResult := ConvertProbeResultToAppResult(pbResult)
 
 		appLogger.Info("Received probe result from agent",
 			zap.String("probe_name", cfg.Name),
@@ -419,6 +428,35 @@ func (e *NetworkProbeExecutor) executeAppProbe(cfg *ProbeConfig) (*probers.AppRe
 		return &probers.AppResult{Error: err.Error()}, 0
 	}
 	return prober.ProbeApp(appCfg), 0
+}
+
+// InjectTeleAIAuthHeader injects Authorization into appCfg.Headers when:
+// - globally enabled
+// - per-probe appKey/region non-empty
+// - X-APP-ID header is present in the request
+func InjectTeleAIAuthHeader(enabled bool, appKey, region string, appCfg *probers.AppProbeConfig) {
+	if !enabled || appKey == "" || region == "" {
+		return
+	}
+	appID := ""
+	for k, v := range appCfg.Headers {
+		if strings.EqualFold(k, "x-app-id") {
+			appID = v
+			break
+		}
+	}
+	if appID == "" {
+		return
+	}
+	if appCfg.Headers == nil {
+		appCfg.Headers = make(map[string]string)
+	}
+	auth, err := GenTeleAIHeader(appID, appKey, region, appCfg.Method, appCfg.URL, appCfg.Headers, appCfg.Params)
+	if err != nil {
+		appLogger.Warn("TeleAI auth generation failed", zap.Error(err))
+		return
+	}
+	appCfg.Headers["Authorization"] = auth
 }
 
 // buildAppProbeConfig converts a ProbeConfig to an AppProbeConfig.
@@ -483,7 +521,7 @@ func parseHostIDs(s string) []uint {
 
 // executeAndSaveWorkflowProbe handles workflow probe execution and persistence.
 func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64) {
-	wfResult := ExecuteWorkflowProbe(ctx, resolvedCfg, e.variableResolver, e.agentFactory)
+	wfResult := ExecuteWorkflowProbe(ctx, resolvedCfg, e.variableResolver, e.agentFactory, e.teleAIEnabled)
 	detail := ""
 	if b, err := json.Marshal(wfResult); err == nil {
 		detail = string(b)
@@ -513,7 +551,7 @@ func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, 
 }
 
 // ExecuteWorkflowProbe executes a workflow probe: parse definition, run steps sequentially, extract variables.
-func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *VariableResolver, agentFactory AgentCommandFactory) *WorkflowResult {
+func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *VariableResolver, agentFactory AgentCommandFactory, teleAIEnabled bool) *WorkflowResult {
 	var def WorkflowDefinition
 	if err := json.Unmarshal([]byte(cfg.Body), &def); err != nil {
 		return &WorkflowResult{Success: false, Error: fmt.Sprintf("parse workflow definition: %v", err)}
@@ -543,7 +581,8 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 		}
 	}()
 
-	for i, step := range def.Steps {
+	for i := 0; i < len(def.Steps); i++ {
+		step := def.Steps[i]
 		stepType := step.StepType
 		if stepType == "" {
 			stepType = "http"
@@ -601,6 +640,203 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 			if wsSession != nil {
 				wsSession.Close()
 				wsSession = nil
+			}
+			// Inject TeleAI Authorization into WS handshake headers (step-level switch)
+			if teleAIEnabled && step.TeleAIEnabled {
+				wsConnCfg := &probers.AppProbeConfig{
+					URL:     resolvedURL,
+					Method:  "GET",
+					Headers: resolvedHeaders,
+					Params:  resolvedParams,
+				}
+				InjectTeleAIAuthHeader(true, step.TeleAIAppKey, step.TeleAIRegion, wsConnCfg)
+				resolvedHeaders = wsConnCfg.Headers
+			}
+			// Agent mode: bundle entire WS flow (connect→all send/receive steps→disconnect)
+			// into one ProbeRequest. All ws_send/ws_receive actions are encoded as a JSON
+			// array in ProbeRequest.Body; Agent executes them on a single persistent
+			// connection and returns per-action results in ProbeResult.ResponseBody.
+			wsEffMode := step.ExecMode
+			if wsEffMode == "" {
+				wsEffMode = cfg.ExecMode
+			}
+			if wsEffMode == ExecModeAgent && agentFactory != nil {
+				// Scan ws block to find disconnect index and collect ordered send/receive actions
+				disconnectIdx := -1
+				var wsActions []WsAction
+				for j := i + 1; j < len(def.Steps); j++ {
+					st := def.Steps[j].StepType
+					if st == "ws_disconnect" {
+						disconnectIdx = j
+						break
+					}
+					if st == "ws_send" {
+						msgType := def.Steps[j].WSMessageType
+						if msgType == 0 {
+							msgType = 1
+						}
+						msg := def.Steps[j].WSMessage
+						if resolver != nil {
+							if v, err := resolver.ResolveText(ctx, msg, varCtx, allowedGroupIDs); err == nil {
+								msg = v
+							}
+						}
+						wsActions = append(wsActions, WsAction{
+							Type:        "send",
+							Message:     msg,
+							MessageType: msgType,
+						})
+					}
+					if st == "ws_receive" {
+						wsActions = append(wsActions, WsAction{
+							Type:        "receive",
+							ReadTimeout: def.Steps[j].WSReadTimeout,
+							ReceiveMode: def.Steps[j].WSReceiveMode,
+						})
+					}
+				}
+				// Pick an online agent
+				agentHostIDs := parseHostIDs(cfg.AgentHostIDs)
+				var onlineAgents []uint
+				for _, id := range agentHostIDs {
+					if agentFactory.IsOnline(id) {
+						onlineAgents = append(onlineAgents, id)
+					}
+				}
+				// Encode WS actions as JSON into ProbeRequest.Body
+				actionsJSON, _ := json.Marshal(wsActions)
+				wsCfg := &ProbeConfig{
+					Type:    "websocket",
+					Target:  resolvedURL,
+					Timeout: step.Timeout,
+					Body:    string(actionsJSON),
+				}
+				wsAppCfg := &probers.AppProbeConfig{
+					URL:        resolvedURL,
+					Method:     "GET",
+					Headers:    resolvedHeaders,
+					Params:     resolvedParams,
+					Timeout:    step.Timeout,
+					SkipVerify: stepSkipVerify,
+					ProxyURL:   step.ProxyURL,
+				}
+				probeReq := BuildProbeRequest(wsCfg, wsAppCfg)
+				probeReq.Body = string(actionsJSON) // ensure Body is set even if BuildProbeRequest clears it
+				var pbResult *pb.ProbeResult
+				var wsConnectErr string
+				var wsConnectSuccess bool
+				var wsConnectLatency float64
+				var wsConnectStatusCode int
+				var wsConnectHeaders map[string]string
+				if len(onlineAgents) == 0 {
+					wsConnectErr = "no online agent available for ws_connect"
+				} else {
+					pickedID := onlineAgents[rand.Intn(len(onlineAgents))]
+					pbRes, err := agentFactory.SendProbeRequest(pickedID, probeReq)
+					if err != nil {
+						wsConnectErr = err.Error()
+					} else {
+						wsConnectSuccess = pbRes.Success
+						wsConnectLatency = pbRes.Latency
+						wsConnectStatusCode = int(pbRes.HttpStatusCode)
+						wsConnectHeaders = pbRes.ResponseHeaders
+						if pbRes.Error != "" {
+							wsConnectErr = pbRes.Error
+						}
+						pbResult = pbRes
+					}
+				}
+				// Emit ws_connect result
+				stepResult.Success = wsConnectSuccess
+				stepResult.HTTPStatusCode = wsConnectStatusCode
+				stepResult.ResponseHeaders = wsConnectHeaders
+				stepResult.Latency = wsConnectLatency
+				totalLatency += stepResult.Latency
+				if wsConnectErr != "" {
+					stepResult.Error = wsConnectErr
+				}
+				// Extract variables from ws_connect upgrade headers
+				if wsConnectSuccess && len(step.Extractions) > 0 {
+					extracted := extractWorkflowVars(step.Extractions, &probers.AppResult{ResponseHeaders: wsConnectHeaders}, varCtx)
+					if len(extracted) > 0 {
+						stepResult.ExtractedVars = extracted
+					}
+				}
+				result.StepResults = append(result.StepResults, stepResult)
+				if !stepResult.Success {
+					result.Success = false
+					if def.StopOnFailure {
+						if disconnectIdx >= 0 {
+							appendSkippedSteps(result, def.Steps, disconnectIdx+1)
+						} else {
+							appendSkippedSteps(result, def.Steps, i+1)
+						}
+						result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
+						result.TotalLatency = totalLatency
+						return result
+					}
+					if disconnectIdx >= 0 {
+						i = disconnectIdx
+					}
+					continue
+				}
+				// Decode per-action results from ResponseBody and synthesize step results
+				var actionResults []WsActionResult
+				if pbResult != nil {
+					_ = json.Unmarshal(pbResult.GetResponseBody(), &actionResults)
+				}
+				actionIdx := 0
+				if disconnectIdx >= 0 {
+					for j := i + 1; j <= disconnectIdx; j++ {
+						subStep := def.Steps[j]
+						subType := subStep.StepType
+						subResult := WorkflowStepResult{
+							StepName:  subStep.Name,
+							StepIndex: j,
+							StepType:  subType,
+							Success:   true,
+						}
+						if subType == "ws_send" || subType == "ws_receive" {
+							if actionIdx < len(actionResults) {
+								ar := actionResults[actionIdx]
+								subResult.Success = ar.Success
+								subResult.Error = ar.Error
+								subResult.Latency = ar.Latency
+								totalLatency += ar.Latency
+								if subType == "ws_receive" {
+									subResult.ResponseBody = ar.ResponseBody
+									// Evaluate assertions on received message
+									if len(subStep.Assertions) > 0 {
+										assertions := toProberAssertions(subStep.Assertions)
+										assertionResults := probers.EvaluateAssertions(assertions, ar.ResponseBody, nil)
+										for _, assertRes := range assertionResults {
+											subResult.AssertionResults = append(subResult.AssertionResults, WorkflowAssertionResult{
+												Name: assertRes.Name, Success: assertRes.Success, Actual: assertRes.Actual, Error: assertRes.Error,
+											})
+											if !assertRes.Success {
+												subResult.Success = false
+											}
+										}
+									}
+									// Extract variables from received message into varCtx for subsequent steps
+									if len(subStep.Extractions) > 0 {
+										extracted := extractWorkflowVars(subStep.Extractions, &probers.AppResult{ResponseBody: ar.ResponseBody}, varCtx)
+										if len(extracted) > 0 {
+											subResult.ExtractedVars = extracted
+										}
+									}
+								}
+								if !ar.Success {
+									result.Success = false
+								}
+								actionIdx++
+							}
+						}
+						result.StepResults = append(result.StepResults, subResult)
+					}
+					i = disconnectIdx
+				}
+				continue
 			}
 			sess, err := probers.NewWSSession(resolvedURL, resolvedHeaders, resolvedParams, step.Timeout, stepSkipVerify, step.ProxyURL)
 			if err != nil {
@@ -789,6 +1025,10 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 			if appCfg.Timeout == 0 {
 				appCfg.Timeout = cfg.Timeout
 			}
+				// Use step-level TeleAI config if enabled for this step, falling back to disabled
+				if teleAIEnabled && step.TeleAIEnabled {
+					InjectTeleAIAuthHeader(true, step.TeleAIAppKey, step.TeleAIRegion, appCfg)
+				}
 			for _, a := range step.Assertions {
 				appCfg.Assertions = append(appCfg.Assertions, probers.Assertion{
 					Name: a.Name, Source: a.Source, Path: a.Path,
@@ -813,9 +1053,14 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 				zap.String("url", resolvedURL),
 			)
 
+			// Determine effective exec mode: step-level overrides cfg-level; empty step.ExecMode inherits cfg.ExecMode
+			effectiveExecMode := step.ExecMode
+			if effectiveExecMode == "" {
+				effectiveExecMode = cfg.ExecMode
+			}
 			// Check step.ExecMode for agent execution
 			var appResult *probers.AppResult
-			if step.ExecMode == ExecModeAgent && agentFactory != nil {
+			if effectiveExecMode == ExecModeAgent && agentFactory != nil {
 				appLogger.Info("Workflow step using agent mode",
 					zap.String("workflow_name", cfg.Name),
 					zap.String("step_name", step.Name),
@@ -848,23 +1093,53 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 					continue
 				}
 
-				// Agent mode not yet implemented for application probing
-				appLogger.Warn("Agent mode for workflow step not yet implemented",
+				// Filter online agents
+				var onlineIDs []uint
+				for _, id := range hostIDs {
+					if agentFactory.IsOnline(id) {
+						onlineIDs = append(onlineIDs, id)
+					}
+				}
+				if len(onlineIDs) == 0 {
+					stepResult.Error = "no online agent available for workflow step"
+					stepResult.Success = false
+					result.StepResults = append(result.StepResults, stepResult)
+					result.Success = false
+					if def.StopOnFailure {
+						appendSkippedSteps(result, def.Steps, i+1)
+						result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
+						result.TotalLatency = totalLatency
+						return result
+					}
+					continue
+				}
+				// Random pick an online agent
+				pickedHostID := onlineIDs[rand.Intn(len(onlineIDs))]
+				// Build a temporary ProbeConfig for this step
+				stepCfg := &ProbeConfig{
+					Type:      probeType,
+					Target:    resolvedURL,
+					Timeout:   appCfg.Timeout,
+					SkipVerify: cfg.SkipVerify,
+					WSMessage:     cfg.WSMessage,
+					WSMessageType: cfg.WSMessageType,
+					WSReadTimeout: cfg.WSReadTimeout,
+				}
+				probeReq := BuildProbeRequest(stepCfg, appCfg)
+				pbResult, err := agentFactory.SendProbeRequest(pickedHostID, probeReq)
+				var stepAppResult *probers.AppResult
+				if err != nil {
+					stepAppResult = &probers.AppResult{Error: err.Error()}
+				} else {
+					stepAppResult = ConvertProbeResultToAppResult(pbResult)
+				}
+				appResult = stepAppResult
+				appLogger.Info("Workflow step agent execution done",
 					zap.String("workflow_name", cfg.Name),
 					zap.String("step_name", step.Name),
-					zap.Uints("host_ids", hostIDs),
+					zap.Uint("host_id", pickedHostID),
+					zap.Bool("success", appResult.Success),
 				)
-				stepResult.Error = fmt.Sprintf("agent mode for application probing not yet implemented (step: %s)", step.Name)
-				stepResult.Success = false
-				result.StepResults = append(result.StepResults, stepResult)
-				result.Success = false
-				if def.StopOnFailure {
-					appendSkippedSteps(result, def.Steps, i+1)
-					result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
-					result.TotalLatency = totalLatency
-					return result
-				}
-				continue
 			} else {
 				appLogger.Info("Workflow step using local/proxy mode",
 					zap.String("workflow_name", cfg.Name),
@@ -965,6 +1240,8 @@ func extractWorkflowVars(extractions []StepExtraction, appResult *probers.AppRes
 // extractStepVariable extracts a variable value from the step's response.
 func extractStepVariable(ext StepExtraction, appResult *probers.AppResult) (string, error) {
 	switch ext.Source {
+	case "response":
+		return appResult.ResponseBody, nil
 	case "body":
 		path := ext.Path
 		if strings.HasPrefix(path, "$.") {
@@ -1584,8 +1861,8 @@ func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *Pr
 	}
 }
 
-// buildProbeRequest 构建 protobuf ProbeRequest
-func buildProbeRequest(cfg *ProbeConfig, appCfg *probers.AppProbeConfig) *pb.ProbeRequest {
+// BuildProbeRequest 构建 protobuf ProbeRequest（导出供 service 层复用）
+func BuildProbeRequest(cfg *ProbeConfig, appCfg *probers.AppProbeConfig) *pb.ProbeRequest {
 	req := &pb.ProbeRequest{
 		RequestId:  generateRequestID(),
 		ProbeType:  cfg.Type,
@@ -1638,8 +1915,8 @@ func buildProbeRequest(cfg *ProbeConfig, appCfg *probers.AppProbeConfig) *pb.Pro
 	return req
 }
 
-// convertProbeResultToAppResult 转换 pb.ProbeResult 到 probers.AppResult
-func convertProbeResultToAppResult(pbResult *pb.ProbeResult) *probers.AppResult {
+// ConvertProbeResultToAppResult 转换 pb.ProbeResult 到 probers.AppResult（导出供 service 层复用）
+func ConvertProbeResultToAppResult(pbResult *pb.ProbeResult) *probers.AppResult {
 	result := &probers.AppResult{
 		Success:           pbResult.Success,
 		Error:             pbResult.Error,
@@ -1708,6 +1985,7 @@ type NetworkProbeV2Executor struct {
 	agentFactory       AgentCommandFactory
 	variableResolver   *VariableResolver
 	redisCounter       *metrics.RedisCounter
+	teleAIEnabled      bool
 }
 
 // InspectionTaskRepo interface for accessing inspection_tasks table
@@ -1759,6 +2037,11 @@ func (e *NetworkProbeV2Executor) SetVariableResolver(r *VariableResolver) {
 // SetRedisCounter injects a Redis-backed counter for persistent metric counting.
 func (e *NetworkProbeV2Executor) SetRedisCounter(rc *metrics.RedisCounter) {
 	e.redisCounter = rc
+}
+
+// SetTeleAIEnabled sets the global TeleAI Authorization auto-fill switch.
+func (e *NetworkProbeV2Executor) SetTeleAIEnabled(enabled bool) {
+	e.teleAIEnabled = enabled
 }
 
 func (e *NetworkProbeV2Executor) Type() string { return "network_probe_v2" }
@@ -1846,6 +2129,7 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 				agentFactory:     e.agentFactory,
 				variableResolver: e.variableResolver,
 				redisCounter:     e.redisCounter,
+				teleAIEnabled:    e.teleAIEnabled,
 			}
 
 			if resolvedCfg.Category == ProbeCategoryApplication {
@@ -1874,6 +2158,23 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 	}
 
 	return nil
+}
+
+// WsAction represents a single WebSocket action (send or receive) in a multi-step WS probe.
+type WsAction struct {
+	Type        string `json:"type"`        // "send" or "receive"
+	Message     string `json:"message"`     // send: message content
+	MessageType int    `json:"msgType"`     // send: 1=text, 2=binary
+	ReadTimeout int    `json:"readTimeout"` // receive: timeout in seconds
+	ReceiveMode string `json:"receiveMode"` // receive: "" or "single" = one message; "stream" = collect all until timeout
+}
+
+// WsActionResult holds the result of a single WS action executed by the Agent.
+type WsActionResult struct {
+	Success      bool    `json:"success"`
+	ResponseBody string  `json:"body"`
+	Latency      float64 `json:"latency"` // ms
+	Error        string  `json:"error"`
 }
 
 // parseJSONArray parses a JSON array string like "[1,2,3]" into []uint

@@ -124,6 +124,7 @@ srehub_inspect_ping_loss_ratio > 0.05
 | `srehub_inspect_tcp_port_reachable` | Gauge | 端口是否可达（1=可达，0=不可达） | 0 或 1 |
 
 **示例标签：**
+
 ```
 srehub_inspect_tcp_port_reachable{
   task_id="15",

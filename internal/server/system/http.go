@@ -64,6 +64,13 @@ func (s *HTTPServer) RegisterRoutes(auth *gin.RouterGroup, public *gin.RouterGro
 			integration.GET("", s.configService.GetIntegrationConfig)
 			integration.PUT("", s.configService.SaveIntegrationConfig)
 		}
+
+		// 定制功能配置路由
+		custom := system.Group("/custom")
+		{
+			custom.GET("", s.configService.GetCustomConfig)
+			custom.PUT("", s.configService.SaveCustomConfig)
+		}
 	}
 
 	// 公开路由（无需认证）
