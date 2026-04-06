@@ -35,17 +35,18 @@ type alertState struct {
 
 // EvalEngine 告警评估引擎
 type EvalEngine struct {
-	db             *gorm.DB
-	rdb            *redis.Client
-	ruleRepo       *alertdata.RuleRepo
-	dsRepo         *alertdata.DataSourceRepo
-	eventRepo      *alertdata.EventRepo
-	subRepo        *alertdata.SubscriptionRepo
-	subRuleRepo    *alertdata.SubscriptionRuleRepo
-	subChannelRepo *alertdata.SubscriptionChannelRepo
-	subUserRepo    *alertdata.SubscriptionUserRepo
-	channelRepo    *alertdata.ChannelRepo
-	notifySvc      *NotifyService
+	db              *gorm.DB
+	rdb             *redis.Client
+	ruleRepo        *alertdata.RuleRepo
+	dsRepo          *alertdata.DataSourceRepo
+	eventRepo       *alertdata.EventRepo
+	subRepo         *alertdata.SubscriptionRepo
+	subRuleRepo     *alertdata.SubscriptionRuleRepo
+	subChannelRepo  *alertdata.SubscriptionChannelRepo
+	subUserRepo     *alertdata.SubscriptionUserRepo
+	channelRepo     *alertdata.ChannelRepo
+	silenceRuleRepo *alertdata.SilenceRuleRepo
+	notifySvc       *NotifyService
 }
 // NewEvalEngine 创建评估引擎
 func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
@@ -57,20 +58,22 @@ func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
 	subChannelRepo := alertdata.NewSubscriptionChannelRepo(db)
 	subUserRepo := alertdata.NewSubscriptionUserRepo(db)
 	channelRepo := alertdata.NewChannelRepo(db)
+	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
 	notifySvc := NewNotifyService(channelRepo)
 
 	return &EvalEngine{
-		db:             db,
-		rdb:            rdb,
-		ruleRepo:       ruleRepo,
-		dsRepo:         dsRepo,
-		eventRepo:      eventRepo,
-		subRepo:        subRepo,
-		subRuleRepo:    subRuleRepo,
-		subChannelRepo: subChannelRepo,
-		subUserRepo:    subUserRepo,
-		channelRepo:    channelRepo,
-		notifySvc:      notifySvc,
+		db:              db,
+		rdb:             rdb,
+		ruleRepo:        ruleRepo,
+		dsRepo:          dsRepo,
+		eventRepo:       eventRepo,
+		subRepo:         subRepo,
+		subRuleRepo:     subRuleRepo,
+		subChannelRepo:  subChannelRepo,
+		subUserRepo:     subUserRepo,
+		channelRepo:     channelRepo,
+		silenceRuleRepo: silenceRuleRepo,
+		notifySvc:       notifySvc,
 	}
 }
 
@@ -380,8 +383,12 @@ func (e *EvalEngine) sendNotifications(ctx context.Context, rule *biz.AlertRule,
 		if err != nil || !sub.Enabled {
 			continue
 		}
-		// 检查屏蔽
+		// 检查屏蔽（旧逻辑：单条手动屏蔽）
 		if event.Silenced && event.SilenceUntil != nil && now.Before(*event.SilenceUntil) {
+			continue
+		}
+		// 检查屏蔽规则（新逻辑：三元组匹配）
+		if e.shouldSilence(ctx, event) {
 			continue
 		}
 		// 检查告警级别过滤（空=全部级别）
@@ -472,6 +479,63 @@ func (e *EvalEngine) getSubUserPhones(ctx context.Context, subscriptionID uint) 
 		}
 	}
 	return phones
+}
+
+// shouldSilence 检查告警是否应该被屏蔽
+func (e *EvalEngine) shouldSilence(ctx context.Context, event *biz.AlertEvent) bool {
+	now := time.Now()
+
+	// 1. 检查单条手动屏蔽（现有逻辑，保持向后兼容）
+	if event.Silenced && event.SilenceUntil != nil && now.Before(*event.SilenceUntil) {
+		return true
+	}
+
+	// 2. 检查屏蔽规则（三元组匹配）
+	rules, err := e.silenceRuleRepo.ListActiveRules(ctx)
+	if err != nil || len(rules) == 0 {
+		return false
+	}
+
+	for _, rule := range rules {
+		if e.matchSilenceRule(rule, event, now) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchSilenceRule 检查告警是否匹配屏蔽规则
+func (e *EvalEngine) matchSilenceRule(rule *biz.AlertSilenceRule, event *biz.AlertEvent, now time.Time) bool {
+	// 1. 检查告警等级
+	if rule.Severity != event.Severity {
+		return false
+	}
+
+	// 2. 检查规则名称
+	if rule.RuleName != event.RuleName {
+		return false
+	}
+
+	// 3. 检查标签（子集匹配）
+	if !MatchLabels(event.Labels, rule.Labels) {
+		return false
+	}
+
+	// 4. 检查时效
+	if rule.Type == "fixed" {
+		// 固定时长：检查是否在屏蔽期内
+		if rule.SilenceUntil != nil && now.Before(*rule.SilenceUntil) {
+			return true
+		}
+	} else if rule.Type == "periodic" {
+		// 周期性：检查当前时间是否在时间窗口内
+		if isInTimeRanges(rule.TimeRanges, now) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // calcFingerprint 计算告警指纹

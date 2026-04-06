@@ -55,6 +55,8 @@ func (s *HTTPServer) RegisterRoutes(auth *gin.RouterGroup, public *gin.RouterGro
 			config.PUT("/basic", s.configService.SaveBasicConfig)
 			config.GET("/security", s.configService.GetSecurityConfig)
 			config.PUT("/security", s.configService.SaveSecurityConfig)
+			config.GET("/data-retention", s.configService.GetDataRetentionConfig)
+			config.PUT("/data-retention", s.configService.SaveDataRetentionConfig)
 			config.POST("/logo", s.configService.UploadLogo)
 		}
 

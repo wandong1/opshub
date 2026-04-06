@@ -124,6 +124,7 @@ export interface EventListParams {
   resolveType?: string
   startTime?: string
   endTime?: string
+  labelFilter?: string
 }
 
 export const getActiveEvents = (params?: EventListParams) => request.get('/api/v1/alert/events/active', { params })
@@ -134,6 +135,57 @@ export const handleEvent = (id: number, data: { note: string; userId?: number })
   request.post(`/api/v1/alert/events/${id}/handle`, data)
 export const getEventStats = () => request.get('/api/v1/alert/events/stats')
 export const getEventTrend = (days = 30) => request.get('/api/v1/alert/events/trend', { params: { days } })
+
+// 批量屏蔽
+export const batchSilenceEvents = (data: {
+  eventIds: number[]
+  type: string  // fixed / periodic
+  duration?: string
+  timeRanges?: string
+  editLabels?: boolean
+  labels?: string
+  reason?: string
+}) => request.post('/api/v1/alert/events/batch-silence', data)
+
+// 批量取消屏蔽
+export const batchUnsilenceEvents = (eventIds: number[]) =>
+  request.post('/api/v1/alert/events/batch-unsilence', { eventIds })
+
+// 查询已屏蔽告警
+export const getSilencedEvents = (params?: EventListParams & { labelFilter?: string }) =>
+  request.get('/api/v1/alert/events/silenced', { params })
+
+// ==================== 屏蔽规则 ====================
+export interface AlertSilenceRule {
+  id?: number
+  severity: string
+  ruleName: string
+  labels: string
+  type: string // fixed / periodic
+  duration?: string
+  silenceUntil?: string
+  timeRanges?: string
+  reason: string
+  createdBy?: number
+  enabled?: boolean
+  createdAt?: string
+}
+
+export const getSilenceRules = (params?: { page: number; pageSize: number }) =>
+  request.get('/api/v1/alert/silence-rules', { params })
+
+export const createSilenceRule = (data: Partial<AlertSilenceRule>) =>
+  request.post('/api/v1/alert/silence-rules', data)
+
+export const updateSilenceRule = (id: number, data: Partial<AlertSilenceRule>) =>
+  request.put(`/api/v1/alert/silence-rules/${id}`, data)
+
+export const deleteSilenceRule = (id: number) =>
+  request.delete(`/api/v1/alert/silence-rules/${id}`)
+
+export const toggleSilenceRule = (id: number) =>
+  request.put(`/api/v1/alert/silence-rules/${id}/toggle`)
+
 
 // ==================== 通知通道 ====================
 export interface AlertNotifyChannel {

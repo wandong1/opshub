@@ -11,17 +11,18 @@ import (
 
 // HTTPServer 告警管理 HTTP 服务
 type HTTPServer struct {
-	dsRepo         *alertdata.DataSourceRepo
-	ruleGroupRepo  *alertdata.RuleGroupRepo
-	ruleRepo       *alertdata.RuleRepo
-	eventRepo      *alertdata.EventRepo
-	channelRepo    *alertdata.ChannelRepo
-	subRepo        *alertdata.SubscriptionRepo
-	subRuleRepo    *alertdata.SubscriptionRuleRepo
-	subChannelRepo *alertdata.SubscriptionChannelRepo
-	subUserRepo    *alertdata.SubscriptionUserRepo
-	notifySvc      *alertsvc.NotifyService
-	evalEngine     *alertsvc.EvalEngine
+	dsRepo          *alertdata.DataSourceRepo
+	ruleGroupRepo   *alertdata.RuleGroupRepo
+	ruleRepo        *alertdata.RuleRepo
+	eventRepo       *alertdata.EventRepo
+	channelRepo     *alertdata.ChannelRepo
+	subRepo         *alertdata.SubscriptionRepo
+	subRuleRepo     *alertdata.SubscriptionRuleRepo
+	subChannelRepo  *alertdata.SubscriptionChannelRepo
+	subUserRepo     *alertdata.SubscriptionUserRepo
+	silenceRuleRepo *alertdata.SilenceRuleRepo
+	notifySvc       *alertsvc.NotifyService
+	evalEngine      *alertsvc.EvalEngine
 }
 
 // NewAlertServices 工厂函数，组装所有依赖
@@ -35,21 +36,23 @@ func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 	subRuleRepo := alertdata.NewSubscriptionRuleRepo(db)
 	subChannelRepo := alertdata.NewSubscriptionChannelRepo(db)
 	subUserRepo := alertdata.NewSubscriptionUserRepo(db)
+	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
 	notifySvc := alertsvc.NewNotifyService(channelRepo)
 	evalEngine := alertsvc.NewEvalEngine(db, rdb)
 
 	return &HTTPServer{
-		dsRepo:         dsRepo,
-		ruleGroupRepo:  ruleGroupRepo,
-		ruleRepo:       ruleRepo,
-		eventRepo:      eventRepo,
-		channelRepo:    channelRepo,
-		subRepo:        subRepo,
-		subRuleRepo:    subRuleRepo,
-		subChannelRepo: subChannelRepo,
-		subUserRepo:    subUserRepo,
-		notifySvc:      notifySvc,
-		evalEngine:     evalEngine,
+		dsRepo:          dsRepo,
+		ruleGroupRepo:   ruleGroupRepo,
+		ruleRepo:        ruleRepo,
+		eventRepo:       eventRepo,
+		channelRepo:     channelRepo,
+		subRepo:         subRepo,
+		subRuleRepo:     subRuleRepo,
+		subChannelRepo:  subChannelRepo,
+		subUserRepo:     subUserRepo,
+		silenceRuleRepo: silenceRuleRepo,
+		notifySvc:       notifySvc,
+		evalEngine:      evalEngine,
 	}
 }
 
@@ -108,6 +111,9 @@ func (s *HTTPServer) RegisterRoutes(rg *gin.RouterGroup) {
 		events.POST("/:id/handle", s.handleEvent)
 		events.GET("/stats", s.getEventStats)
 		events.GET("/trend", s.getEventTrend)
+		events.POST("/batch-silence", s.batchSilenceEvents)
+		events.POST("/batch-unsilence", s.batchUnsilenceEvents)
+		events.GET("/silenced", s.listSilencedEvents)
 	}
 
 	// 通知通道
@@ -129,5 +135,16 @@ func (s *HTTPServer) RegisterRoutes(rg *gin.RouterGroup) {
 		subs.GET("/:id", s.getSubscription)
 		subs.PUT("/:id", s.updateSubscription)
 		subs.DELETE("/:id", s.deleteSubscription)
+	}
+
+	// 屏蔽规则
+	silenceRules := alert.Group("/silence-rules")
+	{
+		silenceRules.GET("", s.listSilenceRules)
+		silenceRules.POST("", s.createSilenceRule)
+		silenceRules.GET("/:id", s.getSilenceRule)
+		silenceRules.PUT("/:id", s.updateSilenceRule)
+		silenceRules.DELETE("/:id", s.deleteSilenceRule)
+		silenceRules.PUT("/:id/toggle", s.toggleSilenceRule)
 	}
 }

@@ -255,6 +255,7 @@ func autoMigrate(db *gorm.DB) error {
 		&alertbiz.AlertSubscriptionRule{},
 		&alertbiz.AlertSubscriptionChannel{},
 		&alertbiz.AlertSubscriptionUser{},
+		&alertbiz.AlertSilenceRule{},
 	); err != nil {
 		return err
 	}
@@ -536,6 +537,8 @@ func initAlertMenus(db *gorm.DB) {
 			buttons: []btnDef{
 				{"屏蔽告警", "alert:events:silence", "/api/v1/alert/events/:id/silence", "POST", 1},
 				{"手动处理", "alert:events:handle", "/api/v1/alert/events/:id/handle", "POST", 2},
+				{"批量屏蔽", "alert:events:batch-silence", "/api/v1/alert/events/batch-silence", "POST", 3},
+				{"批量取消屏蔽", "alert:events:batch-unsilence", "/api/v1/alert/events/batch-unsilence", "POST", 4},
 			},
 		},
 		{

@@ -283,12 +283,23 @@ type WorkflowStepResult struct {
 	ExtractedVars    map[string]string `json:"extractedVars,omitempty"`
 	AssertionResults []WorkflowAssertionResult `json:"assertionResults,omitempty"`
 	Error            string            `json:"error,omitempty"`
+	// 需求二：新增字段用于前端展示
+	URL            string            `json:"url,omitempty"`            // 请求 URL
+	Method         string            `json:"method,omitempty"`         // 请求方法
+	RequestHeaders map[string]string `json:"requestHeaders,omitempty"` // 请求头
+	RequestParams  map[string]string `json:"requestParams,omitempty"`  // 请求参数
+	RequestBody    string            `json:"requestBody,omitempty"`    // 请求体
 }
 
-// WorkflowAssertionResult mirrors probers.AssertionResult.
+// WorkflowAssertionResult mirrors probers.AssertionResult with assertion expression details.
 type WorkflowAssertionResult struct {
-	Name    string `json:"name"`
-	Success bool   `json:"success"`
-	Actual  string `json:"actual"`
-	Error   string `json:"error"`
+	Name      string `json:"name"`
+	Success   bool   `json:"success"`
+	Actual    string `json:"actual"`
+	Error     string `json:"error"`
+	// Assertion expression fields for display
+	Source    string `json:"source"`    // body / header / response
+	Path      string `json:"path"`      // GJSON path or header name
+	Condition string `json:"condition"` // == > >= < <= contains notcontains regexp notregexp
+	Value     string `json:"value"`     // expected value
 }

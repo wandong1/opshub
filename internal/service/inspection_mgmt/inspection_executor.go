@@ -109,6 +109,16 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 		return fmt.Errorf("no inspection groups configured for task %d", payload.TaskID)
 	}
 
+	// 需求一：解析任务级执行方式覆盖配置
+	taskExecutionMode := inspectionTask.ExecutionMode     // 覆盖巡检组执行方式（空=不覆盖）
+	taskBusinessGroupID := inspectionTask.BusinessGroupID // 覆盖业务分组（0=不覆盖）
+
+	// 需求三：解析任务级自定义变量（巡检任务，优先级最高）
+	taskExtraVars := make(map[string]string)
+	if inspectionTask.CustomVariables != "" {
+		_ = json.Unmarshal([]byte(inspectionTask.CustomVariables), &taskExtraVars)
+	}
+
 	// 收集所有需要执行的巡检项
 	var itemsToExecute []*inspectionmgmtdata.InspectionItem
 	for _, groupID := range groupIDs {
@@ -200,8 +210,8 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 		go func(itm *inspectionmgmtdata.InspectionItem) {
 			defer wg.Done()
 
-			// 执行巡检项
-			itemResults, err := e.itemSvc.ExecuteItemByID(ctx, itm.ID)
+			// 需求一：使用覆盖参数执行巡检项
+			itemResults, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, taskBusinessGroupID, taskExtraVars)
 			if err != nil {
 				appLogger.Error("execute inspection item failed",
 					zap.Uint("itemID", itm.ID),
@@ -230,8 +240,18 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 					ItemID:             itm.ID,
 					ItemName:           itm.Name,
 					HostID:             oldRecord.HostID,
-					HostName:           "", // 需要从 oldRecord 获取
-					HostIP:             "", // 需要从 oldRecord 获取
+					HostName:           oldRecord.HostName,
+					HostIP:             oldRecord.HostIP,
+					// 填充执行配置信息
+					BusinessGroup:      group.Name,
+					ExecutionType:      itm.ExecutionType,
+					ExecutionMode:      group.ExecutionMode,
+					Command:            itm.Command,
+					ScriptType:         itm.ScriptType,
+					ScriptContent:      itm.ScriptContent,
+					AssertionType:      itm.AssertionType,
+					AssertionValue:     itm.AssertionValue,
+					// 执行结果
 					Status:             oldRecord.Status,
 					Output:             oldRecord.Output,
 					ErrorMessage:       oldRecord.ErrorMessage,
@@ -485,6 +505,199 @@ func (e *InspectionExecutor) pushMetrics(
 		zap.String("taskName", task.Name),
 		zap.String("itemName", item.Name),
 		zap.Int("recordCount", len(records)))
+}
+
+// RunSyncResult 同步执行结果（需求二）
+type RunSyncResult struct {
+	TaskID      uint                    `json:"task_id"`
+	TaskName    string                  `json:"task_name"`
+	TaskType    string                  `json:"task_type"`
+	Status      string                  `json:"status"`      // success/failed/partial
+	Duration    float64                 `json:"duration"`    // 秒
+	TotalItems  int                     `json:"total_items"`
+	SuccessCount int                    `json:"success_count"`
+	FailedCount int                     `json:"failed_count"`
+	Details     []RunSyncItemDetail     `json:"details"`
+}
+
+// RunSyncItemDetail 每个巡检项/拨测项的执行明细
+type RunSyncItemDetail struct {
+	GroupID          uint     `json:"group_id"`
+	GroupName        string   `json:"group_name"`
+	ItemID           uint     `json:"item_id"`
+	ItemName         string   `json:"item_name"`
+	HostID           uint     `json:"host_id,omitempty"`
+	HostName         string   `json:"host_name,omitempty"`
+	HostIP           string   `json:"host_ip,omitempty"`
+	// 执行配置信息
+	BusinessGroup    string   `json:"business_group,omitempty"`
+	ExecutionType    string   `json:"execution_type,omitempty"`
+	ExecutionMode    string   `json:"execution_mode,omitempty"`
+	Command          string   `json:"command,omitempty"`
+	ScriptType       string   `json:"script_type,omitempty"`
+	ScriptContent    string   `json:"script_content,omitempty"`
+	AssertionType    string   `json:"assertion_type,omitempty"`
+	AssertionValue   string   `json:"assertion_value,omitempty"`
+	// 执行结果
+	Status           string   `json:"status"`           // success/failed
+	Output           string   `json:"output"`
+	ErrorMessage     string   `json:"error_message,omitempty"`
+	Duration         float64  `json:"duration"`
+	AssertionResult  string   `json:"assertion_result,omitempty"`  // pass/fail/skip
+	AssertionDetails string   `json:"assertion_details,omitempty"` // JSON
+	ExtractedVars    string   `json:"extracted_vars,omitempty"`    // JSON
+	ExecutedAt       string   `json:"executed_at"`
+}
+
+// ExecuteSync 同步执行巡检任务，阻塞直到完成，返回完整结果（需求二）
+func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*RunSyncResult, error) {
+	inspectionTask, err := e.taskRepo.GetByID(ctx, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("get inspection task: %w", err)
+	}
+
+	// 解析巡检组 ID
+	var groupIDs []uint
+	if inspectionTask.GroupIDs != "" {
+		if err := json.Unmarshal([]byte(inspectionTask.GroupIDs), &groupIDs); err != nil {
+			return nil, fmt.Errorf("parse group ids: %w", err)
+		}
+	}
+	var itemIDs []uint
+	if inspectionTask.ItemIDs != "" {
+		_ = json.Unmarshal([]byte(inspectionTask.ItemIDs), &itemIDs)
+	}
+
+	if len(groupIDs) == 0 {
+		return nil, fmt.Errorf("no inspection groups configured for task %d", taskID)
+	}
+
+	taskExecutionMode := inspectionTask.ExecutionMode
+	taskBusinessGroupID := inspectionTask.BusinessGroupID
+	// 需求三：解析任务级自定义变量（最高优先级）
+	taskExtraVars := make(map[string]string)
+	if inspectionTask.CustomVariables != "" {
+		_ = json.Unmarshal([]byte(inspectionTask.CustomVariables), &taskExtraVars)
+	}
+
+	// 收集要执行的巡检项
+	var itemsToExecute []*inspectionmgmtdata.InspectionItem
+	groupNameMap := make(map[uint]string)
+	for _, groupID := range groupIDs {
+		group, err := e.groupRepo.GetByID(ctx, groupID)
+		if err != nil {
+			continue
+		}
+		groupNameMap[groupID] = group.Name
+		items, err := e.itemRepo.GetByGroupID(ctx, groupID)
+		if err != nil {
+			continue
+		}
+		if len(itemIDs) > 0 {
+			for _, item := range items {
+				for _, id := range itemIDs {
+					if item.ID == id && item.Status == "enabled" {
+						itemsToExecute = append(itemsToExecute, item)
+						break
+					}
+				}
+			}
+		} else {
+			for _, item := range items {
+				if item.Status == "enabled" {
+					itemsToExecute = append(itemsToExecute, item)
+				}
+			}
+		}
+	}
+
+	startTime := time.Now()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var details []RunSyncItemDetail
+	failCount := 0
+
+	for _, item := range itemsToExecute {
+		wg.Add(1)
+		go func(itm *inspectionmgmtdata.InspectionItem) {
+			defer wg.Done()
+			records, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, taskBusinessGroupID, taskExtraVars)
+			groupName := groupNameMap[itm.GroupID]
+			if err != nil {
+				mu.Lock()
+				details = append(details, RunSyncItemDetail{
+					GroupID:      itm.GroupID,
+					GroupName:    groupName,
+					ItemID:       itm.ID,
+					ItemName:     itm.Name,
+					Status:       "failed",
+					ErrorMessage: err.Error(),
+					ExecutedAt:   time.Now().Format(time.RFC3339),
+				})
+				failCount++
+				mu.Unlock()
+				return
+			}
+			mu.Lock()
+			for _, r := range records {
+				// 获取巡检组信息
+				group, _ := e.groupRepo.GetByID(ctx, itm.GroupID)
+				d := RunSyncItemDetail{
+					GroupID:          itm.GroupID,
+					GroupName:        groupName,
+					ItemID:           itm.ID,
+					ItemName:         itm.Name,
+					HostID:           r.HostID,
+					HostName:         r.HostName,
+					HostIP:           r.HostIP,
+					// 执行配置信息
+					BusinessGroup:    groupName,
+					ExecutionType:    itm.ExecutionType,
+					ExecutionMode:    group.ExecutionMode,
+					Command:          itm.Command,
+					ScriptType:       itm.ScriptType,
+					ScriptContent:    itm.ScriptContent,
+					AssertionType:    itm.AssertionType,
+					AssertionValue:   itm.AssertionValue,
+					// 执行结果
+					Status:           r.Status,
+					Output:           r.Output,
+					ErrorMessage:     r.ErrorMessage,
+					Duration:         r.Duration,
+					AssertionResult:  r.AssertionResult,
+					AssertionDetails: r.AssertionDetails,
+					ExtractedVars:    r.ExtractedVariables,
+					ExecutedAt:       r.ExecutedAt.Format(time.RFC3339),
+				}
+				details = append(details, d)
+				if r.Status == "failed" {
+					failCount++
+				}
+			}
+			mu.Unlock()
+		}(item)
+	}
+	wg.Wait()
+
+	duration := time.Since(startTime).Seconds()
+	status := "success"
+	if failCount == len(details) && len(details) > 0 {
+		status = "failed"
+	} else if failCount > 0 {
+		status = "partial"
+	}
+
+	return &RunSyncResult{
+		TaskID:       taskID,
+		TaskName:     inspectionTask.Name,
+		TaskType:     "inspection",
+		Status:       status,
+		Duration:     duration,
+		TotalItems:   len(itemsToExecute),
+		SuccessCount: len(details) - failCount,
+		FailedCount:  failCount,
+		Details:      details,
+	}, nil
 }
 
 // calculateNextRunTime 计算下次执行时间

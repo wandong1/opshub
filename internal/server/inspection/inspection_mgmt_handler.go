@@ -48,6 +48,7 @@ func (s *HTTPServer) RegisterInspectionMgmtRoutes(r *gin.RouterGroup) {
 			items.GET("/:id", s.getInspectionItem)
 			items.GET("", s.listInspectionItems)
 			items.POST("/test-run", s.testRunInspectionItems)
+			items.POST("/test-run-without-save", s.testRunInspectionItemsWithoutSave)
 		}
 
 		// 巡检执行记录
@@ -71,6 +72,7 @@ func (s *HTTPServer) RegisterInspectionMgmtRoutes(r *gin.RouterGroup) {
 			tasks.PUT("/:id/toggle", s.toggleInspectionTask)
 			tasks.POST("/:id/run", s.runInspectionTask)
 			tasks.POST("/:id/stop", s.stopInspectionTask)
+			tasks.POST("/:id/run-sync", s.runInspectionTaskSync) // 需求二：同步执行
 		}
 
 		// 调度器管理
@@ -481,6 +483,28 @@ func (s *HTTPServer) testRunInspectionItems(c *gin.Context) {
 	})
 }
 
+func (s *HTTPServer) testRunInspectionItemsWithoutSave(c *gin.Context) {
+	var req struct {
+		GroupID uint                              `json:"groupId" binding:"required"`
+		Items   []inspection_mgmt.ItemCreateRequest `json:"items" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	results, err := s.inspectionItemService.TestRunWithoutSave(c.Request.Context(), req.GroupID, req.Items)
+	if err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"success": true,
+		"results": results,
+	})
+}
+
 // ==================== 巡检执行记录 Handlers ====================
 
 func (s *HTTPServer) listExecutionRecords(c *gin.Context) {
@@ -807,4 +831,63 @@ func (s *HTTPServer) stopInspectionTask(c *gin.Context) {
 
 	appLogger.Info("手动停止任务", zap.Uint("taskID", taskID))
 	response.Success(c, gin.H{"message": "任务已停止"})
+}
+
+// runInspectionTaskSync 同步执行任务，阻塞直到完成并返回完整结果（需求二）
+func (s *HTTPServer) runInspectionTaskSync(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
+	taskID := uint(id)
+
+	// 检查任务是否存在
+	task, err := s.inspectionTaskService.GetByID(c.Request.Context(), taskID)
+	if err != nil {
+		response.ErrorCode(c, http.StatusNotFound, "任务不存在: "+err.Error())
+		return
+	}
+
+	// 检查是否已在运行
+	s.runningTasksMu.Lock()
+	if _, running := s.runningTasks[taskID]; running {
+		s.runningTasksMu.Unlock()
+		response.ErrorCode(c, http.StatusConflict, "任务已在运行中，请先停止")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*60*time.Second)
+	s.runningTasks[taskID] = cancel
+	s.runningTasksMu.Unlock()
+
+	defer func() {
+		s.runningTasksMu.Lock()
+		delete(s.runningTasks, taskID)
+		s.runningTasksMu.Unlock()
+		cancel()
+	}()
+
+	if task.TaskType == "inspection" {
+		if s.inspectionExecutor == nil {
+			response.ErrorCode(c, http.StatusServiceUnavailable, "巡检执行器未初始化")
+			return
+		}
+		result, err := s.inspectionExecutor.ExecuteSync(ctx, taskID)
+		if err != nil {
+			appLogger.Error("同步执行巡检任务失败", zap.Uint("taskID", taskID), zap.Error(err))
+			response.ErrorCode(c, http.StatusInternalServerError, "执行失败: "+err.Error())
+			return
+		}
+		response.Success(c, result)
+	} else if task.TaskType == "probe" {
+		if s.probeV2Executor == nil {
+			response.ErrorCode(c, http.StatusServiceUnavailable, "拨测执行器未初始化")
+			return
+		}
+		result, err := s.probeV2Executor.ExecuteSync(ctx, taskID)
+		if err != nil {
+			appLogger.Error("同步执行拨测任务失败", zap.Uint("taskID", taskID), zap.Error(err))
+			response.ErrorCode(c, http.StatusInternalServerError, "执行失败: "+err.Error())
+			return
+		}
+		response.Success(c, result)
+	} else {
+		response.ErrorCode(c, http.StatusBadRequest, "未知任务类型: "+task.TaskType)
+	}
 }

@@ -1,7 +1,10 @@
 package inspection
 
 import (
+	"fmt"
+
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	systembiz "github.com/ydcloud-dy/opshub/internal/biz/system"
 	inspectionmgmtbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection_mgmt"
 	inspectiondata "github.com/ydcloud-dy/opshub/internal/data/inspection"
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
@@ -16,18 +19,21 @@ func InitInspectionMgmtServices(
 	hostRepo assetbiz.HostRepo,
 	credentialRepo assetbiz.CredentialRepo,
 	agentHub *agent.AgentHub,
+	configUseCase *systembiz.ConfigUseCase,
 ) (
 	*inspectionmgmtsvc.GroupService,
 	*inspectionmgmtsvc.ItemService,
 	*inspectionmgmtsvc.RecordService,
 	*inspectionmgmtsvc.TaskService,
 	*inspectionmgmtsvc.ExecutionRecordService,
+	*inspectionmgmtsvc.CleanupService,
 	inspectionmgmtdata.GroupRepository,
 	inspectionmgmtdata.ItemRepository,
 	inspectionmgmtdata.RecordRepository,
 	inspectionmgmtdata.TaskRepository,
 	inspectionmgmtdata.ExecutionRecordRepository,
 ) {
+	fmt.Println("=========初始化task 数据库==========")
 	// 自动迁移数据库表
 	_ = db.AutoMigrate(
 		&inspectionmgmtdata.InspectionGroup{},
@@ -37,6 +43,7 @@ func InitInspectionMgmtServices(
 		&inspectionmgmtdata.InspectionExecutionRecord{},
 		&inspectionmgmtdata.InspectionExecutionDetail{},
 	)
+	fmt.Println("=========初始化task 数据库==========")
 
 	// 初始化 Repository
 	groupRepo := inspectionmgmtdata.NewGroupRepository(db)
@@ -64,5 +71,8 @@ func InitInspectionMgmtServices(
 	taskService := inspectionmgmtsvc.NewTaskService(taskRepo)
 	executionRecordService := inspectionmgmtsvc.NewExecutionRecordService(execRecordRepo)
 
-	return groupService, itemService, recordService, taskService, executionRecordService, groupRepo, itemRepo, recordRepo, taskRepo, execRecordRepo
+	// 初始化清理服务
+	cleanupService := inspectionmgmtsvc.NewCleanupService(recordRepo, configUseCase)
+
+	return groupService, itemService, recordService, taskService, executionRecordService, cleanupService, groupRepo, itemRepo, recordRepo, taskRepo, execRecordRepo
 }

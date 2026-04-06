@@ -70,12 +70,16 @@ const (
 	ConfigKeyEnableCaptcha     = "enable_captcha"
 	ConfigKeyMaxLoginAttempts  = "max_login_attempts"
 	ConfigKeyLockoutDuration   = "lockout_duration"
+
+	// 数据保留策略配置
+	ConfigKeyInspectionRecordRetention = "inspection_record_retention" // 智能巡检执行记录保留数量
 )
 
 // ConfigGroup 配置分组常量
 const (
 	ConfigGroupBasic    = "basic"
 	ConfigGroupSecurity = "security"
+	ConfigGroupDataRetention = "data_retention" // 数据保留策略
 )
 
 // DefaultConfigs 默认配置
@@ -135,6 +139,14 @@ var DefaultConfigs = map[string]SysConfig{
 		Type:   "int",
 		Group:  ConfigGroupSecurity,
 		Remark: "账户锁定时间(秒)",
+	},
+	// 数据保留策略配置
+	ConfigKeyInspectionRecordRetention: {
+		Key:    ConfigKeyInspectionRecordRetention,
+		Value:  "1000000",
+		Type:   "int",
+		Group:  ConfigGroupDataRetention,
+		Remark: "智能巡检执行记录保留数量（默认100万条）",
 	},
 	// 定制功能默认配置
 	ConfigKeyCustomTeleAIAuthEnabled: {
@@ -212,6 +224,12 @@ type SecurityConfig struct {
 
 // AllConfig 所有配置响应结构
 type AllConfig struct {
-	Basic    BasicConfig    `json:"basic"`
-	Security SecurityConfig `json:"security"`
+	Basic         BasicConfig         `json:"basic"`
+	Security      SecurityConfig      `json:"security"`
+	DataRetention DataRetentionConfig `json:"dataRetention"`
+}
+
+// DataRetentionConfig 数据保留策略配置响应结构
+type DataRetentionConfig struct {
+	InspectionRecordRetention int `json:"inspectionRecordRetention"` // 智能巡检执行记录保留数量
 }

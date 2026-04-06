@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量选择功能测试</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { color: #1d2129; margin-top: 0; }
+    h2 { color: #4e5969; font-size: 18px; margin-top: 0; }
+    .status { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 14px; }
+    .status.pass { background: #e8ffea; color: #00b42a; }
+    .status.fail { background: #ffece8; color: #f53f3f; }
+    .status.pending { background: #e8f3ff; color: #165dff; }
+    .test-item {
+      padding: 12px;
+      margin: 8px 0;
+      background: #f7f8fa;
+      border-radius: 4px;
+      border-left: 3px solid #165dff;
+    }
+    .code {
+      background: #1d2129;
+      color: #e5e6eb;
+      padding: 16px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .warning {
+      background: #fff7e6;
+      border: 1px solid #ffe7ba;
+      padding: 12px;
+      border-radius: 4px;
+      color: #ff7d00;
+      margin: 12px 0;
+    }
+    .success {
+      background: #e8ffea;
+      border: 1px solid #aff0b5;
+      padding: 12px;
+      border-radius: 4px;
+      color: #00b42a;
+      margin: 12px 0;
+    }
+    ul { line-height: 1.8; }
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #165dff;
+      color: white;
+      border-radius: 4px;
+      text-decoration: none;
+      margin-right: 8px;
+    }
+    .btn:hover { background: #4080ff; }
+  </style>
+</head>
+<body>
+  <h1>🔧 告警管理批量选择功能测试指南</h1>
+
+  <div class="test-card">
+    <h2>📋 Bug 修复状态</h2>
+    <p><span class="status pass">✅ 已修复</span> Bug 1: 单条屏蔽缺少三元组说明和标签编辑</p>
+    <p><span class="status pass">✅ 已修复</span> Bug 2: 单条屏蔽缺少周期性选择</p>
+    <p><span class="status pending">⚠️ 需测试</span> Bug 3: 批量选择功能无法工作</p>
+  </div>
+
+  <div class="test-card">
+    <h2>🚀 启动测试环境</h2>
+    <div class="code">
+# 终端1: 启动后端
+cd /Users/Zhuanz/golang_project/src/opshub
+make run
+
+# 终端2: 启动前端
+cd /Users/Zhuanz/golang_project/src/opshub/web
+npm run dev
+    </div>
+    <p style="margin-top: 12px;">
+      <a href="http://localhost:5173" target="_blank" class="btn">打开前端 (localhost:5173)</a>
+      <a href="http://localhost:9876/swagger/index.html" target="_blank" class="btn">打开 Swagger (localhost:9876)</a>
+    </p>
+  </div>
+
+  <div class="test-card">
+    <h2>✅ 测试清单 - 单条屏蔽功能</h2>
+
+    <div class="test-item">
+      <strong>测试1: 固定时长屏蔽（默认标签）</strong>
+      <ol>
+        <li>进入"告警管理" -> "实时告警"</li>
+        <li>点击任意告警的"屏蔽"按钮</li>
+        <li>✅ 验证弹窗显示三元组说明</li>
+        <li>✅ 验证显示"屏蔽类型"选择（固定时长/周期性）</li>
+        <li>选择"固定时长" -> "2小时"</li>
+        <li>输入屏蔽原因："测试固定时长屏蔽"</li>
+        <li>点击"确定"</li>
+        <li>✅ 验证告警显示"屏蔽中"标签</li>
+      </ol>
+    </div>
+
+    <div class="test-item">
+      <strong>测试2: 标签编辑功能</strong>
+      <ol>
+        <li>点击告警的"屏蔽"按钮</li>
+        <li>✅ 勾选"自定义标签（移除部分标签可扩大屏蔽范围）"</li>
+        <li>✅ 验证显示当前告警的所有标签</li>
+        <li>点击某个标签的 X 按钮移除（如移除 pod 标签）</li>
+        <li>✅ 验证标签被移除</li>
+        <li>✅ 验证提示文字显示</li>
+        <li>选择"固定时长" -> "1小时"</li>
+        <li>点击"确定"</li>
+        <li>✅ 验证所有相同 job 和 instance 的告警都被屏蔽</li>
+      </ol>
+    </div>
+
+    <div class="test-item">
+      <strong>测试3: 周期性屏蔽</strong>
+      <ol>
+        <li>点击告警的"屏蔽"按钮</li>
+        <li>✅ 选择"周期性"</li>
+        <li>✅ 验证显示工作日选择（周一到周日）</li>
+        <li>勾选"周一"到"周五"</li>
+        <li>✅ 验证显示时间选择器</li>
+        <li>设置开始时间：09:00</li>
+        <li>设置结束时间：18:00</li>
+        <li>输入原因："工作时间屏蔽"</li>
+        <li>点击"确定"</li>
+        <li>✅ 验证屏蔽规则创建成功</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="test-card">
+    <h2>⚠️ 测试清单 - 批量选择功能（重点）</h2>
+
+    <div class="warning">
+      <strong>⚠️ 重要：</strong>这是用户反馈的主要问题，请仔细测试每一步
+    </div>
+
+    <div class="test-item">
+      <strong>测试4: 批量选择基础功能</strong>
+      <ol>
+        <li>进入"实时告警"页面</li>
+        <li><strong>🔍 检查点1:</strong> 表格第一列是否显示 checkbox 列？
+          <ul>
+            <li>✅ 如果显示：继续下一步</li>
+            <li>❌ 如果不显示：打开浏览器控制台，查看是否有错误</li>
+          </ul>
+        </li>
+        <li><strong>🔍 检查点2:</strong> 点击表头的 checkbox（全选）
+          <ul>
+            <li>✅ 如果所有行都被选中：功能正常</li>
+            <li>❌ 如果无反应：记录问题</li>
+          </ul>
+        </li>
+        <li><strong>🔍 检查点3:</strong> 点击单个告警行的 checkbox
+          <ul>
+            <li>✅ 如果该行被选中：功能正常</li>
+            <li>❌ 如果无反应：记录问题</li>
+          </ul>
+        </li>
+        <li><strong>🔍 检查点4:</strong> 选中2-3条告警后，批量操作栏是否显示？
+          <ul>
+            <li>✅ 如果显示蓝色操作栏，显示"已选 X 条"：功能正常</li>
+            <li>❌ 如果不显示：记录问题</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+
+    <div class="test-item">
+      <strong>测试5: 批量屏蔽功能</strong>
+      <ol>
+        <li>勾选2-3条告警</li>
+        <li>点击批量操作栏中的"批量屏蔽"按钮</li>
+        <li>✅ 验证弹窗显示完整功能（三元组说明、标签编辑、类型选择）</li>
+        <li>选择"固定时长" -> "2小时"</li>
+        <li>输入原因："批量测试"</li>
+        <li>点击"确定"</li>
+        <li>✅ 验证所有选中的告警都显示"屏蔽中"</li>
+        <li>✅ 验证批量操作栏消失</li>
+        <li>✅ 验证选中状态被清空</li>
+      </ol>
+    </div>
+
+    <div class="test-item">
+      <strong>测试6: 已屏蔽告警批量取消</strong>
+      <ol>
+        <li>点击"已屏蔽告警"按钮</li>
+        <li>✅ 验证弹窗显示已屏蔽的告警列表</li>
+        <li><strong>🔍 检查点5:</strong> 表格第一列是否显示 checkbox？</li>
+        <li>勾选2-3条已屏蔽告警</li>
+        <li><strong>🔍 检查点6:</strong> 批量操作栏是否显示？</li>
+        <li>点击"批量取消屏蔽"</li>
+        <li>确认操作</li>
+        <li>✅ 验证告警从列表中移除</li>
+        <li>关闭弹窗，返回实时告警列表</li>
+        <li>✅ 验证告警恢复正常（不再显示"屏蔽中"）</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="test-card">
+    <h2>🐛 如果批量选择不工作</h2>
+
+    <div class="warning">
+      <strong>请收集以下信息：</strong>
+    </div>
+
+    <div class="test-item">
+      <strong>1. 浏览器控制台错误</strong>
+      <ul>
+        <li>按 F12 打开开发者工具</li>
+        <li>切换到 Console 标签</li>
+        <li>刷新页面，查看是否有红色错误信息</li>
+        <li>截图或复制错误信息</li>
+      </ul>
+    </div>
+
+    <div class="test-item">
+      <strong>2. 检查数据格式</strong>
+      <p>在浏览器控制台执行：</p>
+      <div class="code">
+// 检查告警数据
+console.log('events:', events.value)
+console.log('first event:', events.value[0])
+console.log('first event id:', events.value[0]?.id)
+
+// 检查选中状态
+console.log('selectedEventIds:', selectedEventIds.value)
+console.log('rowSelection:', rowSelection.value)
+      </div>
+    </div>
+
+    <div class="test-item">
+      <strong>3. 检查 Arco Design 版本</strong>
+      <div class="code">
+cd /Users/Zhuanz/golang_project/src/opshub/web
+npm list @arco-design/web-vue
+      </div>
+    </div>
+
+    <div class="test-item">
+      <strong>4. 视觉检查</strong>
+      <ul>
+        <li>表格第一列是否有空白列（checkbox 列）？</li>
+        <li>鼠标悬停在 checkbox 位置时，光标是否变成手型？</li>
+        <li>点击 checkbox 时是否有任何视觉反馈？</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="test-card">
+    <h2>📊 测试结果记录</h2>
+
+    <p>请将测试结果填写在下方：</p>
+
+    <div class="test-item">
+      <strong>单条屏蔽功能：</strong>
+      <ul>
+        <li>[ ] 三元组说明显示正常</li>
+        <li>[ ] 标签编辑功能正常</li>
+        <li>[ ] 固定时长屏蔽正常</li>
+        <li>[ ] 周期性屏蔽正常</li>
+      </ul>
+    </div>
+
+    <div class="test-item">
+      <strong>批量选择功能：</strong>
+      <ul>
+        <li>[ ] Checkbox 列显示正常</li>
+        <li>[ ] 可以勾选告警</li>
+        <li>[ ] 批量操作栏显示正常</li>
+        <li>[ ] 已选数量显示正确</li>
+      </ul>
+    </div>
+
+    <div class="test-item">
+      <strong>批量屏蔽功能：</strong>
+      <ul>
+        <li>[ ] 批量屏蔽弹窗正常</li>
+        <li>[ ] 批量屏蔽执行成功</li>
+        <li>[ ] 告警状态更新正常</li>
+      </ul>
+    </div>
+
+    <div class="test-item">
+      <strong>批量取消屏蔽：</strong>
+      <ul>
+        <li>[ ] 已屏蔽弹窗显示正常</li>
+        <li>[ ] 可以勾选已屏蔽告警</li>
+        <li>[ ] 批量取消屏蔽成功</li>
+        <li>[ ] 告警恢复正常</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="test-card">
+    <h2>📞 获取帮助</h2>
+    <p>如果测试过程中遇到问题，请提供：</p>
+    <ol>
+      <li>具体哪个测试步骤失败</li>
+      <li>浏览器控制台的错误信息（截图）</li>
+      <li>实际看到的界面（截图）</li>
+      <li>Arco Design 版本号</li>
+    </ol>
+    <div class="success">
+      <strong>✅ 修复文档位置：</strong><br>
+      - Bug修复报告: <code>/Users/Zhuanz/golang_project/src/opshub/BUG_FIX_REPORT.md</code><br>
+      - 实施文档: <code>/Users/Zhuanz/golang_project/src/opshub/ALERT_SILENCE_IMPLEMENTATION.md</code>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: #86909c; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e6eb;">
+    <p>告警管理屏蔽逻辑优化 - Bug修复测试指南</p>
+    <p>生成时间: 2026-04-03</p>
+  </div>
+</body>
+</html>

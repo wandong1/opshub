@@ -503,11 +503,21 @@ func buildAppProbeConfig(cfg *ProbeConfig) *probers.AppProbeConfig {
 	return appCfg
 }
 
-// parseHostIDs parses a comma-separated string of host IDs into a uint slice.
+// parseHostIDs parses a comma-separated string or JSON array string of host IDs into a uint slice.
+// Supports both formats: "1,2,3" (comma-separated) and "[1,2,3]" (JSON array)
 func parseHostIDs(s string) []uint {
 	if s == "" {
 		return nil
 	}
+	// Try JSON array format first (from inspection_tasks.agent_host_ids)
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		var ids []uint
+		if err := json.Unmarshal([]byte(s), &ids); err == nil {
+			return ids
+		}
+	}
+	// Fallback to comma-separated format (from probe_configs.agent_host_ids)
 	parts := strings.Split(s, ",")
 	ids := make([]uint, 0, len(parts))
 	for _, p := range parts {
@@ -521,6 +531,7 @@ func parseHostIDs(s string) []uint {
 
 // executeAndSaveWorkflowProbe handles workflow probe execution and persistence.
 func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64) {
+	// Bug 修复：使用 resolvedCfg 而不是 origCfg，确保任务级覆盖的 AgentHostIDs 生效
 	wfResult := ExecuteWorkflowProbe(ctx, resolvedCfg, e.variableResolver, e.agentFactory, e.teleAIEnabled)
 	detail := ""
 	if b, err := json.Marshal(wfResult); err == nil {
@@ -809,9 +820,11 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 									if len(subStep.Assertions) > 0 {
 										assertions := toProberAssertions(subStep.Assertions)
 										assertionResults := probers.EvaluateAssertions(assertions, ar.ResponseBody, nil)
-										for _, assertRes := range assertionResults {
+										for idx, assertRes := range assertionResults {
 											subResult.AssertionResults = append(subResult.AssertionResults, WorkflowAssertionResult{
 												Name: assertRes.Name, Success: assertRes.Success, Actual: assertRes.Actual, Error: assertRes.Error,
+												Source: subStep.Assertions[idx].Source, Path: subStep.Assertions[idx].Path,
+												Condition: subStep.Assertions[idx].Condition, Value: subStep.Assertions[idx].Value,
 											})
 											if !assertRes.Success {
 												subResult.Success = false
@@ -863,9 +876,11 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 			if len(step.Assertions) > 0 {
 				assertions := toProberAssertions(step.Assertions)
 				assertionResults := probers.EvaluateAssertions(assertions, "", sess.RawHeader())
-				for _, ar := range assertionResults {
+				for idx, ar := range assertionResults {
 					stepResult.AssertionResults = append(stepResult.AssertionResults, WorkflowAssertionResult{
 						Name: ar.Name, Success: ar.Success, Actual: ar.Actual, Error: ar.Error,
+						Source: step.Assertions[idx].Source, Path: step.Assertions[idx].Path,
+						Condition: step.Assertions[idx].Condition, Value: step.Assertions[idx].Value,
 					})
 					if !ar.Success {
 						stepResult.Success = false
@@ -982,9 +997,11 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 			if len(step.Assertions) > 0 {
 				assertions := toProberAssertions(step.Assertions)
 				assertionResults := probers.EvaluateAssertions(assertions, stepResult.ResponseBody, nil)
-				for _, ar := range assertionResults {
+				for idx, ar := range assertionResults {
 					stepResult.AssertionResults = append(stepResult.AssertionResults, WorkflowAssertionResult{
 						Name: ar.Name, Success: ar.Success, Actual: ar.Actual, Error: ar.Error,
+						Source: step.Assertions[idx].Source, Path: step.Assertions[idx].Path,
+						Condition: step.Assertions[idx].Condition, Value: step.Assertions[idx].Value,
 					})
 					if !ar.Success {
 						stepResult.Success = false
@@ -995,7 +1012,10 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 			if stepResult.Success || !def.StopOnFailure {
 				extracted := extractWorkflowVars(step.Extractions, &probers.AppResult{ResponseBody: stepResult.ResponseBody}, varCtx)
 				if len(extracted) > 0 {
-					stepResult.ExtractedVars = extracted
+					stepResult.ExtractedVars = make(map[string]string)
+					for k, v := range extracted {
+						stepResult.ExtractedVars[k] = v
+					}
 				}
 			}
 
@@ -1173,10 +1193,18 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 			stepResult.ResponseBody = appResult.ResponseBody
 			stepResult.ResponseHeaders = appResult.ResponseHeaders
 			stepResult.Success = appResult.Success
+			// 需求二：填充请求信息用于前端展示
+			stepResult.URL = resolvedURL
+			stepResult.Method = appCfg.Method
+			stepResult.RequestHeaders = resolvedHeaders
+			stepResult.RequestParams = resolvedParams
+			stepResult.RequestBody = resolvedBody
 
-			for _, ar := range appResult.AssertionResults {
+			for idx, ar := range appResult.AssertionResults {
 				stepResult.AssertionResults = append(stepResult.AssertionResults, WorkflowAssertionResult{
 					Name: ar.Name, Success: ar.Success, Actual: ar.Actual, Error: ar.Error,
+					Source: step.Assertions[idx].Source, Path: step.Assertions[idx].Path,
+					Condition: step.Assertions[idx].Condition, Value: step.Assertions[idx].Value,
 				})
 			}
 			if appResult.Error != "" {
@@ -1996,15 +2024,20 @@ type InspectionTaskRepo interface {
 
 // InspectionTaskV2 represents a task from inspection_tasks table
 type InspectionTaskV2 struct {
-	ID            uint
-	Name          string
-	TaskType      string
-	CronExpr      string
-	Enabled       bool
-	GroupIDs      string
-	ItemIDs       string
-	PushgatewayID uint
-	Concurrency   int
+	ID              uint
+	Name            string
+	TaskType        string
+	CronExpr        string
+	Enabled         bool
+	GroupIDs        string
+	ItemIDs         string
+	PushgatewayID   uint
+	Concurrency     int
+	// 需求一新增：任务调度级别覆盖配置
+	ExecutionMode   string // 执行方式覆盖（拨测：local/agent；空=不覆盖）
+	AgentHostIDs    string // Agent 主机 ID 列表（JSON 数组）
+	BusinessGroupID uint   // 业务分组 ID 覆盖
+	CustomVariables string // 自定义变量 JSON 对象（优先级最高）
 }
 
 // NewNetworkProbeV2Executor creates a new executor for probe tasks from inspection_tasks table.
@@ -2100,6 +2133,12 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 		TriggerType:   triggerType,
 	}
 
+	// 需求一：解析任务级自定义变量（优先级最高）
+	taskCustomVars := make(map[string]string)
+	if inspectionTask.CustomVariables != "" {
+		_ = json.Unmarshal([]byte(inspectionTask.CustomVariables), &taskCustomVars)
+	}
+
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	var failCount int64
@@ -2111,11 +2150,25 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			// Variable resolution
-			resolvedCfg := cfg
+			// 需求一：任务级执行方式覆盖（优先于各探测配置自身设置）
+			effectiveCfg := *cfg // 浅拷贝，避免修改原配置
+			if inspectionTask.ExecutionMode != "" {
+				effectiveCfg.ExecMode = inspectionTask.ExecutionMode
+				if inspectionTask.ExecutionMode == ExecModeAgent && inspectionTask.AgentHostIDs != "" {
+					effectiveCfg.AgentHostIDs = inspectionTask.AgentHostIDs
+				}
+			}
+			// 需求一：业务分组覆盖（影响变量作用域）
+			if inspectionTask.BusinessGroupID > 0 {
+				effectiveCfg.GroupID = inspectionTask.BusinessGroupID
+			}
+			cfgPtr := &effectiveCfg
+
+			// 变量解析：优先级 任务变量 > 系统变量(ProbeVariable) > 探测配置内联变量
+			resolvedCfg := cfgPtr
 			if e.variableResolver != nil {
-				if rc, err := e.variableResolver.ResolveConfig(ctx, cfg); err != nil {
-					appLogger.Error("resolve variables failed", zap.String("name", cfg.Name), zap.Error(err))
+				if rc, err := e.variableResolver.ResolveConfigWithExtra(ctx, cfgPtr, taskCustomVars); err != nil {
+					appLogger.Error("resolve variables failed", zap.String("name", cfgPtr.Name), zap.Error(err))
 				} else {
 					resolvedCfg = rc
 				}
@@ -2133,11 +2186,11 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 			}
 
 			if resolvedCfg.Category == ProbeCategoryApplication {
-				executor.executeAndSaveAppProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+				executor.executeAndSaveAppProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount)
 			} else if resolvedCfg.Category == ProbeCategoryWorkflow {
-				executor.executeAndSaveWorkflowProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+				executor.executeAndSaveWorkflowProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount)
 			} else {
-				executor.executeAndSaveNetworkProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+				executor.executeAndSaveNetworkProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount)
 			}
 		}(config)
 	}
@@ -2158,6 +2211,181 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 	}
 
 	return nil
+}
+
+// ProbeSyncResult 拨测同步执行结果（需求二）
+type ProbeSyncResult struct {
+	TaskID       uint              `json:"task_id"`
+	TaskName     string            `json:"task_name"`
+	TaskType     string            `json:"task_type"`
+	Status       string            `json:"status"`
+	Duration     float64           `json:"duration"`
+	TotalItems   int               `json:"total_items"`
+	SuccessCount int               `json:"success_count"`
+	FailedCount  int               `json:"failed_count"`
+	Details      []ProbeItemDetail `json:"details"`
+}
+
+// ProbeItemDetail 单个拨测项执行明细
+type ProbeItemDetail struct {
+	ConfigID         uint    `json:"config_id"`
+	ConfigName       string  `json:"config_name"`
+	ConfigType       string  `json:"config_type"`
+	Target           string  `json:"target"`
+	Success          bool    `json:"success"`
+	Latency          float64 `json:"latency_ms"`
+	ErrorMessage     string  `json:"error_message,omitempty"`
+	Output           string  `json:"output,omitempty"`          // 格式化的执行输出
+	AssertionSuccess bool    `json:"assertion_success"`
+	AssertionDetail  string  `json:"assertion_detail,omitempty"` // JSON
+	AgentHostID      uint    `json:"agent_host_id,omitempty"`
+	RetryAttempt     int     `json:"retry_attempt"`
+	ExecutedAt       string  `json:"executed_at"`
+}
+
+// ExecuteSync 同步执行拨测任务，阻塞直到完成，返回完整结果（需求二）
+func (e *NetworkProbeV2Executor) ExecuteSync(ctx context.Context, taskID uint) (*ProbeSyncResult, error) {
+	inspectionTask, err := e.inspectionTaskRepo.GetByID(ctx, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("get inspection task: %w", err)
+	}
+
+	configIDs := parseJSONArray(inspectionTask.ItemIDs)
+	if len(configIDs) == 0 {
+		return nil, fmt.Errorf("no probe config IDs in task %d", taskID)
+	}
+
+	var configs []*ProbeConfig
+	for _, configID := range configIDs {
+		cfg, err := e.configRepo.GetByID(ctx, configID)
+		if err != nil {
+			appLogger.Error("get probe config failed", zap.Uint("config_id", configID), zap.Error(err))
+			continue
+		}
+		configs = append(configs, cfg)
+	}
+	if len(configs) == 0 {
+		return nil, fmt.Errorf("no valid probe configs for task %d", taskID)
+	}
+
+	concurrency := inspectionTask.Concurrency
+	if concurrency <= 0 {
+		concurrency = 5
+	}
+
+	// 解析任务级自定义变量
+	taskCustomVars := make(map[string]string)
+	if inspectionTask.CustomVariables != "" {
+		_ = json.Unmarshal([]byte(inspectionTask.CustomVariables), &taskCustomVars)
+	}
+
+	startTime := time.Now()
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var details []ProbeItemDetail
+	var failCount int64
+
+	for _, config := range configs {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(cfg *ProbeConfig) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			effectiveCfg := *cfg
+			if inspectionTask.ExecutionMode != "" {
+				effectiveCfg.ExecMode = inspectionTask.ExecutionMode
+				if inspectionTask.ExecutionMode == ExecModeAgent && inspectionTask.AgentHostIDs != "" {
+					effectiveCfg.AgentHostIDs = inspectionTask.AgentHostIDs
+				}
+			}
+			if inspectionTask.BusinessGroupID > 0 {
+				effectiveCfg.GroupID = inspectionTask.BusinessGroupID
+			}
+			cfgPtr := &effectiveCfg
+
+			resolvedCfg := cfgPtr
+			if e.variableResolver != nil {
+				if rc, err := e.variableResolver.ResolveConfigWithExtra(ctx, cfgPtr, taskCustomVars); err == nil {
+					resolvedCfg = rc
+				}
+			}
+
+			execAt := time.Now().Format(time.RFC3339)
+			detail := ProbeItemDetail{
+				ConfigID:   cfg.ID,
+				ConfigName: cfg.Name,
+				ConfigType: cfg.Type,
+				Target:     cfg.Target,
+				ExecutedAt: execAt,
+			}
+
+			// 复用现有执行逻辑
+			helperExec := &NetworkProbeExecutor{
+				agentFactory:     e.agentFactory,
+				variableResolver: e.variableResolver,
+				teleAIEnabled:    e.teleAIEnabled,
+			}
+
+			switch resolvedCfg.Category {
+			case ProbeCategoryApplication:
+				appResult, agentHostID := helperExec.executeAppProbe(resolvedCfg)
+				detail.Success = appResult.Success
+				detail.Latency = appResult.Latency
+				detail.ErrorMessage = appResult.Error
+				detail.AgentHostID = agentHostID
+				detail.AssertionSuccess = appResult.AssertionSuccess
+				if len(appResult.AssertionResults) > 0 {
+					if b, _ := json.Marshal(appResult.AssertionResults); b != nil {
+						detail.AssertionDetail = string(b)
+					}
+				}
+			case ProbeCategoryWorkflow:
+				wfResult := ExecuteWorkflowProbe(ctx, resolvedCfg, e.variableResolver, e.agentFactory, e.teleAIEnabled)
+				detail.Success = wfResult.Success
+				detail.Latency = wfResult.TotalLatency
+				detail.ErrorMessage = wfResult.Error
+				if b, _ := json.Marshal(wfResult.StepResults); b != nil {
+					detail.Output = string(b)
+				}
+			default:
+				netResult, agentHostID := helperExec.executeProbe(resolvedCfg)
+				detail.Success = netResult.Success
+				detail.Latency = netResult.Latency
+				detail.ErrorMessage = netResult.Error
+				detail.AgentHostID = agentHostID
+			}
+
+			if !detail.Success {
+				atomic.AddInt64(&failCount, 1)
+			}
+			mu.Lock()
+			details = append(details, detail)
+			mu.Unlock()
+		}(config)
+	}
+	wg.Wait()
+
+	duration := time.Since(startTime).Seconds()
+	status := "success"
+	if failCount > 0 && int(failCount) == len(details) {
+		status = "failed"
+	} else if failCount > 0 {
+		status = "partial"
+	}
+
+	return &ProbeSyncResult{
+		TaskID:       taskID,
+		TaskName:     inspectionTask.Name,
+		TaskType:     "probe",
+		Status:       status,
+		Duration:     duration,
+		TotalItems:   len(configs),
+		SuccessCount: len(details) - int(failCount),
+		FailedCount:  int(failCount),
+		Details:      details,
+	}, nil
 }
 
 // WsAction represents a single WebSocket action (send or receive) in a multi-step WS probe.

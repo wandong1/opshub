@@ -60,6 +60,55 @@ func (r *VariableResolver) Resolve(ctx context.Context, text string, allowedGrou
 	return result, nil
 }
 
+// ResolveConfigWithExtra resolves variable references in a ProbeConfig with extra vars (highest priority).
+// Priority: extraVars > system ProbeVariables (scoped by GroupID) > unresolved placeholders kept as-is.
+func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *ProbeConfig, extraVars map[string]string) (*ProbeConfig, error) {
+	texts := []string{cfg.Target, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}
+	names := ExtractVariableNames(texts...)
+	if len(names) == 0 && len(extraVars) == 0 {
+		return cfg, nil
+	}
+
+	allowedGroupIDs := parseGroupIDs(cfg.GroupIDs)
+	if cfg.GroupID > 0 {
+		allowedGroupIDs = append(allowedGroupIDs, cfg.GroupID)
+	}
+
+	varMap := make(map[string]string)
+	// 先加载系统变量（低优先级）
+	if len(names) > 0 && r.variableRepo != nil {
+		vars, err := r.variableRepo.GetByNames(ctx, names, allowedGroupIDs)
+		if err == nil {
+			for _, v := range vars {
+				varMap[v.Name] = v.Value
+			}
+		}
+	}
+	// extraVars 覆盖系统变量（高优先级）
+	for k, v := range extraVars {
+		varMap[k] = v
+	}
+
+	replace := func(s string) string {
+		return variablePattern.ReplaceAllStringFunc(s, func(match string) string {
+			name := match[2 : len(match)-2]
+			if val, ok := varMap[name]; ok {
+				return val
+			}
+			return match
+		})
+	}
+
+	copy := *cfg
+	copy.Target = replace(cfg.Target)
+	copy.URL = replace(cfg.URL)
+	copy.Headers = replace(cfg.Headers)
+	copy.Params = replace(cfg.Params)
+	copy.Body = replace(cfg.Body)
+	copy.ProxyURL = replace(cfg.ProxyURL)
+	return &copy, nil
+}
+
 // ResolveConfig resolves variable references in a ProbeConfig, returning a shallow copy.
 func (r *VariableResolver) ResolveConfig(ctx context.Context, cfg *ProbeConfig) (*ProbeConfig, error) {
 	texts := []string{cfg.Target, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}

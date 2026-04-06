@@ -132,6 +132,28 @@
             </a-form-item>
           </a-form>
         </div>
+
+        <!-- 数据保留策略 -->
+        <div v-show="activeNav === 3" class="config-section">
+          <div class="section-header">
+            <icon-storage class="section-icon" />
+            <span>数据保留策略</span>
+          </div>
+          <a-form :model="dataRetentionConfig" layout="horizontal" :label-col-props="{ span: 5 }" :wrapper-col-props="{ span: 16 }">
+            <div class="section-sub-header">智能巡检执行记录</div>
+            <a-form-item label="记录保留数量">
+              <a-space>
+                <a-input-number v-model="dataRetentionConfig.inspectionRecordRetention" :min="10000" :max="10000000" :step="100000" style="width: 200px;" />
+                <span class="form-tip">条（范围：1万-1000万）</span>
+              </a-space>
+            </a-form-item>
+            <a-form-item label=" " :label-col-props="{ span: 5 }">
+              <a-alert type="info" style="margin-bottom: 0;">
+                系统将每天凌晨2点自动清理超出保留数量的历史记录，仅保留最新的记录。建议根据实际业务需求和存储空间设置合理的保留数量。
+              </a-alert>
+            </a-form-item>
+          </a-form>
+        </div>
       </a-card>
     </div>
   </div>
@@ -148,6 +170,7 @@ import {
   IconPlus,
   IconDelete,
   IconCode,
+  IconStorage,
 } from '@arco-design/web-vue/es/icon'
 import {
   getAllConfig,
@@ -167,6 +190,7 @@ const navItems = [
   { label: '基础配置', icon: IconHome },
   { label: '安全配置', icon: IconLock },
   { label: '定制配置', icon: IconCode },
+  { label: '数据保留策略', icon: IconStorage },
 ]
 
 const config = reactive({
@@ -182,6 +206,10 @@ const config = reactive({
 
 const customConfig = reactive({
   teleaiAuthEnabled: false,
+})
+
+const dataRetentionConfig = reactive({
+  inspectionRecordRetention: 1000000, // 默认100万条
 })
 
 const loadConfig = async () => {
@@ -208,6 +236,9 @@ const loadConfig = async () => {
     const res = await getCustomConfig()
     if (res?.teleaiAuth) {
       customConfig.teleaiAuthEnabled = res.teleaiAuth.enabled || false
+    }
+    if (res?.dataRetention) {
+      dataRetentionConfig.inspectionRecordRetention = res.dataRetention.inspectionRecordRetention || 1000000
     }
   } catch (error) {
     console.error('加载定制配置失败', error)
@@ -236,6 +267,9 @@ const handleSave = async () => {
         enabled: customConfig.teleaiAuthEnabled,
         appKey: '',
         region: '',
+      },
+      dataRetention: {
+        inspectionRecordRetention: dataRetentionConfig.inspectionRecordRetention,
       }
     })
 

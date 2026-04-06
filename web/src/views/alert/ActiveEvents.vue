@@ -58,11 +58,38 @@
             <a-option value="warning"><a-tag color="blue" size="small">提示 P4</a-tag></a-option>
           </a-select>
         </a-col>
-        <a-col :span="7"><a-input v-model="keyword" placeholder="搜索规则名称" allow-clear @press-enter="load" /></a-col>
-        <a-col :span="4"><a-button type="primary" @click="load">查询</a-button></a-col>
+        <a-col :span="6"><a-input v-model="keyword" placeholder="搜索规则名称" allow-clear @press-enter="load" /></a-col>
+        <a-col :span="6">
+          <a-input v-model="labelFilter" placeholder="标签搜索 (如: job=prome*)" allow-clear @press-enter="load">
+            <template #prefix><icon-tags /></template>
+          </a-input>
+        </a-col>
+        <a-col :span="3"><a-button type="primary" @click="load">查询</a-button></a-col>
+        <a-col :span="4" style="text-align:right">
+          <a-button @click="openSilencedModal">
+            <template #icon><icon-eye /></template>已屏蔽告警
+          </a-button>
+        </a-col>
       </a-row>
 
-      <a-table :data="events" :loading="loading" row-key="id"
+      <!-- 批量操作栏 -->
+      <div v-if="selectedEventIds.length > 0" class="batch-bar">
+        <span class="batch-count">已选 <b>{{ selectedEventIds.length }}</b> 条</span>
+        <a-space>
+          <a-button size="small" @click="openBatchSilence">
+            <template #icon><icon-mute /></template>批量屏蔽
+          </a-button>
+          <a-button size="small" @click="openBatchHandle">
+            <template #icon><icon-check-circle /></template>批量处理
+          </a-button>
+          <a-button size="small" type="text" @click="selectedEventIds = []">取消选择</a-button>
+        </a-space>
+      </div>
+
+      <a-table :data="events" :loading="loading"
+        row-key="id"
+        :row-selection="rowSelection"
+        v-model:selectedKeys="selectedEventIds"
         :pagination="{ total, pageSize: 50, current: page, onChange: (p:number)=>{page=p;load()} }"
         :bordered="false" stripe
         :expandable="{ expandRowByClick: true, defaultExpandAllRows: false }">
@@ -177,19 +204,67 @@
       </a-table>
     </a-card>
 
-    <!-- 屏蔽弹窗 -->
-    <a-modal v-model:visible="silenceVisible" title="屏蔽告警" @ok="doSilence" @cancel="silenceVisible=false" width="400px">
-      <a-form layout="vertical" :model="{}">
-        <a-form-item label="屏蔽时长">
+    <!-- 屏蔽弹窗（单条） -->
+    <a-modal v-model:visible="silenceVisible" title="屏蔽告警" @ok="doSilence" @cancel="silenceVisible=false" width="600px">
+      <a-form layout="vertical" :model="{ singleSilenceType, singleEditLabels, silenceDuration, silenceReason }">
+        <a-form-item label="屏蔽维度">
+          <a-alert type="info" style="margin-bottom:12px">
+            默认按 <b>告警等级 + 规则名称 + 标签</b> 三元组屏蔽，相同维度的所有告警都会被屏蔽
+          </a-alert>
+        </a-form-item>
+
+        <a-form-item label="标签编辑（可选）">
+          <a-checkbox v-model="singleEditLabels">自定义标签（移除部分标签可扩大屏蔽范围）</a-checkbox>
+          <div v-if="singleEditLabels" style="margin-top:8px">
+            <a-space wrap>
+              <a-tag v-for="(label, idx) in singleSelectedLabels" :key="idx" closable @close="removeSingleLabel(idx)">
+                {{ label.k }}={{ label.v }}
+              </a-tag>
+            </a-space>
+            <div style="margin-top:8px;font-size:12px;color:var(--ops-text-tertiary)">
+              提示：移除标签后，屏蔽范围会扩大到所有包含剩余标签的告警
+            </div>
+          </div>
+        </a-form-item>
+
+        <a-form-item label="屏蔽类型">
+          <a-radio-group v-model="singleSilenceType" type="button">
+            <a-radio value="fixed">固定时长</a-radio>
+            <a-radio value="periodic">周期性</a-radio>
+          </a-radio-group>
+        </a-form-item>
+
+        <a-form-item v-if="singleSilenceType === 'fixed'" label="屏蔽时长">
           <a-radio-group v-model="silenceDuration" type="button">
             <a-radio value="1h">1小时</a-radio>
             <a-radio value="2h">2小时</a-radio>
             <a-radio value="4h">4小时</a-radio>
             <a-radio value="8h">8小时</a-radio>
             <a-radio value="24h">24小时</a-radio>
+            <a-radio value="168h">1周</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="屏蔽原因"><a-textarea v-model="silenceReason" :auto-size="{minRows:2}" /></a-form-item>
+
+        <a-form-item v-if="singleSilenceType === 'periodic'" label="生效时间段">
+          <a-checkbox-group v-model="singleSilenceWeekdays">
+            <a-checkbox :value="1">周一</a-checkbox>
+            <a-checkbox :value="2">周二</a-checkbox>
+            <a-checkbox :value="3">周三</a-checkbox>
+            <a-checkbox :value="4">周四</a-checkbox>
+            <a-checkbox :value="5">周五</a-checkbox>
+            <a-checkbox :value="6">周六</a-checkbox>
+            <a-checkbox :value="7">周日</a-checkbox>
+          </a-checkbox-group>
+          <a-space style="margin-top:8px">
+            <a-time-picker v-model="singleSilenceStart" format="HH:mm" />
+            <span>至</span>
+            <a-time-picker v-model="singleSilenceEnd" format="HH:mm" />
+          </a-space>
+        </a-form-item>
+
+        <a-form-item label="屏蔽原因">
+          <a-textarea v-model="silenceReason" :auto-size="{minRows:2}" placeholder="请输入屏蔽原因" />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -198,22 +273,76 @@
       <a-alert type="info" style="margin-bottom:12px">
         标记「人工介入」后，该告警仍处于 firing 状态。当监控指标恢复正常时，系统将自动恢复该告警，并记录恢复方式为「人工介入后自动恢复」。
       </a-alert>
-      <a-form layout="vertical" :model="{}">
+      <a-form layout="vertical" :model="{ handleNote }">
         <a-form-item label="介入备注（可选）">
           <a-textarea v-model="handleNote" :auto-size="{minRows:3}" placeholder="记录处理过程、原因或操作说明..." />
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 批量屏蔽弹窗 -->
+    <a-modal v-model:visible="batchSilenceVisible" title="批量屏蔽告警" @ok="doBatchSilence" width="600px">
+      <a-form layout="vertical" :model="{ batchSilenceType, batchSilenceDuration, batchSilenceReason }">
+        <a-form-item label="屏蔽说明">
+          <a-alert type="info" style="margin-bottom:12px">
+            已选中 <b>{{ selectedEventIds.length }}</b> 条告警，将按每条告警的 <b>告警等级 + 规则名称 + 标签</b> 三元组分别创建屏蔽规则
+          </a-alert>
+        </a-form-item>
+
+        <a-form-item label="屏蔽类型">
+          <a-radio-group v-model="batchSilenceType" type="button">
+            <a-radio value="fixed">固定时长</a-radio>
+            <a-radio value="periodic">周期性</a-radio>
+          </a-radio-group>
+        </a-form-item>
+
+        <a-form-item v-if="batchSilenceType === 'fixed'" label="屏蔽时长">
+          <a-radio-group v-model="batchSilenceDuration" type="button">
+            <a-radio value="1h">1小时</a-radio>
+            <a-radio value="2h">2小时</a-radio>
+            <a-radio value="6h">6小时</a-radio>
+            <a-radio value="12h">12小时</a-radio>
+            <a-radio value="24h">1天</a-radio>
+            <a-radio value="168h">1周</a-radio>
+          </a-radio-group>
+        </a-form-item>
+
+        <a-form-item v-if="batchSilenceType === 'periodic'" label="生效时间段">
+          <a-checkbox-group v-model="batchSilenceWeekdays">
+            <a-checkbox :value="1">周一</a-checkbox>
+            <a-checkbox :value="2">周二</a-checkbox>
+            <a-checkbox :value="3">周三</a-checkbox>
+            <a-checkbox :value="4">周四</a-checkbox>
+            <a-checkbox :value="5">周五</a-checkbox>
+            <a-checkbox :value="6">周六</a-checkbox>
+            <a-checkbox :value="7">周日</a-checkbox>
+          </a-checkbox-group>
+          <a-space style="margin-top:8px">
+            <a-time-picker v-model="batchSilenceStart" format="HH:mm" />
+            <span>至</span>
+            <a-time-picker v-model="batchSilenceEnd" format="HH:mm" />
+          </a-space>
+        </a-form-item>
+
+        <a-form-item label="屏蔽原因">
+          <a-textarea v-model="batchSilenceReason" :auto-size="{minRows:2}" placeholder="请输入屏蔽原因" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 已屏蔽告警弹窗 -->
+    <SilencedAlertsModal v-model:visible="silencedModalVisible" @refresh="load" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import * as echarts from 'echarts'
 import { useUserStore } from '@/stores/user'
-import { getActiveEvents, getEventStats, getEventTrend, silenceEvent, handleEvent } from '@/api/alert'
+import { getActiveEvents, getEventStats, getEventTrend, silenceEvent, handleEvent, batchSilenceEvents } from '@/api/alert'
+import SilencedAlertsModal from './SilencedAlertsModal.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -224,8 +353,41 @@ const total = ref(0)
 const page = ref(1)
 const keyword = ref('')
 const filterSeverity = ref('')
+const labelFilter = ref('')
 const lastRefresh = ref('')
 const chartDays = ref(7)
+
+// 批量选择
+const selectedEventIds = ref<number[]>([])
+
+const rowSelection = computed(() => {
+  const config = {
+    type: 'checkbox' as const,
+    showCheckedAll: true
+  }
+  console.log('[批量选择] rowSelection computed 执行', {
+    selectedKeys: selectedEventIds.value,
+    config
+  })
+  return config
+})
+
+// 监听选择变化（通过 v-model:selectedKeys）
+watch(selectedEventIds, (newVal) => {
+  console.log('[批量选择] selectedEventIds 变化', { newVal })
+})
+
+// 批量屏蔽
+const batchSilenceVisible = ref(false)
+const batchSilenceType = ref('fixed')
+const batchSilenceDuration = ref('2h')
+const batchSilenceWeekdays = ref<number[]>([1, 2, 3, 4, 5])
+const batchSilenceStart = ref('09:00')
+const batchSilenceEnd = ref('18:00')
+const batchSilenceReason = ref('')
+
+// 已屏蔽告警弹窗
+const silencedModalVisible = ref(false)
 
 const roseChartRef = ref<HTMLElement>()
 const barChartRef = ref<HTMLElement>()
@@ -246,6 +408,12 @@ const fmtTime = (s?: string) => {
 const silenceVisible = ref(false)
 const silenceDuration = ref('2h')
 const silenceReason = ref('')
+const singleSilenceType = ref('fixed')
+const singleEditLabels = ref(false)
+const singleSelectedLabels = ref<{k:string, v:string}[]>([])
+const singleSilenceWeekdays = ref<number[]>([1, 2, 3, 4, 5])
+const singleSilenceStart = ref('09:00')
+const singleSilenceEnd = ref('18:00')
 const handleVisible = ref(false)
 const handleNote = ref('')
 let currentEventId = 0
@@ -276,10 +444,24 @@ const goRule = (ruleId?: number) => {
 const load = async () => {
   loading.value = true
   try {
-    const d = await getActiveEvents({ page: page.value, pageSize: 50, severity: filterSeverity.value, keyword: keyword.value }) as any
+    const d = await getActiveEvents({
+      page: page.value,
+      pageSize: 50,
+      severity: filterSeverity.value,
+      keyword: keyword.value,
+      labelFilter: labelFilter.value
+    }) as any
     events.value = Array.isArray(d) ? d : (d?.data || [])
     total.value = Array.isArray(d) ? d.length : (d?.total || 0)
     lastRefresh.value = new Date().toLocaleTimeString()
+
+    // 调试日志
+    console.log('[数据加载] 告警列表加载完成', {
+      count: events.value.length,
+      firstRecord: events.value[0],
+      hasId: events.value.length > 0 && events.value[0]?.id !== undefined,
+      ids: events.value.slice(0, 3).map(e => e.id)
+    })
   } finally { loading.value = false }
 }
 
@@ -316,8 +498,8 @@ const initCharts = async () => {
     const firingDay = trend.map((t: any) => t.firingCount ?? 0)
     barChart.setOption({
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: { bottom: 0, textStyle: { fontSize: 10 } },
-      grid: { top: 10, bottom: 40, left: 36, right: 10 },
+      legend: { top: 0, textStyle: { fontSize: 10 } },
+      grid: { top: 30, bottom: 40, left: 36, right: 10 },
       xAxis: { type: 'category', data: barDates, axisLabel: { fontSize: 9, rotate: 30 } },
       yAxis: { type: 'value', minInterval: 1 },
       series: [
@@ -338,8 +520,8 @@ const initCharts = async () => {
     const resolved = trend.map((t: any) => t.resolvedCount)
     trendChart.setOption({
       tooltip: { trigger: 'axis' },
-      legend: { data: ['新增告警', '已恢复'], bottom: 0, textStyle: { fontSize: 11 } },
-      grid: { top: 20, bottom: 40, left: 40, right: 20 },
+      legend: { data: ['新增告警', '已恢复'], top: 0, textStyle: { fontSize: 11 } },
+      grid: { top: 30, bottom: 40, left: 40, right: 20 },
       xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
       yAxis: { type: 'value', minInterval: 1 },
       series: [
@@ -354,15 +536,120 @@ const initCharts = async () => {
   }
 }
 
-const openSilence = (row: any) => { currentEventId = row.id; silenceReason.value = ''; silenceVisible.value = true }
+const openSilence = (row: any) => {
+  currentEventId = row.id
+  silenceReason.value = ''
+  singleEditLabels.value = false
+  singleSilenceType.value = 'fixed'
+  singleSelectedLabels.value = parseLabels(row.labels)
+  silenceVisible.value = true
+}
+
+const removeSingleLabel = (idx: number) => {
+  singleSelectedLabels.value.splice(idx, 1)
+}
+
 const doSilence = async () => {
-  try { await silenceEvent(currentEventId, { duration: silenceDuration.value, reason: silenceReason.value }); Message.success('屏蔽成功'); silenceVisible.value = false; load() }
-  catch { Message.error('操作失败') }
+  try {
+    const data: any = {
+      eventIds: [currentEventId],
+      type: singleSilenceType.value,
+      reason: silenceReason.value
+    }
+
+    if (singleEditLabels.value) {
+      const labelsObj: Record<string, string> = {}
+      singleSelectedLabels.value.forEach(l => { labelsObj[l.k] = l.v })
+      data.editLabels = true
+      data.labels = JSON.stringify(labelsObj)
+    }
+
+    if (singleSilenceType.value === 'fixed') {
+      data.duration = silenceDuration.value
+    } else {
+      data.timeRanges = JSON.stringify([{
+        weekdays: singleSilenceWeekdays.value,
+        start: singleSilenceStart.value,
+        end: singleSilenceEnd.value
+      }])
+    }
+
+    await batchSilenceEvents(data)
+    Message.success('屏蔽成功')
+    silenceVisible.value = false
+    load()
+  } catch {
+    Message.error('操作失败')
+  }
 }
 const openHandle = (row: any) => { currentEventId = row.id; handleNote.value = ''; handleVisible.value = true }
 const doHandle = async () => {
   try { await handleEvent(currentEventId, { note: handleNote.value, userId: userStore.userInfo?.id }); Message.success('已标记人工介入'); handleVisible.value = false; load() }
   catch { Message.error('操作失败') }
+}
+
+// 批量屏蔽
+const openBatchSilence = () => {
+  if (selectedEventIds.value.length === 0) {
+    Message.warning('请先选择告警')
+    return
+  }
+
+  console.log('[批量屏蔽] 打开弹窗，已选告警数:', selectedEventIds.value.length)
+  console.log('[批量屏蔽] 已选告警ID列表:', selectedEventIds.value)
+
+  batchSilenceVisible.value = true
+}
+
+const doBatchSilence = async () => {
+  console.log('[批量屏蔽] 开始执行，参数:', {
+    eventIds: selectedEventIds.value,
+    type: batchSilenceType.value,
+    duration: batchSilenceType.value === 'fixed' ? batchSilenceDuration.value : undefined,
+    timeRanges: batchSilenceType.value === 'periodic' ? {
+      weekdays: batchSilenceWeekdays.value,
+      start: batchSilenceStart.value,
+      end: batchSilenceEnd.value
+    } : undefined,
+    reason: batchSilenceReason.value
+  })
+
+  try {
+    const data: any = {
+      eventIds: selectedEventIds.value,
+      type: batchSilenceType.value,
+      reason: batchSilenceReason.value
+    }
+
+    if (batchSilenceType.value === 'fixed') {
+      data.duration = batchSilenceDuration.value
+    } else {
+      data.timeRanges = JSON.stringify([{
+        weekdays: batchSilenceWeekdays.value,
+        start: batchSilenceStart.value,
+        end: batchSilenceEnd.value
+      }])
+    }
+
+    console.log('[批量屏蔽] 发送请求数据:', data)
+    await batchSilenceEvents(data)
+    console.log('[批量屏蔽] 请求成功')
+    Message.success('批量屏蔽成功')
+    batchSilenceVisible.value = false
+    selectedEventIds.value = []
+    load()
+  } catch (err) {
+    console.error('[批量屏蔽] 请求失败:', err)
+    Message.error('批量屏蔽失败')
+  }
+}
+
+const openBatchHandle = () => {
+  Message.info('批量处理功能开发中...')
+}
+
+const openSilencedModal = () => {
+  silencedModalVisible.value = true
 }
 
 onMounted(async () => {
@@ -377,6 +664,14 @@ onUnmounted(() => { if (timer) clearInterval(timer); roseChart?.dispose(); barCh
 .page-container { padding: 20px; background: var(--ops-content-bg); min-height: 100%; }
 .chart-card { border-radius: 8px; }
 .chart-title { font-size: 13px; font-weight: 600; color: var(--ops-text-primary); margin-bottom: 8px; }
+
+/* 批量操作栏 */
+.batch-bar {
+  display: flex; align-items: center; gap: 12px;
+  background: #e8f3ff; border: 1px solid #bedaff; border-radius: 6px;
+  padding: 8px 14px; margin-bottom: 12px;
+}
+.batch-count { font-size: 13px; color: var(--ops-primary); flex-shrink: 0; }
 
 /* 级别徽标 */
 .sev-cell { display: flex; align-items: center; gap: 5px; }

@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	systembiz "github.com/ydcloud-dy/opshub/internal/biz/system"
 	biz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
 	inspectiondata "github.com/ydcloud-dy/opshub/internal/data/inspection"
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
@@ -39,6 +40,7 @@ type HTTPServer struct {
 	inspectionTaskService      *inspectionmgmtsvc.TaskService
 	executionRecordService     *inspectionmgmtsvc.ExecutionRecordService
 	inspectionExecutor         *inspectionmgmtsvc.InspectionExecutor
+	cleanupService             *inspectionmgmtsvc.CleanupService
 
 	// 手动运行中的任务取消函数（taskID → cancel）
 	runningTasksMu sync.Mutex
@@ -68,6 +70,7 @@ func NewHTTPServer(
 	inspectionTaskService *inspectionmgmtsvc.TaskService,
 	executionRecordService *inspectionmgmtsvc.ExecutionRecordService,
 	inspectionExecutor *inspectionmgmtsvc.InspectionExecutor,
+	cleanupService *inspectionmgmtsvc.CleanupService,
 	hostRepo assetbiz.HostRepo,
 	groupRepo inspectionmgmtdata.GroupRepository,
 	itemRepo inspectionmgmtdata.ItemRepository,
@@ -89,6 +92,7 @@ func NewHTTPServer(
 		inspectionTaskService:   inspectionTaskService,
 		executionRecordService:  executionRecordService,
 		inspectionExecutor:      inspectionExecutor,
+		cleanupService:          cleanupService,
 		runningTasks:            make(map[uint]context.CancelFunc),
 		hostRepo:                hostRepo,
 		groupRepo:               groupRepo,
@@ -287,7 +291,7 @@ func (a *pushgatewayAdapter) GetByID(ctx context.Context, id uint) (*inspectionm
 
 // NewInspectionServices is the factory function that assembles the full dependency chain.
 // Returns the HTTPServer and starts the scheduler.
-func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo assetbiz.HostRepo, credentialRepo assetbiz.CredentialRepo, agentHub *agent.AgentHub) *HTTPServer {
+func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo assetbiz.HostRepo, credentialRepo assetbiz.CredentialRepo, agentHub *agent.AgentHub, configUseCase interface{}) *HTTPServer {
 	// Repos
 	configRepo := inspectiondata.NewProbeConfigRepo(db)
 	taskRepo := inspectiondata.NewProbeTaskRepo(db)
@@ -339,7 +343,16 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	sched.RegisterExecutor(healthExecutor)
 
 	// 初始化巡检管理服务
-	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _, execRecordRepo := InitInspectionMgmtServices(db, hostRepo, credentialRepo, agentHub)
+	sysConfigUseCase, ok := configUseCase.(*systembiz.ConfigUseCase)
+	if !ok {
+		appLogger.Fatal("configUseCase type assertion failed")
+	}
+	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, cleanupService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _, execRecordRepo := InitInspectionMgmtServices(db, hostRepo, credentialRepo, agentHub, sysConfigUseCase)
+
+	// 启动清理服务
+	if err := cleanupService.Start(); err != nil {
+		appLogger.Error("启动智能巡检执行记录清理服务失败", zap.Error(err))
+	}
 
 	// 创建 Pushgateway 适配器
 	pgwAdapter := &pushgatewayAdapter{repo: pgwRepo}
@@ -387,7 +400,7 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	pgwSvc := svc.NewPushgatewayService(pgwUC)
 	variableSvc := svc.NewProbeVariableService(variableUC)
 
-	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, probeV2Executor, healthExecutor, inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, inspectionExecutor, hostRepo, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, execRecordRepo)
+	return NewHTTPServer(probeConfigSvc, probeTaskSvc, pgwSvc, variableSvc, sched, executor, probeV2Executor, healthExecutor, inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, inspectionExecutor, cleanupService, hostRepo, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, execRecordRepo)
 }
 
 // migrateData performs one-time data migration:
@@ -433,6 +446,16 @@ func AutoMigrateModels() []interface{} {
 // Migrate runs auto-migration for inspection tables.
 func Migrate(db *gorm.DB) error {
 	return db.AutoMigrate(AutoMigrateModels()...)
+}
+
+// Stop 停止调度器和清理服务
+func (s *HTTPServer) Stop() {
+	if s.scheduler != nil {
+		s.scheduler.Stop()
+	}
+	if s.cleanupService != nil {
+		s.cleanupService.Stop()
+	}
 }
 
 func init() {

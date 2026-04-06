@@ -52,6 +52,14 @@ type ExecutionDetailResponse struct {
 	HostID             uint    `json:"hostId"`
 	HostName           string  `json:"hostName"`
 	HostIP             string  `json:"hostIp"`
+	BusinessGroup      string  `json:"businessGroup"`
+	ExecutionType      string  `json:"executionType"`
+	ExecutionMode      string  `json:"executionMode"`
+	Command            string  `json:"command"`
+	ScriptType         string  `json:"scriptType"`
+	ScriptContent      string  `json:"scriptContent"`
+	AssertionType      string  `json:"assertionType"`
+	AssertionValue     string  `json:"assertionValue"`
 	Status             string  `json:"status"`
 	Output             string  `json:"output"`
 	ErrorMessage       string  `json:"errorMessage"`
@@ -179,6 +187,14 @@ func (s *ExecutionRecordService) toDetailResponse(detail *inspectionmgmtdata.Ins
 		HostID:             detail.HostID,
 		HostName:           detail.HostName,
 		HostIP:             detail.HostIP,
+		BusinessGroup:      detail.BusinessGroup,
+		ExecutionType:      detail.ExecutionType,
+		ExecutionMode:      detail.ExecutionMode,
+		Command:            detail.Command,
+		ScriptType:         detail.ScriptType,
+		ScriptContent:      detail.ScriptContent,
+		AssertionType:      detail.AssertionType,
+		AssertionValue:     detail.AssertionValue,
 		Status:             detail.Status,
 		Output:             detail.Output,
 		ErrorMessage:       detail.ErrorMessage,

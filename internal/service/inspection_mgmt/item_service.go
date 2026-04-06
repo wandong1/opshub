@@ -261,6 +261,79 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 	return results, nil
 }
 
+// TestRunWithoutSave 测试执行巡检项（不保存到数据库，用于前端测试）
+func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, items []ItemCreateRequest) ([]*TestRunResponse, error) {
+	var results []*TestRunResponse
+
+	// 获取巡检组
+	group, err := s.groupRepo.GetByID(ctx, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("获取巡检组失败: %v", err)
+	}
+
+	for _, itemReq := range items {
+		// 构造临时巡检项（不保存到数据库）
+		item := &inspectionmgmtdata.InspectionItem{
+			Name:              itemReq.Name,
+			Description:       itemReq.Description,
+			GroupID:           groupID,
+			Sort:              itemReq.Sort,
+			Status:            itemReq.Status,
+			ExecutionStrategy: itemReq.ExecutionStrategy,
+			ExecutionType:     itemReq.ExecutionType,
+			Command:           itemReq.Command,
+			ScriptType:        itemReq.ScriptType,
+			ScriptContent:     itemReq.ScriptContent,
+			ScriptFile:        itemReq.ScriptFile,
+			ScriptArgs:        itemReq.ScriptArgs,
+			PromQLQuery:       itemReq.PromQLQuery,
+			ProbeCategory:     itemReq.ProbeCategory,
+			ProbeType:         itemReq.ProbeType,
+			ProbeConfigID:     itemReq.ProbeConfigID,
+			HostMatchType:     itemReq.HostMatchType,
+			HostTags:          itemReq.HostTags,
+			HostIDs:           itemReq.HostIDs,
+			AssertionType:     itemReq.AssertionType,
+			AssertionValue:    itemReq.AssertionValue,
+			VariableName:      itemReq.VariableName,
+			VariableRegex:     itemReq.VariableRegex,
+			Timeout:           itemReq.Timeout,
+		}
+
+		// 设置默认值
+		if item.Status == "" {
+			item.Status = "enabled"
+		}
+		if item.ExecutionStrategy == "" {
+			item.ExecutionStrategy = "concurrent"
+		}
+		if item.Timeout == 0 {
+			item.Timeout = 60
+		}
+
+		// 拨测类型不需要主机匹配，直接执行
+		if item.ExecutionType == "probe" {
+			result := s.executeItem(ctx, item, group, nil, nil)
+			results = append(results, result)
+			continue
+		}
+
+		// 匹配主机（非拨测类型）
+		hosts, err := s.matchHosts(ctx, item, group)
+		if err != nil {
+			continue
+		}
+
+		// 对每个主机执行巡检
+		for _, host := range hosts {
+			result := s.executeItem(ctx, item, group, host, nil)
+			results = append(results, result)
+		}
+	}
+
+	return results, nil
+}
+
 func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.InspectionItem, group *inspectionmgmtdata.InspectionGroup, host *assetbiz.Host, runtimeVariables map[string]string) *TestRunResponse {
 	result := &TestRunResponse{
 		ItemID:   item.ID,
@@ -701,5 +774,124 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 		records = append(records, record)
 	}
 
+	return records, nil
+}
+
+// ExecuteItemByIDWithOverride 执行巡检项，支持任务调度级覆盖（需求一、需求三）
+// executionModeOverride: 覆盖执行方式，空=沿用巡检组配置
+// businessGroupIDOverride: 覆盖业务分组，0=沿用巡检组配置
+// extraVars: 任务调度级自定义变量（优先级最高，合并到运行时变量）
+func (s *ItemService) ExecuteItemByIDWithOverride(
+	ctx context.Context,
+	itemID uint,
+	executionModeOverride string,
+	businessGroupIDOverride uint,
+	extraVars map[string]string,
+) ([]*inspectionmgmtdata.InspectionRecord, error) {
+	// 获取巡检项
+	item, err := s.itemRepo.GetByID(ctx, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("get inspection item failed: %w", err)
+	}
+
+	// 获取巡检组
+	group, err := s.groupRepo.GetByID(ctx, item.GroupID)
+	if err != nil {
+		return nil, fmt.Errorf("get inspection group failed: %w", err)
+	}
+
+	// 需求一：运行时覆盖巡检组配置（不修改数据库）
+	effectiveGroup := *group
+	if executionModeOverride != "" {
+		effectiveGroup.ExecutionMode = executionModeOverride
+	}
+	if businessGroupIDOverride > 0 {
+		// 将业务分组 ID 序列化为 JSON 数组格式
+		groupIDsJSON, _ := json.Marshal([]uint{businessGroupIDOverride})
+		effectiveGroup.GroupIDs = string(groupIDsJSON)
+	}
+
+	// 需求三：将任务调度自定义变量（最高优先级）作为初始运行时变量
+	baseVars := make(map[string]string)
+	for k, v := range extraVars {
+		baseVars[k] = v
+	}
+
+	// 拨测类型不需要主机匹配，直接执行
+	if item.ExecutionType == "probe" {
+		variables := make(map[string]string)
+		for k, v := range baseVars {
+			variables[k] = v
+		}
+		result := s.executeItem(ctx, item, &effectiveGroup, nil, variables)
+
+		assertionDetailsJSON := ""
+		if result.AssertionDetails != nil {
+			if data, err := json.Marshal(result.AssertionDetails); err == nil {
+				assertionDetailsJSON = string(data)
+			}
+		}
+
+		record := &inspectionmgmtdata.InspectionRecord{
+			GroupID:          item.GroupID,
+			ItemID:           item.ID,
+			HostID:           0,
+			Status:           result.Status,
+			Output:           result.Output,
+			ErrorMessage:     result.ErrorMessage,
+			Duration:         result.Duration,
+			AssertionResult:  result.AssertionResult,
+			AssertionDetails: assertionDetailsJSON,
+			ExecutedAt:       time.Now(),
+		}
+		if err := s.recordRepo.Create(ctx, record); err != nil {
+			return nil, fmt.Errorf("save inspection record failed: %w", err)
+		}
+		return []*inspectionmgmtdata.InspectionRecord{record}, nil
+	}
+
+	// 获取目标主机列表（使用覆盖后的 group）
+	hosts, err := s.matchHosts(ctx, item, &effectiveGroup)
+	if err != nil {
+		return nil, fmt.Errorf("match hosts failed: %w", err)
+	}
+	if len(hosts) == 0 {
+		return nil, fmt.Errorf("no target hosts found for item %d", itemID)
+	}
+
+	records := make([]*inspectionmgmtdata.InspectionRecord, 0, len(hosts))
+	variables := make(map[string]string)
+	for k, v := range baseVars {
+		variables[k] = v
+	}
+	for _, host := range hosts {
+		result := s.executeItem(ctx, item, &effectiveGroup, host, variables)
+
+		assertionDetailsJSON := ""
+		if result.AssertionDetails != nil {
+			if data, err := json.Marshal(result.AssertionDetails); err == nil {
+				assertionDetailsJSON = string(data)
+			}
+		}
+
+		record := &inspectionmgmtdata.InspectionRecord{
+			GroupID:          item.GroupID,
+			ItemID:           item.ID,
+			HostID:           host.ID,
+			HostName:         host.Name,
+			HostIP:           host.IP,
+			Status:           result.Status,
+			Output:           result.Output,
+			ErrorMessage:     result.ErrorMessage,
+			Duration:         result.Duration,
+			AssertionResult:  result.AssertionResult,
+			AssertionDetails: assertionDetailsJSON,
+			ExecutedAt:       time.Now(),
+		}
+		if err := s.recordRepo.Create(ctx, record); err != nil {
+			return nil, fmt.Errorf("save inspection record failed: %w", err)
+		}
+		records = append(records, record)
+	}
 	return records, nil
 }

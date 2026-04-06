@@ -382,3 +382,61 @@ func (s *ConfigService) SaveCustomConfig(c *gin.Context) {
 	}
 	response.Success(c, nil)
 }
+
+// GetDataRetentionConfig 获取数据保留策略配置
+// @Summary 获取数据保留策略配置
+// @Description 获取智能巡检执行记录保留数量等配置
+// @Tags 系统配置
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} response.Response{} "获取成功"
+// @Router /api/v1/system/config/data-retention [get]
+func (s *ConfigService) GetDataRetentionConfig(c *gin.Context) {
+	config, err := s.configUseCase.GetDataRetentionConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, "获取配置失败: "+err.Error())
+		return
+	}
+	response.Success(c, config)
+}
+
+// SaveDataRetentionConfigRequest 保存数据保留策略配置请求
+type SaveDataRetentionConfigRequest struct {
+	InspectionRecordRetention int `json:"inspectionRecordRetention"`
+}
+
+// SaveDataRetentionConfig 保存数据保留策略配置
+// @Summary 保存数据保留策略配置
+// @Description 保存智能巡检执行记录保留数量等配置
+// @Tags 系统配置
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param body body SaveDataRetentionConfigRequest true "数据保留策略配置"
+// @Success 200 {object} response.Response "保存成功"
+// @Router /api/v1/system/config/data-retention [put]
+func (s *ConfigService) SaveDataRetentionConfig(c *gin.Context) {
+	var req SaveDataRetentionConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
+		return
+	}
+
+	// 验证参数
+	if req.InspectionRecordRetention < 10000 || req.InspectionRecordRetention > 10000000 {
+		response.ErrorCode(c, http.StatusBadRequest, "记录保留数量必须在1万-1000万之间")
+		return
+	}
+
+	config := &system.DataRetentionConfig{
+		InspectionRecordRetention: req.InspectionRecordRetention,
+	}
+
+	if err := s.configUseCase.SaveDataRetentionConfig(c.Request.Context(), config); err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, "保存配置失败: "+err.Error())
+		return
+	}
+
+	response.SuccessWithMessage(c, "保存成功", nil)
+}

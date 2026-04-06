@@ -1,0 +1,17 @@
+{
+	"ulid": "01KNH2MP41ER22R034FPZ45ZQ5",
+	"minTime": 1775457469691,
+	"maxTime": 1775462400000,
+	"stats": {
+		"numSamples": 6140,
+		"numSeries": 949,
+		"numChunks": 949
+	},
+	"compaction": {
+		"level": 1,
+		"sources": [
+			"01KNH2MP41ER22R034FPZ45ZQ5"
+		]
+	},
+	"version": 1
+}

@@ -274,7 +274,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		if s.grpcServer != nil {
 			agentHub = s.grpcServer.Hub()
 		}
-		s.inspectionServer = inspectionserver.NewInspectionServices(s.db, s.redisClient, hostRepo, credentialRepo, agentHub)
+		s.inspectionServer = inspectionserver.NewInspectionServices(s.db, s.redisClient, hostRepo, credentialRepo, agentHub, configUseCase)
 		s.inspectionServer.RegisterRoutes(v1)
 
 		// 设置Agent命令执行工厂，使拨测支持Agent方式
