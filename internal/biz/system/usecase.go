@@ -85,6 +85,9 @@ func (uc *ConfigUseCase) GetAllConfig(ctx context.Context) (*AllConfig, error) {
 			MaxLoginAttempts:  getIntValue(configMap, ConfigKeyMaxLoginAttempts, 5),
 			LockoutDuration:   getIntValue(configMap, ConfigKeyLockoutDuration, 300),
 		},
+		DataRetention: DataRetentionConfig{
+			InspectionRecordRetention: getIntValue(configMap, ConfigKeyInspectionRecordRetention, 1000000),
+		},
 	}
 
 	return result, nil
@@ -286,6 +289,44 @@ func (uc *ConfigUseCase) SaveTeleAIAuthConfig(ctx context.Context, cfg *TeleAIAu
 	return uc.configRepo.BatchSaveOrUpdate(ctx, map[string]string{
 		ConfigKeyCustomTeleAIAuthEnabled: enabledStr,
 	})
+}
+
+// GetDataRetentionConfig 获取数据保留策略配置
+func (uc *ConfigUseCase) GetDataRetentionConfig(ctx context.Context) (*DataRetentionConfig, error) {
+	configs, err := uc.configRepo.GetByGroup(ctx, ConfigGroupDataRetention)
+	if err != nil {
+		return nil, err
+	}
+
+	configMap := make(map[string]string)
+	for _, c := range configs {
+		configMap[c.Key] = c.Value
+	}
+
+	return &DataRetentionConfig{
+		InspectionRecordRetention: getIntValue(configMap, ConfigKeyInspectionRecordRetention, 1000000),
+	}, nil
+}
+
+// SaveDataRetentionConfig 保存数据保留策略配置
+func (uc *ConfigUseCase) SaveDataRetentionConfig(ctx context.Context, config *DataRetentionConfig) error {
+	configs := map[string]string{
+		ConfigKeyInspectionRecordRetention: strconv.Itoa(config.InspectionRecordRetention),
+	}
+	return uc.configRepo.BatchSaveOrUpdate(ctx, configs)
+}
+
+// GetInspectionRecordRetention 获取智能巡检执行记录保留数量
+func (uc *ConfigUseCase) GetInspectionRecordRetention(ctx context.Context) int {
+	value, err := uc.GetConfigByKey(ctx, ConfigKeyInspectionRecordRetention)
+	if err != nil {
+		return 1000000 // 默认100万条
+	}
+	retention, err := strconv.Atoi(value)
+	if err != nil {
+		return 1000000
+	}
+	return retention
 }
 
 // 辅助函数

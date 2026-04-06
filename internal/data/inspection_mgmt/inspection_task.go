@@ -32,6 +32,20 @@ type InspectionTask struct {
 	// 负责人
 	Owner string `gorm:"size:100" json:"owner"`
 
+	// 任务调度级别的执行方式覆盖
+	// 拨测任务：local/agent，空表示沿用各拨测配置原有设置
+	// 巡检任务：auto/agent/ssh，空表示沿用各巡检组原有设置
+	ExecutionMode string `gorm:"size:20;default:''" json:"execution_mode"`
+
+	// Agent 主机 ID 列表 ✅ 移除 default:''
+	AgentHostIDs string `gorm:"type:text" json:"agent_host_ids"`
+
+	// 业务分组
+	BusinessGroupID uint `gorm:"default:0" json:"business_group_id"`
+
+	// 自定义变量 ✅ 移除 default:''
+	CustomVariables string `gorm:"type:text" json:"custom_variables"`
+
 	// 执行记录
 	LastRunAt     *time.Time `json:"last_run_at"`
 	LastRunStatus string     `gorm:"size:20" json:"last_run_status"` // success/failed

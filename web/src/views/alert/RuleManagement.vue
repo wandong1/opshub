@@ -62,6 +62,7 @@
 
         <a-table :data="rules" :loading="loading" row-key="id"
           :row-selection="rowSelection"
+          v-model:selectedKeys="selectedRuleIds"
           :pagination="{ total, pageSize, current: page, onChange: onPageChange }"
           :bordered="false" stripe>
           <template #columns>
@@ -77,7 +78,7 @@
             </a-table-column>
             <a-table-column title="规则分类" :width="110">
               <template #cell="{ record }">
-                <a-tag v-if="record.ruleGroupId" size="small" color="arcoblue" style="font-size:11px">{{ ruleGroupName(record.ruleGroupId) }}</a-tag>
+                <a-tag v-if="record.ruleGroupId" size="small" color="arcoblue" style="font-size:11px">{{ record.ruleGroupName || ruleGroupName(record.ruleGroupId) }}</a-tag>
                 <span v-else style="color:#c9cdd4">—</span>
               </template>
             </a-table-column>
@@ -288,7 +289,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
   getRules, createRule, updateRule, deleteRule, toggleRule,
@@ -302,7 +303,8 @@ const groupTree = ref<any[]>([])
 const flatGroups = ref<any[]>([])
 const selectedKeys = ref<string[]>([])
 const selectedAssetGroupId = ref<number | undefined>()
-const ruleGroups = ref<AlertRuleGroup[]>([])
+const ruleGroups = ref<AlertRuleGroup[]>([])  // 用于表单编辑的规则分类
+const allRuleGroups = ref<AlertRuleGroup[]>([])  // 所有规则分类（用于列表显示）
 const filterAssetGroupId = ref<number | undefined>()
 const filterRuleGroupId = ref<number | undefined>()
 const filterRuleGroups = ref<AlertRuleGroup[]>([])
@@ -319,11 +321,22 @@ const pageSize = ref(20)
 const keyword = ref('')
 const filterEnabled = ref<boolean | undefined>()
 const selectedRuleIds = ref<number[]>([])
-const rowSelection = computed(() => ({
-  type: 'checkbox' as const,
-  selectedRowKeys: selectedRuleIds.value,
-  onChange: (keys: (string | number)[]) => { selectedRuleIds.value = keys.map(Number) }
-}))
+const rowSelection = computed(() => {
+  const config = {
+    type: 'checkbox' as const,
+    showCheckedAll: true
+  }
+  console.log('[告警规则] rowSelection computed 执行', {
+    selectedKeys: selectedRuleIds.value,
+    config
+  })
+  return config
+})
+
+// 监听选择变化
+watch(selectedRuleIds, (newVal) => {
+  console.log('[告警规则] selectedRuleIds 变化', { newVal })
+})
 const modalVisible = ref(false)
 const testVisible = ref(false)
 const testResult = ref<any>(null)
@@ -342,7 +355,7 @@ const adhocResult = ref<any>(null)
 // helpers
 const sevColor = (s: string) => ({ critical: 'red', major: 'orangered', minor: 'orange', warning: 'blue', info: 'arcoblue' }[s] || 'gray')
 const sevLabel = (s: string) => ({ critical: '紧急P1', major: '严重P2', minor: '一般P3', warning: '提示P4', info: '信息' }[s] || s)
-const ruleGroupName = (id?: number) => ruleGroups.value.find(g => g.id === id)?.name || ''
+const ruleGroupName = (id?: number) => allRuleGroups.value.find(g => g.id === id)?.name || ''
 const dsName = (id?: number) => dataSources.value.find(d => d.id === id)?.name || String(id || '')
 const getAssetGroupName = (id?: number) => flatGroups.value.find(g => g.id === id)?.name || ''
 
@@ -369,34 +382,41 @@ const flattenTree = (nodes: any[], result: any[] = []) => {
   return result
 }
 
-const onSelectionChange = (keys: (string | number)[]) => { selectedRuleIds.value = keys.map(Number) }
-
 const openBatchGroup = () => { batchAssetGroupId.value = undefined; batchGroupVisible.value = true }
 const openBatchRuleGroup = () => { batchRuleGroupId.value = undefined; batchRuleGroupVisible.value = true }
 
 const doBatchGroup = async () => {
   if (!batchAssetGroupId.value) { Message.warning('请选择业务分组'); return }
+  console.log('[告警规则] 批量设置业务分组', { selectedIds: selectedRuleIds.value, groupId: batchAssetGroupId.value })
   try {
     await Promise.all(selectedRuleIds.value.map(id => updateRule(Number(id), { assetGroupId: batchAssetGroupId.value })))
     Message.success('批量设置成功')
     batchGroupVisible.value = false
     selectedRuleIds.value = []
     load()
-  } catch { Message.error('批量设置失败') }
+  } catch (err) {
+    console.error('[告警规则] 批量设置业务分组失败', err)
+    Message.error('批量设置失败')
+  }
 }
 
 const doBatchRuleGroup = async () => {
   if (!batchRuleGroupId.value) { Message.warning('请选择规则分类'); return }
+  console.log('[告警规则] 批量设置规则分类', { selectedIds: selectedRuleIds.value, ruleGroupId: batchRuleGroupId.value })
   try {
     await Promise.all(selectedRuleIds.value.map(id => updateRule(Number(id), { ruleGroupId: batchRuleGroupId.value })))
     Message.success('批量设置成功')
     batchRuleGroupVisible.value = false
     selectedRuleIds.value = []
     load()
-  } catch { Message.error('批量设置失败') }
+  } catch (err) {
+    console.error('[告警规则] 批量设置规则分类失败', err)
+    Message.error('批量设置失败')
+  }
 }
 
 const batchDelete = async () => {
+  console.log('[告警规则] 批量删除', { selectedIds: selectedRuleIds.value })
   try {
     await Promise.all(selectedRuleIds.value.map(id => deleteRule(Number(id))))
     Message.success('批量删除成功')
@@ -437,6 +457,14 @@ const load = async () => {
       rules.value = d?.data || []
       total.value = d?.total || 0
     }
+
+    // 调试日志
+    console.log('[告警规则] 数据加载完成', {
+      count: rules.value.length,
+      firstRecord: rules.value[0],
+      hasId: rules.value.length > 0 && rules.value[0]?.id !== undefined,
+      ids: rules.value.slice(0, 3).map(r => r.id)
+    })
   } finally { loading.value = false }
 }
 
@@ -512,13 +540,19 @@ const save = async () => {
 const saveRuleGroup = async () => {
   if (!newGroupName.value.trim()) { Message.warning('请输入分类名称'); return }
   const groupId = form.value.assetGroupId || selectedAssetGroupId.value
+  if (!groupId) { Message.warning('请先选择业务分组'); return }
   try {
-    const created = await createRuleGroup({ name: newGroupName.value, description: newGroupDesc.value, assetGroupId: groupId || 0 }) as any
+    const created = await createRuleGroup({ name: newGroupName.value, description: newGroupDesc.value, assetGroupId: groupId })
     Message.success('创建成功')
     ruleGroupModalVisible.value = false
     newGroupName.value = ''; newGroupDesc.value = ''
+    // 重新加载规则分类列表
     await loadRuleGroups(groupId)
-    form.value.ruleGroupId = created?.id
+    // 同时更新 allRuleGroups
+    const allRgRes = await getRuleGroups()
+    allRuleGroups.value = (allRgRes as any) || []
+    // 设置表单的规则分类ID
+    form.value.ruleGroupId = (created as any)?.id
   } catch { Message.error('创建失败') }
 }
 
@@ -585,12 +619,13 @@ const doImport = async ({ file }: any) => {
 }
 
 onMounted(async () => {
-  const [treeRes, dsRes, rgRes] = await Promise.all([getGroupTree(), getDataSources(), getRuleGroups()])
+  const [treeRes, dsRes, allRgRes] = await Promise.all([getGroupTree(), getDataSources(), getRuleGroups()])
   const rawTree = (treeRes as any) || []
   groupTree.value = enrichTree(rawTree)
   flatGroups.value = flattenTree(rawTree)
   dataSources.value = (dsRes as any) || []
-  ruleGroups.value = (rgRes as any) || []
+  allRuleGroups.value = (allRgRes as any) || []  // 保存所有规则分类用于列表显示
+  ruleGroups.value = (allRgRes as any) || []  // 初始化表单的规则分类
   load()
 })
 </script>

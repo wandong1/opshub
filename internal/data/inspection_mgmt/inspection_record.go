@@ -16,6 +16,8 @@ type InspectionRecord struct {
 	GroupID     uint           `gorm:"index" json:"group_id"`
 	ItemID      uint           `gorm:"not null;index" json:"item_id"`
 	HostID      uint           `gorm:"index" json:"host_id"`
+	HostName    string         `gorm:"size:200" json:"host_name"`
+	HostIP      string         `gorm:"size:50" json:"host_ip"`
 
 	// 执行结果
 	Status       string  `gorm:"size:20;not null" json:"status"` // success/failed

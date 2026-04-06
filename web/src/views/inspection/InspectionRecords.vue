@@ -138,13 +138,37 @@
         </a-tab-pane>
 
         <a-tab-pane key="details" title="执行明细">
+          <!-- 筛选条件 -->
+          <div style="margin-bottom: 16px;">
+            <a-space>
+              <a-select v-model="detailFilter.status" placeholder="执行状态" allow-clear style="width: 120px;" @change="filterDetailData">
+                <a-option value="success">成功</a-option>
+                <a-option value="failed">失败</a-option>
+              </a-select>
+              <a-select v-model="detailFilter.assertionResult" placeholder="断言结果" allow-clear style="width: 120px;" @change="filterDetailData">
+                <a-option value="pass">通过</a-option>
+                <a-option value="fail">失败</a-option>
+                <a-option value="skip">跳过</a-option>
+              </a-select>
+              <a-button @click="resetDetailFilter">重置</a-button>
+            </a-space>
+          </div>
+
           <a-table
             :columns="detailColumns"
-            :data="detailTableData"
+            :data="filteredDetailTableData"
             :loading="detailLoading"
-            :pagination="false"
+            :pagination="{ pageSize: 20, showTotal: true }"
             size="small"
           >
+            <template #executionType="{ record }">
+              <a-tag v-if="record.executionType === 'command'" size="small" color="blue">命令</a-tag>
+              <a-tag v-else-if="record.executionType === 'script'" size="small" color="purple">脚本</a-tag>
+              <a-tag v-else-if="record.executionType === 'probe'" size="small" color="cyan">拨测</a-tag>
+              <a-tag v-else-if="record.executionType === 'promql'" size="small" color="orange">PromQL</a-tag>
+              <span v-else>-</span>
+            </template>
+
             <template #status="{ record }">
               <a-tag :color="record.status === 'success' ? 'green' : 'red'">
                 {{ record.status === 'success' ? '成功' : '失败' }}
@@ -175,7 +199,7 @@
     <a-modal
       v-model:visible="detailItemVisible"
       title="执行明细详情"
-      width="800px"
+      width="900px"
       :footer="false"
     >
       <a-descriptions :column="2" bordered>
@@ -183,6 +207,25 @@
         <a-descriptions-item label="巡检项">{{ detailItemData.itemName }}</a-descriptions-item>
         <a-descriptions-item label="主机">{{ detailItemData.hostName }}</a-descriptions-item>
         <a-descriptions-item label="主机IP">{{ detailItemData.hostIp }}</a-descriptions-item>
+        <a-descriptions-item label="执行类型">
+          <a-tag v-if="detailItemData.executionType === 'command'" size="small" color="blue">命令</a-tag>
+          <a-tag v-else-if="detailItemData.executionType === 'script'" size="small" color="purple">脚本</a-tag>
+          <a-tag v-else-if="detailItemData.executionType === 'probe'" size="small" color="cyan">拨测</a-tag>
+          <a-tag v-else-if="detailItemData.executionType === 'promql'" size="small" color="orange">PromQL</a-tag>
+          <span v-else>-</span>
+        </a-descriptions-item>
+        <a-descriptions-item label="执行方式">{{ detailItemData.executionMode || '-' }}</a-descriptions-item>
+        <a-descriptions-item v-if="detailItemData.command" label="执行命令" :span="2">
+          <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap;">{{ detailItemData.command }}</pre>
+        </a-descriptions-item>
+        <a-descriptions-item v-if="detailItemData.scriptType" label="脚本类型">{{ detailItemData.scriptType }}</a-descriptions-item>
+        <a-descriptions-item v-if="detailItemData.scriptContent" label="脚本内容" :span="2">
+          <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{{ detailItemData.scriptContent }}</pre>
+        </a-descriptions-item>
+        <a-descriptions-item v-if="detailItemData.assertionType" label="断言类型">{{ detailItemData.assertionType }}</a-descriptions-item>
+        <a-descriptions-item v-if="detailItemData.assertionValue" label="断言表达式" :span="2">
+          <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap;">{{ detailItemData.assertionValue }}</pre>
+        </a-descriptions-item>
         <a-descriptions-item label="执行状态">
           <a-tag :color="detailItemData.status === 'success' ? 'green' : 'red'">
             {{ detailItemData.status === 'success' ? '成功' : '失败' }}
@@ -271,12 +314,40 @@ const detailColumns = [
   { title: '巡检项', dataIndex: 'itemName', width: 150 },
   { title: '主机', dataIndex: 'hostName', width: 120 },
   { title: '主机IP', dataIndex: 'hostIp', width: 130 },
+  { title: '执行类型', slotName: 'executionType', width: 90 },
   { title: '执行状态', slotName: 'status', width: 90 },
   { title: '断言结果', slotName: 'assertionResult', width: 90 },
   { title: '执行时长', slotName: 'duration', width: 90 },
   { title: '执行时间', dataIndex: 'executedAt', width: 170 },
   { title: '操作', slotName: 'operations', width: 80, fixed: 'right' }
 ]
+
+const detailFilter = reactive({
+  status: '',
+  assertionResult: ''
+})
+
+const filteredDetailTableData = ref<ExecutionDetail[]>([])
+
+const filterDetailData = () => {
+  let filtered = [...detailTableData.value]
+
+  if (detailFilter.status) {
+    filtered = filtered.filter(item => item.status === detailFilter.status)
+  }
+
+  if (detailFilter.assertionResult) {
+    filtered = filtered.filter(item => item.assertionResult === detailFilter.assertionResult)
+  }
+
+  filteredDetailTableData.value = filtered
+}
+
+const resetDetailFilter = () => {
+  detailFilter.status = ''
+  detailFilter.assertionResult = ''
+  filteredDetailTableData.value = [...detailTableData.value]
+}
 
 const formatJSON = (str: string) => {
   try {
@@ -353,6 +424,10 @@ const handleViewDetail = async (record: ExecutionRecord) => {
     detailLoading.value = true
     const details = await getExecutionDetails(record.id)
     detailTableData.value = details
+    filteredDetailTableData.value = [...details]
+    // 重置筛选条件
+    detailFilter.status = ''
+    detailFilter.assertionResult = ''
   } catch (error: any) {
     Message.error(error.message || '获取详情失败')
   } finally {

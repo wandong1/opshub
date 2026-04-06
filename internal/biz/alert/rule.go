@@ -43,6 +43,9 @@ type AlertRule struct {
 	Enabled         bool           `gorm:"default:true" json:"enabled"`
 	NotifyOnResolve bool           `gorm:"default:true" json:"notifyOnResolve"`
 	LastEvalAt      *time.Time     `json:"lastEvalAt"`
+
+	// 展示用虚拟字段（不存储，查询时回填）
+	RuleGroupName string `gorm:"-" json:"ruleGroupName"`
 }
 
 func (AlertRule) TableName() string {

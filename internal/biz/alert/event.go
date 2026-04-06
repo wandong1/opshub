@@ -30,6 +30,12 @@ type AlertEvent struct {
 	HandledAt     *time.Time `json:"handledAt"`
 	HandledNote   string     `gorm:"size:1000" json:"handledNote"`
 
+	// 屏蔽维度（用于匹配同类告警）
+	SilenceDimension string `gorm:"type:text" json:"silenceDimension"` // JSON: {"severity":"critical","ruleName":"CPU高","labels":{"job":"prometheus"}}
+	SilenceType      string `gorm:"size:20" json:"silenceType"`        // fixed / periodic
+	SilenceTimeRanges string `gorm:"type:text" json:"silenceTimeRanges"` // 周期性屏蔽时间段 JSON
+	SilencedAt       *time.Time `json:"silencedAt"` // 屏蔽开始时间
+
 	// 展示用虚拟字段（不存储，查询时回填）
 	AssetGroupName string `gorm:"-" json:"assetGroupName"`
 	RuleGroupName  string `gorm:"-" json:"ruleGroupName"`

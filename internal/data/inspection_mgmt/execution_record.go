@@ -62,6 +62,16 @@ type InspectionExecutionDetail struct {
 	HostName    string `gorm:"size:200;not null" json:"hostName"`
 	HostIP      string `gorm:"size:50;not null" json:"hostIp"`
 
+	// 执行配置信息
+	BusinessGroup   string `gorm:"size:200" json:"businessGroup"`       // 业务分组名称
+	ExecutionType   string `gorm:"size:50" json:"executionType"`        // command/script/probe/promql
+	ExecutionMode   string `gorm:"size:50" json:"executionMode"`        // auto/agent/ssh
+	Command         string `gorm:"type:text" json:"command"`            // 执行的命令
+	ScriptType      string `gorm:"size:50" json:"scriptType"`           // shell/python/etc
+	ScriptContent   string `gorm:"type:text" json:"scriptContent"`      // 脚本内容
+	AssertionType   string `gorm:"size:50" json:"assertionType"`        // 断言类型
+	AssertionValue  string `gorm:"type:text" json:"assertionValue"`     // 断言值
+
 	// 执行结果
 	Status       string  `gorm:"size:20;not null;index:idx_status" json:"status"` // success/failed
 	Output       string  `gorm:"type:text" json:"output"`

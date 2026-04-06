@@ -4,7 +4,14 @@
       <template #title>历史告警查询</template>
       <a-form layout="inline" :model="{}" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <a-form-item label="时间范围">
-          <a-range-picker v-model="timeRange" show-time format="YYYY-MM-DD HH:mm:ss" style="width:340px" />
+          <a-range-picker
+            v-model="timeRange"
+            show-time
+            format="YYYY-MM-DD HH:mm:ss"
+            style="width:400px"
+            :shortcuts="timeShortcuts"
+            :disabled-time="() => ({ disabledSeconds: () => [] })"
+          />
         </a-form-item>
         <a-form-item label="严重级别">
           <a-select v-model="filterSeverity" placeholder="全部" allow-clear style="width:120px">
@@ -28,6 +35,11 @@
         </a-form-item>
         <a-form-item label="规则名称">
           <a-input v-model="keyword" placeholder="搜索" allow-clear style="width:160px" />
+        </a-form-item>
+        <a-form-item label="标签搜索">
+          <a-input v-model="labelFilter" placeholder="如: job=prome*" allow-clear style="width:160px">
+            <template #prefix><icon-tags /></template>
+          </a-input>
         </a-form-item>
         <a-form-item>
           <a-space>
@@ -179,11 +191,157 @@ const loading = ref(false)
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const timeRange = ref<[Date, Date] | null>(null)
+const timeRange = ref<[string, string] | undefined>(undefined)
 const filterSeverity = ref('')
 const filterStatus = ref('')
 const filterResolveType = ref('')
 const keyword = ref('')
+const labelFilter = ref('')
+
+// 时间快捷选项
+const timeShortcuts = [
+  {
+    label: '最近 30 分钟',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 30 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 1 小时',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 2 小时',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 2 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 3 小时',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 6 小时',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 6 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 12 小时',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 12 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 24 小时',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 24 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '今天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setHours(0, 0, 0, 0)
+      return [start, end]
+    }
+  },
+  {
+    label: '昨天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 24 * 60 * 60 * 1000)
+      start.setHours(0, 0, 0, 0)
+      end.setTime(start.getTime() + 24 * 60 * 60 * 1000 - 1)
+      return [start, end]
+    }
+  },
+  {
+    label: '本周',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      const day = start.getDay()
+      const diff = start.getDate() - day + (day === 0 ? -6 : 1)
+      start.setDate(diff)
+      start.setHours(0, 0, 0, 0)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 7 天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 7 * 24 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '本月',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(1)
+      start.setHours(0, 0, 0, 0)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 30 天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 30 * 24 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 90 天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 90 * 24 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  },
+  {
+    label: '最近 1 年',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 365 * 24 * 60 * 60 * 1000)
+      return [start, end]
+    }
+  }
+]
 
 const fmtTime = (s?: string) => {
   if (!s) return '—'
@@ -224,8 +382,9 @@ const load = async () => {
     if (filterSeverity.value) params.severity = filterSeverity.value
     if (filterStatus.value) params.status = filterStatus.value
     if (filterResolveType.value) params.resolveType = filterResolveType.value
-    if (timeRange.value?.[0]) params.startTime = timeRange.value[0].toISOString()
-    if (timeRange.value?.[1]) params.endTime = timeRange.value[1].toISOString()
+    if (labelFilter.value) params.labelFilter = labelFilter.value
+    if (timeRange.value?.[0]) params.startTime = new Date(timeRange.value[0]).toISOString()
+    if (timeRange.value?.[1]) params.endTime = new Date(timeRange.value[1]).toISOString()
     const d = await getHistoryEvents(params) as any
     list.value = Array.isArray(d) ? d : (d?.data || [])
     total.value = Array.isArray(d) ? d.length : (d?.total || 0)
@@ -233,8 +392,8 @@ const load = async () => {
 }
 
 const reset = () => {
-  timeRange.value = null; filterSeverity.value = ''; filterStatus.value = ''
-  filterResolveType.value = ''; keyword.value = ''; page.value = 1; load()
+  timeRange.value = undefined; filterSeverity.value = ''; filterStatus.value = ''
+  filterResolveType.value = ''; keyword.value = ''; labelFilter.value = ''; page.value = 1; load()
 }
 
 onMounted(load)

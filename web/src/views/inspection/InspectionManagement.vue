@@ -822,6 +822,7 @@ import {
   getInspectionItems,
   batchSaveInspectionItems,
   testRunInspection,
+  testRunInspectionWithoutSave,
   getInspectionStats,
   exportInspectionGroup,
   exportAllInspectionGroups,
@@ -1367,7 +1368,7 @@ const handleTestRunItem = async (itemIndex: number) => {
   testRunning.value = true
 
   try {
-    // 先保存当前巡检组和巡检项（临时保存用于测试）
+    // 如果巡检组还未保存，需要先创建
     let groupId = formData.id
     if (!groupId) {
       const groupData: any = {
@@ -1390,7 +1391,7 @@ const handleTestRunItem = async (itemIndex: number) => {
       Message.info('已创建临时巡检组用于测试，请继续完善配置后保存')
     }
 
-    // 保存巡检项
+    // 准备巡检项数据（不保存到数据库）
     console.log('[TestRun] item.scriptContent:', JSON.stringify(item.scriptContent))
     console.log('[TestRun] item.executionType:', item.executionType)
     const itemData = {
@@ -1401,27 +1402,22 @@ const handleTestRunItem = async (itemIndex: number) => {
       hostTags: JSON.stringify(item.hostTags || []),
       hostIds: JSON.stringify(item.hostIds || [])
     }
-    await batchSaveInspectionItems(groupId, [itemData])
 
-    // 执行测试
-    const itemsRes = await getInspectionItems({ groupId })
-    if (itemsRes.list && itemsRes.list.length > 0) {
-      const testItemId = itemsRes.list[itemsRes.list.length - 1].id
-      const res = await testRunInspection({ groupId, itemIds: [testItemId] })
+    // 使用新的不保存数据的测试 API
+    const res = await testRunInspectionWithoutSave({ groupId, items: [itemData] })
 
-      if (res.success && res.results) {
-        testLogs.value = res.results.map((result: any) => ({
-          status: result.status,
-          hostName: result.hostName,
-          hostIp: result.hostIp || '',
-          output: result.output,
-          errorMessage: result.errorMessage,
-          duration: Math.round(result.duration * 1000),
-          assertionResult: result.assertionResult,
-          assertionDetails: result.assertionDetails
-        }))
-        Message.success(`测试执行完成`)
-      }
+    if (res.success && res.results) {
+      testLogs.value = res.results.map((result: any) => ({
+        status: result.status,
+        hostName: result.hostName,
+        hostIp: result.hostIp || '',
+        output: result.output,
+        errorMessage: result.errorMessage,
+        duration: Math.round(result.duration * 1000),
+        assertionResult: result.assertionResult,
+        assertionDetails: result.assertionDetails
+      }))
+      Message.success(`测试执行完成`)
     }
   } catch (error: any) {
     Message.error(error.message || '测试执行失败')

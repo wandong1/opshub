@@ -2,6 +2,8 @@ package alert
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	biz "github.com/ydcloud-dy/opshub/internal/biz/alert"
@@ -96,6 +98,11 @@ type EventRepo struct{ db *gorm.DB }
 
 func NewEventRepo(db *gorm.DB) *EventRepo {
 	return &EventRepo{db: db}
+}
+
+// GetDB 返回数据库连接（用于复杂查询）
+func (r *EventRepo) GetDB() *gorm.DB {
+	return r.db
 }
 
 func (r *EventRepo) Create(ctx context.Context, e *biz.AlertEvent) error {
@@ -228,4 +235,82 @@ func (r *EventRepo) GetStats(ctx context.Context) (*StatsData, error) {
 	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'resolved' AND resolve_type = 'manual'").Count(&stats.ManualResolvedCount)
 	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'firing'").Count(&stats.FiringCount)
 	return &stats, nil
+}
+
+// ListSilenced 查询已屏蔽告警列表
+func (r *EventRepo) ListSilenced(ctx context.Context, page, pageSize int, severity, status, keyword, labelFilter string) ([]*biz.AlertEvent, int64, error) {
+	var list []*biz.AlertEvent
+	var total int64
+	q := r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("silenced = ?", true)
+
+	if severity != "" {
+		q = q.Where("severity = ?", severity)
+	}
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if keyword != "" {
+		q = q.Where("rule_name LIKE ?", "%"+keyword+"%")
+	}
+	if labelFilter != "" {
+		q = r.applyLabelFilter(q, labelFilter)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	err := q.Order("fired_at desc").Offset(offset).Limit(pageSize).Find(&list).Error
+	if err == nil {
+		r.fillGroupNames(ctx, list)
+	}
+	return list, total, err
+}
+
+// applyLabelFilter 应用标签过滤（支持模糊匹配）
+func (r *EventRepo) applyLabelFilter(q *gorm.DB, filter string) *gorm.DB {
+	// 解析 key=value 或 key=value* 格式
+	parts := strings.SplitN(filter, "=", 2)
+	if len(parts) != 2 {
+		return q
+	}
+
+	key := strings.TrimSpace(parts[0])
+	pattern := strings.TrimSpace(parts[1])
+
+	// 使用 JSON_EXTRACT + LIKE 实现模糊匹配
+	jsonPath := fmt.Sprintf("$.%s", key)
+
+	if strings.HasSuffix(pattern, "*") {
+		// 前缀匹配：job=prome*
+		prefix := strings.TrimSuffix(pattern, "*")
+		q = q.Where("JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, prefix+"%")
+	} else if strings.HasPrefix(pattern, "*") {
+		// 后缀匹配：instance=*:9090
+		suffix := strings.TrimPrefix(pattern, "*")
+		q = q.Where("JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, "%"+suffix)
+	} else if strings.Contains(pattern, "*") {
+		// 包含匹配：instance=*:90*
+		pattern = strings.ReplaceAll(pattern, "*", "%")
+		q = q.Where("JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, pattern)
+	} else {
+		// 精确匹配
+		q = q.Where("JSON_EXTRACT(labels, ?) = ?", jsonPath, pattern)
+	}
+
+	return q
+}
+
+// ResolveActiveByRuleID 将指定规则的所有告警中的告警标记为已恢复
+func (r *EventRepo) ResolveActiveByRuleID(ctx context.Context, ruleID uint) error {
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":       "resolved",
+		"resolve_type": "manual_then_auto",
+		"resolved_at":  now,
+	}
+	return r.db.WithContext(ctx).
+		Model(&biz.AlertEvent{}).
+		Where("alert_rule_id = ? AND status = 'firing'", ruleID).
+		Updates(updates).Error
 }

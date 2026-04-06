@@ -50,12 +50,77 @@ func NewRuleRepo(db *gorm.DB) *RuleRepo {
 	return &RuleRepo{db: db}
 }
 
+// fillRuleGroupNames 批量回填规则分组名称
+func (r *RuleRepo) fillRuleGroupNames(ctx context.Context, list []*biz.AlertRule) {
+	if len(list) == 0 {
+		return
+	}
+
+	// 收集所有规则分组 ID
+	ruleGroupIDs := make(map[uint]bool)
+	for _, rule := range list {
+		if rule.RuleGroupID > 0 {
+			ruleGroupIDs[rule.RuleGroupID] = true
+		}
+	}
+
+	if len(ruleGroupIDs) == 0 {
+		return
+	}
+
+	// 查询规则分组名称
+	var ids []uint
+	for id := range ruleGroupIDs {
+		ids = append(ids, id)
+	}
+
+	var ruleGroups []struct {
+		ID   uint   `gorm:"column:id"`
+		Name string `gorm:"column:name"`
+	}
+	r.db.WithContext(ctx).Table("alert_rule_groups").
+		Select("id, name").
+		Where("id IN ?", ids).
+		Scan(&ruleGroups)
+
+	// 构建 ID -> Name 映射
+	nameMap := make(map[uint]string)
+	for _, rg := range ruleGroups {
+		nameMap[rg.ID] = rg.Name
+	}
+
+	// 回填到规则对象
+	for _, rule := range list {
+		if name, ok := nameMap[rule.RuleGroupID]; ok {
+			rule.RuleGroupName = name
+		}
+	}
+}
+
 func (r *RuleRepo) Create(ctx context.Context, rule *biz.AlertRule) error {
 	return r.db.WithContext(ctx).Create(rule).Error
 }
 
 func (r *RuleRepo) Update(ctx context.Context, rule *biz.AlertRule) error {
 	return r.db.WithContext(ctx).Model(rule).Omit("created_at").Select("*").Updates(rule).Error
+}
+
+func (r *RuleRepo) UpdateFields(ctx context.Context, id uint, fields map[string]interface{}) error {
+	// 过滤掉虚拟字段和不应该更新的字段
+	filteredFields := make(map[string]interface{})
+	for k, v := range fields {
+		// 跳过虚拟字段和系统字段
+		if k == "ruleGroupName" || k == "id" || k == "createdAt" || k == "updatedAt" || k == "deletedAt" {
+			continue
+		}
+		filteredFields[k] = v
+	}
+
+	if len(filteredFields) == 0 {
+		return nil
+	}
+
+	return r.db.WithContext(ctx).Model(&biz.AlertRule{}).Where("id = ?", id).Updates(filteredFields).Error
 }
 
 func (r *RuleRepo) Delete(ctx context.Context, id uint) error {
@@ -90,7 +155,14 @@ func (r *RuleRepo) List(ctx context.Context, page, pageSize int, assetGroupID, r
 		return nil, 0, err
 	}
 	offset := (page - 1) * pageSize
-	return list, total, q.Order("id desc").Offset(offset).Limit(pageSize).Find(&list).Error
+	if err := q.Order("id desc").Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 关联查询规则分组名称
+	r.fillRuleGroupNames(ctx, list)
+
+	return list, total, nil
 }
 
 func (r *RuleRepo) ListEnabled(ctx context.Context) ([]*biz.AlertRule, error) {

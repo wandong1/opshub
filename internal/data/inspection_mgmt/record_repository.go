@@ -14,6 +14,8 @@ type RecordRepository interface {
 	List(ctx context.Context, page, pageSize int, taskID, groupID, itemID, hostID uint, status string, startTime, endTime *time.Time) ([]*InspectionRecord, int64, error)
 	GetByTaskID(ctx context.Context, taskID uint) ([]*InspectionRecord, error)
 	DeleteOldRecords(ctx context.Context, days int) error
+	CleanupExcessRecords(ctx context.Context, keepCount int) error // 保留最新的 keepCount 条记录，删除其余
+	GetTotalCount(ctx context.Context) (int64, error)
 }
 
 type recordRepository struct {
@@ -83,4 +85,40 @@ func (r *recordRepository) GetByTaskID(ctx context.Context, taskID uint) ([]*Ins
 func (r *recordRepository) DeleteOldRecords(ctx context.Context, days int) error {
 	cutoffTime := time.Now().AddDate(0, 0, -days)
 	return r.db.WithContext(ctx).Where("executed_at < ?", cutoffTime).Delete(&InspectionRecord{}).Error
+}
+
+// CleanupExcessRecords 清理超出保留数量的记录，保留最新的 keepCount 条
+func (r *recordRepository) CleanupExcessRecords(ctx context.Context, keepCount int) error {
+	// 先获取总记录数
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&InspectionRecord{}).Count(&total).Error; err != nil {
+		return err
+	}
+
+	// 如果记录数未超过保留数量，无需清理
+	if total <= int64(keepCount) {
+		return nil
+	}
+
+	// 使用子查询删除最旧的记录
+	// 找到第 keepCount 条记录的 ID，删除 ID 小于等于该值的记录
+	var cutoffID uint
+	if err := r.db.WithContext(ctx).Model(&InspectionRecord{}).
+		Select("id").
+		Order("id DESC").
+		Offset(keepCount).
+		Limit(1).
+		Pluck("id", &cutoffID).Error; err != nil {
+		return err
+	}
+
+	// 删除 ID 小于等于 cutoffID 的记录
+	return r.db.WithContext(ctx).Where("id <= ?", cutoffID).Delete(&InspectionRecord{}).Error
+}
+
+// GetTotalCount 获取总记录数
+func (r *recordRepository) GetTotalCount(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&InspectionRecord{}).Count(&count).Error
+	return count, err
 }

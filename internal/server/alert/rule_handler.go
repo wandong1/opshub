@@ -123,25 +123,47 @@ func (s *HTTPServer) getRule(c *gin.Context) {
 
 func (s *HTTPServer) updateRule(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var req biz.AlertRule
-	if err := c.ShouldBindJSON(&req); err != nil {
+
+	// 先检查规则是否存在
+	_, err := s.ruleRepo.GetByID(c.Request.Context(), uint(id))
+	if err != nil {
+		response.ErrorCode(c, http.StatusNotFound, "规则不存在")
+		return
+	}
+
+	// 解析请求体到 map，只更新传递的字段
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		response.ErrorCode(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	req.ID = uint(id)
-	if err := s.ruleRepo.Update(c.Request.Context(), &req); err != nil {
+
+	// 使用 GORM 的 Updates 方法只更新传递的字段
+	if err := s.ruleRepo.UpdateFields(c.Request.Context(), uint(id), updates); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "更新失败")
 		return
 	}
-	response.Success(c, req)
+
+	// 重新获取更新后的规则
+	updatedRule, _ := s.ruleRepo.GetByID(c.Request.Context(), uint(id))
+	response.Success(c, updatedRule)
 }
 
 func (s *HTTPServer) deleteRule(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	// 先将该规则的所有告警中的告警标记为已恢复（与禁用规则逻辑相同）
+	if err := s.eventRepo.ResolveActiveByRuleID(c.Request.Context(), uint(id)); err != nil {
+		// 记录错误但不影响后续操作
+		c.Error(err)
+	}
+
+	// 删除规则
 	if err := s.ruleRepo.Delete(c.Request.Context(), uint(id)); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
+
 	response.Success(c, nil)
 }
 
@@ -152,6 +174,15 @@ func (s *HTTPServer) toggleRule(c *gin.Context) {
 		response.ErrorCode(c, http.StatusNotFound, "规则不存在")
 		return
 	}
+
+	// 如果是禁用规则，将该规则的所有告警中的告警标记为已恢复
+	if rule.Enabled {
+		if err := s.eventRepo.ResolveActiveByRuleID(c.Request.Context(), uint(id)); err != nil {
+			// 记录错误但不影响规则禁用操作
+			c.Error(err)
+		}
+	}
+
 	rule.Enabled = !rule.Enabled
 	if err := s.ruleRepo.Update(c.Request.Context(), rule); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "操作失败")

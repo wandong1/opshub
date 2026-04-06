@@ -66,3 +66,8 @@ export function stopInspectionTask(id: number) {
   return request.post(`/api/v1/inspection/mgmt-tasks/${id}/stop`)
 }
 
+// 同步执行任务（立即运行，阻塞直到完成，返回完整结果）
+export function runInspectionTaskSync(id: number) {
+  return request.post(`/api/v1/inspection/mgmt-tasks/${id}/run-sync`, {}, { timeout: 30 * 60 * 1000 })
+}
+

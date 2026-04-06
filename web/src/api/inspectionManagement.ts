@@ -102,6 +102,14 @@ export interface ExecutionDetail {
   hostId: number
   hostName: string
   hostIp: string
+  businessGroup: string
+  executionType: string
+  executionMode: string
+  command: string
+  scriptType: string
+  scriptContent: string
+  assertionType: string
+  assertionValue: string
   status: string
   output: string
   errorMessage: string
@@ -295,6 +303,17 @@ export function batchSaveInspectionItems(groupId: number, items: InspectionItem[
 export function testRunInspection(data: TestRunRequest) {
   return request<TestRunResult>({
     url: '/api/v1/inspection/items/test-run',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 测试运行巡检项（不保存到数据库）
+ */
+export function testRunInspectionWithoutSave(data: { groupId: number; items: any[] }) {
+  return request<TestRunResult>({
+    url: '/api/v1/inspection/items/test-run-without-save',
     method: 'post',
     data
   })
