@@ -27,6 +27,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/ydcloud-dy/opshub/internal/biz/rbac"
+	"github.com/ydcloud-dy/opshub/internal/biz/system"
 	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 )
@@ -59,6 +60,7 @@ func GetUsername(c *gin.Context) string {
 // AuthMiddleware JWT认证中间件
 type AuthMiddleware struct {
 	authService              *AuthService
+	apiKeyUseCase            *system.APIKeyUseCase
 	assetPermissionRepo      rbac.AssetPermissionRepo
 	middlewarePermissionRepo rbac.MiddlewarePermissionRepo
 	menuRepo                 rbac.MenuRepo
@@ -69,6 +71,11 @@ func NewAuthMiddleware(authService *AuthService) *AuthMiddleware {
 	return &AuthMiddleware{
 		authService: authService,
 	}
+}
+
+// SetAPIKeyUseCase 设置 API Key 用例
+func (m *AuthMiddleware) SetAPIKeyUseCase(apiKeyUseCase *system.APIKeyUseCase) {
+	m.apiKeyUseCase = apiKeyUseCase
 }
 
 // SetPermissionDeps 设置权限检查依赖
@@ -113,6 +120,23 @@ func (m *AuthMiddleware) AuthRequired() gin.HandlerFunc {
 			return
 		}
 
+		// 尝试 API Key 认证（如果配置了 API Key UseCase）
+		if m.apiKeyUseCase != nil && strings.HasPrefix(token, "opshub_") {
+			apiKey, err := m.apiKeyUseCase.VerifyAPIKey(c.Request.Context(), token)
+			if err == nil && apiKey != nil {
+				// API Key 验证成功，记录使用情况
+				m.apiKeyUseCase.RecordAPIKeyUsage(c.Request.Context(), apiKey.KeyHash)
+
+				// API Key 拥有超级管理员权限，设置特殊标识
+				c.Set(UserIdKey, uint(0)) // 使用 0 表示 API Key 认证
+				c.Set(UsernameKey, "api_key:"+apiKey.Name)
+				c.Set("is_api_key", true)
+				c.Next()
+				return
+			}
+		}
+
+		// JWT 认证
 		claims, err := m.authService.ParseToken(token)
 		if err != nil {
 			response.ErrorCode(c, http.StatusUnauthorized, "token无效或已过期")
@@ -308,6 +332,12 @@ func (m *AuthMiddleware) RequirePermission() gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
+
+		// API Key 认证拥有超级管理员权限，直接放行
+		if isAPIKey, exists := c.Get("is_api_key"); exists && isAPIKey.(bool) {
+			c.Next()
+			return
+		}
 
 		// 检查是否admin（优先缓存）
 		isAdmin, found := m.permissionCache.GetUserIsAdmin(ctx, userID)

@@ -13,7 +13,7 @@ type TaskRepository interface {
 	Delete(ctx context.Context, id uint) error
 	GetByID(ctx context.Context, id uint) (*InspectionTask, error)
 	GetByName(ctx context.Context, name string) (*InspectionTask, error)
-	List(ctx context.Context, page, pageSize int, name string, enabled *bool) ([]*InspectionTask, int64, error)
+	List(ctx context.Context, page, pageSize int, name string, taskType string, enabled *bool) ([]*InspectionTask, int64, error)
 	GetEnabledTasks(ctx context.Context) ([]*InspectionTask, error)
 }
 
@@ -55,7 +55,7 @@ func (r *taskRepository) GetByName(ctx context.Context, name string) (*Inspectio
 	return &task, nil
 }
 
-func (r *taskRepository) List(ctx context.Context, page, pageSize int, name string, enabled *bool) ([]*InspectionTask, int64, error) {
+func (r *taskRepository) List(ctx context.Context, page, pageSize int, name string, taskType string, enabled *bool) ([]*InspectionTask, int64, error) {
 	var tasks []*InspectionTask
 	var total int64
 
@@ -63,6 +63,9 @@ func (r *taskRepository) List(ctx context.Context, page, pageSize int, name stri
 
 	if name != "" {
 		query = query.Where("name LIKE ?", "%"+name+"%")
+	}
+	if taskType != "" {
+		query = query.Where("task_type = ?", taskType)
 	}
 	if enabled != nil {
 		query = query.Where("enabled = ?", *enabled)

@@ -1,0 +1,17 @@
+{
+	"ulid": "01KP0390BC69RX384HGM8WC20H",
+	"minTime": 1775836804252,
+	"maxTime": 1775844000000,
+	"stats": {
+		"numSamples": 126736,
+		"numSeries": 928,
+		"numChunks": 1424
+	},
+	"compaction": {
+		"level": 1,
+		"sources": [
+			"01KP0390BC69RX384HGM8WC20H"
+		]
+	},
+	"version": 1
+}

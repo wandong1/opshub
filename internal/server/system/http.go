@@ -21,6 +21,7 @@ package system
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	systembiz "github.com/ydcloud-dy/opshub/internal/biz/system"
 	systemdata "github.com/ydcloud-dy/opshub/internal/data/system"
 	systemservice "github.com/ydcloud-dy/opshub/internal/service/system"
@@ -30,15 +31,17 @@ import (
 // HTTPServer 系统配置HTTP服务器
 type HTTPServer struct {
 	configService  *systemservice.ConfigService
+	apiKeyService  *systemservice.APIKeyService
 	grafanaProxy   *GrafanaProxyHandler
 }
 
 // NewHTTPServer 创建系统配置HTTP服务器
-func NewHTTPServer(configService *systemservice.ConfigService) *HTTPServer {
+func NewHTTPServer(configService *systemservice.ConfigService, apiKeyService *systemservice.APIKeyService) *HTTPServer {
 	// 创建 Grafana 代理（复用 configUseCase）
 	grafanaProxy := NewGrafanaProxyHandler(configService.GetConfigUseCase())
 	return &HTTPServer{
 		configService: configService,
+		apiKeyService: apiKeyService,
 		grafanaProxy:  grafanaProxy,
 	}
 }
@@ -58,6 +61,14 @@ func (s *HTTPServer) RegisterRoutes(auth *gin.RouterGroup, public *gin.RouterGro
 			config.GET("/data-retention", s.configService.GetDataRetentionConfig)
 			config.PUT("/data-retention", s.configService.SaveDataRetentionConfig)
 			config.POST("/logo", s.configService.UploadLogo)
+		}
+
+		// API Key 管理路由
+		apikeys := system.Group("/apikeys")
+		{
+			apikeys.POST("", s.apiKeyService.CreateAPIKey)
+			apikeys.GET("", s.apiKeyService.ListAPIKeys)
+			apikeys.DELETE("/:id", s.apiKeyService.DeleteAPIKey)
 		}
 
 		// 集成管理路由
@@ -85,16 +96,19 @@ func (s *HTTPServer) RegisterGrafanaProxy(router *gin.Engine) {
 }
 
 // NewSystemServices 创建系统服务依赖
-func NewSystemServices(db *gorm.DB, uploadDir string) (*systemservice.ConfigService, *systembiz.ConfigUseCase) {
+func NewSystemServices(db *gorm.DB, rdb *redis.Client, uploadDir string) (*systemservice.ConfigService, *systemservice.APIKeyService, *systembiz.ConfigUseCase, *systembiz.APIKeyUseCase) {
 	// 初始化Repository
 	configRepo := systemdata.NewConfigRepo(db)
 	loginAttemptRepo := systemdata.NewLoginAttemptRepo(db)
+	apiKeyRepo := systemdata.NewAPIKeyRepo(db)
 
 	// 初始化UseCase
 	configUseCase := systembiz.NewConfigUseCase(configRepo, loginAttemptRepo)
+	apiKeyUseCase := systembiz.NewAPIKeyUseCase(apiKeyRepo, rdb)
 
 	// 初始化Service
 	configService := systemservice.NewConfigService(configUseCase, uploadDir)
+	apiKeyService := systemservice.NewAPIKeyService(apiKeyUseCase)
 
-	return configService, configUseCase
+	return configService, apiKeyService, configUseCase, apiKeyUseCase
 }

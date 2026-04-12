@@ -27,7 +27,7 @@
             v-for="(item, index) in navItems"
             :key="index"
             :class="['nav-item', { active: activeNav === index }]"
-            @click="activeNav = index"
+            @click="handleNavClick(item, index)"
           >
             <component :is="item.icon" class="nav-icon" />
             <span>{{ item.label }}</span>
@@ -154,8 +154,106 @@
             </a-form-item>
           </a-form>
         </div>
+
+        <!-- API Key管理 -->
+        <div v-show="activeNav === 4" class="config-section">
+          <div class="section-header">
+            <icon-safe class="section-icon" />
+            <span>API Key管理</span>
+          </div>
+          <div class="apikey-container">
+            <div class="apikey-header">
+              <a-button type="primary" @click="handleCreateAPIKey">
+                <template #icon><icon-plus /></template>
+                新增 API Key
+              </a-button>
+            </div>
+
+            <a-table
+              :columns="apikeyColumns"
+              :data="apikeyList"
+              :loading="apikeyLoading"
+              :pagination="apikeyPagination"
+              @page-change="handleAPIKeyPageChange"
+              @page-size-change="handleAPIKeyPageSizeChange"
+            >
+              <template #maskedKey="{ record }">
+                <a-typography-text code>{{ record.maskedKey }}</a-typography-text>
+              </template>
+
+              <template #totalCalls="{ record }">
+                <a-tag color="blue">{{ record.totalCalls }}</a-tag>
+              </template>
+
+              <template #lastCalledAt="{ record }">
+                <span v-if="record.lastCalledAt && record.lastCalledAt !== '0001-01-01T00:00:00Z'">
+                  {{ formatDateTime(record.lastCalledAt) }}
+                </span>
+                <span v-else style="color: #86909c">从未调用</span>
+              </template>
+
+              <template #createdAt="{ record }">
+                {{ formatDateTime(record.createdAt) }}
+              </template>
+
+              <template #action="{ record }">
+                <a-popconfirm
+                  content="删除后该 API Key 将立即失效，无法恢复，确认删除？"
+                  @ok="handleDeleteAPIKey(record.id)"
+                >
+                  <a-button type="text" status="danger" size="small">删除</a-button>
+                </a-popconfirm>
+              </template>
+            </a-table>
+          </div>
+        </div>
       </a-card>
     </div>
+
+    <!-- 创建 API Key 弹窗 -->
+    <a-modal
+      v-model:visible="createAPIKeyVisible"
+      title="新增 API Key"
+      @ok="handleCreateAPIKeySubmit"
+      @cancel="handleCreateAPIKeyCancel"
+      :ok-loading="createAPIKeyLoading"
+    >
+      <a-form :model="createAPIKeyForm" layout="vertical">
+        <a-form-item label="名称" required>
+          <a-input v-model="createAPIKeyForm.name" placeholder="请输入 API Key 名称" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea
+            v-model="createAPIKeyForm.description"
+            placeholder="请输入描述信息"
+            :max-length="500"
+            show-word-limit
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 显示完整密钥弹窗 -->
+    <a-modal
+      v-model:visible="showAPIKeyVisible"
+      title="API Key 创建成功"
+      :footer="false"
+      :closable="false"
+      :mask-closable="false"
+      width="600px"
+    >
+      <a-alert type="warning" style="margin-bottom: 16px">
+        请妥善保管您的 API Key，关闭后将无法再次查看完整密钥！
+      </a-alert>
+
+      <div class="key-display">
+        <a-typography-text code copyable>{{ fullAPIKey }}</a-typography-text>
+      </div>
+
+      <div style="margin-top: 16px; text-align: right">
+        <a-button type="primary" @click="handleAPIKeyClose">我已复制，关闭</a-button>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -171,6 +269,7 @@ import {
   IconDelete,
   IconCode,
   IconStorage,
+  IconSafe,
 } from '@arco-design/web-vue/es/icon'
 import {
   getAllConfig,
@@ -180,7 +279,9 @@ import {
   getCustomConfig,
   saveCustomConfig,
 } from '@/api/system'
+import { createAPIKey, listAPIKeys, deleteAPIKey, type APIKey } from '@/api/apikey'
 import { useSystemStore } from '@/stores/system'
+import dayjs from 'dayjs'
 
 const systemStore = useSystemStore()
 const saving = ref(false)
@@ -191,6 +292,7 @@ const navItems = [
   { label: '安全配置', icon: IconLock },
   { label: '定制配置', icon: IconCode },
   { label: '数据保留策略', icon: IconStorage },
+  { label: 'API Key管理', icon: IconSafe },
 ]
 
 const config = reactive({
@@ -319,6 +421,134 @@ const removeLogo = () => {
   config.systemLogo = ''
 }
 
+// API Key 管理相关
+const apikeyLoading = ref(false)
+const apikeyList = ref<APIKey[]>([])
+const apikeyPagination = reactive({
+  current: 1,
+  pageSize: 20,
+  total: 0,
+  showTotal: true,
+  showPageSize: true
+})
+
+const apikeyColumns = [
+  { title: 'ID', dataIndex: 'id', width: 80 },
+  { title: '名称', dataIndex: 'name', width: 150 },
+  { title: 'API Key', slotName: 'maskedKey', width: 200 },
+  { title: '描述', dataIndex: 'description', ellipsis: true, tooltip: true },
+  { title: '调用次数', slotName: 'totalCalls', width: 120 },
+  { title: '最后调用时间', slotName: 'lastCalledAt', width: 180 },
+  { title: '创建时间', slotName: 'createdAt', width: 180 },
+  { title: '操作', slotName: 'action', width: 100, fixed: 'right' }
+]
+
+const createAPIKeyVisible = ref(false)
+const createAPIKeyLoading = ref(false)
+const createAPIKeyForm = reactive({
+  name: '',
+  description: ''
+})
+
+const showAPIKeyVisible = ref(false)
+const fullAPIKey = ref('')
+
+// 加载 API Key 列表
+const loadAPIKeys = async () => {
+  apikeyLoading.value = true
+  try {
+    const res = await listAPIKeys({
+      page: apikeyPagination.current,
+      page_size: apikeyPagination.pageSize
+    })
+    apikeyList.value = res.data || []
+    apikeyPagination.total = res.total
+  } catch (error: any) {
+    Message.error(error.message || '加载失败')
+  } finally {
+    apikeyLoading.value = false
+  }
+}
+
+const handleAPIKeyPageChange = (page: number) => {
+  apikeyPagination.current = page
+  loadAPIKeys()
+}
+
+const handleAPIKeyPageSizeChange = (pageSize: number) => {
+  apikeyPagination.pageSize = pageSize
+  apikeyPagination.current = 1
+  loadAPIKeys()
+}
+
+const handleCreateAPIKey = () => {
+  createAPIKeyForm.name = ''
+  createAPIKeyForm.description = ''
+  createAPIKeyVisible.value = true
+}
+
+const handleCreateAPIKeySubmit = async () => {
+  if (!createAPIKeyForm.name.trim()) {
+    Message.warning('请输入 API Key 名称')
+    return
+  }
+
+  createAPIKeyLoading.value = true
+  try {
+    const res = await createAPIKey({
+      name: createAPIKeyForm.name.trim(),
+      description: createAPIKeyForm.description.trim()
+    })
+
+    Message.success('创建成功')
+    createAPIKeyVisible.value = false
+
+    // 显示完整密钥（res 已经是 data 对象）
+    fullAPIKey.value = res.apiKey
+    showAPIKeyVisible.value = true
+
+    // 刷新列表
+    loadAPIKeys()
+  } catch (error: any) {
+    Message.error(error.message || '创建失败')
+  } finally {
+    createAPIKeyLoading.value = false
+  }
+}
+
+const handleCreateAPIKeyCancel = () => {
+  createAPIKeyVisible.value = false
+}
+
+const handleAPIKeyClose = () => {
+  showAPIKeyVisible.value = false
+  fullAPIKey.value = ''
+}
+
+const handleDeleteAPIKey = async (id: number) => {
+  try {
+    await deleteAPIKey(id)
+    Message.success('删除成功')
+    loadAPIKeys()
+  } catch (error: any) {
+    Message.error(error.message || '删除失败')
+  }
+}
+
+const formatDateTime = (dateStr: string) => {
+  if (!dateStr || dateStr === '0001-01-01T00:00:00Z') return '-'
+  return dayjs(dateStr).format('YYYY-MM-DD HH:mm:ss')
+}
+
+// 处理导航点击
+const handleNavClick = (item: any, index: number) => {
+  activeNav.value = index
+  // 如果切换到 API Key 管理，加载数据
+  if (index === 4) {
+    loadAPIKeys()
+  }
+}
+
 onMounted(() => {
   loadConfig()
 })
@@ -422,6 +652,22 @@ onMounted(() => {
   background: var(--ops-primary, #165dff);
   color: #fff;
   font-weight: 500;
+}
+
+/* API Key 管理样式 */
+.apikey-container {
+  margin-top: 16px;
+}
+
+.apikey-header {
+  margin-bottom: 16px;
+}
+
+.key-display {
+  padding: 16px;
+  background: #f7f8fa;
+  border-radius: 4px;
+  word-break: break-all;
 }
 
 .nav-item.active .nav-icon {

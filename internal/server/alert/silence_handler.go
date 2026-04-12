@@ -46,6 +46,14 @@ func (s *HTTPServer) createSilenceRule(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败")
 		return
 	}
+
+	// 发布屏蔽规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetSilenceCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, req)
 }
 
@@ -89,6 +97,14 @@ func (s *HTTPServer) updateSilenceRule(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "更新失败")
 		return
 	}
+
+	// 发布屏蔽规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetSilenceCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, rule)
 }
 
@@ -99,6 +115,14 @@ func (s *HTTPServer) deleteSilenceRule(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
+
+	// 发布屏蔽规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetSilenceCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, nil)
 }
 
@@ -116,5 +140,13 @@ func (s *HTTPServer) toggleSilenceRule(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "操作失败")
 		return
 	}
+
+	// 发布屏蔽规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetSilenceCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, rule)
 }

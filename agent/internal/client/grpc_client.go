@@ -198,10 +198,17 @@ func (c *GRPCClient) loadTLS() (*tls.Config, error) {
 		return nil, fmt.Errorf("加载客户端证书失败: %w", err)
 	}
 
+	// 从 ServerAddr 中提取主机名（去掉端口）
+	serverName := c.cfg.ServerAddr
+	if host, _, err := net.SplitHostPort(c.cfg.ServerAddr); err == nil {
+		serverName = host
+	}
+
 	return &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caPool,
-		ServerName:   "localhost",
+		Certificates:       []tls.Certificate{cert},
+		RootCAs:            caPool,
+		ServerName:         serverName,
+		InsecureSkipVerify: false, // 跳过服务器证书验证（因为服务端证书只包含 localhost）
 	}, nil
 }
 

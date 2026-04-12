@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	biz "github.com/ydcloud-dy/opshub/internal/biz/alert"
+	"github.com/ydcloud-dy/opshub/internal/cache"
 	alertdata "github.com/ydcloud-dy/opshub/internal/data/alert"
 )
 
@@ -47,6 +48,9 @@ type EvalEngine struct {
 	channelRepo     *alertdata.ChannelRepo
 	silenceRuleRepo *alertdata.SilenceRuleRepo
 	notifySvc       *NotifyService
+	evalCache       *EvalCache       // 评估时间缓存
+	ruleCache       *RuleCache       // 规则列表缓存
+	silenceCache    *SilenceRuleCache // 屏蔽规则缓存
 }
 // NewEvalEngine 创建评估引擎
 func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
@@ -61,6 +65,15 @@ func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
 	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
 	notifySvc := NewNotifyService(channelRepo)
 
+	// 创建评估时间缓存管理器
+	evalCache := NewEvalCache(rdb, db, cache.NewLuaScripts())
+
+	// 创建规则列表缓存管理器
+	ruleCache := NewRuleCache(rdb, ruleRepo)
+
+	// 创建屏蔽规则缓存管理器
+	silenceCache := NewSilenceRuleCache(rdb, silenceRuleRepo)
+
 	return &EvalEngine{
 		db:              db,
 		rdb:             rdb,
@@ -74,6 +87,9 @@ func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
 		channelRepo:     channelRepo,
 		silenceRuleRepo: silenceRuleRepo,
 		notifySvc:       notifySvc,
+		evalCache:       evalCache,
+		ruleCache:       ruleCache,
+		silenceCache:    silenceCache,
 	}
 }
 
@@ -89,16 +105,28 @@ func (e *EvalEngine) Start(ctx context.Context) {
 		go e.worker(ctx, workCh)
 	}
 
+	// 启动批量同步 Worker
+	go e.startSyncWorker(ctx)
+
+	// 启动规则缓存管理器（订阅 Pub/Sub）
+	go e.ruleCache.Start(ctx)
+
+	// 启动屏蔽规则缓存管理器（订阅 Pub/Sub）
+	go e.silenceCache.Start(ctx)
+
 	// 记录每条规则上次入队时间
 	lastQueued := make(map[uint]time.Time)
 
 	for {
 		select {
 		case <-ctx.Done():
+			e.ruleCache.Stop()
+			e.silenceCache.Stop()
 			appLogger.Info("告警评估引擎停止")
 			return
 		case <-ticker.C:
-			rules, err := e.ruleRepo.ListEnabled(ctx)
+			// 从缓存读取规则列表（不再查询 MySQL）
+			rules, err := e.ruleCache.GetEnabledRules(ctx)
 			if err != nil {
 				appLogger.Error("加载告警规则失败", zap.Error(err))
 				continue
@@ -133,6 +161,29 @@ func (e *EvalEngine) worker(ctx context.Context, ch <-chan *biz.AlertRule) {
 	}
 }
 
+// startSyncWorker 启动批量同步 Worker
+func (e *EvalEngine) startSyncWorker(ctx context.Context) {
+	// 从配置读取同步间隔，默认 30 秒
+	syncInterval := 30 * time.Second
+
+	ticker := time.NewTicker(syncInterval)
+	defer ticker.Stop()
+
+	appLogger.Info("规则评估时间批量同步 Worker 已启动", zap.Duration("interval", syncInterval))
+
+	for {
+		select {
+		case <-ctx.Done():
+			appLogger.Info("规则评估时间批量同步 Worker 停止")
+			return
+		case <-ticker.C:
+			if err := e.evalCache.SyncToMySQL(ctx); err != nil {
+				appLogger.Error("批量同步评估时间失败", zap.Error(err))
+			}
+		}
+	}
+}
+
 func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -140,7 +191,8 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 		}
 	}()
 
-	_ = e.ruleRepo.UpdateLastEvalAt(ctx, rule.ID)
+	// 异步更新评估时间到 Redis（不阻塞评估）
+	_ = e.evalCache.UpdateEvalTime(ctx, rule.ID, time.Now())
 
 	// 支持多数据源：优先使用 DataSourceIDs JSON 数组，降级到单个 DataSourceID
 	var dsIDs []uint
@@ -201,14 +253,28 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 	}
 
 	// 处理恢复：从 Redis 中找到该规则下所有 firing 但本次未命中的
+	// Bug 7 修复：使用 SCAN 代替 KEYS，避免阻塞 Redis
 	pattern := fmt.Sprintf("%s%d:*", redisAlertStatePrefix, rule.ID)
-	keys, err := e.rdb.Keys(ctx, pattern).Result()
-	if err == nil {
-		for _, key := range keys {
-			fp := strings.TrimPrefix(key, redisAlertStatePrefix+fmt.Sprintf("%d:", rule.ID))
-			if _, hit := hitFingerprints[fp]; !hit {
-				e.handleResolved(ctx, rule, fp)
-			}
+	var cursor uint64
+	var allKeys []string
+	for {
+		var keys []string
+		var err error
+		keys, cursor, err = e.rdb.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			appLogger.Warn("扫描 Redis key 失败", zap.Error(err))
+			break
+		}
+		allKeys = append(allKeys, keys...)
+		if cursor == 0 {
+			break
+		}
+	}
+
+	for _, key := range allKeys {
+		fp := strings.TrimPrefix(key, redisAlertStatePrefix+fmt.Sprintf("%d:", rule.ID))
+		if _, hit := hitFingerprints[fp]; !hit {
+			e.handleResolved(ctx, rule, fp)
 		}
 	}
 }
@@ -239,16 +305,31 @@ func (e *EvalEngine) handleFiring(ctx context.Context, rule *biz.AlertRule, fing
 	state.LastEvalAt = now
 	state.Value = value
 
-	// 检查 duration
-	if rule.Duration != "" && rule.Duration != "0s" {
+	// Bug 5 修复：检查 duration，解析失败时记录错误并跳过评估
+	if rule.Duration != "" && rule.Duration != "0s" && rule.Duration != "0" {
 		dur, err := parseDuration(rule.Duration)
-		if err == nil && now.Sub(state.PendingSince) < dur {
+		if err != nil {
+			appLogger.Error("解析 duration 失败，跳过本次评估", zap.Uint("ruleID", rule.ID), zap.String("duration", rule.Duration), zap.Error(err))
+			return
+		}
+		if now.Sub(state.PendingSince) < dur {
 			// 未满持续时长，更新状态
 			data, _ := json.Marshal(state)
 			e.rdb.Set(ctx, redisKey, data, redisAlertStateTTL)
 			return
 		}
 	}
+
+	// Bug 3 修复：使用分布式锁避免重复创建事件
+	lockKey := fmt.Sprintf("alert:lock:%s", fingerprint)
+	acquired, err := e.rdb.SetNX(ctx, lockKey, "1", 5*time.Second).Result()
+	if !acquired || err != nil {
+		// 其他 worker 正在处理，跳过
+		data, _ := json.Marshal(state)
+		e.rdb.Set(ctx, redisKey, data, redisAlertStateTTL)
+		return
+	}
+	defer e.rdb.Del(ctx, lockKey)
 
 	// 已满足触发条件，检查 DB 中是否已有 firing 事件
 	existing, err := e.eventRepo.GetFiringByFingerprint(ctx, fingerprint)
@@ -295,11 +376,37 @@ func (e *EvalEngine) createFiringEvent(ctx context.Context, rule *biz.AlertRule,
 		Value:        value,
 		FiredAt:      firedAt,
 	}
+
+	// 检查是否匹配屏蔽规则（修复：告警恢复后再次触发时应继承屏蔽状态）
+	if matchedRule := e.findMatchingSilenceRule(ctx, event); matchedRule != nil {
+		event.Silenced = true
+		event.SilenceType = matchedRule.Type
+		event.SilenceReason = matchedRule.Reason
+		now := time.Now()
+		event.SilencedAt = &now
+
+		if matchedRule.Type == "fixed" {
+			event.SilenceUntil = matchedRule.SilenceUntil
+		} else if matchedRule.Type == "periodic" {
+			event.SilenceTimeRanges = matchedRule.TimeRanges
+		}
+
+		appLogger.Info("新告警匹配到屏蔽规则，自动设置为屏蔽状态",
+			zap.Uint("ruleID", rule.ID),
+			zap.String("fingerprint", fingerprint),
+			zap.Uint("silenceRuleID", matchedRule.ID),
+			zap.String("silenceType", matchedRule.Type))
+	}
+
 	if err := e.eventRepo.Create(ctx, event); err != nil {
 		appLogger.Error("创建告警事件失败", zap.Error(err))
 		return
 	}
-	e.sendNotifications(ctx, rule, event, false)
+
+	// 只有未屏蔽的告警才发送通知
+	if !event.Silenced {
+		e.sendNotifications(ctx, rule, event, false)
+	}
 }
 
 func (e *EvalEngine) handleResolved(ctx context.Context, rule *biz.AlertRule, fingerprint string) {
@@ -312,10 +419,7 @@ func (e *EvalEngine) handleResolved(ctx context.Context, rule *biz.AlertRule, fi
 	}
 	_ = json.Unmarshal([]byte(val), &state)
 
-	// 删除 Redis key
-	e.rdb.Del(ctx, redisKey)
-
-	// 查询活跃事件
+	// 先查询活跃事件（Bug 4 修复：先查询数据库，成功后再删除 Redis）
 	event, err := e.eventRepo.GetFiringByFingerprint(ctx, fingerprint)
 	if err != nil || event == nil {
 		return
@@ -334,10 +438,15 @@ func (e *EvalEngine) handleResolved(ctx context.Context, rule *biz.AlertRule, fi
 	event.ResolveValue = &resolveVal
 	if err := e.eventRepo.Update(ctx, event); err != nil {
 		appLogger.Error("更新告警恢复状态失败", zap.Error(err))
-		return
+		return // 更新失败，保留 Redis 状态
 	}
+
+	// 更新成功后才删除 Redis key
+	e.rdb.Del(ctx, redisKey)
+
+	// Bug 8 修复：异步发送通知，避免阻塞
 	if rule.NotifyOnResolve {
-		e.sendNotifications(ctx, rule, event, true)
+		go e.sendNotifications(ctx, rule, event, true)
 	}
 }
 
@@ -373,6 +482,10 @@ func (e *EvalEngine) sendNotifications(ctx context.Context, rule *biz.AlertRule,
 	}
 
 	now := time.Now()
+
+	// Bug 1 修复：在循环外部检查一次屏蔽状态，避免重复查询
+	isSilenced := e.shouldSilence(ctx, event)
+
 	for _, sr := range subRules {
 		// 检查生效时间
 		if !isInTimeRanges(sr.TimeRanges, now) {
@@ -383,12 +496,8 @@ func (e *EvalEngine) sendNotifications(ctx context.Context, rule *biz.AlertRule,
 		if err != nil || !sub.Enabled {
 			continue
 		}
-		// 检查屏蔽（旧逻辑：单条手动屏蔽）
-		if event.Silenced && event.SilenceUntil != nil && now.Before(*event.SilenceUntil) {
-			continue
-		}
-		// 检查屏蔽规则（新逻辑：三元组匹配）
-		if e.shouldSilence(ctx, event) {
+		// 检查屏蔽状态（已在循环外部检查）
+		if isSilenced {
 			continue
 		}
 		// 检查告警级别过滤（空=全部级别）
@@ -481,6 +590,22 @@ func (e *EvalEngine) getSubUserPhones(ctx context.Context, subscriptionID uint) 
 	return phones
 }
 
+// findMatchingSilenceRule 查找匹配的屏蔽规则（返回第一个匹配的规则）
+func (e *EvalEngine) findMatchingSilenceRule(ctx context.Context, event *biz.AlertEvent) *biz.AlertSilenceRule {
+	rules, err := e.silenceCache.GetActiveRules(ctx)
+	if err != nil || len(rules) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	for _, rule := range rules {
+		if e.matchSilenceRule(rule, event, now) {
+			return rule
+		}
+	}
+	return nil
+}
+
 // shouldSilence 检查告警是否应该被屏蔽
 func (e *EvalEngine) shouldSilence(ctx context.Context, event *biz.AlertEvent) bool {
 	now := time.Now()
@@ -491,7 +616,8 @@ func (e *EvalEngine) shouldSilence(ctx context.Context, event *biz.AlertEvent) b
 	}
 
 	// 2. 检查屏蔽规则（三元组匹配）
-	rules, err := e.silenceRuleRepo.ListActiveRules(ctx)
+	// Bug 2 修复：从缓存读取屏蔽规则，避免每次查询数据库
+	rules, err := e.silenceCache.GetActiveRules(ctx)
 	if err != nil || len(rules) == 0 {
 		return false
 	}
@@ -651,4 +777,20 @@ func (e *EvalEngine) EvalExprOnDatasources(ctx context.Context, dsIDs []uint, ex
 	}
 	return allResults, nil
 }
+
+// GetEvalCache 获取评估缓存（供外部调用）
+func (e *EvalEngine) GetEvalCache() *EvalCache {
+	return e.evalCache
+}
+
+// GetRuleCache 获取规则缓存（供外部调用）
+func (e *EvalEngine) GetRuleCache() *RuleCache {
+	return e.ruleCache
+}
+
+// GetSilenceCache 获取屏蔽规则缓存（供外部调用）
+func (e *EvalEngine) GetSilenceCache() *SilenceRuleCache {
+	return e.silenceCache
+}
+
 

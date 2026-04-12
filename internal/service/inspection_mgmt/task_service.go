@@ -92,7 +92,7 @@ func (s *TaskService) GetByID(ctx context.Context, id uint) (*TaskResponse, erro
 }
 
 func (s *TaskService) List(ctx context.Context, req *TaskListRequest) ([]*TaskResponse, int64, error) {
-	tasks, total, err := s.taskRepo.List(ctx, req.Page, req.PageSize, req.Name, req.Enabled)
+	tasks, total, err := s.taskRepo.List(ctx, req.Page, req.PageSize, req.Name, req.TaskType, req.Enabled)
 	if err != nil {
 		return nil, 0, err
 	}

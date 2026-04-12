@@ -2,6 +2,8 @@ package alert
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	biz "github.com/ydcloud-dy/opshub/internal/biz/alert"
 	"gorm.io/gorm"
@@ -178,4 +180,42 @@ func (r *RuleRepo) UpdateLastEvalAt(ctx context.Context, id uint) error {
 func (r *RuleRepo) ListByIDs(ctx context.Context, ids []uint) ([]*biz.AlertRule, error) {
 	var list []*biz.AlertRule
 	return list, r.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error
+}
+
+// FillEvalTimesFromCache 从缓存回填评估时间
+func (r *RuleRepo) FillEvalTimesFromCache(ctx context.Context, list []*biz.AlertRule, evalCache interface{}) error {
+	if len(list) == 0 {
+		return nil
+	}
+
+	// 类型断言，获取 EvalCache 接口
+	type evalCacheGetter interface {
+		GetEvalTimes(ctx context.Context, ruleIDs []uint) (map[uint]*time.Time, error)
+	}
+
+	cache, ok := evalCache.(evalCacheGetter)
+	if !ok {
+		return fmt.Errorf("evalCache 类型断言失败")
+	}
+
+	// 收集规则 ID
+	ruleIDs := make([]uint, len(list))
+	for i, rule := range list {
+		ruleIDs[i] = rule.ID
+	}
+
+	// 批量获取评估时间（优先 Redis）
+	evalTimes, err := cache.GetEvalTimes(ctx, ruleIDs)
+	if err != nil {
+		return err
+	}
+
+	// 回填到规则对象
+	for _, rule := range list {
+		if evalTime, ok := evalTimes[rule.ID]; ok {
+			rule.LastEvalAt = evalTime
+		}
+	}
+
+	return nil
 }

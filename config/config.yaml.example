@@ -40,3 +40,11 @@ agent:
   binary_dir: "data/agent-binaries"
   heartbeat_timeout: 90
   deploy_path: "/opt/srehub-agent"
+  # 额外的服务端地址（用于证书SAN），支持IP和域名
+  # 适用场景：NAT转换、负载均衡、多网卡、公网访问等
+  # 示例：
+  # server_addresses:
+  #   - "1.2.3.4"              # NAT公网IP
+  #   - "opshub.example.com"   # 域名
+  #   - "192.168.100.1"        # 其他网段IP
+  server_addresses: []

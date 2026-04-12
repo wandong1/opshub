@@ -233,3 +233,52 @@ type AllConfig struct {
 type DataRetentionConfig struct {
 	InspectionRecordRetention int `json:"inspectionRecordRetention"` // 智能巡检执行记录保留数量
 }
+
+// SysAPIKey API Key 表
+type SysAPIKey struct {
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	Name        string         `gorm:"type:varchar(100);not null;comment:API Key名称" json:"name"`
+	KeyHash     string         `gorm:"type:varchar(64);uniqueIndex;not null;comment:API Key哈希值(SHA256)" json:"-"`
+	KeyPrefix   string         `gorm:"type:varchar(10);not null;comment:密钥前缀(用于展示)" json:"keyPrefix"`
+	KeySuffix   string         `gorm:"type:varchar(10);not null;comment:密钥后缀(用于展示)" json:"keySuffix"`
+	Description string         `gorm:"type:varchar(500);comment:描述" json:"description"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// TableName 指定表名
+func (SysAPIKey) TableName() string {
+	return "sys_api_keys"
+}
+
+// APIKeyVO API Key 视图对象（用于列表展示，包含脱敏密钥和统计信息）
+type APIKeyVO struct {
+	ID             uint      `json:"id"`
+	Name           string    `json:"name"`
+	MaskedKey      string    `json:"maskedKey"`      // 脱敏密钥（前缀+***+后缀）
+	Description    string    `json:"description"`
+	TotalCalls     int64     `json:"totalCalls"`     // 总调用次数（从Redis读取）
+	LastCalledAt   time.Time `json:"lastCalledAt"`   // 最后调用时间（从Redis读取）
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+// CreateAPIKeyResponse 创建 API Key 响应（仅此接口返回完整明文密钥）
+type CreateAPIKeyResponse struct {
+	ID          uint      `json:"id"`
+	Name        string    `json:"name"`
+	APIKey      string    `json:"apiKey"`      // 完整明文密钥（仅创建时返回一次）
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// ConfigGroup 配置分组常量 - API Key
+const (
+	ConfigGroupAPIKey = "api_key" // API Key 管理
+)
+
+// Redis Key 前缀常量
+const (
+	RedisKeyAPIKeyCallCount  = "apikey:call_count:"   // API Key 调用次数 apikey:call_count:{key_hash}
+	RedisKeyAPIKeyLastCalled = "apikey:last_called:"  // API Key 最后调用时间 apikey:last_called:{key_hash}
+)

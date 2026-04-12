@@ -219,6 +219,7 @@ func autoMigrate(db *gorm.DB) error {
 		// 系统配置相关表
 		&systemmodel.SysConfig{},
 		&systemmodel.SysUserLoginAttempt{},
+		&systemmodel.SysAPIKey{},
 		// Kubernetes 集群相关表
 		&models.Cluster{},
 		&k8smodel.UserKubeConfig{},
