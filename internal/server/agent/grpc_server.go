@@ -87,8 +87,8 @@ func (s *GRPCServer) Start() error {
 		return fmt.Errorf("初始化CA失败: %w", err)
 	}
 
-	// 加载TLS配置
-	tlsConfig, err := s.tlsMgr.LoadServerTLSConfig()
+	// 加载TLS配置（传入配置的额外地址）
+	tlsConfig, err := s.tlsMgr.LoadServerTLSConfig(s.conf.Agent.ServerAddresses)
 	if err != nil {
 		return fmt.Errorf("加载TLS配置失败: %w", err)
 	}

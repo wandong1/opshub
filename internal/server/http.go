@@ -126,7 +126,25 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisCl
 
 	// ========== 初始化缓存系统 ==========
 	agentRepo := agentrepo.NewRepository(db)
-	cacheManager := cache.NewCacheManager(redisClient, agentRepo, db)
+
+	// 转换配置
+	cacheConfig := cache.ConvertConfigToCacheConfig(struct {
+		BatchFlushInterval int
+		BatchSize          int
+		BatchQueueMaxSize  int
+		RedisTTL           int
+		LockTimeout        int
+		OfflineThreshold   int
+	}{
+		BatchFlushInterval: conf.Cache.BatchFlushInterval,
+		BatchSize:          conf.Cache.BatchSize,
+		BatchQueueMaxSize:  conf.Cache.BatchQueueMaxSize,
+		RedisTTL:           conf.Cache.RedisTTL,
+		LockTimeout:        conf.Cache.LockTimeout,
+		OfflineThreshold:   conf.Cache.OfflineThreshold,
+	})
+
+	cacheManager := cache.NewCacheManager(redisClient, agentRepo, db, cacheConfig)
 	scheduler := cache.NewCacheSyncScheduler(cacheManager)
 
 	// 预热缓存
@@ -136,6 +154,9 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisCl
 
 	// 启动定期任务
 	scheduler.Start()
+
+	// 启动批量同步 Worker
+	cacheManager.StartBatchWorker()
 
 	// 注入到 AgentService
 	grpcServer.GetAgentService().SetCacheManager(cacheManager)
@@ -193,13 +214,19 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 
 	// 创建 System 服务
 	uploadDir := "./web/public/uploads"
-	configService, configUseCase := systemserver.NewSystemServices(s.db, uploadDir)
+	configService, apiKeyService, configUseCase, apiKeyUseCase := systemserver.NewSystemServices(s.db, s.redisClient, uploadDir)
 
 	// 设置配置用例到用户服务（用于密码验证和登录锁定）
 	userService.SetConfigUseCase(configUseCase)
 
+	// 设置 API Key 用例到认证中间件
+	authMiddleware.SetAPIKeyUseCase(apiKeyUseCase)
+
 	// 创建 Audit 服务
 	operationLogService, loginLogService, dataLogService, mwAuditLogService := auditserver.NewAuditServices(s.db)
+
+	// 创建 System HTTP Server
+	systemHTTPServer := systemserver.NewHTTPServer(configService, apiKeyService)
 
 	// 创建 Asset 服务
 	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo := assetserver.NewAssetServices(s.db)
@@ -292,7 +319,6 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		v1.PUT("/profile/avatar", s.uploadSrv.UpdateUserAvatar)
 
 		// 系统配置路由
-		systemHTTPServer := systemserver.NewHTTPServer(configService)
 		systemHTTPServer.RegisterRoutes(v1, public)
 		// Grafana 代理：路由路径与 Grafana sub_path 一致，注册在根路由（无需认证）
 		systemHTTPServer.RegisterGrafanaProxy(router)
@@ -548,6 +574,12 @@ func (s *HTTPServer) Stop(ctx context.Context) error {
 	if s.evalCancel != nil {
 		s.evalCancel()
 		appLogger.Info("告警评估引擎已停止")
+	}
+
+	// 停止批量同步 Worker
+	if s.cacheManager != nil {
+		s.cacheManager.StopBatchWorker()
+		appLogger.Info("批量同步 Worker 已停止")
 	}
 
 	// 停止缓存调度器

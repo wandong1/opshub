@@ -92,6 +92,15 @@ func (s *HTTPServer) listRules(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "查询失败")
 		return
 	}
+
+	// 从缓存回填评估时间
+	if s.evalEngine != nil {
+		if err := s.ruleRepo.FillEvalTimesFromCache(c.Request.Context(), list, s.evalEngine.GetEvalCache()); err != nil {
+			// 回填失败不影响主流程，仅记录日志
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, gin.H{"total": total, "page": page, "pageSize": pageSize, "data": list})
 }
 
@@ -108,6 +117,14 @@ func (s *HTTPServer) createRule(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败")
 		return
 	}
+
+	// 发布规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, req)
 }
 
@@ -144,6 +161,13 @@ func (s *HTTPServer) updateRule(c *gin.Context) {
 		return
 	}
 
+	// 发布规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	// 重新获取更新后的规则
 	updatedRule, _ := s.ruleRepo.GetByID(c.Request.Context(), uint(id))
 	response.Success(c, updatedRule)
@@ -162,6 +186,13 @@ func (s *HTTPServer) deleteRule(c *gin.Context) {
 	if err := s.ruleRepo.Delete(c.Request.Context(), uint(id)); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "删除失败")
 		return
+	}
+
+	// 发布规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
 	}
 
 	response.Success(c, nil)
@@ -188,6 +219,14 @@ func (s *HTTPServer) toggleRule(c *gin.Context) {
 		response.ErrorCode(c, http.StatusInternalServerError, "操作失败")
 		return
 	}
+
+	// 发布规则重载事件
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, gin.H{"enabled": rule.Enabled})
 }
 
@@ -262,6 +301,14 @@ func (s *HTTPServer) importRules(c *gin.Context) {
 			success++
 		}
 	}
+
+	// 发布规则重载事件
+	if s.evalEngine != nil && success > 0 {
+		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
 	response.Success(c, gin.H{"imported": success, "total": len(rules)})
 }
 

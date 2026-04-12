@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
@@ -181,7 +182,7 @@ func (m *TLSManager) SignAgentCert(agentID string, hostIP string) (certPEM, keyP
 }
 
 // LoadServerTLSConfig 加载gRPC server的mTLS配置
-func (m *TLSManager) LoadServerTLSConfig() (*tls.Config, error) {
+func (m *TLSManager) LoadServerTLSConfig(configAddresses []string) (*tls.Config, error) {
 	if m.caCert == nil || m.caKey == nil {
 		return nil, fmt.Errorf("CA未初始化")
 	}
@@ -190,6 +191,40 @@ func (m *TLSManager) LoadServerTLSConfig() (*tls.Config, error) {
 	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("生成server私钥失败: %w", err)
+	}
+
+	// 1. 获取本机所有 IP 地址
+	localIPs := getLocalIPs()
+	ipAddresses := []net.IP{
+		net.ParseIP("0.0.0.0"),
+		net.ParseIP("127.0.0.1"),
+	}
+	for _, ipStr := range localIPs {
+		if ip := net.ParseIP(ipStr); ip != nil {
+			ipAddresses = append(ipAddresses, ip)
+		}
+	}
+
+	// 2. 从配置文件读取额外的地址
+	dnsNames := []string{"localhost"}
+	var configIPs []string
+	var configDomains []string
+
+	for _, addr := range configAddresses {
+		addr = strings.TrimSpace(addr)
+		if addr == "" {
+			continue
+		}
+
+		if ip := net.ParseIP(addr); ip != nil {
+			// 是 IP 地址
+			ipAddresses = append(ipAddresses, ip)
+			configIPs = append(configIPs, addr)
+		} else {
+			// 是域名
+			dnsNames = append(dnsNames, addr)
+			configDomains = append(configDomains, addr)
+		}
 	}
 
 	serialNumber, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
@@ -205,9 +240,18 @@ func (m *TLSManager) LoadServerTLSConfig() (*tls.Config, error) {
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
 		},
-		IPAddresses: []net.IP{net.ParseIP("0.0.0.0"), net.ParseIP("127.0.0.1")},
-		DNSNames:    []string{"localhost"},
+		IPAddresses: ipAddresses,
+		DNSNames:    dnsNames,
 	}
+
+	// 记录证书包含的地址
+	appLogger.Info("生成服务端证书",
+		zap.Strings("autoDetectedIPs", localIPs),
+		zap.Strings("configIPs", configIPs),
+		zap.Strings("configDomains", configDomains),
+		zap.Int("totalIPs", len(ipAddresses)),
+		zap.Int("totalDomains", len(dnsNames)),
+	)
 
 	serverCertDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, m.caCert, &serverKey.PublicKey, m.caKey)
 	if err != nil {
@@ -250,4 +294,22 @@ func savePEM(path string, pemType string, data []byte) error {
 	}
 	defer f.Close()
 	return pem.Encode(f, &pem.Block{Type: pemType, Bytes: data})
+}
+
+// getLocalIPs 获取本机所有非loopback IP地址
+func getLocalIPs() []string {
+	var ips []string
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		appLogger.Warn("获取本机IP失败", zap.Error(err))
+		return ips
+	}
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+			if ipNet.IP.To4() != nil {
+				ips = append(ips, ipNet.IP.String())
+			}
+		}
+	}
+	return ips
 }

@@ -40,3 +40,23 @@ agent:
   binary_dir: "data/agent-binaries"
   heartbeat_timeout: 180  # 心跳超时时间（秒），实际心跳间隔为 timeout/3 = 60秒
   deploy_path: "/opt/srehub-agent"
+  # 额外的服务端地址（用于证书SAN），支持IP和域名
+  # 适用场景：NAT转换、负载均衡、多网卡、公网访问等
+  # 示例：
+  # server_addresses:
+  #   - "1.2.3.4"              # NAT公网IP
+  #   - "opshub.example.com"   # 域名
+  #   - "192.168.100.1"        # 其他网段IP
+  server_addresses: ["srehub.agent"]
+
+cache:
+  batch_flush_interval: 300  # 批量同步间隔（秒），默认 5 分钟
+  batch_size: 100            # 每批次处理数量
+  batch_queue_max_size: 10000 # 队列最大长度（告警阈值）
+  redis_ttl: 600             # Redis 数据 TTL（秒），默认 10 分钟
+  lock_timeout: 60           # 分布式锁超时时间（秒）
+  offline_threshold: 600     # 离线检测阈值（秒），默认 10 分钟
+
+  # 告警规则评估时间缓存配置
+  rule_eval_sync_interval: 30  # 规则评估时间同步间隔（秒），默认 30 秒
+  rule_eval_redis_ttl: 86400   # 规则评估时间 Redis TTL（秒），默认 24 小时

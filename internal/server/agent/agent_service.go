@@ -347,28 +347,26 @@ func (s *AgentService) handleHeartbeat(as *AgentStream, req *pb.HeartbeatRequest
 		zap.String("agentID", req.AgentId),
 		zap.Time("time", now))
 
-	// 使用缓存管理器更新状态（异步）
+	// 使用缓存管理器更新状态（同步执行，但内部会快速返回）
 	if s.cacheManager != nil {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
 
-			updates := map[string]any{
-				"status":    "online",
-				"last_seen": &now,
-			}
+		updates := map[string]any{
+			"status":    "online",
+			"last_seen": now,
+		}
 
-			if err := s.cacheManager.UpdateAgentStatus(ctx, req.AgentId, updates); err != nil {
-				appLogger.Warn("更新 Agent 状态失败",
-					zap.String("agentID", req.AgentId),
-					zap.Error(err))
-			}
-		}()
+		if err := s.cacheManager.UpdateAgentStatus(ctx, req.AgentId, updates); err != nil {
+			appLogger.Warn("更新 Agent 状态失败",
+				zap.String("agentID", req.AgentId),
+				zap.Error(err))
+		}
 	} else {
 		// 降级：直接更新数据库
 		s.agentRepo.UpdateInfo(context.Background(), req.AgentId, map[string]any{
 			"status":    "online",
-			"last_seen": &now,
+			"last_seen": now,
 		})
 	}
 

@@ -67,7 +67,7 @@
         <a-col :span="3"><a-button type="primary" @click="load">查询</a-button></a-col>
         <a-col :span="4" style="text-align:right">
           <a-button @click="openSilencedModal">
-            <template #icon><icon-eye /></template>已屏蔽告警
+            <template #icon><icon-eye /></template>屏蔽规则管理
           </a-button>
         </a-col>
       </a-row>
@@ -330,8 +330,8 @@
       </a-form>
     </a-modal>
 
-    <!-- 已屏蔽告警弹窗 -->
-    <SilencedAlertsModal v-model:visible="silencedModalVisible" @refresh="load" />
+    <!-- 屏蔽规则管理弹窗 -->
+    <SilenceRulesModal v-model:visible="silencedModalVisible" @refresh="load" />
   </div>
 </template>
 
@@ -342,7 +342,7 @@ import { Message } from '@arco-design/web-vue'
 import * as echarts from 'echarts'
 import { useUserStore } from '@/stores/user'
 import { getActiveEvents, getEventStats, getEventTrend, silenceEvent, handleEvent, batchSilenceEvents } from '@/api/alert'
-import SilencedAlertsModal from './SilencedAlertsModal.vue'
+import SilenceRulesModal from './SilenceRulesModal.vue'
 
 const router = useRouter()
 const userStore = useUserStore()

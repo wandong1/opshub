@@ -16,9 +16,9 @@
         <a-option label="拨测任务" value="probe" />
         <a-option label="巡检任务" value="inspection" />
       </a-select>
-      <a-select v-model="searchForm.status" placeholder="状态" allow-clear style="width: 120px;">
-        <a-option label="启用" :value="1" />
-        <a-option label="禁用" :value="0" />
+      <a-select v-model="searchForm.status" placeholder="状态" allow-clear style="width: 120px;" @change="handleStatusChange">
+        <a-option label="启用" value="1" />
+        <a-option label="禁用" value="0" />
       </a-select>
       <a-button type="primary" @click="loadData"><template #icon><icon-search /></template>搜索</a-button>
       <a-button @click="handleReset"><template #icon><icon-refresh /></template>重置</a-button>
@@ -28,7 +28,7 @@
 
     <a-table :data="taskList" :loading="loading" :bordered="{ cell: true }" stripe :pagination="{ current: pagination.page, pageSize: pagination.pageSize, total: pagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50] }" @page-change="(p: number) => { pagination.page = p; loadData() }" @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadData() }">
       <template #columns>
-        <a-table-column title="任务名称" data-index="name" :width="140" />
+        <a-table-column title="任务名称" data-index="name" :width="240" />
         <a-table-column title="任务类型" :width="100" align="center">
           <template #cell="{ record }">
             <a-tag size="small" :color="record.taskType === 'inspection' ? 'purple' : 'blue'">
@@ -59,16 +59,16 @@
             <a-tag size="small" :color="record.enabled ? 'green' : 'red'">{{ record.enabled ? '启用' : '禁用' }}</a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="最后执行" :width="170">
-          <template #cell="{ record }">{{ record.lastRunAt || '-' }}</template>
+        <a-table-column title="最后执行" :width="175">
+          <template #cell="{ record }">{{ formatDateTime(record.lastRunAt) }}</template>
         </a-table-column>
-        <a-table-column title="结果" :width="80" align="center">
+        <a-table-column title="结果" :width="95" align="center">
           <template #cell="{ record }">
             <a-tag v-if="record.lastResult" size="small" :color="record.lastResult === 'success' ? 'green' : 'red'">{{ record.lastResult }}</a-tag>
             <span v-else>-</span>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="420" fixed="right" align="center">
+        <a-table-column title="操作" :width="320" fixed="right" align="center">
           <template #cell="{ record }">
             <a-tooltip content="启用/禁用">
               <a-button v-permission="'inspection:tasks:toggle'" type="text" size="small" :status="record.enabled ? 'warning' : 'normal'" @click="handleToggle(record)">
@@ -368,7 +368,7 @@
                 <template #cell="{ record }"><a-tag size="small" color="arcoblue">{{ record.config_type?.toUpperCase() }}</a-tag></template>
               </a-table-column>
               <a-table-column title="目标" data-index="target" :width="160" ellipsis tooltip />
-              <a-table-column title="结果" :width="80" align="center">
+              <a-table-column title="结果" :width="85" align="center">
                 <template #cell="{ record }">
                   <a-tag size="small" :color="record.success ? 'green' : 'red'">{{ record.success ? '成功' : '失败' }}</a-tag>
                 </template>
@@ -600,7 +600,7 @@ const runningTaskIds = ref<Set<number>>(new Set())
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const resultPagination = reactive({ page: 1, pageSize: 20, total: 0 })
-const searchForm = reactive({ keyword: '', taskType: undefined as string | undefined, status: undefined as number | undefined })
+const searchForm = reactive({ keyword: '', taskType: undefined as string | undefined, status: undefined as string | undefined })
 
 const cronPresets = [
   { label: '每30秒', value: '0/30 * * * * ?' },
@@ -678,7 +678,8 @@ const loadData = async () => {
       page: pagination.page,
       page_size: pagination.pageSize,
       name: searchForm.keyword,
-      enabled: searchForm.status !== undefined ? searchForm.status === 1 : undefined
+      task_type: searchForm.taskType,
+      enabled: searchForm.status !== undefined ? searchForm.status === '1' : undefined
     })
 
     // 转换数据格式以兼容前端显示
@@ -805,6 +806,25 @@ const handleTaskCategoryChange = () => {
   formData.probeConfigIds = formData.probeConfigIds.filter(id =>
     filteredProbeOptions.value.some((p: any) => p.id === id)
   )
+}
+
+const handleStatusChange = (value: string | undefined) => {
+  searchForm.status = value
+}
+
+const formatDateTime = (dateStr: string | null | undefined) => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return '-'
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 const handleReset = () => { searchForm.keyword = ''; searchForm.taskType = undefined; searchForm.status = undefined; pagination.page = 1; loadData() }

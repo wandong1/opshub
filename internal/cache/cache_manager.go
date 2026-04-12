@@ -16,17 +16,52 @@ import (
 
 // CacheManager 缓存管理器，负责 Redis 与 MySQL 之间的数据一致性
 type CacheManager struct {
-	cache     *AgentCache
-	agentRepo *agentrepo.Repository
-	db        *gorm.DB
+	cache       *AgentCache
+	agentRepo   *agentrepo.Repository
+	db          *gorm.DB
+	rdb         *redis.Client
+	cfg         *CacheConfig
+	metrics     *Metrics
+	scripts     *LuaScripts
+	batchWorker *BatchWorker
 }
 
 // NewCacheManager 创建缓存管理器
-func NewCacheManager(rdb *redis.Client, agentRepo *agentrepo.Repository, db *gorm.DB) *CacheManager {
-	return &CacheManager{
+func NewCacheManager(rdb *redis.Client, agentRepo *agentrepo.Repository, db *gorm.DB, cfg *CacheConfig) *CacheManager {
+	if cfg == nil {
+		cfg = DefaultCacheConfig()
+	}
+
+	metrics := NewMetrics()
+	scripts := NewLuaScripts()
+
+	manager := &CacheManager{
 		cache:     NewAgentCache(rdb),
 		agentRepo: agentRepo,
 		db:        db,
+		rdb:       rdb,
+		cfg:       cfg,
+		metrics:   metrics,
+		scripts:   scripts,
+	}
+
+	// 创建批量同步 Worker
+	manager.batchWorker = NewBatchWorker(rdb, db, agentRepo, cfg, metrics, scripts)
+
+	return manager
+}
+
+// StartBatchWorker 启动批量同步 Worker
+func (m *CacheManager) StartBatchWorker() {
+	if m.batchWorker != nil {
+		m.batchWorker.Start()
+	}
+}
+
+// StopBatchWorker 停止批量同步 Worker
+func (m *CacheManager) StopBatchWorker() {
+	if m.batchWorker != nil {
+		m.batchWorker.Stop()
 	}
 }
 
@@ -35,26 +70,97 @@ func (m *CacheManager) GetAgentCache() *AgentCache {
 	return m.cache
 }
 
-// UpdateAgentStatus 更新 Agent 状态（保证一致性）
-// 策略：Write-Through，同时更新 Redis 和 MySQL
+// UpdateAgentStatus 更新 Agent 状态（混合策略）
+// 策略：状态变化立即写 MySQL，状态未变化加入批量队列
 func (m *CacheManager) UpdateAgentStatus(ctx context.Context, agentID string, updates map[string]any) error {
-	// 1. 更新 MySQL
-	if err := m.agentRepo.UpdateInfo(ctx, agentID, updates); err != nil {
-		return fmt.Errorf("更新数据库失败: %w", err)
-	}
-
-	// 2. 查询最新数据
-	agentInfo, err := m.agentRepo.GetByAgentID(ctx, agentID)
+	// 1. 使用 Lua 脚本原子更新 Redis 并检测状态变化
+	statusChanged, err := m.updateRedisAndDetectChange(ctx, agentID, updates)
 	if err != nil {
-		appLogger.Warn("查询 Agent 信息失败，跳过缓存更新", zap.String("agentID", agentID), zap.Error(err))
-		return nil // 数据库已更新，缓存更新失败不影响主流程
+		// Redis 故障降级：直接写 MySQL
+		appLogger.Warn("Redis 故障，降级到直接写 MySQL",
+			zap.String("agentID", agentID),
+			zap.Error(err))
+		m.metrics.RedisFallbackCount.Inc()
+		return m.agentRepo.UpdateInfo(ctx, agentID, updates)
 	}
 
-	// 3. 更新 Redis 缓存
-	cacheData := ConvertAgentInfoToCache(agentInfo)
-	if err := m.cache.SetAgentStatus(ctx, agentID, cacheData); err != nil {
-		appLogger.Warn("更新 Agent 缓存失败", zap.String("agentID", agentID), zap.Error(err))
-		// 缓存更新失败不返回错误，避免影响主流程
+	// 2. 状态变化 → 立即写 MySQL
+	if statusChanged {
+		appLogger.Info("检测到状态变化，立即同步 MySQL",
+			zap.String("agentID", agentID),
+			zap.Any("updates", updates))
+		m.metrics.ImmediateWriteCount.Inc()
+		return m.agentRepo.UpdateInfo(ctx, agentID, updates)
+	}
+
+	// 3. 状态未变化 → 加入 Redis 批量队列
+	if err := m.enqueueToRedis(ctx, agentID); err != nil {
+		appLogger.Warn("加入批量队列失败",
+			zap.String("agentID", agentID),
+			zap.Error(err))
+		// 入队失败不影响主流程（下次心跳会重试）
+	}
+
+	return nil
+}
+
+// updateRedisAndDetectChange 使用 Lua 脚本原子更新 Redis 并检测状态变化
+func (m *CacheManager) updateRedisAndDetectChange(ctx context.Context, agentID string, updates map[string]any) (bool, error) {
+	key := fmt.Sprintf("agent:status:%s", agentID)
+
+	// 提取 status 和 last_seen
+	status, ok := updates["status"].(string)
+	if !ok {
+		status = "online" // 默认值
+	}
+
+	lastSeen, ok := updates["last_seen"].(time.Time)
+	if !ok {
+		lastSeen = time.Now()
+	}
+
+	// 执行 Lua 脚本
+	result, err := m.scripts.UpdateAndDetectChange.Run(ctx, m.rdb,
+		[]string{key},
+		status,
+		lastSeen.Unix(),
+		int(m.cfg.RedisTTL.Seconds()),
+	).Int()
+
+	if err != nil {
+		return false, err
+	}
+
+	// result: 0=未变化, 1=变化, 2=首次注册
+	return result > 0, nil
+}
+
+// enqueueToRedis 加入 Redis 批量队列
+func (m *CacheManager) enqueueToRedis(ctx context.Context, agentID string) error {
+	result, err := m.scripts.EnqueueWithDedup.Run(ctx, m.rdb,
+		[]string{BatchQueueKey, BatchPendingKey},
+		agentID,
+	).Int()
+
+	if err != nil {
+		return err
+	}
+
+	// result: -1=已存在, >0=队列长度
+	if result == -1 {
+		// 已在队列中，跳过
+		return nil
+	}
+
+	// 更新队列长度指标
+	m.metrics.BatchQueueSize.Set(float64(result))
+
+	// 队列长度超过阈值，触发告警
+	if result > m.cfg.BatchQueueMaxSize {
+		appLogger.Warn("批量队列长度超过阈值",
+			zap.Int("queueLen", result),
+			zap.Int("maxSize", m.cfg.BatchQueueMaxSize))
+		// TODO: 触发告警
 	}
 
 	return nil

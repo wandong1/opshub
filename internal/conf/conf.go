@@ -33,15 +33,17 @@ type Config struct {
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Log      LogConfig      `mapstructure:"log"`
 	Agent    AgentConfig    `mapstructure:"agent"`
+	Cache    CacheConfig    `mapstructure:"cache"`
 }
 
 // AgentConfig Agent配置
 type AgentConfig struct {
-	Enabled          bool   `mapstructure:"enabled"`
-	CertDir          string `mapstructure:"cert_dir"`
-	BinaryDir        string `mapstructure:"binary_dir"`
-	HeartbeatTimeout int    `mapstructure:"heartbeat_timeout"`
-	DeployPath       string `mapstructure:"deploy_path"`
+	Enabled          bool     `mapstructure:"enabled"`
+	CertDir          string   `mapstructure:"cert_dir"`
+	BinaryDir        string   `mapstructure:"binary_dir"`
+	HeartbeatTimeout int      `mapstructure:"heartbeat_timeout"`
+	DeployPath       string   `mapstructure:"deploy_path"`
+	ServerAddresses  []string `mapstructure:"server_addresses"` // 额外的服务端地址（用于证书SAN），支持IP和域名
 }
 
 // ServerConfig 服务器配置
@@ -86,6 +88,20 @@ type LogConfig struct {
 	MaxAge     int    `mapstructure:"max_age"`      // days
 	Compress   bool   `mapstructure:"compress"`
 	Console    bool   `mapstructure:"console"`
+}
+
+// CacheConfig 缓存配置
+type CacheConfig struct {
+	BatchFlushInterval int `mapstructure:"batch_flush_interval"` // 批量同步间隔（秒）
+	BatchSize          int `mapstructure:"batch_size"`           // 每批次处理数量
+	BatchQueueMaxSize  int `mapstructure:"batch_queue_max_size"` // 队列最大长度
+	RedisTTL           int `mapstructure:"redis_ttl"`            // Redis 数据 TTL（秒）
+	LockTimeout        int `mapstructure:"lock_timeout"`         // 分布式锁超时时间（秒）
+	OfflineThreshold   int `mapstructure:"offline_threshold"`    // 离线检测阈值（秒）
+
+	// 规则评估时间缓存配置
+	RuleEvalSyncInterval int `mapstructure:"rule_eval_sync_interval"` // 规则评估时间同步间隔（秒）
+	RuleEvalRedisTTL     int `mapstructure:"rule_eval_redis_ttl"`     // 规则评估时间 Redis TTL（秒）
 }
 
 var globalConfig *Config
