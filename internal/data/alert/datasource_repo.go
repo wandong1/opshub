@@ -48,3 +48,11 @@ func (r *DataSourceRepo) ListEnabled(ctx context.Context) ([]*biz.AlertDataSourc
 	}
 	return list, nil
 }
+
+func (r *DataSourceRepo) GetByProxyToken(ctx context.Context, proxyToken string) (*biz.AlertDataSource, error) {
+	var ds biz.AlertDataSource
+	if err := r.db.WithContext(ctx).Where("proxy_token = ?", proxyToken).First(&ds).Error; err != nil {
+		return nil, err
+	}
+	return &ds, nil
+}

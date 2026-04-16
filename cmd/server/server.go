@@ -248,6 +248,7 @@ func autoMigrate(db *gorm.DB) error {
 		&assetbiz.WebsiteAgent{},
 		// 告警管理表
 		&alertbiz.AlertDataSource{},
+		&alertbiz.DataSourceAgentRelation{},
 		&alertbiz.AlertRuleGroup{},
 		&alertbiz.AlertRule{},
 		&alertbiz.AlertEvent{},

@@ -1,11 +1,14 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -328,6 +331,12 @@ func (c *GRPCClient) handleServerMessage(msg *pb.ServerMessage) {
 			}
 			c.SendMessage(resp)
 		}
+
+	case *pb.ServerMessage_HttpProxyRequest:
+		// 处理 HTTP 代理请求
+		logger.Info("收到 HTTP 代理请求: method=%s, url=%s, requestID=%s",
+			payload.HttpProxyRequest.Method, payload.HttpProxyRequest.Url, payload.HttpProxyRequest.RequestId)
+		go c.handleHttpProxyRequest(payload.HttpProxyRequest)
 	}
 }
 
@@ -351,4 +360,83 @@ func getLocalIPs() []string {
 		}
 	}
 	return ips
+}
+
+// handleHttpProxyRequest 处理 HTTP 代理请求
+func (c *GRPCClient) handleHttpProxyRequest(req *pb.HttpProxyRequest) {
+	// 构建 HTTP 请求
+	httpReq, err := http.NewRequest(req.Method, req.Url, bytes.NewReader(req.Body))
+	if err != nil {
+		c.sendHttpProxyError(req.RequestId, err)
+		return
+	}
+
+	// 设置请求头
+	for key, value := range req.Headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	// 执行 HTTP 请求
+	timeout := time.Duration(req.Timeout) * time.Second
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	client := &http.Client{Timeout: timeout}
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		logger.Error("HTTP 代理请求失败: url=%s, error=%v", req.Url, err)
+		c.sendHttpProxyError(req.RequestId, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 读取响应体
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Error("读取响应体失败: url=%s, error=%v", req.Url, err)
+		c.sendHttpProxyError(req.RequestId, err)
+		return
+	}
+
+	// 构建响应头
+	headers := make(map[string]string)
+	for key, values := range resp.Header {
+		if len(values) > 0 {
+			headers[key] = values[0]
+		}
+	}
+
+	// 发送响应
+	proxyResp := &pb.HttpProxyResponse{
+		RequestId:  req.RequestId,
+		StatusCode: int32(resp.StatusCode),
+		Headers:    headers,
+		Body:       body,
+		Error:      "",
+	}
+
+	logger.Info("HTTP 代理请求成功: url=%s, status=%d, bodyLen=%d",
+		req.Url, resp.StatusCode, len(body))
+
+	c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_HttpProxyResponse{
+			HttpProxyResponse: proxyResp,
+		},
+	})
+}
+
+// sendHttpProxyError 发送 HTTP 代理错误响应
+func (c *GRPCClient) sendHttpProxyError(requestID string, err error) {
+	proxyResp := &pb.HttpProxyResponse{
+		RequestId:  requestID,
+		StatusCode: 500,
+		Error:      err.Error(),
+	}
+
+	c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_HttpProxyResponse{
+			HttpProxyResponse: proxyResp,
+		},
+	})
 }
