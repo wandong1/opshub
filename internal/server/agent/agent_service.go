@@ -109,6 +109,11 @@ func (s *AgentService) Connect(stream pb.AgentHub_ConnectServer) error {
 			if as != nil {
 				as.ResolvePending(payload.ProbeResult.RequestId, payload.ProbeResult)
 			}
+
+		case *pb.AgentMessage_HttpProxyResponse:
+			if as != nil {
+				as.ResolvePending(payload.HttpProxyResponse.RequestId, payload.HttpProxyResponse)
+			}
 		}
 	}
 }

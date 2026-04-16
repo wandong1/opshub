@@ -246,10 +246,15 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		appLogger.Error("注册Inspection插件失败", zap.Error(err))
 	}
 
-	// 创建 WebsiteProxyHandler
+	// 创建 WebsiteProxyHandler（使用新版 V2，支持真实的 HTTP 代理）
 	var websiteProxyHandler *assetserver.WebsiteProxyHandler
+	var websiteProxyHandlerV2 *assetserver.WebsiteProxyHandlerV2
 	if s.grpcServer != nil {
+		// 保留旧版（兼容性）
 		websiteProxyHandler = assetserver.NewWebsiteProxyHandler(websiteUseCase, s.grpcServer.Hub())
+		// 使用新版（真实 HTTP 代理）+ 适配器
+		agentHubAdapter := assetserver.NewAgentHubAdapter(s.grpcServer.Hub())
+		websiteProxyHandlerV2 = assetserver.NewWebsiteProxyHandlerV2(websiteUseCase, agentHubAdapter)
 	}
 
 	// 设置authMiddleware的assetPermissionRepo
@@ -261,7 +266,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	authMiddleware.SetMiddlewarePermissionRepo(mwPermissionRepo)
 
 	// Asset 路由
-	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, websiteProxyHandler, terminalManager, s.db, authMiddleware)
+	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, websiteProxyHandler, websiteProxyHandlerV2, terminalManager, s.db, authMiddleware)
 
 	// API v1 - 公开接口(不需要认证)
 	public := router.Group("/api/v1/public")
@@ -287,6 +292,9 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 
 		// 注册 Asset 路由
 		assetServer.RegisterRoutes(v1)
+
+		// 注册 Asset 模块的公开路由（站点代理，无需认证）
+		assetServer.RegisterPublicRoutes(router)
 
 		// 注册 Identity 路由
 		identityServer, err := identityserver.NewIdentityServices(s.db)
@@ -333,8 +341,14 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 
 		// 注册 Alert（告警管理）路由
 		s.alertServer = alertserver.NewAlertServices(s.db, s.redisClient)
+		if s.grpcServer != nil {
+			s.alertServer.SetAgentHub(s.grpcServer.Hub())
+		}
 		s.alertServer.RegisterRoutes(v1)
 	}
+
+	// 注册告警模块的公开路由（数据源代理，无需认证）
+	s.alertServer.RegisterPublicRoutes(router)
 
 	// 插件路由
 	pluginsGroup := router.Group("/api/v1/plugins")

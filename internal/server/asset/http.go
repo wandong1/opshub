@@ -38,6 +38,7 @@ type HTTPServer struct {
 	serviceLabelService          *assetService.ServiceLabelService
 	websiteService               *assetService.WebsiteService
 	websiteProxyHandler          *WebsiteProxyHandler
+	websiteProxyHandlerV2        *WebsiteProxyHandlerV2
 	terminalManager              *TerminalManager
 	terminalAuditHandler         *TerminalAuditHandler
 	authMiddleware               *rbacService.AuthMiddleware
@@ -51,6 +52,7 @@ func NewHTTPServer(
 	serviceLabelService *assetService.ServiceLabelService,
 	websiteService *assetService.WebsiteService,
 	websiteProxyHandler *WebsiteProxyHandler,
+	websiteProxyHandlerV2 *WebsiteProxyHandlerV2,
 	terminalManager *TerminalManager,
 	db *gorm.DB,
 	authMiddleware *rbacService.AuthMiddleware,
@@ -63,6 +65,7 @@ func NewHTTPServer(
 		serviceLabelService:         serviceLabelService,
 		websiteService:              websiteService,
 		websiteProxyHandler:         websiteProxyHandler,
+		websiteProxyHandlerV2:       websiteProxyHandlerV2,
 		terminalManager:             terminalManager,
 		terminalAuditHandler:        NewTerminalAuditHandler(db),
 		authMiddleware:              authMiddleware,
@@ -410,7 +413,18 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 		websites.PUT("/:id", s.websiteService.UpdateWebsite)
 		websites.DELETE("/:id", s.websiteService.DeleteWebsite)
 		websites.GET("/:id/access", s.websiteProxyHandler.AccessWebsite)
-		websites.Any("/:id/proxy/*path", s.websiteProxyHandler.ProxyRequest)
+		// 注意：代理路由已移到公开路由，在 RegisterPublicRoutes 中注册
+	}
+}
+
+// RegisterPublicRoutes 注册公开路由（无需认证）
+func (s *HTTPServer) RegisterPublicRoutes(router *gin.Engine) {
+	// Web 站点代理路由（无需认证）
+	if s.websiteProxyHandlerV2 != nil {
+		router.Any("/api/v1/websites/:id/proxy/*path", s.websiteProxyHandlerV2.ProxyWebsiteRequest)
+	} else if s.websiteProxyHandler != nil {
+		// 兼容：如果 V2 不可用，使用旧版
+		router.Any("/api/v1/websites/:id/proxy/*path", s.websiteProxyHandler.ProxyRequest)
 	}
 }
 
