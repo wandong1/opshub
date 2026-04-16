@@ -461,8 +461,17 @@ func (s *HTTPServer) uninstallAgentOnHost(ctx context.Context, hostID uint) erro
 // renderAgentConfig 生成Agent配置文件
 func (s *HTTPServer) renderAgentConfig(agentID, serverAddr string) ([]byte, error) {
 	deployPath := s.grpcServer.conf.Agent.DeployPath
+
+	// 智能处理服务端地址：如果已包含端口则直接使用，否则追加默认端口
+	finalServerAddr := serverAddr
+	if serverAddr != "" && !strings.Contains(serverAddr, ":") {
+		// 地址不包含端口，追加默认端口
+		finalServerAddr = fmt.Sprintf("%s:%d", serverAddr, s.grpcServer.conf.Server.RPCPort)
+	}
+	// 如果地址已包含端口（如 172.16.38.1:9090），则直接使用
+
 	tmpl := `agent_id: "{{.AgentID}}"
-server_addr: "{{.ServerAddr}}:{{.RPCPort}}"
+server_addr: "{{.ServerAddr}}"
 cert_dir: "{{.DeployPath}}/certs"
 log_file: "/var/log/srehub-agent.log"
 `
@@ -473,8 +482,7 @@ log_file: "/var/log/srehub-agent.log"
 	var buf bytes.Buffer
 	err = t.Execute(&buf, map[string]any{
 		"AgentID":    agentID,
-		"ServerAddr": serverAddr,
-		"RPCPort":    s.grpcServer.conf.Server.RPCPort,
+		"ServerAddr": finalServerAddr,
 		"DeployPath": deployPath,
 	})
 	return buf.Bytes(), err

@@ -5,13 +5,26 @@ export interface AlertDataSource {
   id?: number
   name: string
   type: string // prometheus | victoriametrics | influxdb
-  url: string
+  url?: string
+  host?: string
+  port?: number
+  access_mode?: string // direct | agent
+  proxy_token?: string
+  proxy_url?: string
   username?: string
   password?: string
   token?: string
   description?: string
   status?: number
-  createdAt?: string
+  created_at?: string
+}
+
+export interface DataSourceAgentRelation {
+  id?: number
+  data_source_id: number
+  agent_host_id: number
+  priority: number
+  created_at?: string
 }
 
 export const getDataSources = () => request.get('/api/v1/alert/datasources')
@@ -20,6 +33,14 @@ export const getDataSource = (id: number) => request.get(`/api/v1/alert/datasour
 export const updateDataSource = (id: number, data: Partial<AlertDataSource>) => request.put(`/api/v1/alert/datasources/${id}`, data)
 export const deleteDataSource = (id: number) => request.delete(`/api/v1/alert/datasources/${id}`)
 export const testDataSource = (id: number) => request.post(`/api/v1/alert/datasources/${id}/test`)
+
+// Agent关联API
+export const getAgentRelations = (datasourceId: number) =>
+  request.get(`/api/v1/alert/datasources/${datasourceId}/agent-relations`)
+export const createAgentRelation = (data: Partial<DataSourceAgentRelation>) =>
+  request.post(`/api/v1/alert/datasources/${data.data_source_id}/agent-relations`, data)
+export const deleteAgentRelation = (id: number) =>
+  request.delete(`/api/v1/alert/datasources/agent-relations/${id}`)
 
 // ==================== 规则分类 ====================
 export interface AlertRuleGroup {

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -251,22 +252,55 @@ func (h *WebsiteProxyHandlerV2) forwardToAgent(c *gin.Context, agentHostID uint,
 		return fmt.Errorf("Agent 执行失败: %s", proxyResp.Error)
 	}
 
-	// 返回响应给客户端（包括错误响应，如 500）
-	// 设置响应头
-	for key, value := range proxyResp.Headers {
-		c.Header(key, value)
-	}
-
 	// 设置状态码（如果 Agent 没有返回状态码，默认 200）
 	statusCode := int(proxyResp.StatusCode)
 	if statusCode == 0 {
 		statusCode = http.StatusOK
 	}
+
+	// 处理响应体：如果是 HTML/CSS/JS，需要重写资源路径
+	responseBody := proxyResp.Body
+	contentType := proxyResp.Headers["Content-Type"]
+	if contentType == "" {
+		contentType = proxyResp.Headers["content-type"]
+	}
+
+	// 构建代理前缀
+	proxyPrefix := fmt.Sprintf("/api/v1/websites/%d/proxy", website.ID)
+
+	// 判断是否需要重写内容
+	needRewrite := false
+	if strings.Contains(contentType, "text/html") ||
+		strings.Contains(contentType, "text/css") ||
+		strings.Contains(contentType, "application/javascript") ||
+		strings.Contains(contentType, "text/javascript") {
+		needRewrite = true
+	}
+
+	if needRewrite && len(responseBody) > 0 {
+		logger.Debug("重写响应内容中的资源路径",
+			zap.String("request_id", requestID),
+			zap.String("content_type", contentType),
+			zap.String("proxy_prefix", proxyPrefix),
+		)
+
+		rewrittenBody := h.rewriteResourcePaths(responseBody, proxyPrefix, website.URL)
+		responseBody = rewrittenBody
+
+		// 更新 Content-Length
+		proxyResp.Headers["Content-Length"] = fmt.Sprintf("%d", len(responseBody))
+	}
+
+	// 设置响应头
+	for key, value := range proxyResp.Headers {
+		c.Header(key, value)
+	}
+
 	c.Status(statusCode)
 
 	// 写入响应体
-	if len(proxyResp.Body) > 0 {
-		_, err = c.Writer.Write(proxyResp.Body)
+	if len(responseBody) > 0 {
+		_, err = c.Writer.Write(responseBody)
 		if err != nil {
 			logger.Error("写入响应体失败",
 				zap.String("request_id", requestID),
@@ -280,9 +314,153 @@ func (h *WebsiteProxyHandlerV2) forwardToAgent(c *gin.Context, agentHostID uint,
 	logger.Info("成功返回响应给客户端",
 		zap.String("request_id", requestID),
 		zap.Int("status_code", statusCode),
-		zap.Int("body_len", len(proxyResp.Body)),
+		zap.Int("body_len", len(responseBody)),
 	)
 
 	// 成功写入响应，返回 nil
 	return nil
+}
+
+// rewriteResourcePaths 重写 HTML/CSS/JS 中的资源路径，添加代理前缀
+func (h *WebsiteProxyHandlerV2) rewriteResourcePaths(body []byte, proxyPrefix string, baseURL string) []byte {
+	content := string(body)
+
+	// 1. 重写 HTML 中的资源引用
+	// <link href="/css/style.css"> -> <link href="/api/v1/websites/1/proxy/css/style.css">
+	// <script src="/js/app.js"> -> <script src="/api/v1/websites/1/proxy/js/app.js">
+	// <img src="/img/logo.png"> -> <img src="/api/v1/websites/1/proxy/img/logo.png">
+	// <a href="/page"> -> <a href="/api/v1/websites/1/proxy/page">
+
+	// 匹配 href="/xxx" 和 src="/xxx" (绝对路径)
+	reAbsolutePath := regexp.MustCompile(`(href|src)="(/[^"]*)"`)
+	content = reAbsolutePath.ReplaceAllStringFunc(content, func(match string) string {
+		// 提取属性名和路径
+		parts := reAbsolutePath.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		attr := parts[1]  // href 或 src
+		path := parts[2]  // /xxx
+
+		// 跳过已经包含代理前缀的路径
+		if strings.HasPrefix(path, proxyPrefix) {
+			return match
+		}
+
+		// 跳过外部链接（http:// 或 https://）
+		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+			return match
+		}
+
+		// 跳过特殊协议（data:, javascript:, mailto:, tel:）
+		if strings.HasPrefix(path, "data:") || strings.HasPrefix(path, "javascript:") ||
+			strings.HasPrefix(path, "mailto:") || strings.HasPrefix(path, "tel:") ||
+			strings.HasPrefix(path, "#") {
+			return match
+		}
+
+		// 添加代理前缀
+		newPath := proxyPrefix + path
+		return fmt.Sprintf(`%s="%s"`, attr, newPath)
+	})
+
+	// 2. 重写 CSS 中的 url() 引用
+	// url(/fonts/font.woff) -> url(/api/v1/websites/1/proxy/fonts/font.woff)
+	// url('/images/bg.png') -> url('/api/v1/websites/1/proxy/images/bg.png')
+	// url("/images/bg.png") -> url("/api/v1/websites/1/proxy/images/bg.png")
+
+	reCSSUrl := regexp.MustCompile(`url\(['"]?(/[^'")]+)['"]?\)`)
+	content = reCSSUrl.ReplaceAllStringFunc(content, func(match string) string {
+		parts := reCSSUrl.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		path := parts[1]
+
+		// 跳过已经包含代理前缀的路径
+		if strings.HasPrefix(path, proxyPrefix) {
+			return match
+		}
+
+		// 跳过外部链接和特殊协议
+		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") ||
+			strings.HasPrefix(path, "data:") {
+			return match
+		}
+
+		// 添加代理前缀
+		newPath := proxyPrefix + path
+		// 保持原有的引号风格
+		if strings.Contains(match, `"`) {
+			return fmt.Sprintf(`url("%s")`, newPath)
+		} else if strings.Contains(match, `'`) {
+			return fmt.Sprintf(`url('%s')`, newPath)
+		} else {
+			return fmt.Sprintf(`url(%s)`, newPath)
+		}
+	})
+
+	// 3. 重写 JavaScript 中的 fetch/XMLHttpRequest 等 API 调用
+	// fetch('/api/data') -> fetch('/api/v1/websites/1/proxy/api/data')
+	// 注意：这个比较复杂，只处理简单的字符串字面量情况
+
+	// 匹配 fetch('xxx') 或 fetch("xxx")
+	reFetch := regexp.MustCompile(`(fetch|XMLHttpRequest\.open)\s*\(\s*['"]([^'"]+)['"]`)
+	content = reFetch.ReplaceAllStringFunc(content, func(match string) string {
+		parts := reFetch.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		method := parts[1]
+		url := parts[2]
+
+		// 只处理相对路径（以 / 开头）
+		if !strings.HasPrefix(url, "/") {
+			return match
+		}
+
+		// 跳过已经包含代理前缀的路径
+		if strings.HasPrefix(url, proxyPrefix) {
+			return match
+		}
+
+		// 跳过外部链接
+		if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+			return match
+		}
+
+		// 添加代理前缀
+		newURL := proxyPrefix + url
+		// 保持原有的引号风格
+		if strings.Contains(match, `"`) {
+			return fmt.Sprintf(`%s("%s"`, method, newURL)
+		} else {
+			return fmt.Sprintf(`%s('%s'`, method, newURL)
+		}
+	})
+
+	// 4. 重写 <base> 标签（如果存在）
+	// <base href="/"> -> <base href="/api/v1/websites/1/proxy/">
+	reBase := regexp.MustCompile(`<base\s+href=["']([^"']+)["']`)
+	content = reBase.ReplaceAllStringFunc(content, func(match string) string {
+		parts := reBase.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		href := parts[1]
+
+		// 如果 base href 是 /，替换为代理前缀
+		if href == "/" {
+			return fmt.Sprintf(`<base href="%s/"`, proxyPrefix)
+		}
+
+		// 如果是相对路径，添加代理前缀
+		if strings.HasPrefix(href, "/") && !strings.HasPrefix(href, proxyPrefix) {
+			return fmt.Sprintf(`<base href="%s%s"`, proxyPrefix, href)
+		}
+
+		return match
+	})
+
+	return []byte(content)
 }

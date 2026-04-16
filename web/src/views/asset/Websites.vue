@@ -120,43 +120,45 @@
 
             <!-- 卡片底部操作 -->
             <div class="card-footer">
-              <a-button type="primary" size="small" @click="handleAccess(site)">
-                <template #icon><icon-export /></template>
-                访问站点
-              </a-button>
-              <a-dropdown v-if="site.accessUser" trigger="hover">
-                <a-button size="small">
-                  <template #icon><icon-copy /></template>
-                  复制凭据
+              <div class="footer-actions">
+                <a-button type="primary" size="small" @click="handleAccess(site)" class="action-btn">
+                  <template #icon><icon-export /></template>
+                  <span class="btn-text">访问</span>
                 </a-button>
-                <template #content>
-                  <a-doption @click="handleCopyUrl(site)">
-                    <template #icon><icon-link /></template>
-                    复制URL
-                  </a-doption>
-                  <a-doption @click="handleCopyUsername(site)">
-                    <template #icon><icon-user /></template>
-                    复制账号
-                  </a-doption>
-                  <a-doption @click="handleCopyPassword(site)">
-                    <template #icon><icon-lock /></template>
-                    复制密码
-                  </a-doption>
-                </template>
-              </a-dropdown>
-              <a-button size="small" @click="handleEdit(site)">
-                <template #icon><icon-edit /></template>
-                编辑
-              </a-button>
-              <a-popconfirm
-                content="确定要删除该站点吗？"
-                @ok="handleDelete(site.id)"
-              >
-                <a-button size="small" status="danger">
-                  <template #icon><icon-delete /></template>
-                  删除
+                <a-dropdown v-if="site.accessUser" trigger="hover">
+                  <a-button size="small" class="action-btn">
+                    <template #icon><icon-copy /></template>
+                    <span class="btn-text">凭据</span>
+                  </a-button>
+                  <template #content>
+                    <a-doption @click="handleCopyUrl(site)">
+                      <template #icon><icon-link /></template>
+                      复制URL
+                    </a-doption>
+                    <a-doption @click="handleCopyUsername(site)">
+                      <template #icon><icon-user /></template>
+                      复制账号
+                    </a-doption>
+                    <a-doption @click="handleCopyPassword(site)">
+                      <template #icon><icon-lock /></template>
+                      复制密码
+                    </a-doption>
+                  </template>
+                </a-dropdown>
+                <a-button size="small" @click="handleEdit(site)" class="action-btn">
+                  <template #icon><icon-edit /></template>
+                  <span class="btn-text">编辑</span>
                 </a-button>
-              </a-popconfirm>
+                <a-popconfirm
+                  content="确定要删除该站点吗？"
+                  @ok="handleDelete(site.id)"
+                >
+                  <a-button size="small" status="danger" class="action-btn">
+                    <template #icon><icon-delete /></template>
+                    <span class="btn-text">删除</span>
+                  </a-button>
+                </a-popconfirm>
+              </div>
             </div>
           </div>
         </div>
@@ -698,6 +700,10 @@ onMounted(() => {
   flex-direction: column;
   background: var(--ops-content-bg);
   padding: 20px;
+
+  @media (max-width: 768px) {
+    padding: 12px;
+  }
 }
 
 .page-header {
@@ -707,14 +713,36 @@ onMounted(() => {
   margin-bottom: 20px;
   padding: 20px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  animation: slideDown 0.4s ease-out;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .page-title-group {
   display: flex;
   align-items: center;
   gap: 16px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+  }
 }
 
 .page-title-icon {
@@ -727,6 +755,23 @@ onMounted(() => {
   border-radius: 12px;
   color: #fff;
   font-size: 24px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  animation: pulse 2s ease-in-out infinite;
+
+  @media (max-width: 768px) {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+  }
 }
 
 .page-title {
@@ -734,17 +779,34 @@ onMounted(() => {
   font-size: 24px;
   font-weight: 600;
   color: var(--ops-text-primary);
+
+  @media (max-width: 768px) {
+    font-size: 20px;
+  }
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 14px;
   color: var(--ops-text-secondary);
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
 }
 
 .header-actions {
   display: flex;
   gap: 12px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: stretch;
+
+    :deep(.arco-btn) {
+      flex: 1;
+    }
+  }
 }
 
 .main-content {
@@ -756,16 +818,47 @@ onMounted(() => {
 .content-panel {
   flex: 1;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .search-bar {
   padding: 16px;
   border-bottom: 1px solid var(--ops-border-color);
+  background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%);
+
+  @media (max-width: 768px) {
+    padding: 12px;
+
+    :deep(.arco-form) {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .arco-form-item {
+        margin-right: 0 !important;
+        margin-bottom: 0 !important;
+      }
+
+      .arco-input-wrapper,
+      .arco-select {
+        width: 100% !important;
+      }
+    }
+  }
 }
 
 .loading-container,
@@ -782,23 +875,66 @@ onMounted(() => {
   overflow: auto;
   padding: 20px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 20px;
   align-content: start;
+
+  @media (max-width: 1400px) {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    padding: 16px;
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 12px;
+  }
 }
 
 .website-card {
   background: #fff;
   border: 1px solid var(--ops-border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
+  animation: cardSlideIn 0.4s ease-out backwards;
+
+  @for $i from 1 through 20 {
+    &:nth-child(#{$i}) {
+      animation-delay: #{$i * 0.05}s;
+    }
+  }
 
   &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-4px);
+    border-color: var(--ops-primary);
+
+    .site-icon-large {
+      transform: scale(1.1) rotate(5deg);
+    }
+
+    .card-footer {
+      background: linear-gradient(to right, #f5f7fa 0%, #ffffff 100%);
+    }
+  }
+}
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -806,12 +942,20 @@ onMounted(() => {
   padding: 20px;
   background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
   border-bottom: 1px solid var(--ops-border-color);
+
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
 }
 
 .site-info {
   display: flex;
   align-items: center;
   gap: 16px;
+
+  @media (max-width: 768px) {
+    gap: 12px;
+  }
 }
 
 .site-icon-large {
@@ -825,15 +969,32 @@ onMounted(() => {
   color: #fff;
   font-size: 28px;
   flex-shrink: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+
+  @media (max-width: 768px) {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+  }
 
   .icon-emoji {
     font-size: 32px;
+
+    @media (max-width: 768px) {
+      font-size: 28px;
+    }
   }
 
   img {
     width: 40px;
     height: 40px;
     object-fit: contain;
+
+    @media (max-width: 768px) {
+      width: 32px;
+      height: 32px;
+    }
   }
 }
 
@@ -850,6 +1011,10 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
 }
 
 .site-tags {
@@ -864,12 +1029,22 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+
+  @media (max-width: 768px) {
+    padding: 16px;
+    gap: 10px;
+  }
 }
 
 .info-row {
   display: flex;
   gap: 12px;
   align-items: flex-start;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 4px;
+  }
 }
 
 .info-label {
@@ -877,6 +1052,12 @@ onMounted(() => {
   color: var(--ops-text-secondary);
   min-width: 70px;
   flex-shrink: 0;
+  font-weight: 500;
+
+  @media (max-width: 768px) {
+    min-width: auto;
+    font-size: 12px;
+  }
 }
 
 .info-value {
@@ -887,6 +1068,10 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
 }
 
 .url-text {
@@ -895,9 +1080,11 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: all 0.2s ease;
 
   &:hover {
     text-decoration: underline;
+    color: #4080ff;
   }
 }
 
@@ -905,9 +1092,58 @@ onMounted(() => {
   padding: 16px 20px;
   background: var(--ops-content-bg);
   border-top: 1px solid var(--ops-border-color);
+  transition: all 0.3s ease;
+
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+  }
+}
+
+.footer-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-start;
+
+  @media (max-width: 1400px) {
+    gap: 6px;
+  }
+
+  @media (max-width: 768px) {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+
+.action-btn {
+  flex: 0 1 auto;
+  min-width: 0;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  @media (max-width: 1400px) {
+    .btn-text {
+      display: none;
+    }
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: center;
+
+    .btn-text {
+      display: inline;
+    }
+  }
 }
 
 .pagination-container {
@@ -915,5 +1151,36 @@ onMounted(() => {
   border-top: 1px solid var(--ops-border-color);
   display: flex;
   justify-content: center;
+  background: linear-gradient(to top, #fafbfc 0%, #ffffff 100%);
+
+  @media (max-width: 768px) {
+    padding: 12px;
+
+    :deep(.arco-pagination) {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+  }
+}
+
+/* 滚动条美化 */
+.websites-grid::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.websites-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.websites-grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.websites-grid::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
 }
 </style>

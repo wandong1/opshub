@@ -212,6 +212,8 @@ services:
       # N8N配置相关
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
       - N8N_RUNNERS_ENABLED=true
+      - N8N_HOST=0.0.0.0
+      - N8N_SECURE_COOKIE=false
     volumes:
       - ./third_party_data/n8n_data:/home/node/.n8n
 
