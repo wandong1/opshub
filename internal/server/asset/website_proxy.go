@@ -95,10 +95,10 @@ func (h *WebsiteProxyHandler) AccessWebsite(c *gin.Context) {
 		return
 	}
 
-	// 返回代理访问信息
+	// 返回代理访问信息（包含站点专用 token）
 	response.Success(c, gin.H{
 		"type":     "internal",
-		"proxyUrl": fmt.Sprintf("/api/v1/websites/%d/proxy", id),
+		"proxyUrl": fmt.Sprintf("/api/v1/websites/%d/proxy/?token=%s", id, website.ProxyToken),
 		"hostId":   onlineHostID,
 	})
 }
@@ -166,14 +166,14 @@ func (h *WebsiteProxyHandler) proxyViaAgent(c *gin.Context, hostID uint, baseURL
 
 	// 构建拨测请求
 	probeReq := &pb.ProbeRequest{
-		RequestId:            uuid.New().String(),
-		ProbeType:            "http",
-		Method:               c.Request.Method,
-		Url:                  fullURL,
-		Headers:              make(map[string]string),
-		Body:                 string(body),
-		Timeout:              30,
-		MaxResponseBodySize:  0, // 0 表示不限制响应体大小（代理场景）
+		RequestId:           uuid.New().String(),
+		ProbeType:           "http",
+		Method:              c.Request.Method,
+		Url:                 fullURL,
+		Headers:             make(map[string]string),
+		Body:                string(body),
+		Timeout:             30,
+		MaxResponseBodySize: 0, // 0 表示不限制响应体大小（代理场景）
 	}
 
 	// 复制请求头

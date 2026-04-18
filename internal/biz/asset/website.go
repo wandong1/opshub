@@ -38,6 +38,18 @@ type Website struct {
 	AccessPassword  string `gorm:"type:varchar(500);comment:访问密码(加密)" json:"accessPassword"`
 	Description     string `gorm:"type:varchar(500);comment:备注" json:"description"`
 	Status          int    `gorm:"type:tinyint;default:1;comment:状态 1:启用 0:禁用" json:"status"`
+
+	// 代理配置字段
+	ProxyStrategy  string `gorm:"type:varchar(20);default:'hybrid';comment:代理策略 minimal/standard/hybrid/aggressive" json:"proxyStrategy"`
+	ProxyWhitelist string `gorm:"type:text;comment:白名单路径(JSON数组)" json:"proxyWhitelist"`
+	ProxyBlacklist string `gorm:"type:text;comment:黑名单路径(JSON数组)" json:"proxyBlacklist"`
+	InjectScript   bool   `gorm:"type:tinyint;default:1;comment:是否注入拦截脚本" json:"injectScript"`
+	RewriteHTML    bool   `gorm:"type:tinyint;default:1;comment:是否重写HTML" json:"rewriteHtml"`
+	RewriteCSS     bool   `gorm:"type:tinyint;default:1;comment:是否重写CSS" json:"rewriteCss"`
+	RewriteJS      bool   `gorm:"type:tinyint;default:0;comment:是否重写JS(保守)" json:"rewriteJs"`
+
+	// 代理访问 Token（安全）
+	ProxyToken string `gorm:"type:varchar(64);uniqueIndex;comment:代理访问Token(UUID)" json:"proxyToken"`
 }
 
 // WebsiteGroup 站点与业务分组关联表
@@ -71,6 +83,15 @@ type WebsiteRequest struct {
 	Status         int      `json:"status"`
 	GroupIDs       []uint   `json:"groupIds"`
 	AgentHostIDs   []uint   `json:"agentHostIds"`
+
+	// 代理配置
+	ProxyStrategy  string `json:"proxyStrategy"`
+	ProxyWhitelist string `json:"proxyWhitelist"`
+	ProxyBlacklist string `json:"proxyBlacklist"`
+	InjectScript   *bool  `json:"injectScript"`   // 使用指针以区分未设置和false
+	RewriteHTML    *bool  `json:"rewriteHtml"`
+	RewriteCSS     *bool  `json:"rewriteCss"`
+	RewriteJS      *bool  `json:"rewriteJs"`
 }
 
 // WebsiteVO 站点VO
@@ -95,11 +116,24 @@ type WebsiteVO struct {
 	AgentHostIDs   []uint   `json:"agentHostIds"`
 	AgentHostNames []string `json:"agentHostNames"`
 	AgentOnline    bool     `json:"agentOnline"` // 是否有在线的Agent
+
+	// 代理配置
+	ProxyStrategy  string `json:"proxyStrategy"`
+	ProxyWhitelist string `json:"proxyWhitelist"`
+	ProxyBlacklist string `json:"proxyBlacklist"`
+	InjectScript   bool   `json:"injectScript"`
+	RewriteHTML    bool   `json:"rewriteHtml"`
+	RewriteCSS     bool   `json:"rewriteCss"`
+	RewriteJS      bool   `json:"rewriteJs"`
+
+	// 代理访问 Token
+	ProxyToken string `json:"proxyToken"`
+	ProxyURL   string `json:"proxyUrl"` // 完整的代理访问 URL
 }
 
 // ToModel 转换为模型
 func (req *WebsiteRequest) ToModel() *Website {
-	return &Website{
+	website := &Website{
 		Name:           req.Name,
 		URL:            req.URL,
 		Icon:           req.Icon,
@@ -111,6 +145,43 @@ func (req *WebsiteRequest) ToModel() *Website {
 		Description:    req.Description,
 		Status:         req.Status,
 	}
+
+	// 代理配置（使用默认值）
+	if req.ProxyStrategy != "" {
+		website.ProxyStrategy = req.ProxyStrategy
+	} else {
+		website.ProxyStrategy = "hybrid" // 默认混合策略
+	}
+
+	website.ProxyWhitelist = req.ProxyWhitelist
+	website.ProxyBlacklist = req.ProxyBlacklist
+
+	// 处理布尔指针（如果未设置则使用默认值）
+	if req.InjectScript != nil {
+		website.InjectScript = *req.InjectScript
+	} else {
+		website.InjectScript = true // 默认启用
+	}
+
+	if req.RewriteHTML != nil {
+		website.RewriteHTML = *req.RewriteHTML
+	} else {
+		website.RewriteHTML = true // 默认启用
+	}
+
+	if req.RewriteCSS != nil {
+		website.RewriteCSS = *req.RewriteCSS
+	} else {
+		website.RewriteCSS = true // 默认启用
+	}
+
+	if req.RewriteJS != nil {
+		website.RewriteJS = *req.RewriteJS
+	} else {
+		website.RewriteJS = false // 默认禁用（保守）
+	}
+
+	return website
 }
 
 // TableName 指定表名

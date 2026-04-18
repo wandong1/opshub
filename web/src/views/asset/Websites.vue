@@ -662,21 +662,15 @@ const handleCopyPassword = async (record: Website) => {
 const handleAccess = async (record: Website) => {
   try {
     const res = await accessWebsite(record.id)
+    console.log('访问站点结果:', res)
     // axios 拦截器已经返回了 data 字段，直接使用 res
     if (res.type === 'external') {
       window.open(res.url, '_blank')
     } else {
       // 内部站点通过代理访问
       if (res.proxyUrl) {
-        // 获取当前的 token
-        const token = localStorage.getItem('token')
-        if (!token) {
-          Message.error('未登录，无法访问内部站点')
-          return
-        }
-        // 构建带 token 的代理 URL
-        const proxyUrl = `${res.proxyUrl}?token=${token}`
-        window.open(proxyUrl, '_blank')
+        // proxyUrl 已经包含了站点专用的 proxy_token，直接使用
+        window.open(res.proxyUrl, '_blank')
       } else {
         Message.error('无法获取代理访问地址')
       }

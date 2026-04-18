@@ -79,6 +79,7 @@ type WebsiteRepo interface {
 	Update(ctx context.Context, website *Website) error
 	Delete(ctx context.Context, id uint) error
 	GetByID(ctx context.Context, id uint) (*Website, error)
+	GetByProxyToken(ctx context.Context, token string) (*Website, error)
 	List(ctx context.Context, page, pageSize int, keyword string, groupIDs []uint, siteType string) ([]*Website, int64, error)
 	GetAll(ctx context.Context) ([]*Website, error)
 
