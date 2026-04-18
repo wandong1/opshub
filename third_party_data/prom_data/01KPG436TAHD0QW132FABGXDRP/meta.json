@@ -1,0 +1,17 @@
+{
+	"ulid": "01KPG436TAHD0QW132FABGXDRP",
+	"minTime": 1776499243151,
+	"maxTime": 1776506400000,
+	"stats": {
+		"numSamples": 258804,
+		"numSeries": 1736,
+		"numChunks": 2527
+	},
+	"compaction": {
+		"level": 1,
+		"sources": [
+			"01KPG436TAHD0QW132FABGXDRP"
+		]
+	},
+	"version": 1
+}

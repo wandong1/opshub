@@ -21,27 +21,27 @@ package asset
 
 import (
 	"github.com/gin-gonic/gin"
-	assetService "github.com/ydcloud-dy/opshub/internal/service/asset"
-	assetdata "github.com/ydcloud-dy/opshub/internal/data/asset"
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
-	rbacService "github.com/ydcloud-dy/opshub/internal/service/rbac"
-	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	rbacbiz "github.com/ydcloud-dy/opshub/internal/biz/rbac"
+	assetdata "github.com/ydcloud-dy/opshub/internal/data/asset"
+	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
+	assetService "github.com/ydcloud-dy/opshub/internal/service/asset"
+	rbacService "github.com/ydcloud-dy/opshub/internal/service/rbac"
 	"gorm.io/gorm"
 )
 
 type HTTPServer struct {
-	assetGroupService            *assetService.AssetGroupService
-	hostService                  *assetService.HostService
-	middlewareService            *assetService.MiddlewareService
-	middlewarePermissionService  *rbacService.MiddlewarePermissionService
-	serviceLabelService          *assetService.ServiceLabelService
-	websiteService               *assetService.WebsiteService
-	websiteProxyHandler          *WebsiteProxyHandler
-	websiteProxyHandlerV2        *WebsiteProxyHandlerV2
-	terminalManager              *TerminalManager
-	terminalAuditHandler         *TerminalAuditHandler
-	authMiddleware               *rbacService.AuthMiddleware
+	assetGroupService           *assetService.AssetGroupService
+	hostService                 *assetService.HostService
+	middlewareService           *assetService.MiddlewareService
+	middlewarePermissionService *rbacService.MiddlewarePermissionService
+	serviceLabelService         *assetService.ServiceLabelService
+	websiteService              *assetService.WebsiteService
+	websiteProxyHandler         *WebsiteProxyHandler
+	websiteProxyHandlerV2       *WebsiteProxyHandlerV2
+	terminalManager             *TerminalManager
+	terminalAuditHandler        *TerminalAuditHandler
+	authMiddleware              *rbacService.AuthMiddleware
 }
 
 func NewHTTPServer(
@@ -419,11 +419,13 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 
 // RegisterPublicRoutes 注册公开路由（无需认证）
 func (s *HTTPServer) RegisterPublicRoutes(router *gin.Engine) {
-	// Web 站点代理路由（无需认证）
+	// Web 站点代理路由（无需认证，使用查询参数 token 验证）
 	if s.websiteProxyHandlerV2 != nil {
+		router.Any("/api/v1/websites/:id/proxy", s.websiteProxyHandlerV2.ProxyWebsiteRequest)
 		router.Any("/api/v1/websites/:id/proxy/*path", s.websiteProxyHandlerV2.ProxyWebsiteRequest)
 	} else if s.websiteProxyHandler != nil {
 		// 兼容：如果 V2 不可用，使用旧版
+		router.Any("/api/v1/websites/:id/proxy", s.websiteProxyHandler.ProxyRequest)
 		router.Any("/api/v1/websites/:id/proxy/*path", s.websiteProxyHandler.ProxyRequest)
 	}
 }

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 OpsHub 是一个插件化的云原生运维管理平台。项目采用单仓库结构，后端使用 Go，前端使用 Vue 3，通过插件架构组织功能模块（Kubernetes 管理、任务执行、监控告警、Nginx 日志分析、SSL 证书管理），各插件可独立启用/禁用。平台支持 Agent 和 SSH 双通道管理主机，Agent 在线时优先使用 gRPC 通道。
 
-## 项目目录结构
+## 项目目录结构示例
 
 ```
 opshub/
@@ -1114,6 +1114,229 @@ describe('HostList', () => {
    - 组件按需加载
    - 图片懒加载
    - 使用虚拟滚动处理大列表
+
+### Agent 代理开发规范
+
+#### HTTP 代理实现规范
+
+**核心原则**：透明代理，保持原始 HTTP 语义
+
+1. **协议定义**（`pkg/agentproto/agent.proto`）：
+   ```protobuf
+   message HttpProxyRequest {
+       string request_id = 1;
+       string method = 2;
+       string url = 3;
+       map<string, string> headers = 4;
+       bytes body = 5;
+       int32 timeout = 6;
+   }
+   
+   message HttpProxyResponse {
+       string request_id = 1;
+       int32 status_code = 2;
+       map<string, string> headers = 3;
+       bytes body = 4;
+       string error = 5;
+   }
+   ```
+
+2. **请求-响应关联**：
+   - 使用 UUID 作为 `request_id`
+   - 通过 `AgentStream.RegisterPending(requestID, chan)` 注册等待通道
+   - 通过 `AgentStream.ResolvePending(requestID, response)` 解析响应
+   - 超时机制：默认 35 秒（Agent 执行超时 30 秒 + 网络延迟 5 秒）
+
+3. **错误处理**：
+   - 区分 gRPC 错误和 HTTP 错误
+   - gRPC 错误：`error != "" && status_code == 0`（Agent 执行失败）
+   - HTTP 错误：`status_code >= 400`（目标服务返回错误，需透传）
+   ```go
+   if proxyResp.Error != "" && proxyResp.StatusCode == 0 {
+       return fmt.Errorf("Agent 执行失败: %s", proxyResp.Error)
+   }
+   // 透传 HTTP 错误响应（包括 4xx、5xx）
+   c.Status(int(proxyResp.StatusCode))
+   c.Writer.Write(proxyResp.Body)
+   ```
+
+4. **消息处理**：
+   - 服务端必须在 `Connect()` 方法的 switch 语句中处理 `HttpProxyResponse`
+   - 调用 `as.ResolvePending(requestID, response)` 唤醒等待的请求
+   ```go
+   case *pb.AgentMessage_HttpProxyResponse:
+       if as != nil {
+           as.ResolvePending(payload.HttpProxyResponse.RequestId, payload.HttpProxyResponse)
+       }
+   ```
+
+#### 数据源 Agent 代理规范
+
+**场景**：平台无法直接访问的边缘数据源（如内网 Prometheus、VictoriaMetrics）
+
+1. **数据源配置**：
+   - `AccessMode` 字段：`direct`（平台直接访问）或 `agent`（通过 Agent 代理）
+   - `AgentHostIDs` 字段：绑定的 Agent 主机 ID 列表（支持多个，实现高可用）
+   - `ProxyToken` 字段：UUID，用于生成无需认证的代理 URL
+
+2. **代理 URL 生成**：
+   ```go
+   proxyURL := fmt.Sprintf("%s/api/v1/alert/proxy/datasource/%s", platformURL, ds.ProxyToken)
+   ```
+   - 公开路由，无需 JWT 认证（通过 `ProxyToken` 验证）
+   - Grafana 等外部系统可直接使用此 URL
+
+3. **路由注册**：
+   ```go
+   // 在 RegisterPublicRoutes() 中注册（不在认证中间件下）
+   func (s *HTTPServer) RegisterPublicRoutes(router *gin.Engine) {
+       proxy := router.Group("/api/v1/alert/proxy/datasource")
+       {
+           proxy.Any("/:token/*path", s.proxyDataSourceRequest)
+       }
+   }
+   ```
+
+4. **Agent 选择策略**：
+   - 遍历 `AgentHostIDs`，选择第一个在线的 Agent
+   - 如果所有 Agent 都离线，返回 503 Service Unavailable
+
+5. **路径处理**：
+   ```go
+   // 移除代理前缀，构建目标 URL
+   proxyPath := c.Request.URL.Path  // /api/v1/alert/proxy/datasource/{token}/api/v1/query
+   targetPath := strings.TrimPrefix(proxyPath, "/api/v1/alert/proxy/datasource/"+token)
+   targetURL := strings.TrimRight(ds.URL, "/") + targetPath
+   ```
+
+#### 站点 Agent 代理规范
+
+**场景**：代理访问内网 Web 站点（支持 Vue/React/Angular 等现代 SPA 应用）
+
+1. **站点配置**：
+   - `Type` 字段：`external`（外部站点）或 `internal`（内部站点，需要代理）
+   - `AgentHostIDs` 字段：绑定的 Agent 主机 ID 列表
+   - `URL` 字段：目标站点的内网地址（如 `http://192.168.1.100:8080`）
+
+2. **代理路由**：
+   ```go
+   // 公开路由，无需认证
+   router.Any("/api/v1/websites/:id/proxy/*path", h.ProxyWebsiteRequest)
+   ```
+
+3. **路径重写策略**：
+   
+   **核心原则**：将绝对路径转换为带代理前缀的路径，相对路径由 `<base>` 标签处理
+   
+   - **HTML 处理**：
+     - 注入 `<base href="/api/v1/websites/{id}/proxy/">` 标签
+     - 重写所有 `src`/`href` 属性中的绝对路径（`/xxx` → `/api/v1/websites/{id}/proxy/xxx`）
+     - 不限制扩展名，支持 SPA 路由（`/dashboard`、`/users/123`）
+   
+   - **CSS 处理**：
+     - 重写 `url()` 中的绝对路径
+     - 保持引号风格（`"`、`'`、无引号）
+   
+   - **JavaScript 处理**（保守策略）：
+     - 只重写明确的资源路径（带扩展名：`.js`、`.css`、`.png`、`.vue` 等）
+     - 不重写无扩展名的路径（避免误伤正则表达式、注释、日期格式等）
+     - 支持的扩展名：`js|css|json|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|webp|mp4|webm|xml|txt|pdf|vue|jsx|tsx`
+
+4. **内容重写实现**：
+   ```go
+   // 判断是否需要重写
+   needRewrite := strings.Contains(contentType, "text/html") ||
+                  strings.Contains(contentType, "text/css") ||
+                  strings.Contains(contentType, "javascript")
+   
+   if needRewrite && len(responseBody) > 0 {
+       // 处理 gzip 压缩
+       if strings.Contains(contentEncoding, "gzip") {
+           responseBody = h.decompressGzip(responseBody)
+           delete(headers, "Content-Encoding")
+       }
+       
+       // 重写路径
+       responseBody = h.rewriteResourcePaths(responseBody, proxyPrefix, contentType)
+       
+       // 更新 Content-Length
+       headers["Content-Length"] = fmt.Sprintf("%d", len(responseBody))
+   }
+   ```
+
+5. **正则表达式规范**：
+   ```go
+   // HTML：匹配所有 src/href 属性
+   reHtmlAttr = regexp.MustCompile(`(src|href)\s*=\s*["']([^"']+)["']`)
+   
+   // CSS：匹配 url()
+   reCssUrl = regexp.MustCompile(`url\(\s*["']?([^"')]+)["']?\s*\)`)
+   
+   // JS：只匹配带资源扩展名的路径（保守策略）
+   jsResourceExts = `\.(js|css|json|png|jpg|...)`
+   reJsResourceDouble = regexp.MustCompile(`"(/[^"]*` + jsResourceExts + `[^"]*)"`)
+   reJsResourceSingle = regexp.MustCompile(`'(/[^']*` + jsResourceExts + `[^']*)'`)
+   ```
+
+6. **过滤规则**：
+   - 跳过已包含代理前缀的路径
+   - 跳过外部链接：`http://`、`https://`、`//`
+   - 跳过特殊协议：`data:`、`javascript:`、`mailto:`、`tel:`、`blob:`、`#`
+   - 跳过相对路径：`./`、`../`（由 `<base>` 标签处理）
+
+7. **gzip 处理**：
+   ```go
+   func (h *WebsiteProxyHandlerV2) decompressGzip(body []byte) ([]byte, error) {
+       reader, err := gzip.NewReader(bytes.NewReader(body))
+       if err != nil {
+           return nil, err
+       }
+       defer reader.Close()
+       return io.ReadAll(reader)
+   }
+   ```
+
+8. **适配器模式**（避免循环导入）：
+   ```go
+   // internal/server/asset/agent_hub_adapter.go
+   type AgentHubInterfaceV2 interface {
+       IsOnline(hostID uint) bool
+       GetByHostID(hostID uint) (AgentStreamInterface, bool)
+       WaitResponse(as AgentStreamInterface, requestID string, timeout time.Duration) (interface{}, error)
+   }
+   
+   // 使用反射调用真实的 AgentHub 方法
+   func NewAgentHubAdapter(realHub interface{}) AgentHubInterfaceV2 {
+       return &AgentHubAdapter{realHub: realHub}
+   }
+   ```
+
+#### Agent 代理最佳实践
+
+1. **超时设置**：
+   - Agent 执行超时：30 秒
+   - 服务端等待超时：35 秒（留 5 秒网络延迟）
+   - 前端请求超时：40 秒
+
+2. **错误日志**：
+   - 记录 `request_id`、`target_url`、`status_code`、`error`
+   - 区分 Agent 错误和 HTTP 错误
+   - 使用结构化日志（zap）
+
+3. **性能优化**：
+   - 使用 gRPC 双向流，避免频繁建立连接
+   - 响应体大小限制：建议 < 10MB
+   - 对于大文件下载，考虑使用分块传输
+
+4. **安全考虑**：
+   - 数据源代理：使用 `ProxyToken` 验证，避免暴露内部 URL
+   - 站点代理：验证站点 ID 和 Agent 绑定关系
+   - 不在日志中记录敏感信息（密码、Token）
+
+5. **测试建议**：
+   - 单元测试：测试路径重写逻辑
+   - 集成测试：测试 Agent 通信和超时处理
+   - 端到端测试：测试完整的代理流程（HTML + CSS + JS + 图片）
 
 ## 命令操作规范
 

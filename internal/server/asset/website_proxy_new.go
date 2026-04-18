@@ -1,30 +1,17 @@
 // Copyright (c) 2026 DYCloud J.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy of
-// this software and associated documentation files (the "Software"), to deal in
-// the Software without restriction, including without limitation the rights to
-// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-// the Software, and to permit persons to whom the Software is furnished to do so,
-// subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-// FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-// IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
 
 package asset
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,19 +24,38 @@ import (
 	"go.uber.org/zap"
 )
 
-// AgentHubInterfaceV2 定义 AgentHub 接口（避免循环导入）
 type AgentHubInterfaceV2 interface {
 	IsOnline(hostID uint) bool
 	GetByHostID(hostID uint) (AgentStreamInterface, bool)
 	WaitResponse(as AgentStreamInterface, requestID string, timeout time.Duration) (interface{}, error)
 }
 
-// AgentStreamInterface 定义 AgentStream 接口
 type AgentStreamInterface interface {
 	Send(msg *pb.ServerMessage) error
 }
 
-// WebsiteProxyHandlerV2 新版站点代理处理器（使用真实的 HTTP 代理）
+// ProxyConfig 代理配置
+type ProxyConfig struct {
+	Strategy     string   // minimal/standard/hybrid/aggressive
+	InjectScript bool     // 是否注入拦截脚本
+	RewriteHTML  bool     // 是否重写 HTML
+	RewriteCSS   bool     // 是否重写 CSS
+	RewriteJS    bool     // 是否重写 JS
+	Whitelist    []string // 白名单路径（正则）
+	Blacklist    []string // 黑名单路径（正则）
+	Debug        bool     // 调试模式
+}
+
+type proxyContext struct {
+	websiteID      uint
+	websiteBaseURL *url.URL
+	targetURL      *url.URL
+	proxyPath      string
+	proxyBasePath  string
+	proxyPrefix    string
+	token          string
+}
+
 type WebsiteProxyHandlerV2 struct {
 	websiteUseCase *asset.WebsiteUseCase
 	agentHub       AgentHubInterfaceV2
@@ -62,29 +68,26 @@ func NewWebsiteProxyHandlerV2(websiteUseCase *asset.WebsiteUseCase, agentHub Age
 	}
 }
 
-// ProxyWebsiteRequest 代理站点请求（完全透明的 HTTP 代理）
 func (h *WebsiteProxyHandlerV2) ProxyWebsiteRequest(c *gin.Context) {
-	// 提取站点 ID
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		response.ErrorCode(c, http.StatusBadRequest, "无效的站点ID")
+	// 从查询参数中提取 token
+	token := c.Query("token")
+	if token == "" {
+		response.ErrorCode(c, http.StatusBadRequest, "缺少代理访问Token")
 		return
 	}
 
-	// 查询站点信息
-	website, err := h.websiteUseCase.GetByID(c.Request.Context(), uint(id))
+	// 通过 token 查找站点
+	website, err := h.websiteUseCase.GetByProxyToken(c.Request.Context(), token)
 	if err != nil {
-		response.ErrorCode(c, http.StatusInternalServerError, "获取站点信息失败: "+err.Error())
+		response.ErrorCode(c, http.StatusNotFound, "站点不存在或Token无效")
 		return
 	}
 
-	// 验证站点类型
 	if website.Type != "internal" {
 		response.ErrorCode(c, http.StatusBadRequest, "仅支持内部站点代理")
 		return
 	}
 
-	// 查找在线的 Agent
 	if len(website.AgentHostIDs) == 0 {
 		response.ErrorCode(c, http.StatusServiceUnavailable, "站点未绑定Agent主机")
 		return
@@ -103,364 +106,594 @@ func (h *WebsiteProxyHandlerV2) ProxyWebsiteRequest(c *gin.Context) {
 		return
 	}
 
-	logger.Debug("站点代理，Agent 选取成功", zap.Uint("agent", onlineHostID))
-
-	// 构建目标 URL
-	proxyPath := c.Request.URL.Path
-	// 移除 /api/v1/websites/:id/proxy 前缀
-	prefix := fmt.Sprintf("/api/v1/websites/%d/proxy", id)
-	targetPath := strings.TrimPrefix(proxyPath, prefix)
-	if targetPath == "" {
-		targetPath = "/"
-	}
-
-	// 使用站点的 URL 加上目标路径（避免双斜杠问题）
-	baseURL := strings.TrimRight(website.URL, "/")
-	targetURL := baseURL + targetPath
-	if c.Request.URL.RawQuery != "" {
-		targetURL += "?" + c.Request.URL.RawQuery
+	proxyCtx, err := h.buildProxyContext(c, website, token)
+	if err != nil {
+		logger.Warn("构建站点代理上下文失败",
+			zap.Uint("website_id", uint(website.ID)),
+			zap.String("website_name", website.Name),
+			zap.Error(err),
+		)
+		response.ErrorCode(c, http.StatusBadRequest, "代理请求路径无效")
+		return
 	}
 
 	logger.Info("站点代理转发请求",
-		zap.Uint("website_id", uint(id)),
+		zap.Uint("website_id", uint(website.ID)),
 		zap.String("website_name", website.Name),
-		zap.String("website_url", website.URL),
-		zap.String("proxy_path", proxyPath),
-		zap.String("target_path", targetPath),
-		zap.String("target_url", targetURL),
+		zap.String("target_url", proxyCtx.targetURL.String()),
 		zap.String("method", c.Request.Method),
-		zap.String("query", c.Request.URL.RawQuery),
 	)
 
-	// 转发请求到 Agent
-	if err := h.forwardToAgent(c, onlineHostID, targetURL, website); err != nil {
-		logger.Error("站点代理转发失败",
-			zap.String("target_url", targetURL),
-			zap.Error(err),
-		)
+	if err := h.forwardToAgent(c, onlineHostID, proxyCtx, website); err != nil {
+		logger.Error("站点代理转发失败", zap.String("target_url", proxyCtx.targetURL.String()), zap.Error(err))
 		response.ErrorCode(c, http.StatusBadGateway, "转发请求失败: "+err.Error())
 		return
 	}
 }
 
-// forwardToAgent 通过 Agent 转发 HTTP 请求
-func (h *WebsiteProxyHandlerV2) forwardToAgent(c *gin.Context, agentHostID uint, targetURL string, website *asset.WebsiteVO) error {
-	logger.Info("开始通过Agent转发站点请求",
-		zap.Uint("agent_host_id", agentHostID),
-		zap.String("target_url", targetURL),
-	)
+func (h *WebsiteProxyHandlerV2) buildProxyContext(c *gin.Context, website *asset.WebsiteVO, token string) (*proxyContext, error) {
+	baseURL, err := url.Parse(strings.TrimRight(website.URL, "/"))
+	if err != nil {
+		return nil, fmt.Errorf("解析站点地址失败: %w", err)
+	}
 
-	// 获取 Agent 连接
+	proxyBasePath := fmt.Sprintf("/api/v1/websites/%d/proxy", website.ID)
+	proxyPath := c.Request.URL.Path
+	targetPath := strings.TrimPrefix(proxyPath, proxyBasePath)
+	if targetPath == "" {
+		targetPath = "/"
+	}
+	if !strings.HasPrefix(targetPath, "/") {
+		targetPath = "/" + targetPath
+	}
+
+	targetURL := baseURL.ResolveReference(&url.URL{Path: targetPath})
+	query := c.Request.URL.Query()
+	query.Del("token")
+	targetURL.RawQuery = query.Encode()
+
+	return &proxyContext{
+		websiteID:      website.ID,
+		websiteBaseURL: baseURL,
+		targetURL:      targetURL,
+		proxyPath:      proxyPath,
+		proxyBasePath:  proxyBasePath,
+		proxyPrefix:    proxyBasePath + "/",
+		token:          token,
+	}, nil
+}
+
+func (h *WebsiteProxyHandlerV2) forwardToAgent(c *gin.Context, agentHostID uint, proxyCtx *proxyContext, website *asset.WebsiteVO) error {
 	as, ok := h.agentHub.GetByHostID(agentHostID)
 	if !ok {
-		logger.Error("Agent未连接", zap.Uint("agent_host_id", agentHostID))
 		return fmt.Errorf("Agent 未连接")
 	}
 
-	// 读取请求体
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		logger.Error("读取请求体失败", zap.Error(err))
 		return fmt.Errorf("读取请求体失败: %w", err)
 	}
 
-	// 构建请求头
-	headers := make(map[string]string)
-	for key, values := range c.Request.Header {
-		if len(values) > 0 {
-			headers[key] = values[0]
-		}
-	}
+	headers := h.buildForwardHeaders(c)
 
-	// 如果站点配置了访问用户名和密码，添加 Basic Auth
-	// if website.AccessUser != "" && website.AccessPassword != "" {
-	// 	auth := website.AccessUser + ":" + website.AccessPassword
-	// 	headers["Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
-	// 	logger.Debug("添加Basic Auth认证", zap.String("username", website.AccessUser))
-	// }
-
-	// 生成请求 ID
 	requestID := uuid.New().String()
-
-	logger.Info("构建HttpProxyRequest",
-		zap.String("request_id", requestID),
-		zap.String("method", c.Request.Method),
-		zap.String("url", targetURL),
-		zap.Int("body_len", len(body)),
-	)
-
-	// 构建 HttpProxyRequest
 	proxyReq := &pb.HttpProxyRequest{
 		RequestId: requestID,
 		Method:    c.Request.Method,
-		Url:       targetURL,
+		Url:       proxyCtx.targetURL.String(),
 		Headers:   headers,
 		Body:      body,
 		Timeout:   30,
 	}
 
-	// 发送给 Agent
 	msg := &pb.ServerMessage{
-		Payload: &pb.ServerMessage_HttpProxyRequest{
-			HttpProxyRequest: proxyReq,
-		},
+		Payload: &pb.ServerMessage_HttpProxyRequest{HttpProxyRequest: proxyReq},
 	}
 
 	if err := as.Send(msg); err != nil {
-		logger.Error("发送请求到Agent失败",
-			zap.String("request_id", requestID),
-			zap.Error(err),
-		)
 		return fmt.Errorf("发送请求失败: %w", err)
 	}
 
-	logger.Info("已发送请求到Agent，等待响应",
-		zap.String("request_id", requestID),
-	)
-
-	// 等待响应
 	result, err := h.agentHub.WaitResponse(as, requestID, 35*time.Second)
 	if err != nil {
-		logger.Error("等待Agent响应超时",
-			zap.String("request_id", requestID),
-			zap.Error(err),
-		)
 		return fmt.Errorf("等待响应超时: %w", err)
 	}
 
 	proxyResp, ok := result.(*pb.HttpProxyResponse)
 	if !ok {
-		logger.Error("响应类型错误",
-			zap.String("request_id", requestID),
-		)
 		return fmt.Errorf("响应类型错误")
 	}
 
-	logger.Info("收到Agent响应",
-		zap.String("request_id", requestID),
-		zap.Int32("status_code", proxyResp.StatusCode),
-		zap.Int("body_len", len(proxyResp.Body)),
-		zap.String("error", proxyResp.Error),
-	)
-
-	// 如果 Agent 返回了错误信息，但没有 HTTP 响应
 	if proxyResp.Error != "" && proxyResp.StatusCode == 0 {
-		logger.Error("Agent执行失败（无HTTP响应）",
-			zap.String("request_id", requestID),
-			zap.String("error", proxyResp.Error),
-		)
 		return fmt.Errorf("Agent 执行失败: %s", proxyResp.Error)
 	}
 
-	// 设置状态码（如果 Agent 没有返回状态码，默认 200）
 	statusCode := int(proxyResp.StatusCode)
 	if statusCode == 0 {
 		statusCode = http.StatusOK
 	}
 
-	// 处理响应体：如果是 HTML/CSS/JS，需要重写资源路径
-	responseBody := proxyResp.Body
-	contentType := proxyResp.Headers["Content-Type"]
-	if contentType == "" {
-		contentType = proxyResp.Headers["content-type"]
-	}
+	responseBody, responseHeaders, _ := h.normalizeProxyResponse(proxyResp, proxyCtx, website)
 
-	// 构建代理前缀
-	proxyPrefix := fmt.Sprintf("/api/v1/websites/%d/proxy", website.ID)
-
-	// 判断是否需要重写内容
-	needRewrite := false
-	if strings.Contains(contentType, "text/html") ||
-		strings.Contains(contentType, "text/css") ||
-		strings.Contains(contentType, "application/javascript") ||
-		strings.Contains(contentType, "text/javascript") {
-		needRewrite = true
-	}
-
-	if needRewrite && len(responseBody) > 0 {
-		logger.Debug("重写响应内容中的资源路径",
-			zap.String("request_id", requestID),
-			zap.String("content_type", contentType),
-			zap.String("proxy_prefix", proxyPrefix),
-		)
-
-		rewrittenBody := h.rewriteResourcePaths(responseBody, proxyPrefix, website.URL)
-		responseBody = rewrittenBody
-
-		// 更新 Content-Length
-		proxyResp.Headers["Content-Length"] = fmt.Sprintf("%d", len(responseBody))
-	}
-
-	// 设置响应头
-	for key, value := range proxyResp.Headers {
+	for key, value := range responseHeaders {
 		c.Header(key, value)
 	}
 
 	c.Status(statusCode)
-
-	// 写入响应体
 	if len(responseBody) > 0 {
 		_, err = c.Writer.Write(responseBody)
 		if err != nil {
-			logger.Error("写入响应体失败",
-				zap.String("request_id", requestID),
-				zap.Error(err),
-			)
-			// 注意：此时响应头已经发送，无法再返回错误
+			logger.Error("写入响应体失败", zap.String("request_id", requestID), zap.Error(err))
 			return err
 		}
 	}
 
-	logger.Info("成功返回响应给客户端",
-		zap.String("request_id", requestID),
-		zap.Int("status_code", statusCode),
-		zap.Int("body_len", len(responseBody)),
-	)
-
-	// 成功写入响应，返回 nil
 	return nil
 }
 
-// rewriteResourcePaths 重写 HTML/CSS/JS 中的资源路径，添加代理前缀
-func (h *WebsiteProxyHandlerV2) rewriteResourcePaths(body []byte, proxyPrefix string, baseURL string) []byte {
+func (h *WebsiteProxyHandlerV2) buildForwardHeaders(c *gin.Context) map[string]string {
+	headers := make(map[string]string)
+	for key, values := range c.Request.Header {
+		if len(values) == 0 {
+			continue
+		}
+
+		if strings.EqualFold(key, "Host") ||
+			strings.EqualFold(key, "Content-Length") ||
+			strings.EqualFold(key, "Connection") ||
+			strings.HasPrefix(strings.ToLower(key), "x-forwarded-") {
+			continue
+		}
+
+		headers[key] = values[0]
+	}
+	return headers
+}
+
+func (h *WebsiteProxyHandlerV2) normalizeProxyResponse(proxyResp *pb.HttpProxyResponse, proxyCtx *proxyContext, website *asset.WebsiteVO) ([]byte, map[string]string, string) {
+	responseHeaders := cloneHeaderMap(proxyResp.Headers)
+	responseBody := proxyResp.Body
+	contentType := firstHeaderValue(responseHeaders, "Content-Type")
+	contentEncoding := firstHeaderValue(responseHeaders, "Content-Encoding")
+
+	h.rewriteResponseHeaders(responseHeaders, proxyCtx)
+
+	config := &ProxyConfig{
+		Strategy:     website.ProxyStrategy,
+		InjectScript: website.InjectScript,
+		RewriteHTML:  website.RewriteHTML,
+		RewriteCSS:   website.RewriteCSS,
+		RewriteJS:    website.RewriteJS,
+		Whitelist:    parseJSONArray(website.ProxyWhitelist),
+		Blacklist:    parseJSONArray(website.ProxyBlacklist),
+		Debug:        false,
+	}
+
+	if h.shouldRewriteBody(contentType) && len(responseBody) > 0 {
+		if strings.Contains(strings.ToLower(contentEncoding), "gzip") {
+			decompressed, err := h.decompressGzip(responseBody)
+			if err == nil {
+				responseBody = decompressed
+				deleteHeader(responseHeaders, "Content-Encoding")
+			}
+		}
+
+		responseBody = h.rewriteResourcePaths(responseBody, proxyCtx.proxyPrefix, proxyCtx.proxyPrefix, proxyCtx.token, contentType, config)
+		setHeader(responseHeaders, "Content-Length", fmt.Sprintf("%d", len(responseBody)))
+	}
+
+	return responseBody, responseHeaders, contentType
+}
+
+func (h *WebsiteProxyHandlerV2) shouldRewriteBody(contentType string) bool {
+	contentType = strings.ToLower(contentType)
+	return strings.Contains(contentType, "text/html") ||
+		strings.Contains(contentType, "text/css") ||
+		strings.Contains(contentType, "application/javascript") ||
+		strings.Contains(contentType, "text/javascript")
+}
+
+func (h *WebsiteProxyHandlerV2) rewriteResponseHeaders(headers map[string]string, proxyCtx *proxyContext) {
+	for key, value := range cloneHeaderMap(headers) {
+		lowerKey := strings.ToLower(key)
+		switch lowerKey {
+		case "content-length", "transfer-encoding":
+			delete(headers, key)
+		case "location":
+			headers[key] = h.rewriteLocationHeader(value, proxyCtx)
+		case "set-cookie":
+			headers[key] = h.rewriteSetCookieHeader(value, proxyCtx.proxyBasePath)
+		}
+	}
+}
+
+func (h *WebsiteProxyHandlerV2) rewriteLocationHeader(location string, proxyCtx *proxyContext) string {
+	if location == "" {
+		return location
+	}
+
+	parsed, err := url.Parse(location)
+	if err != nil {
+		return location
+	}
+
+	if parsed.IsAbs() {
+		if proxyCtx.websiteBaseURL == nil || !sameOriginURL(parsed, proxyCtx.websiteBaseURL) {
+			return location
+		}
+		rewritten := proxyURLFromTargetURL(parsed, proxyCtx)
+		return appendProxyToken(rewritten, proxyCtx.token)
+	}
+
+	if strings.HasPrefix(location, "/") {
+		rewritten := proxyCtx.proxyPrefix + strings.TrimPrefix(location, "/")
+		return appendProxyToken(rewritten, proxyCtx.token)
+	}
+
+	if proxyCtx.targetURL == nil {
+		return location
+	}
+
+	resolved := proxyCtx.targetURL.ResolveReference(parsed)
+	rewritten := proxyURLFromTargetURL(resolved, proxyCtx)
+	return appendProxyToken(rewritten, proxyCtx.token)
+}
+
+func (h *WebsiteProxyHandlerV2) rewriteSetCookieHeader(cookie string, proxyBasePath string) string {
+	cookie = regexp.MustCompile(`(?i);\s*Domain=[^;]+`).ReplaceAllString(cookie, "")
+
+	pathPattern := regexp.MustCompile(`(?i)Path=[^;]+`)
+	if pathPattern.MatchString(cookie) {
+		return pathPattern.ReplaceAllString(cookie, "Path="+proxyBasePath)
+	}
+
+	return cookie + "; Path=" + proxyBasePath
+}
+
+func cloneHeaderMap(src map[string]string) map[string]string {
+	cloned := make(map[string]string, len(src))
+	for key, value := range src {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func firstHeaderValue(headers map[string]string, key string) string {
+	if value, ok := headers[key]; ok {
+		return value
+	}
+	lowerKey := strings.ToLower(key)
+	for headerKey, value := range headers {
+		if strings.ToLower(headerKey) == lowerKey {
+			return value
+		}
+	}
+	return ""
+}
+
+func deleteHeader(headers map[string]string, key string) {
+	delete(headers, key)
+	delete(headers, strings.ToLower(key))
+}
+
+func setHeader(headers map[string]string, key string, value string) {
+	deleteHeader(headers, key)
+	headers[key] = value
+}
+
+func sameOriginURL(a *url.URL, b *url.URL) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
+}
+
+func proxyURLFromTargetURL(target *url.URL, proxyCtx *proxyContext) string {
+	if target == nil {
+		return proxyCtx.proxyBasePath
+	}
+
+	path := target.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+
+	proxyPath := proxyCtx.proxyPrefix + strings.TrimPrefix(path, "/")
+	if strings.HasSuffix(proxyCtx.proxyPrefix, "/") && path == "/" {
+		proxyPath = proxyCtx.proxyPrefix
+	}
+
+	if target.RawQuery != "" {
+		proxyPath += "?" + target.RawQuery
+	}
+	if target.Fragment != "" {
+		proxyPath += "#" + target.Fragment
+	}
+	return proxyPath
+}
+
+// parseJSONArray 解析 JSON 数组字符串
+func parseJSONArray(jsonStr string) []string {
+	if jsonStr == "" {
+		return nil
+	}
+
+	var arr []string
+	if err := json.Unmarshal([]byte(jsonStr), &arr); err != nil {
+		logger.Warn("解析 JSON 数组失败", zap.String("json", jsonStr), zap.Error(err))
+		return nil
+	}
+
+	return arr
+}
+
+var (
+	// HTML 中的 src/href 属性（匹配所有路径，不限扩展名）
+	reHtmlAttr = regexp.MustCompile(`(src|href)\s*=\s*["']([^"']+)["']`)
+
+	// CSS 中的 url()
+	reCssUrl = regexp.MustCompile(`url\(\s*["']?([^"')]+)["']?\s*\)`)
+
+	// JS 中的资源路径（更精确的匹配，只匹配常见的资源扩展名）
+	// 匹配 "/xxx.js" 或 "/xxx.css" 等明确的资源路径
+	jsResourceExts     = `\.(js|css|json|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|webp|mp4|webm|xml|txt|pdf|vue|jsx|tsx)`
+	reJsResourceDouble = regexp.MustCompile(`"(/[^"]*` + jsResourceExts + `[^"]*)"`)
+	reJsResourceSingle = regexp.MustCompile(`'(/[^']*` + jsResourceExts + `[^']*)'`)
+
+	// base 标签
+	reBase = regexp.MustCompile(`<base\s+href=["']([^"']+)["'][^>]*>`)
+
+	// head 标签
+	reHead = regexp.MustCompile(`<head[^>]*>`)
+)
+
+func (h *WebsiteProxyHandlerV2) rewriteResourcePaths(body []byte, proxyPrefix string, proxyBasePath string, token string, contentType string, config *ProxyConfig) []byte {
 	content := string(body)
 
-	// 1. 重写 HTML 中的资源引用
-	// <link href="/css/style.css"> -> <link href="/api/v1/websites/1/proxy/css/style.css">
-	// <script src="/js/app.js"> -> <script src="/api/v1/websites/1/proxy/js/app.js">
-	// <img src="/img/logo.png"> -> <img src="/api/v1/websites/1/proxy/img/logo.png">
-	// <a href="/page"> -> <a href="/api/v1/websites/1/proxy/page">
-
-	// 匹配 href="/xxx" 和 src="/xxx" (绝对路径)
-	reAbsolutePath := regexp.MustCompile(`(href|src)="(/[^"]*)"`)
-	content = reAbsolutePath.ReplaceAllStringFunc(content, func(match string) string {
-		// 提取属性名和路径
-		parts := reAbsolutePath.FindStringSubmatch(match)
-		if len(parts) != 3 {
-			return match
-		}
-		attr := parts[1]  // href 或 src
-		path := parts[2]  // /xxx
-
-		// 跳过已经包含代理前缀的路径
-		if strings.HasPrefix(path, proxyPrefix) {
-			return match
+	switch {
+	case strings.Contains(contentType, "text/html"):
+		// 注入拦截脚本（如果启用）
+		if config.InjectScript {
+			content = h.injectInterceptScript(content, proxyPrefix, token, config.Debug)
 		}
 
-		// 跳过外部链接（http:// 或 https://）
-		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-			return match
+		// 重写 HTML（如果启用）
+		if config.RewriteHTML {
+			content = h.injectBaseTag(content, proxyBasePath)
+			content = reHtmlAttr.ReplaceAllStringFunc(content, func(match string) string {
+				return h.rewriteHtmlAttr(match, proxyPrefix, token, config)
+			})
 		}
 
-		// 跳过特殊协议（data:, javascript:, mailto:, tel:）
-		if strings.HasPrefix(path, "data:") || strings.HasPrefix(path, "javascript:") ||
-			strings.HasPrefix(path, "mailto:") || strings.HasPrefix(path, "tel:") ||
-			strings.HasPrefix(path, "#") {
-			return match
+	case strings.Contains(contentType, "text/css"):
+		if config.RewriteCSS {
+			content = reCssUrl.ReplaceAllStringFunc(content, func(match string) string {
+				return h.rewriteCssUrl(match, proxyPrefix, token, config)
+			})
 		}
 
-		// 添加代理前缀
-		newPath := proxyPrefix + path
-		return fmt.Sprintf(`%s="%s"`, attr, newPath)
+	case strings.Contains(contentType, "javascript"):
+		// 只在启用 JS 重写时才处理（默认禁用）
+		if config.RewriteJS {
+			content = reJsResourceDouble.ReplaceAllStringFunc(content, func(match string) string {
+				return h.rewriteJsPath(match, proxyPrefix, token, `"`, config)
+			})
+			content = reJsResourceSingle.ReplaceAllStringFunc(content, func(match string) string {
+				return h.rewriteJsPath(match, proxyPrefix, token, `'`, config)
+			})
+		}
+	}
+
+	return []byte(content)
+}
+
+func appendProxyToken(rawURL string, token string) string {
+	if rawURL == "" || token == "" {
+		return rawURL
+	}
+
+	if strings.Contains(rawURL, "token=") {
+		return rawURL
+	}
+
+	if strings.Contains(rawURL, "#") {
+		parts := strings.SplitN(rawURL, "#", 2)
+		return appendProxyToken(parts[0], token) + "#" + parts[1]
+	}
+
+	sep := "?"
+	if strings.Contains(rawURL, "?") {
+		sep = "&"
+	}
+	return rawURL + sep + "token=" + token
+}
+
+// injectInterceptScript 注入拦截脚本到 HTML
+func (h *WebsiteProxyHandlerV2) injectInterceptScript(content string, proxyPrefix string, token string, debug bool) string {
+	script := GenerateProxyInterceptScript(proxyPrefix, token, debug)
+
+	// 插入到 <head> 标签之后（优先级最高）
+	content = reHead.ReplaceAllStringFunc(content, func(match string) string {
+		return match + fmt.Sprintf("\n<script>%s</script>", script)
 	})
 
-	// 2. 重写 CSS 中的 url() 引用
-	// url(/fonts/font.woff) -> url(/api/v1/websites/1/proxy/fonts/font.woff)
-	// url('/images/bg.png') -> url('/api/v1/websites/1/proxy/images/bg.png')
-	// url("/images/bg.png") -> url("/api/v1/websites/1/proxy/images/bg.png")
+	return content
+}
 
-	reCSSUrl := regexp.MustCompile(`url\(['"]?(/[^'")]+)['"]?\)`)
-	content = reCSSUrl.ReplaceAllStringFunc(content, func(match string) string {
-		parts := reCSSUrl.FindStringSubmatch(match)
-		if len(parts) != 2 {
-			return match
+// shouldRewritePath 判断是否应该重写路径（根据白名单/黑名单）
+func (h *WebsiteProxyHandlerV2) shouldRewritePath(path string, config *ProxyConfig) bool {
+	// 检查黑名单
+	for _, pattern := range config.Blacklist {
+		if matched, _ := regexp.MatchString(pattern, path); matched {
+			return false
 		}
-		path := parts[1]
+	}
 
-		// 跳过已经包含代理前缀的路径
-		if strings.HasPrefix(path, proxyPrefix) {
-			return match
+	// 检查白名单
+	if len(config.Whitelist) > 0 {
+		for _, pattern := range config.Whitelist {
+			if matched, _ := regexp.MatchString(pattern, path); matched {
+				return true
+			}
 		}
+		return false
+	}
 
-		// 跳过外部链接和特殊协议
-		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") ||
-			strings.HasPrefix(path, "data:") {
-			return match
-		}
+	return true
+}
 
-		// 添加代理前缀
-		newPath := proxyPrefix + path
+// injectBaseTag 注入 base 标签到 HTML head 中
+func (h *WebsiteProxyHandlerV2) injectBaseTag(content string, baseHref string) string {
+	// 如果已有 base 标签，先移除（避免冲突）
+	content = reBase.ReplaceAllString(content, "")
+
+	// 注入 base 标签，使用完整的代理前缀
+	baseTag := fmt.Sprintf(`<base href="%s">`, baseHref)
+
+	// 插入到 <head> 标签之后
+	content = reHead.ReplaceAllStringFunc(content, func(match string) string {
+		return match + baseTag
+	})
+
+	return content
+}
+
+// rewriteHtmlAttr 重写 HTML 属性中的路径
+func (h *WebsiteProxyHandlerV2) rewriteHtmlAttr(match string, proxyPrefix string, token string, config *ProxyConfig) string {
+	parts := reHtmlAttr.FindStringSubmatch(match)
+	if len(parts) != 3 {
+		return match
+	}
+
+	attr := parts[1] // src 或 href
+	path := parts[2]
+
+	// 检查白名单/黑名单
+	if !h.shouldRewritePath(path, config) {
+		return match
+	}
+
+	// 跳过已经包含代理前缀的路径
+	if strings.HasPrefix(path, proxyPrefix) {
+		return match
+	}
+
+	// 跳过外部链接
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") ||
+		strings.HasPrefix(path, "//") {
+		return match
+	}
+
+	// 跳过特殊协议
+	if strings.HasPrefix(path, "data:") || strings.HasPrefix(path, "javascript:") ||
+		strings.HasPrefix(path, "mailto:") || strings.HasPrefix(path, "tel:") ||
+		strings.HasPrefix(path, "#") || strings.HasPrefix(path, "blob:") {
+		return match
+	}
+
+	// 跳过已经是相对路径的
+	if strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		return match
+	}
+
+	// 将绝对路径转换为带代理前缀的路径
+	if strings.HasPrefix(path, "/") {
+		newPath := appendProxyToken(proxyPrefix+strings.TrimPrefix(path, "/"), token)
+		return fmt.Sprintf(`%s="%s"`, attr, newPath)
+	}
+
+	// 相对路径保持不变（base 标签会处理）
+	return match
+}
+
+// rewriteCssUrl 重写 CSS url() 中的路径
+func (h *WebsiteProxyHandlerV2) rewriteCssUrl(match string, proxyPrefix string, token string, config *ProxyConfig) string {
+	parts := reCssUrl.FindStringSubmatch(match)
+	if len(parts) != 2 {
+		return match
+	}
+
+	path := parts[1]
+
+	// 检查白名单/黑名单
+	if !h.shouldRewritePath(path, config) {
+		return match
+	}
+
+	// 跳过已经包含代理前缀的路径
+	if strings.HasPrefix(path, proxyPrefix) {
+		return match
+	}
+
+	// 跳过外部链接和特殊协议
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") ||
+		strings.HasPrefix(path, "//") || strings.HasPrefix(path, "data:") {
+		return match
+	}
+
+	// 跳过相对路径
+	if strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		return match
+	}
+
+	// 将绝对路径转换为带代理前缀的路径
+	if strings.HasPrefix(path, "/") {
+		newPath := appendProxyToken(proxyPrefix+strings.TrimPrefix(path, "/"), token)
 		// 保持原有的引号风格
 		if strings.Contains(match, `"`) {
 			return fmt.Sprintf(`url("%s")`, newPath)
 		} else if strings.Contains(match, `'`) {
 			return fmt.Sprintf(`url('%s')`, newPath)
-		} else {
-			return fmt.Sprintf(`url(%s)`, newPath)
 		}
-	})
+		return fmt.Sprintf(`url(%s)`, newPath)
+	}
 
-	// 3. 重写 JavaScript 中的 fetch/XMLHttpRequest 等 API 调用
-	// fetch('/api/data') -> fetch('/api/v1/websites/1/proxy/api/data')
-	// 注意：这个比较复杂，只处理简单的字符串字面量情况
+	// 相对路径保持不变
+	return match
+}
 
-	// 匹配 fetch('xxx') 或 fetch("xxx")
-	reFetch := regexp.MustCompile(`(fetch|XMLHttpRequest\.open)\s*\(\s*['"]([^'"]+)['"]`)
-	content = reFetch.ReplaceAllStringFunc(content, func(match string) string {
-		parts := reFetch.FindStringSubmatch(match)
-		if len(parts) != 3 {
-			return match
-		}
-		method := parts[1]
-		url := parts[2]
+// rewriteJsPath 重写 JS 中的资源路径
+func (h *WebsiteProxyHandlerV2) rewriteJsPath(match string, proxyPrefix string, token string, quote string, config *ProxyConfig) string {
+	var re *regexp.Regexp
+	if quote == `"` {
+		re = reJsResourceDouble
+	} else {
+		re = reJsResourceSingle
+	}
 
-		// 只处理相对路径（以 / 开头）
-		if !strings.HasPrefix(url, "/") {
-			return match
-		}
-
-		// 跳过已经包含代理前缀的路径
-		if strings.HasPrefix(url, proxyPrefix) {
-			return match
-		}
-
-		// 跳过外部链接
-		if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-			return match
-		}
-
-		// 添加代理前缀
-		newURL := proxyPrefix + url
-		// 保持原有的引号风格
-		if strings.Contains(match, `"`) {
-			return fmt.Sprintf(`%s("%s"`, method, newURL)
-		} else {
-			return fmt.Sprintf(`%s('%s'`, method, newURL)
-		}
-	})
-
-	// 4. 重写 <base> 标签（如果存在）
-	// <base href="/"> -> <base href="/api/v1/websites/1/proxy/">
-	reBase := regexp.MustCompile(`<base\s+href=["']([^"']+)["']`)
-	content = reBase.ReplaceAllStringFunc(content, func(match string) string {
-		parts := reBase.FindStringSubmatch(match)
-		if len(parts) != 2 {
-			return match
-		}
-		href := parts[1]
-
-		// 如果 base href 是 /，替换为代理前缀
-		if href == "/" {
-			return fmt.Sprintf(`<base href="%s/"`, proxyPrefix)
-		}
-
-		// 如果是相对路径，添加代理前缀
-		if strings.HasPrefix(href, "/") && !strings.HasPrefix(href, proxyPrefix) {
-			return fmt.Sprintf(`<base href="%s%s"`, proxyPrefix, href)
-		}
-
+	parts := re.FindStringSubmatch(match)
+	if len(parts) != 2 {
 		return match
-	})
+	}
 
-	return []byte(content)
+	path := parts[1] // /xxx.js
+
+	// 检查白名单/黑名单
+	if !h.shouldRewritePath(path, config) {
+		return match
+	}
+
+	// 跳过已经包含代理前缀的路径
+	if strings.HasPrefix(path, proxyPrefix) {
+		return match
+	}
+
+	// 跳过外部链接
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return match
+	}
+
+	// 将绝对路径转换为带代理前缀的路径
+	newPath := appendProxyToken(proxyPrefix+strings.TrimPrefix(path, "/"), token)
+	return fmt.Sprintf(`%s%s%s`, quote, newPath, quote)
+}
+
+func (h *WebsiteProxyHandlerV2) decompressGzip(body []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("创建gzip reader失败: %w", err)
+	}
+	defer reader.Close()
+
+	return io.ReadAll(reader)
 }

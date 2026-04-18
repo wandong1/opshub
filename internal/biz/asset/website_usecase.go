@@ -117,6 +117,9 @@ func (uc *WebsiteUseCase) Create(ctx context.Context, req *WebsiteRequest) error
 
 	website := req.ToModel()
 
+	// 生成代理访问 Token（UUID）
+	website.ProxyToken = generateProxyToken()
+
 	// 加密敏感信息
 	if website.AccessPassword != "" {
 		encrypted, err := uc.encrypt(website.AccessPassword)
@@ -273,6 +276,19 @@ func (uc *WebsiteUseCase) toVO(ctx context.Context, website *Website) (*WebsiteV
 		Status:        website.Status,
 		CreateTime:    website.CreatedAt.Format(time.DateTime),
 		UpdateTime:    website.UpdatedAt.Format(time.DateTime),
+
+		// 代理配置
+		ProxyStrategy:  website.ProxyStrategy,
+		ProxyWhitelist: website.ProxyWhitelist,
+		ProxyBlacklist: website.ProxyBlacklist,
+		InjectScript:   website.InjectScript,
+		RewriteHTML:    website.RewriteHTML,
+		RewriteCSS:     website.RewriteCSS,
+		RewriteJS:      website.RewriteJS,
+
+		// 代理访问 Token
+		ProxyToken: website.ProxyToken,
+		ProxyURL:   fmt.Sprintf("/api/v1/websites/%d/proxy/?token=%s", website.ID, website.ProxyToken),
 	}
 
 	// 类型文本
@@ -350,4 +366,56 @@ func (uc *WebsiteUseCase) toVOWithPassword(ctx context.Context, website *Website
 	}
 
 	return vo, nil
+}
+
+// generateProxyToken 生成代理访问 Token（UUID）
+func generateProxyToken() string {
+	// 使用 UUID v4 生成随机 token
+	// 格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx（去掉连字符）
+	uuid := make([]byte, 16)
+	_, err := rand.Read(uuid)
+	if err != nil {
+		// 如果随机数生成失败，使用时间戳作为后备
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+
+	// 设置 UUID 版本（v4）和变体
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 // Version 4
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 // Variant 10
+
+	// 转换为十六进制字符串（无连字符）
+	return fmt.Sprintf("%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x",
+		uuid[0], uuid[1], uuid[2], uuid[3],
+		uuid[4], uuid[5], uuid[6], uuid[7],
+		uuid[8], uuid[9], uuid[10], uuid[11],
+		uuid[12], uuid[13], uuid[14], uuid[15])
+}
+
+// RegenerateProxyToken 重新生成代理访问 Token
+func (uc *WebsiteUseCase) RegenerateProxyToken(ctx context.Context, id uint) (string, error) {
+	website, err := uc.websiteRepo.GetByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+
+	// 生成新的 token
+	newToken := generateProxyToken()
+	website.ProxyToken = newToken
+
+	// 更新数据库
+	if err := uc.websiteRepo.Update(ctx, website); err != nil {
+		return "", err
+	}
+
+	return newToken, nil
+}
+
+// GetByProxyToken 通过代理 Token 获取站点
+func (uc *WebsiteUseCase) GetByProxyToken(ctx context.Context, token string) (*WebsiteVO, error) {
+	website, err := uc.websiteRepo.GetByProxyToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	return uc.toVO(ctx, website)
 }

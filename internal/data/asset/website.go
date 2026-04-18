@@ -69,6 +69,15 @@ func (r *websiteRepo) GetByID(ctx context.Context, id uint) (*asset.Website, err
 	return &website, nil
 }
 
+func (r *websiteRepo) GetByProxyToken(ctx context.Context, token string) (*asset.Website, error) {
+	var website asset.Website
+	err := r.db.WithContext(ctx).Where("proxy_token = ?", token).First(&website).Error
+	if err != nil {
+		return nil, err
+	}
+	return &website, nil
+}
+
 func (r *websiteRepo) List(ctx context.Context, page, pageSize int, keyword string, groupIDs []uint, siteType string) ([]*asset.Website, int64, error) {
 	var websites []*asset.Website
 	var total int64
