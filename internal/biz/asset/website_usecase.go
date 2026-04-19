@@ -35,6 +35,7 @@ type WebsiteUseCase struct {
 	assetGroupRepo  AssetGroupRepo
 	hostRepo        HostRepo
 	encryptionKey   []byte
+	accessManager   *WebsiteAccessManager
 }
 
 func NewWebsiteUseCase(websiteRepo WebsiteRepo, assetGroupRepo AssetGroupRepo, hostRepo HostRepo) *WebsiteUseCase {
@@ -45,7 +46,13 @@ func NewWebsiteUseCase(websiteRepo WebsiteRepo, assetGroupRepo AssetGroupRepo, h
 		assetGroupRepo: assetGroupRepo,
 		hostRepo:       hostRepo,
 		encryptionKey:  encryptionKey,
+		accessManager:  nil, // 延迟注入
 	}
+}
+
+// SetAccessManager 设置访问管理器（依赖注入）
+func (uc *WebsiteUseCase) SetAccessManager(manager *WebsiteAccessManager) {
+	uc.accessManager = manager
 }
 
 // encrypt 加密
@@ -288,7 +295,7 @@ func (uc *WebsiteUseCase) toVO(ctx context.Context, website *Website) (*WebsiteV
 
 		// 代理访问 Token
 		ProxyToken: website.ProxyToken,
-		ProxyURL:   fmt.Sprintf("/api/v1/websites/%d/proxy/?token=%s", website.ID, website.ProxyToken),
+		ProxyURL:   fmt.Sprintf("/api/v1/websites/proxy/t/%s", website.ProxyToken),
 	}
 
 	// 类型文本

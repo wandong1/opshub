@@ -43,13 +43,20 @@ type AgentHubInterface interface {
 type WebsiteProxyHandler struct {
 	websiteUseCase *asset.WebsiteUseCase
 	agentHub       AgentHubInterface
+	accessManager  *asset.WebsiteAccessManager
 }
 
 func NewWebsiteProxyHandler(websiteUseCase *asset.WebsiteUseCase, agentHub AgentHubInterface) *WebsiteProxyHandler {
 	return &WebsiteProxyHandler{
 		websiteUseCase: websiteUseCase,
 		agentHub:       agentHub,
+		accessManager:  nil, // 延迟注入
 	}
+}
+
+// SetAccessManager 设置访问管理器（依赖注入）
+func (h *WebsiteProxyHandler) SetAccessManager(manager *asset.WebsiteAccessManager) {
+	h.accessManager = manager
 }
 
 // AccessWebsite 访问站点（内部站点通过Agent代理）
@@ -95,10 +102,52 @@ func (h *WebsiteProxyHandler) AccessWebsite(c *gin.Context) {
 		return
 	}
 
-	// 返回代理访问信息（包含站点专用 token）
+	// 内部站点：签发短期访问凭证
+	if h.accessManager != nil {
+		// 从上下文获取可信用户身份
+		userID, _ := c.Get("user_id")
+		username, _ := c.Get("username")
+
+		var uid uint
+		var uname string
+		if userID != nil {
+			uid, _ = userID.(uint)
+		}
+		if username != nil {
+			uname, _ = username.(string)
+		}
+
+		// 签发访问凭证
+		session, err := h.accessManager.IssueAccessKey(
+			c.Request.Context(),
+			website.ID,
+			website.Name,
+			uid,
+			uname,
+			c.ClientIP(),
+			c.Request.UserAgent(),
+		)
+
+		if err != nil {
+			response.ErrorCode(c, 500, "签发访问凭证失败: "+err.Error())
+			return
+		}
+
+		// 返回短期访问地址
+		response.Success(c, gin.H{
+			"type":      "internal",
+			"proxyUrl":  fmt.Sprintf("/api/v1/websites/proxy/t/%s", session.AccessKey),
+			"hostId":    onlineHostID,
+			"expiresAt": session.ExpiresAt.Unix(),
+			"ttl":       int(session.ExpiresAt.Sub(session.IssuedAt).Seconds()),
+		})
+		return
+	}
+
+	// 降级：如果 accessManager 未注入，使用长期 token（兼容）
 	response.Success(c, gin.H{
 		"type":     "internal",
-		"proxyUrl": fmt.Sprintf("/api/v1/websites/%d/proxy/?token=%s", id, website.ProxyToken),
+		"proxyUrl": fmt.Sprintf("/api/v1/websites/proxy/t/%s", website.ProxyToken),
 		"hostId":   onlineHostID,
 	})
 }

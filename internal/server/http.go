@@ -223,13 +223,18 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	authMiddleware.SetAPIKeyUseCase(apiKeyUseCase)
 
 	// 创建 Audit 服务
-	operationLogService, loginLogService, dataLogService, mwAuditLogService := auditserver.NewAuditServices(s.db)
+	operationLogService, loginLogService, dataLogService, mwAuditLogService, websiteProxyAuditService, websiteProxyAuditWorker, websiteProxyAuditQueryService := auditserver.NewAuditServices(s.db, s.redisClient)
+
+	// 启动网站代理访问审计 worker（如果 Redis 可用）
+	if websiteProxyAuditWorker != nil {
+		websiteProxyAuditWorker.Start()
+	}
 
 	// 创建 System HTTP Server
 	systemHTTPServer := systemserver.NewHTTPServer(configService, apiKeyService)
 
 	// 创建 Asset 服务
-	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo := assetserver.NewAssetServices(s.db)
+	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo, accessManager := assetserver.NewAssetServices(s.db, s.redisClient)
 
 	// 设置Agent命令执行工厂，使主机采集支持Agent方式
 	if s.grpcServer != nil {
@@ -252,9 +257,19 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	if s.grpcServer != nil {
 		// 保留旧版（兼容性）
 		websiteProxyHandler = assetserver.NewWebsiteProxyHandler(websiteUseCase, s.grpcServer.Hub())
+		if accessManager != nil {
+			websiteProxyHandler.SetAccessManager(accessManager)
+		}
 		// 使用新版（真实 HTTP 代理）+ 适配器
 		agentHubAdapter := assetserver.NewAgentHubAdapter(s.grpcServer.Hub())
 		websiteProxyHandlerV2 = assetserver.NewWebsiteProxyHandlerV2(websiteUseCase, agentHubAdapter)
+		if accessManager != nil {
+			websiteProxyHandlerV2.SetAccessManager(accessManager)
+		}
+		// 注入审计服务
+		if websiteProxyAuditService != nil {
+			websiteProxyHandlerV2.SetAuditService(websiteProxyAuditService)
+		}
 	}
 
 	// 设置authMiddleware的assetPermissionRepo
@@ -287,7 +302,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	v1.Use(authMiddleware.RequirePermission())
 	{
 		// Audit 路由
-		auditHTTPServer := auditserver.NewHTTPService(operationLogService, loginLogService, dataLogService, mwAuditLogService)
+		auditHTTPServer := auditserver.NewHTTPService(operationLogService, loginLogService, dataLogService, mwAuditLogService, websiteProxyAuditQueryService)
 		auditHTTPServer.RegisterRoutes(v1)
 
 		// 注册 Asset 路由

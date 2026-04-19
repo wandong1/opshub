@@ -229,6 +229,7 @@ func autoMigrate(db *gorm.DB) error {
 		&auditmodel.SysLoginLog{},
 		&auditmodel.SysDataLog{},
 		&auditmodel.SysMiddlewareAuditLog{},
+		&auditmodel.WebsiteProxyAuditLog{},
 		// 智能巡检相关表
 		&inspectionbiz.ProbeConfig{},
 		&inspectionbiz.ProbeTask{},

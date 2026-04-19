@@ -25,10 +25,11 @@ import (
 )
 
 type HTTPService struct {
-	operationLogService *audit.OperationLogService
-	loginLogService     *audit.LoginLogService
-	dataLogService      *audit.DataLogService
-	mwAuditLogService   *audit.MiddlewareAuditLogService
+	operationLogService           *audit.OperationLogService
+	loginLogService               *audit.LoginLogService
+	dataLogService                *audit.DataLogService
+	mwAuditLogService             *audit.MiddlewareAuditLogService
+	websiteProxyAuditQueryService *audit.WebsiteProxyAuditQueryService
 }
 
 func NewHTTPService(
@@ -36,12 +37,14 @@ func NewHTTPService(
 	loginLogService *audit.LoginLogService,
 	dataLogService *audit.DataLogService,
 	mwAuditLogService *audit.MiddlewareAuditLogService,
+	websiteProxyAuditQueryService *audit.WebsiteProxyAuditQueryService,
 ) *HTTPService {
 	return &HTTPService{
-		operationLogService: operationLogService,
-		loginLogService:     loginLogService,
-		dataLogService:      dataLogService,
-		mwAuditLogService:   mwAuditLogService,
+		operationLogService:           operationLogService,
+		loginLogService:               loginLogService,
+		dataLogService:                dataLogService,
+		mwAuditLogService:             mwAuditLogService,
+		websiteProxyAuditQueryService: websiteProxyAuditQueryService,
 	}
 }
 
@@ -83,6 +86,16 @@ func (s *HTTPService) RegisterRoutes(r *gin.RouterGroup) {
 			mwAuditLogs.GET("", s.mwAuditLogService.ListMiddlewareAuditLogs)
 			mwAuditLogs.DELETE("/:id", s.mwAuditLogService.DeleteMiddlewareAuditLog)
 			mwAuditLogs.POST("/batch-delete", s.mwAuditLogService.DeleteMiddlewareAuditLogsBatch)
+		}
+
+		// 网站代理访问审计日志路由
+		if s.websiteProxyAuditQueryService != nil {
+			websiteProxyAuditLogs := audit.Group("/website-proxy-audit-logs")
+			{
+				websiteProxyAuditLogs.GET("", s.ListWebsiteProxyAuditLogs)
+				websiteProxyAuditLogs.DELETE("/:id", s.DeleteWebsiteProxyAuditLog)
+				websiteProxyAuditLogs.POST("/batch-delete", s.DeleteWebsiteProxyAuditLogsBatch)
+			}
 		}
 	}
 }
