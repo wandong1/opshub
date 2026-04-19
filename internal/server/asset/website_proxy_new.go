@@ -6,6 +6,7 @@ package asset
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	auditbiz "github.com/ydcloud-dy/opshub/internal/biz/audit"
 	"github.com/ydcloud-dy/opshub/internal/biz/asset"
 	pb "github.com/ydcloud-dy/opshub/pkg/agentproto"
 	"github.com/ydcloud-dy/opshub/pkg/logger"
@@ -59,28 +61,74 @@ type proxyContext struct {
 type WebsiteProxyHandlerV2 struct {
 	websiteUseCase *asset.WebsiteUseCase
 	agentHub       AgentHubInterfaceV2
+	accessManager  *asset.WebsiteAccessManager
+	auditService   AuditServiceInterface
+}
+
+type AuditServiceInterface interface {
+	EnqueueAuditEvent(ctx context.Context, event *auditbiz.WebsiteProxyAuditLog)
 }
 
 func NewWebsiteProxyHandlerV2(websiteUseCase *asset.WebsiteUseCase, agentHub AgentHubInterfaceV2) *WebsiteProxyHandlerV2 {
 	return &WebsiteProxyHandlerV2{
 		websiteUseCase: websiteUseCase,
 		agentHub:       agentHub,
+		accessManager:  nil, // 延迟注入
+		auditService:   nil, // 延迟注入
 	}
 }
 
+// SetAccessManager 设置访问管理器（依赖注入）
+func (h *WebsiteProxyHandlerV2) SetAccessManager(manager *asset.WebsiteAccessManager) {
+	h.accessManager = manager
+}
+
+// SetAuditService 设置审计服务（依赖注入）
+func (h *WebsiteProxyHandlerV2) SetAuditService(service AuditServiceInterface) {
+	h.auditService = service
+}
+
 func (h *WebsiteProxyHandlerV2) ProxyWebsiteRequest(c *gin.Context) {
-	// 从查询参数中提取 token
-	token := c.Query("token")
+	// 从路径参数中提取 token
+	token := c.Param("token")
 	if token == "" {
 		response.ErrorCode(c, http.StatusBadRequest, "缺少代理访问Token")
 		return
 	}
 
-	// 通过 token 查找站点
-	website, err := h.websiteUseCase.GetByProxyToken(c.Request.Context(), token)
-	if err != nil {
-		response.ErrorCode(c, http.StatusNotFound, "站点不存在或Token无效")
-		return
+	var website *asset.WebsiteVO
+	var err error
+
+	// 优先尝试从 accessManager 解析短期凭证
+	if h.accessManager != nil {
+		session, sessionErr := h.accessManager.ValidateAccessKey(c.Request.Context(), token)
+		if sessionErr == nil {
+			// 短期凭证有效，通过 websiteID 查找站点
+			website, err = h.websiteUseCase.GetByID(c.Request.Context(), session.WebsiteID)
+			if err != nil {
+				response.ErrorCode(c, http.StatusNotFound, "站点不存在")
+				return
+			}
+
+			// 恢复可信用户身份到上下文（供审计使用）
+			c.Set("access_user_id", session.UserID)
+			c.Set("access_username", session.Username)
+			c.Set("access_website_name", session.WebsiteName)
+		} else {
+			// 短期凭证无效，降级尝试长期 proxy_token
+			website, err = h.websiteUseCase.GetByProxyToken(c.Request.Context(), token)
+			if err != nil {
+				response.ErrorCode(c, http.StatusNotFound, "站点不存在或Token无效")
+				return
+			}
+		}
+	} else {
+		// accessManager 未注入，直接使用长期 token
+		website, err = h.websiteUseCase.GetByProxyToken(c.Request.Context(), token)
+		if err != nil {
+			response.ErrorCode(c, http.StatusNotFound, "站点不存在或Token无效")
+			return
+		}
 	}
 
 	if website.Type != "internal" {
@@ -126,9 +174,20 @@ func (h *WebsiteProxyHandlerV2) ProxyWebsiteRequest(c *gin.Context) {
 
 	if err := h.forwardToAgent(c, onlineHostID, proxyCtx, website); err != nil {
 		logger.Error("站点代理转发失败", zap.String("target_url", proxyCtx.targetURL.String()), zap.Error(err))
+
+		// 记录失败的审计事件
+		h.enqueueAuditEvent(c, website, proxyCtx, onlineHostID, "failed", 0, err.Error())
+
 		response.ErrorCode(c, http.StatusBadGateway, "转发请求失败: "+err.Error())
 		return
 	}
+
+	// 记录成功的审计事件（从响应上下文中获取状态码）
+	statusCode := c.Writer.Status()
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	h.enqueueAuditEvent(c, website, proxyCtx, onlineHostID, "success", statusCode, "")
 }
 
 func (h *WebsiteProxyHandlerV2) buildProxyContext(c *gin.Context, website *asset.WebsiteVO, token string) (*proxyContext, error) {
@@ -137,7 +196,7 @@ func (h *WebsiteProxyHandlerV2) buildProxyContext(c *gin.Context, website *asset
 		return nil, fmt.Errorf("解析站点地址失败: %w", err)
 	}
 
-	proxyBasePath := fmt.Sprintf("/api/v1/websites/%d/proxy", website.ID)
+	proxyBasePath := fmt.Sprintf("/api/v1/websites/proxy/t/%s", token)
 	proxyPath := c.Request.URL.Path
 	targetPath := strings.TrimPrefix(proxyPath, proxyBasePath)
 	if targetPath == "" {
@@ -148,9 +207,7 @@ func (h *WebsiteProxyHandlerV2) buildProxyContext(c *gin.Context, website *asset
 	}
 
 	targetURL := baseURL.ResolveReference(&url.URL{Path: targetPath})
-	query := c.Request.URL.Query()
-	query.Del("token")
-	targetURL.RawQuery = query.Encode()
+	targetURL.RawQuery = c.Request.URL.RawQuery
 
 	return &proxyContext{
 		websiteID:      website.ID,
@@ -278,7 +335,7 @@ func (h *WebsiteProxyHandlerV2) normalizeProxyResponse(proxyResp *pb.HttpProxyRe
 			}
 		}
 
-		responseBody = h.rewriteResourcePaths(responseBody, proxyCtx.proxyPrefix, proxyCtx.proxyPrefix, proxyCtx.token, contentType, config)
+		responseBody = h.rewriteResourcePaths(responseBody, proxyCtx.proxyPrefix, proxyCtx.proxyBasePath, proxyCtx.token, contentType, config)
 		setHeader(responseHeaders, "Content-Length", fmt.Sprintf("%d", len(responseBody)))
 	}
 
@@ -321,13 +378,11 @@ func (h *WebsiteProxyHandlerV2) rewriteLocationHeader(location string, proxyCtx 
 		if proxyCtx.websiteBaseURL == nil || !sameOriginURL(parsed, proxyCtx.websiteBaseURL) {
 			return location
 		}
-		rewritten := proxyURLFromTargetURL(parsed, proxyCtx)
-		return appendProxyToken(rewritten, proxyCtx.token)
+		return proxyURLFromTargetURL(parsed, proxyCtx)
 	}
 
 	if strings.HasPrefix(location, "/") {
-		rewritten := proxyCtx.proxyPrefix + strings.TrimPrefix(location, "/")
-		return appendProxyToken(rewritten, proxyCtx.token)
+		return proxyCtx.proxyPrefix + strings.TrimPrefix(location, "/")
 	}
 
 	if proxyCtx.targetURL == nil {
@@ -335,8 +390,7 @@ func (h *WebsiteProxyHandlerV2) rewriteLocationHeader(location string, proxyCtx 
 	}
 
 	resolved := proxyCtx.targetURL.ResolveReference(parsed)
-	rewritten := proxyURLFromTargetURL(resolved, proxyCtx)
-	return appendProxyToken(rewritten, proxyCtx.token)
+	return proxyURLFromTargetURL(resolved, proxyCtx)
 }
 
 func (h *WebsiteProxyHandlerV2) rewriteSetCookieHeader(cookie string, proxyBasePath string) string {
@@ -459,7 +513,8 @@ func (h *WebsiteProxyHandlerV2) rewriteResourcePaths(body []byte, proxyPrefix st
 
 		// 重写 HTML（如果启用）
 		if config.RewriteHTML {
-			content = h.injectBaseTag(content, proxyBasePath)
+			// 注入 base 标签，使用带尾部斜杠的 proxyPrefix
+			content = h.injectBaseTag(content, proxyPrefix)
 			content = reHtmlAttr.ReplaceAllStringFunc(content, func(match string) string {
 				return h.rewriteHtmlAttr(match, proxyPrefix, token, config)
 			})
@@ -573,8 +628,8 @@ func (h *WebsiteProxyHandlerV2) rewriteHtmlAttr(match string, proxyPrefix string
 		return match
 	}
 
-	// 跳过已经包含代理前缀的路径
-	if strings.HasPrefix(path, proxyPrefix) {
+	// 跳过已经包含代理前缀的路径（检查通用代理路径前缀，避免重复拼接）
+	if strings.HasPrefix(path, "/api/v1/websites/proxy/") {
 		return match
 	}
 
@@ -598,7 +653,7 @@ func (h *WebsiteProxyHandlerV2) rewriteHtmlAttr(match string, proxyPrefix string
 
 	// 将绝对路径转换为带代理前缀的路径
 	if strings.HasPrefix(path, "/") {
-		newPath := appendProxyToken(proxyPrefix+strings.TrimPrefix(path, "/"), token)
+		newPath := proxyPrefix + strings.TrimPrefix(path, "/")
 		return fmt.Sprintf(`%s="%s"`, attr, newPath)
 	}
 
@@ -620,8 +675,8 @@ func (h *WebsiteProxyHandlerV2) rewriteCssUrl(match string, proxyPrefix string, 
 		return match
 	}
 
-	// 跳过已经包含代理前缀的路径
-	if strings.HasPrefix(path, proxyPrefix) {
+	// 跳过已经包含代理前缀的路径（检查通用代理路径前缀，避免重复拼接）
+	if strings.HasPrefix(path, "/api/v1/websites/proxy/") {
 		return match
 	}
 
@@ -638,7 +693,7 @@ func (h *WebsiteProxyHandlerV2) rewriteCssUrl(match string, proxyPrefix string, 
 
 	// 将绝对路径转换为带代理前缀的路径
 	if strings.HasPrefix(path, "/") {
-		newPath := appendProxyToken(proxyPrefix+strings.TrimPrefix(path, "/"), token)
+		newPath := proxyPrefix + strings.TrimPrefix(path, "/")
 		// 保持原有的引号风格
 		if strings.Contains(match, `"`) {
 			return fmt.Sprintf(`url("%s")`, newPath)
@@ -673,8 +728,8 @@ func (h *WebsiteProxyHandlerV2) rewriteJsPath(match string, proxyPrefix string, 
 		return match
 	}
 
-	// 跳过已经包含代理前缀的路径
-	if strings.HasPrefix(path, proxyPrefix) {
+	// 跳过已经包含代理前缀的路径（检查通用代理路径前缀，避免重复拼接）
+	if strings.HasPrefix(path, "/api/v1/websites/proxy/") {
 		return match
 	}
 
@@ -684,7 +739,7 @@ func (h *WebsiteProxyHandlerV2) rewriteJsPath(match string, proxyPrefix string, 
 	}
 
 	// 将绝对路径转换为带代理前缀的路径
-	newPath := appendProxyToken(proxyPrefix+strings.TrimPrefix(path, "/"), token)
+	newPath := proxyPrefix + strings.TrimPrefix(path, "/")
 	return fmt.Sprintf(`%s%s%s`, quote, newPath, quote)
 }
 

@@ -125,6 +125,10 @@
                   <template #icon><icon-export /></template>
                   <span class="btn-text">访问</span>
                 </a-button>
+                <a-button size="small" @click="handleViewAuditLogs(site)" class="action-btn">
+                  <template #icon><icon-history /></template>
+                  <span class="btn-text">审计</span>
+                </a-button>
                 <a-dropdown v-if="site.accessUser" trigger="hover">
                   <a-button size="small" class="action-btn">
                     <template #icon><icon-copy /></template>
@@ -291,6 +295,113 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 审计日志弹窗 -->
+    <a-modal
+      v-model:visible="auditLogVisible"
+      :title="`${currentWebsite?.name} - 访问审计日志`"
+      width="1200px"
+      :footer="false"
+    >
+      <!-- 筛选条件 -->
+      <div class="audit-search-bar">
+        <a-form layout="inline" :model="auditFilters">
+          <a-form-item label="用户名">
+            <a-input
+              v-model="auditFilters.username"
+              placeholder="请输入用户名"
+              allow-clear
+              style="width: 150px;"
+            />
+          </a-form-item>
+          <a-form-item label="状态">
+            <a-select
+              v-model="auditFilters.status"
+              placeholder="全部"
+              allow-clear
+              style="width: 120px;"
+            >
+              <a-option value="success">成功</a-option>
+              <a-option value="failed">失败</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="请求方法">
+            <a-select
+              v-model="auditFilters.method"
+              placeholder="全部"
+              allow-clear
+              style="width: 120px;"
+            >
+              <a-option value="GET">GET</a-option>
+              <a-option value="POST">POST</a-option>
+              <a-option value="PUT">PUT</a-option>
+              <a-option value="DELETE">DELETE</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item>
+            <a-button type="primary" @click="handleAuditSearch">
+              <template #icon><icon-search /></template>
+              搜索
+            </a-button>
+            <a-button @click="handleAuditReset" style="margin-left: 8px;">
+              <template #icon><icon-refresh /></template>
+              重置
+            </a-button>
+          </a-form-item>
+        </a-form>
+      </div>
+
+      <!-- 审计日志表格 -->
+      <a-table
+        :data="auditLogs"
+        :loading="auditLogLoading"
+        :pagination="false"
+        :scroll="{ x: 1000 }"
+        style="margin-top: 16px;"
+      >
+        <template #columns>
+          <a-table-column title="访问时间" data-index="accessTime" width="180">
+            <template #cell="{ record }">
+              {{ new Date(record.accessTime).toLocaleString('zh-CN') }}
+            </template>
+          </a-table-column>
+          <a-table-column title="用户" data-index="username" width="120" />
+          <a-table-column title="请求方法" data-index="requestMethod" width="100">
+            <template #cell="{ record }">
+              <a-tag :color="getMethodColor(record.requestMethod)" size="small">
+                {{ record.requestMethod }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="请求URL" data-index="requestUrl" :ellipsis="true" :tooltip="true" />
+          <a-table-column title="状态" data-index="status" width="100">
+            <template #cell="{ record }">
+              <a-tag :color="record.status === 'success' ? 'green' : 'red'" size="small">
+                {{ record.status === 'success' ? '成功' : '失败' }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="状态码" data-index="statusCode" width="100" />
+          <a-table-column title="请求类型" data-index="requestType" width="100">
+            <template #cell="{ record }">
+              <a-tag size="small">{{ getRequestTypeText(record.requestType) }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="客户端IP" data-index="clientIp" width="140" />
+        </template>
+      </a-table>
+
+      <!-- 分页 -->
+      <div class="audit-pagination">
+        <a-pagination
+          v-model:current="auditPagination.current"
+          v-model:page-size="auditPagination.pageSize"
+          :total="auditPagination.total"
+          :show-total="true"
+          @change="handleAuditPageChange"
+        />
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -309,7 +420,8 @@ import {
   IconRefresh,
   IconCopy,
   IconUser,
-  IconLock
+  IconLock,
+  IconHistory
 } from '@arco-design/web-vue/es/icon'
 import {
   getWebsiteList,
@@ -323,6 +435,7 @@ import {
 } from '@/api/website'
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
+import { getWebsiteProxyAuditLogs } from '@/api/audit'
 
 // 表格相关
 const tableData = ref<Website[]>([])
@@ -678,6 +791,101 @@ const handleAccess = async (record: Website) => {
   } catch (error: any) {
     Message.error('访问失败: ' + error.message)
   }
+}
+
+// 审计日志相关
+const auditLogVisible = ref(false)
+const auditLogLoading = ref(false)
+const currentWebsite = ref<Website | null>(null)
+const auditLogs = ref<any[]>([])
+const auditPagination = reactive({
+  current: 1,
+  pageSize: 20,
+  total: 0
+})
+const auditFilters = reactive({
+  username: '',
+  status: '',
+  method: '',
+  startTime: '',
+  endTime: ''
+})
+
+// 查看审计日志
+const handleViewAuditLogs = (record: Website) => {
+  currentWebsite.value = record
+  auditLogVisible.value = true
+  loadAuditLogs()
+}
+
+// 加载审计日志
+const loadAuditLogs = async () => {
+  if (!currentWebsite.value) return
+
+  auditLogLoading.value = true
+  try {
+    const res = await getWebsiteProxyAuditLogs({
+      page: auditPagination.current,
+      page_size: auditPagination.pageSize,
+      websiteId: currentWebsite.value.id,
+      username: auditFilters.username || undefined,
+      status: auditFilters.status || undefined,
+      method: auditFilters.method || undefined,
+      startTime: auditFilters.startTime || undefined,
+      endTime: auditFilters.endTime || undefined
+    })
+    auditLogs.value = res.data || []
+    auditPagination.total = res.total || 0
+  } catch (error: any) {
+    Message.error('加载审计日志失败: ' + error.message)
+  } finally {
+    auditLogLoading.value = false
+  }
+}
+
+// 审计日志筛选
+const handleAuditSearch = () => {
+  auditPagination.current = 1
+  loadAuditLogs()
+}
+
+// 审计日志重置
+const handleAuditReset = () => {
+  auditFilters.username = ''
+  auditFilters.status = ''
+  auditFilters.method = ''
+  auditFilters.startTime = ''
+  auditFilters.endTime = ''
+  auditPagination.current = 1
+  loadAuditLogs()
+}
+
+// 审计日志分页
+const handleAuditPageChange = (page: number) => {
+  auditPagination.current = page
+  loadAuditLogs()
+}
+
+// 获取请求方法颜色
+const getMethodColor = (method: string) => {
+  const colors: Record<string, string> = {
+    GET: 'blue',
+    POST: 'green',
+    PUT: 'orange',
+    DELETE: 'red',
+    PATCH: 'purple'
+  }
+  return colors[method] || 'gray'
+}
+
+// 获取请求类型文本
+const getRequestTypeText = (type: string) => {
+  const texts: Record<string, string> = {
+    page: '页面',
+    api: 'API',
+    xhr: 'XHR'
+  }
+  return texts[type] || type
 }
 
 onMounted(() => {
@@ -1176,5 +1384,21 @@ onMounted(() => {
 
 .websites-grid::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+}
+
+// 审计日志弹窗样式
+.audit-search-bar {
+  padding: 16px;
+  background: #f7f8fa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.audit-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ops-border-color);
 }
 </style>

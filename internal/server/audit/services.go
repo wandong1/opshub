@@ -20,6 +20,7 @@
 package audit
 
 import (
+	"github.com/redis/go-redis/v9"
 	"github.com/ydcloud-dy/opshub/internal/biz/audit"
 	auditdata "github.com/ydcloud-dy/opshub/internal/data/audit"
 	auditservice "github.com/ydcloud-dy/opshub/internal/service/audit"
@@ -27,29 +28,43 @@ import (
 )
 
 // NewAuditServices 创建审计模块的所有服务
-func NewAuditServices(db *gorm.DB) (
+func NewAuditServices(db *gorm.DB, rdb *redis.Client) (
 	operationLogService *auditservice.OperationLogService,
 	loginLogService *auditservice.LoginLogService,
 	dataLogService *auditservice.DataLogService,
 	mwAuditLogService *auditservice.MiddlewareAuditLogService,
+	websiteProxyAuditService *auditservice.WebsiteProxyAuditService,
+	websiteProxyAuditWorker *auditservice.WebsiteProxyAuditWorker,
+	websiteProxyAuditQueryService *auditservice.WebsiteProxyAuditQueryService,
 ) {
 	// 初始化Repository
 	operationLogRepo := auditdata.NewOperationLogRepo(db)
 	loginLogRepo := auditdata.NewLoginLogRepo(db)
 	dataLogRepo := auditdata.NewDataLogRepo(db)
 	mwAuditLogRepo := auditdata.NewMiddlewareAuditLogRepo(db)
+	websiteProxyAuditRepo := auditdata.NewWebsiteProxyAuditRepo(db)
 
 	// 初始化UseCase
 	operationLogUseCase := audit.NewOperationLogUseCase(operationLogRepo)
 	loginLogUseCase := audit.NewLoginLogUseCase(loginLogRepo)
 	dataLogUseCase := audit.NewDataLogUseCase(dataLogRepo)
 	mwAuditLogUseCase := audit.NewMiddlewareAuditLogUseCase(mwAuditLogRepo)
+	websiteProxyAuditUseCase := audit.NewWebsiteProxyAuditUseCase(websiteProxyAuditRepo)
 
 	// 初始化Service
 	operationLogService = auditservice.NewOperationLogService(operationLogUseCase)
 	loginLogService = auditservice.NewLoginLogService(loginLogUseCase)
 	dataLogService = auditservice.NewDataLogService(dataLogUseCase)
 	mwAuditLogService = auditservice.NewMiddlewareAuditLogService(mwAuditLogUseCase)
+
+	// 初始化网站代理访问审计服务（如果 Redis 可用）
+	if rdb != nil {
+		websiteProxyAuditService = auditservice.NewWebsiteProxyAuditService(websiteProxyAuditUseCase, rdb)
+		websiteProxyAuditWorker = auditservice.NewWebsiteProxyAuditWorker(rdb, db, websiteProxyAuditUseCase)
+	}
+
+	// 查询服务（总是可用）
+	websiteProxyAuditQueryService = auditservice.NewWebsiteProxyAuditQueryService(websiteProxyAuditUseCase)
 
 	return
 }

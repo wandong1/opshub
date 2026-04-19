@@ -50,6 +50,29 @@ export const deleteLoginLogsBatch = (ids: number[]) => {
   return request.post('/api/v1/audit/login-logs/batch-delete', { ids })
 }
 
+// 网站代理访问审计日志相关接口
+export const getWebsiteProxyAuditLogs = (params: {
+  page?: number
+  page_size?: number
+  websiteId?: number
+  websiteName?: string
+  username?: string
+  status?: string
+  method?: string
+  startTime?: string
+  endTime?: string
+}) => {
+  return request.get('/api/v1/audit/website-proxy-audit-logs', { params })
+}
+
+export const deleteWebsiteProxyAuditLog = (id: number) => {
+  return request.delete(`/api/v1/audit/website-proxy-audit-logs/${id}`)
+}
+
+export const deleteWebsiteProxyAuditLogsBatch = (ids: number[]) => {
+  return request.post('/api/v1/audit/website-proxy-audit-logs/batch-delete', { ids })
+}
+
 // 数据日志相关接口
 export const getDataLogList = (params: {
   page?: number

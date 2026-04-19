@@ -21,6 +21,7 @@ package asset
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	rbacbiz "github.com/ydcloud-dy/opshub/internal/biz/rbac"
 	assetdata "github.com/ydcloud-dy/opshub/internal/data/asset"
@@ -419,19 +420,19 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 
 // RegisterPublicRoutes 注册公开路由（无需认证）
 func (s *HTTPServer) RegisterPublicRoutes(router *gin.Engine) {
-	// Web 站点代理路由（无需认证，使用查询参数 token 验证）
+	// Web 站点代理路由（无需认证，使用 path token 验证）
 	if s.websiteProxyHandlerV2 != nil {
-		router.Any("/api/v1/websites/:id/proxy", s.websiteProxyHandlerV2.ProxyWebsiteRequest)
-		router.Any("/api/v1/websites/:id/proxy/*path", s.websiteProxyHandlerV2.ProxyWebsiteRequest)
+		router.Any("/api/v1/websites/proxy/t/:token", s.websiteProxyHandlerV2.ProxyWebsiteRequest)
+		router.Any("/api/v1/websites/proxy/t/:token/*path", s.websiteProxyHandlerV2.ProxyWebsiteRequest)
 	} else if s.websiteProxyHandler != nil {
 		// 兼容：如果 V2 不可用，使用旧版
-		router.Any("/api/v1/websites/:id/proxy", s.websiteProxyHandler.ProxyRequest)
-		router.Any("/api/v1/websites/:id/proxy/*path", s.websiteProxyHandler.ProxyRequest)
+		router.Any("/api/v1/websites/proxy/t/:token", s.websiteProxyHandler.ProxyRequest)
+		router.Any("/api/v1/websites/proxy/t/:token/*path", s.websiteProxyHandler.ProxyRequest)
 	}
 }
 
 // NewAssetServices 创建asset相关的服务
-func NewAssetServices(db *gorm.DB) (
+func NewAssetServices(db *gorm.DB, rdb *redis.Client) (
 	*assetService.AssetGroupService,
 	*assetService.HostService,
 	*assetService.MiddlewareService,
@@ -444,6 +445,7 @@ func NewAssetServices(db *gorm.DB) (
 	assetbiz.ServiceLabelRepo,
 	assetbiz.HostRepo,
 	assetbiz.CredentialRepo,
+	*assetbiz.WebsiteAccessManager,
 ) {
 	// 初始化Repository
 	assetGroupRepo := assetdata.NewAssetGroupRepo(db)
@@ -467,6 +469,13 @@ func NewAssetServices(db *gorm.DB) (
 	serviceLabelUseCase := assetbiz.NewServiceLabelUseCase(serviceLabelRepo)
 	websiteUseCase := assetbiz.NewWebsiteUseCase(websiteRepo, assetGroupRepo, hostRepo)
 
+	// 初始化访问管理器（如果 Redis 可用）
+	var accessManager *assetbiz.WebsiteAccessManager
+	if rdb != nil {
+		accessManager = assetbiz.NewWebsiteAccessManager(rdb)
+		websiteUseCase.SetAccessManager(accessManager)
+	}
+
 	// 初始化Service
 	assetGroupService := assetService.NewAssetGroupService(assetGroupUseCase)
 	hostService := assetService.NewHostService(hostUseCase, credentialUseCase, cloudAccountUseCase, assetPermissionUseCase)
@@ -478,5 +487,5 @@ func NewAssetServices(db *gorm.DB) (
 	// 初始化TerminalManager
 	terminalManager := NewTerminalManager(hostUseCase, db)
 
-	return assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo
+	return assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo, accessManager
 }

@@ -218,23 +218,27 @@ services:
       - ./third_party_data/n8n_data:/home/node/.n8n
 
   nacos:
-    image: nacos/nacos-server:v2.4.0
+    image: nacos/nacos-server:v2.4.2
     container_name: nacos-server
-    environment:
-      - MODE=standalone
-      - SPRING_DATASOURCE_PLATFORM=mysql
-      - MYSQL_SERVICE_HOST=mysql
-      - MYSQL_SERVICE_DB_NAME=nacos_config
-      - MYSQL_SERVICE_PORT=3306
-      - MYSQL_SERVICE_USER=root
-      - MYSQL_SERVICE_PASSWORD=OpsHub@2026
     ports:
+      - "7848:7848"
       - "8848:8848"
       - "9848:9848"
       - "9849:9849"
-    volumes:
-      - ./third_party_data/nacos/data:/home/nacos/data
-      - ./third_party_data/nacos/logs:/home/nacos/logs
+    environment:
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_PORT=3306
+      - JVM_XMX=4g
+      - PREFER_HOST_MODE=hostname
+      - JVM_XMN=1g
+      - MODE=standalone
+      - MYSQL_SERVICE_HOST=172.16.38.1
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=OpsHub@2026
+      - JVM_XMS=4g
+    working_dir: /home/nacos
+    entrypoint: bin/docker-startup.sh 
     restart: always
     networks:
       - opshub-network
