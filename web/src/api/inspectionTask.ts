@@ -1,5 +1,18 @@
 import request from '@/utils/request'
 
+// 巡检项断言覆盖结构
+export interface ItemAssertionOverride {
+  item_id: number
+  assertion_type: string
+  assertion_value: string
+}
+
+// 巡检组业务分组覆盖结构
+export interface GroupBusinessGroupOverride {
+  group_id: number
+  business_group_id: number
+}
+
 // 巡检任务接口
 export interface InspectionTask {
   id: number
@@ -12,6 +25,12 @@ export interface InspectionTask {
   itemIds: number[]
   pushgatewayId?: number
   concurrency: number
+  executionMode?: string
+  agentHostIds?: string
+  businessGroupId?: number
+  customVariables?: string
+  itemAssertionOverrides?: string
+  groupBusinessGroupOverrides?: string
   createdAt: string
   updatedAt: string
 }

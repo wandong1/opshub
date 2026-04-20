@@ -262,3 +262,115 @@ func (h *AgentHub) CloseAll() {
 
 	appLogger.Info("所有Agent连接已关闭")
 }
+
+// SendWsSessionOpen 发送 WebSocket 会话打开请求
+func (h *AgentHub) SendWsSessionOpen(hostID uint, sessionID, url string, headers, params map[string]string, timeout int32, skipVerify bool, proxyURL string) (*pb.WsSessionResult, error) {
+	as, ok := h.GetByHostID(hostID)
+	if !ok {
+		return nil, fmt.Errorf("Agent未连接")
+	}
+
+	msg := &pb.ServerMessage{
+		Payload: &pb.ServerMessage_WsSessionOpen{
+			WsSessionOpen: &pb.WsSessionOpen{
+				SessionId:  sessionID,
+				Url:        url,
+				Headers:    headers,
+				Params:     params,
+				Timeout:    timeout,
+				SkipVerify: skipVerify,
+				ProxyUrl:   proxyURL,
+			},
+		},
+	}
+
+	if err := as.Send(msg); err != nil {
+		return nil, fmt.Errorf("发送 WebSocket 会话打开请求失败: %w", err)
+	}
+
+	// 等待响应
+	result, err := h.WaitResponse(as, sessionID, 35*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	wsResult, ok := result.(*pb.WsSessionResult)
+	if !ok {
+		return nil, fmt.Errorf("响应类型错误")
+	}
+
+	return wsResult, nil
+}
+
+// SendWsSessionAction 发送 WebSocket 会话操作请求
+func (h *AgentHub) SendWsSessionAction(hostID uint, sessionID, actionID, actionType, message string, messageType, readTimeout int32, receiveMode string) (*pb.WsSessionResult, error) {
+	as, ok := h.GetByHostID(hostID)
+	if !ok {
+		return nil, fmt.Errorf("Agent未连接")
+	}
+
+	msg := &pb.ServerMessage{
+		Payload: &pb.ServerMessage_WsSessionAction{
+			WsSessionAction: &pb.WsSessionAction{
+				SessionId:   sessionID,
+				ActionId:    actionID,
+				ActionType:  actionType,
+				Message:     message,
+				MessageType: messageType,
+				ReadTimeout: readTimeout,
+				ReceiveMode: receiveMode,
+			},
+		},
+	}
+
+	if err := as.Send(msg); err != nil {
+		return nil, fmt.Errorf("发送 WebSocket 会话操作请求失败: %w", err)
+	}
+
+	// 等待响应，使用 sessionID:actionID 作为 key
+	key := sessionID + ":" + actionID
+	result, err := h.WaitResponse(as, key, 35*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	wsResult, ok := result.(*pb.WsSessionResult)
+	if !ok {
+		return nil, fmt.Errorf("响应类型错误")
+	}
+
+	return wsResult, nil
+}
+
+// SendWsSessionClose 发送 WebSocket 会话关闭请求
+func (h *AgentHub) SendWsSessionClose(hostID uint, sessionID string) (*pb.WsSessionResult, error) {
+	as, ok := h.GetByHostID(hostID)
+	if !ok {
+		return nil, fmt.Errorf("Agent未连接")
+	}
+
+	msg := &pb.ServerMessage{
+		Payload: &pb.ServerMessage_WsSessionClose{
+			WsSessionClose: &pb.WsSessionClose{
+				SessionId: sessionID,
+			},
+		},
+	}
+
+	if err := as.Send(msg); err != nil {
+		return nil, fmt.Errorf("发送 WebSocket 会话关闭请求失败: %w", err)
+	}
+
+	// 等待响应
+	result, err := h.WaitResponse(as, sessionID, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	wsResult, ok := result.(*pb.WsSessionResult)
+	if !ok {
+		return nil, fmt.Errorf("响应类型错误")
+	}
+
+	return wsResult, nil
+}

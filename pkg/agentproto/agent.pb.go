@@ -34,6 +34,7 @@ type AgentMessage struct {
 	//	*AgentMessage_FileList
 	//	*AgentMessage_ProbeResult
 	//	*AgentMessage_HttpProxyResponse
+	//	*AgentMessage_WsSessionResult
 	Payload       isAgentMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -148,6 +149,15 @@ func (x *AgentMessage) GetHttpProxyResponse() *HttpProxyResponse {
 	return nil
 }
 
+func (x *AgentMessage) GetWsSessionResult() *WsSessionResult {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_WsSessionResult); ok {
+			return x.WsSessionResult
+		}
+	}
+	return nil
+}
+
 type isAgentMessage_Payload interface {
 	isAgentMessage_Payload()
 }
@@ -184,6 +194,10 @@ type AgentMessage_HttpProxyResponse struct {
 	HttpProxyResponse *HttpProxyResponse `protobuf:"bytes,8,opt,name=http_proxy_response,json=httpProxyResponse,proto3,oneof"`
 }
 
+type AgentMessage_WsSessionResult struct {
+	WsSessionResult *WsSessionResult `protobuf:"bytes,9,opt,name=ws_session_result,json=wsSessionResult,proto3,oneof"`
+}
+
 func (*AgentMessage_Register) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Heartbeat) isAgentMessage_Payload() {}
@@ -200,6 +214,8 @@ func (*AgentMessage_ProbeResult) isAgentMessage_Payload() {}
 
 func (*AgentMessage_HttpProxyResponse) isAgentMessage_Payload() {}
 
+func (*AgentMessage_WsSessionResult) isAgentMessage_Payload() {}
+
 // Server → Agent
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -215,6 +231,9 @@ type ServerMessage struct {
 	//	*ServerMessage_CmdRequest
 	//	*ServerMessage_ProbeRequest
 	//	*ServerMessage_HttpProxyRequest
+	//	*ServerMessage_WsSessionOpen
+	//	*ServerMessage_WsSessionAction
+	//	*ServerMessage_WsSessionClose
 	Payload       isServerMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -347,6 +366,33 @@ func (x *ServerMessage) GetHttpProxyRequest() *HttpProxyRequest {
 	return nil
 }
 
+func (x *ServerMessage) GetWsSessionOpen() *WsSessionOpen {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_WsSessionOpen); ok {
+			return x.WsSessionOpen
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetWsSessionAction() *WsSessionAction {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_WsSessionAction); ok {
+			return x.WsSessionAction
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetWsSessionClose() *WsSessionClose {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_WsSessionClose); ok {
+			return x.WsSessionClose
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Payload interface {
 	isServerMessage_Payload()
 }
@@ -391,6 +437,18 @@ type ServerMessage_HttpProxyRequest struct {
 	HttpProxyRequest *HttpProxyRequest `protobuf:"bytes,10,opt,name=http_proxy_request,json=httpProxyRequest,proto3,oneof"`
 }
 
+type ServerMessage_WsSessionOpen struct {
+	WsSessionOpen *WsSessionOpen `protobuf:"bytes,11,opt,name=ws_session_open,json=wsSessionOpen,proto3,oneof"`
+}
+
+type ServerMessage_WsSessionAction struct {
+	WsSessionAction *WsSessionAction `protobuf:"bytes,12,opt,name=ws_session_action,json=wsSessionAction,proto3,oneof"`
+}
+
+type ServerMessage_WsSessionClose struct {
+	WsSessionClose *WsSessionClose `protobuf:"bytes,13,opt,name=ws_session_close,json=wsSessionClose,proto3,oneof"`
+}
+
 func (*ServerMessage_RegisterAck) isServerMessage_Payload() {}
 
 func (*ServerMessage_HeartbeatAck) isServerMessage_Payload() {}
@@ -410,6 +468,12 @@ func (*ServerMessage_CmdRequest) isServerMessage_Payload() {}
 func (*ServerMessage_ProbeRequest) isServerMessage_Payload() {}
 
 func (*ServerMessage_HttpProxyRequest) isServerMessage_Payload() {}
+
+func (*ServerMessage_WsSessionOpen) isServerMessage_Payload() {}
+
+func (*ServerMessage_WsSessionAction) isServerMessage_Payload() {}
+
+func (*ServerMessage_WsSessionClose) isServerMessage_Payload() {}
 
 // ========== 注册 ==========
 type RegisterRequest struct {
@@ -2207,12 +2271,349 @@ func (x *HttpProxyResponse) GetError() string {
 	return ""
 }
 
+// ========== WebSocket 会话管理 ==========
+type WsSessionOpen struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Headers       map[string]string      `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Params        map[string]string      `protobuf:"bytes,4,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Timeout       int32                  `protobuf:"varint,5,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	SkipVerify    bool                   `protobuf:"varint,6,opt,name=skip_verify,json=skipVerify,proto3" json:"skip_verify,omitempty"`
+	ProxyUrl      string                 `protobuf:"bytes,7,opt,name=proxy_url,json=proxyUrl,proto3" json:"proxy_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WsSessionOpen) Reset() {
+	*x = WsSessionOpen{}
+	mi := &file_api_proto_agent_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WsSessionOpen) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WsSessionOpen) ProtoMessage() {}
+
+func (x *WsSessionOpen) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_agent_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WsSessionOpen.ProtoReflect.Descriptor instead.
+func (*WsSessionOpen) Descriptor() ([]byte, []int) {
+	return file_api_proto_agent_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *WsSessionOpen) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *WsSessionOpen) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *WsSessionOpen) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *WsSessionOpen) GetParams() map[string]string {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+func (x *WsSessionOpen) GetTimeout() int32 {
+	if x != nil {
+		return x.Timeout
+	}
+	return 0
+}
+
+func (x *WsSessionOpen) GetSkipVerify() bool {
+	if x != nil {
+		return x.SkipVerify
+	}
+	return false
+}
+
+func (x *WsSessionOpen) GetProxyUrl() string {
+	if x != nil {
+		return x.ProxyUrl
+	}
+	return ""
+}
+
+type WsSessionAction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ActionId      string                 `protobuf:"bytes,2,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
+	ActionType    string                 `protobuf:"bytes,3,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"`     // "send" or "receive"
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`                             // for send
+	MessageType   int32                  `protobuf:"varint,5,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"` // 1=text, 2=binary
+	ReadTimeout   int32                  `protobuf:"varint,6,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"` // for receive (seconds)
+	ReceiveMode   string                 `protobuf:"bytes,7,opt,name=receive_mode,json=receiveMode,proto3" json:"receive_mode,omitempty"`  // "" / "single" = one message; "stream" = collect all until timeout
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WsSessionAction) Reset() {
+	*x = WsSessionAction{}
+	mi := &file_api_proto_agent_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WsSessionAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WsSessionAction) ProtoMessage() {}
+
+func (x *WsSessionAction) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_agent_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WsSessionAction.ProtoReflect.Descriptor instead.
+func (*WsSessionAction) Descriptor() ([]byte, []int) {
+	return file_api_proto_agent_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *WsSessionAction) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *WsSessionAction) GetActionId() string {
+	if x != nil {
+		return x.ActionId
+	}
+	return ""
+}
+
+func (x *WsSessionAction) GetActionType() string {
+	if x != nil {
+		return x.ActionType
+	}
+	return ""
+}
+
+func (x *WsSessionAction) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *WsSessionAction) GetMessageType() int32 {
+	if x != nil {
+		return x.MessageType
+	}
+	return 0
+}
+
+func (x *WsSessionAction) GetReadTimeout() int32 {
+	if x != nil {
+		return x.ReadTimeout
+	}
+	return 0
+}
+
+func (x *WsSessionAction) GetReceiveMode() string {
+	if x != nil {
+		return x.ReceiveMode
+	}
+	return ""
+}
+
+type WsSessionClose struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WsSessionClose) Reset() {
+	*x = WsSessionClose{}
+	mi := &file_api_proto_agent_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WsSessionClose) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WsSessionClose) ProtoMessage() {}
+
+func (x *WsSessionClose) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_agent_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WsSessionClose.ProtoReflect.Descriptor instead.
+func (*WsSessionClose) Descriptor() ([]byte, []int) {
+	return file_api_proto_agent_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *WsSessionClose) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type WsSessionResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ActionId      string                 `protobuf:"bytes,2,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
+	ResultType    string                 `protobuf:"bytes,3,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"` // "open", "action", "close"
+	Success       bool                   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	Latency       float64                `protobuf:"fixed64,6,opt,name=latency,proto3" json:"latency,omitempty"`                                                                         // ms
+	StatusCode    int32                  `protobuf:"varint,7,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`                                                  // for open: HTTP upgrade status
+	Headers       map[string]string      `protobuf:"bytes,8,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // for open: upgrade response headers
+	ResponseBody  string                 `protobuf:"bytes,9,opt,name=response_body,json=responseBody,proto3" json:"response_body,omitempty"`                                             // for receive action
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WsSessionResult) Reset() {
+	*x = WsSessionResult{}
+	mi := &file_api_proto_agent_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WsSessionResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WsSessionResult) ProtoMessage() {}
+
+func (x *WsSessionResult) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_agent_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WsSessionResult.ProtoReflect.Descriptor instead.
+func (*WsSessionResult) Descriptor() ([]byte, []int) {
+	return file_api_proto_agent_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *WsSessionResult) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *WsSessionResult) GetActionId() string {
+	if x != nil {
+		return x.ActionId
+	}
+	return ""
+}
+
+func (x *WsSessionResult) GetResultType() string {
+	if x != nil {
+		return x.ResultType
+	}
+	return ""
+}
+
+func (x *WsSessionResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *WsSessionResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *WsSessionResult) GetLatency() float64 {
+	if x != nil {
+		return x.Latency
+	}
+	return 0
+}
+
+func (x *WsSessionResult) GetStatusCode() int32 {
+	if x != nil {
+		return x.StatusCode
+	}
+	return 0
+}
+
+func (x *WsSessionResult) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *WsSessionResult) GetResponseBody() string {
+	if x != nil {
+		return x.ResponseBody
+	}
+	return ""
+}
+
 var File_api_proto_agent_proto protoreflect.FileDescriptor
 
 const file_api_proto_agent_proto_rawDesc = "" +
 	"\n" +
 	"\x15api/proto/agent.proto\x12\n" +
-	"agentproto\"\x8f\x04\n" +
+	"agentproto\"\xda\x04\n" +
 	"\fAgentMessage\x129\n" +
 	"\bregister\x18\x01 \x01(\v2\x1b.agentproto.RegisterRequestH\x00R\bregister\x12<\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1c.agentproto.HeartbeatRequestH\x00R\theartbeat\x12=\n" +
@@ -2224,8 +2625,9 @@ const file_api_proto_agent_proto_rawDesc = "" +
 	"cmd_result\x18\x05 \x01(\v2\x19.agentproto.CommandResultH\x00R\tcmdResult\x129\n" +
 	"\tfile_list\x18\x06 \x01(\v2\x1a.agentproto.FileListResultH\x00R\bfileList\x12<\n" +
 	"\fprobe_result\x18\a \x01(\v2\x17.agentproto.ProbeResultH\x00R\vprobeResult\x12O\n" +
-	"\x13http_proxy_response\x18\b \x01(\v2\x1d.agentproto.HttpProxyResponseH\x00R\x11httpProxyResponseB\t\n" +
-	"\apayload\"\x9f\x05\n" +
+	"\x13http_proxy_response\x18\b \x01(\v2\x1d.agentproto.HttpProxyResponseH\x00R\x11httpProxyResponse\x12I\n" +
+	"\x11ws_session_result\x18\t \x01(\v2\x1b.agentproto.WsSessionResultH\x00R\x0fwsSessionResultB\t\n" +
+	"\apayload\"\xf7\x06\n" +
 	"\rServerMessage\x12A\n" +
 	"\fregister_ack\x18\x01 \x01(\v2\x1c.agentproto.RegisterResponseH\x00R\vregisterAck\x12D\n" +
 	"\rheartbeat_ack\x18\x02 \x01(\v2\x1d.agentproto.HeartbeatResponseH\x00R\fheartbeatAck\x127\n" +
@@ -2241,7 +2643,10 @@ const file_api_proto_agent_proto_rawDesc = "" +
 	"cmdRequest\x12?\n" +
 	"\rprobe_request\x18\t \x01(\v2\x18.agentproto.ProbeRequestH\x00R\fprobeRequest\x12L\n" +
 	"\x12http_proxy_request\x18\n" +
-	" \x01(\v2\x1c.agentproto.HttpProxyRequestH\x00R\x10httpProxyRequestB\t\n" +
+	" \x01(\v2\x1c.agentproto.HttpProxyRequestH\x00R\x10httpProxyRequest\x12C\n" +
+	"\x0fws_session_open\x18\v \x01(\v2\x19.agentproto.WsSessionOpenH\x00R\rwsSessionOpen\x12I\n" +
+	"\x11ws_session_action\x18\f \x01(\v2\x1b.agentproto.WsSessionActionH\x00R\x0fwsSessionAction\x12F\n" +
+	"\x10ws_session_close\x18\r \x01(\v2\x1a.agentproto.WsSessionCloseH\x00R\x0ewsSessionCloseB\t\n" +
 	"\apayload\"\x98\x01\n" +
 	"\x0fRegisterRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +
@@ -2436,6 +2841,51 @@ const file_api_proto_agent_proto_rawDesc = "" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x90\x03\n" +
+	"\rWsSessionOpen\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12@\n" +
+	"\aheaders\x18\x03 \x03(\v2&.agentproto.WsSessionOpen.HeadersEntryR\aheaders\x12=\n" +
+	"\x06params\x18\x04 \x03(\v2%.agentproto.WsSessionOpen.ParamsEntryR\x06params\x12\x18\n" +
+	"\atimeout\x18\x05 \x01(\x05R\atimeout\x12\x1f\n" +
+	"\vskip_verify\x18\x06 \x01(\bR\n" +
+	"skipVerify\x12\x1b\n" +
+	"\tproxy_url\x18\a \x01(\tR\bproxyUrl\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf1\x01\n" +
+	"\x0fWsSessionAction\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
+	"\taction_id\x18\x02 \x01(\tR\bactionId\x12\x1f\n" +
+	"\vaction_type\x18\x03 \x01(\tR\n" +
+	"actionType\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12!\n" +
+	"\fmessage_type\x18\x05 \x01(\x05R\vmessageType\x12!\n" +
+	"\fread_timeout\x18\x06 \x01(\x05R\vreadTimeout\x12!\n" +
+	"\freceive_mode\x18\a \x01(\tR\vreceiveMode\"/\n" +
+	"\x0eWsSessionClose\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"\xfe\x02\n" +
+	"\x0fWsSessionResult\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
+	"\taction_id\x18\x02 \x01(\tR\bactionId\x12\x1f\n" +
+	"\vresult_type\x18\x03 \x01(\tR\n" +
+	"resultType\x12\x18\n" +
+	"\asuccess\x18\x04 \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\x12\x18\n" +
+	"\alatency\x18\x06 \x01(\x01R\alatency\x12\x1f\n" +
+	"\vstatus_code\x18\a \x01(\x05R\n" +
+	"statusCode\x12B\n" +
+	"\aheaders\x18\b \x03(\v2(.agentproto.WsSessionResult.HeadersEntryR\aheaders\x12#\n" +
+	"\rresponse_body\x18\t \x01(\tR\fresponseBody\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012N\n" +
 	"\bAgentHub\x12B\n" +
 	"\aConnect\x12\x18.agentproto.AgentMessage\x1a\x19.agentproto.ServerMessage(\x010\x01B-Z+github.com/ydcloud-dy/opshub/pkg/agentprotob\x06proto3"
@@ -2452,7 +2902,7 @@ func file_api_proto_agent_proto_rawDescGZIP() []byte {
 	return file_api_proto_agent_proto_rawDescData
 }
 
-var file_api_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_api_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_api_proto_agent_proto_goTypes = []any{
 	(*AgentMessage)(nil),         // 0: agentproto.AgentMessage
 	(*ServerMessage)(nil),        // 1: agentproto.ServerMessage
@@ -2477,11 +2927,18 @@ var file_api_proto_agent_proto_goTypes = []any{
 	(*ProbeAssertionResult)(nil), // 20: agentproto.ProbeAssertionResult
 	(*HttpProxyRequest)(nil),     // 21: agentproto.HttpProxyRequest
 	(*HttpProxyResponse)(nil),    // 22: agentproto.HttpProxyResponse
-	nil,                          // 23: agentproto.ProbeRequest.HeadersEntry
-	nil,                          // 24: agentproto.ProbeRequest.ParamsEntry
-	nil,                          // 25: agentproto.ProbeResult.ResponseHeadersEntry
-	nil,                          // 26: agentproto.HttpProxyRequest.HeadersEntry
-	nil,                          // 27: agentproto.HttpProxyResponse.HeadersEntry
+	(*WsSessionOpen)(nil),        // 23: agentproto.WsSessionOpen
+	(*WsSessionAction)(nil),      // 24: agentproto.WsSessionAction
+	(*WsSessionClose)(nil),       // 25: agentproto.WsSessionClose
+	(*WsSessionResult)(nil),      // 26: agentproto.WsSessionResult
+	nil,                          // 27: agentproto.ProbeRequest.HeadersEntry
+	nil,                          // 28: agentproto.ProbeRequest.ParamsEntry
+	nil,                          // 29: agentproto.ProbeResult.ResponseHeadersEntry
+	nil,                          // 30: agentproto.HttpProxyRequest.HeadersEntry
+	nil,                          // 31: agentproto.HttpProxyResponse.HeadersEntry
+	nil,                          // 32: agentproto.WsSessionOpen.HeadersEntry
+	nil,                          // 33: agentproto.WsSessionOpen.ParamsEntry
+	nil,                          // 34: agentproto.WsSessionResult.HeadersEntry
 }
 var file_api_proto_agent_proto_depIdxs = []int32{
 	2,  // 0: agentproto.AgentMessage.register:type_name -> agentproto.RegisterRequest
@@ -2492,31 +2949,38 @@ var file_api_proto_agent_proto_depIdxs = []int32{
 	13, // 5: agentproto.AgentMessage.file_list:type_name -> agentproto.FileListResult
 	19, // 6: agentproto.AgentMessage.probe_result:type_name -> agentproto.ProbeResult
 	22, // 7: agentproto.AgentMessage.http_proxy_response:type_name -> agentproto.HttpProxyResponse
-	3,  // 8: agentproto.ServerMessage.register_ack:type_name -> agentproto.RegisterResponse
-	5,  // 9: agentproto.ServerMessage.heartbeat_ack:type_name -> agentproto.HeartbeatResponse
-	6,  // 10: agentproto.ServerMessage.term_open:type_name -> agentproto.TerminalOpen
-	7,  // 11: agentproto.ServerMessage.term_input:type_name -> agentproto.TerminalInput
-	9,  // 12: agentproto.ServerMessage.term_resize:type_name -> agentproto.TerminalResize
-	10, // 13: agentproto.ServerMessage.term_close:type_name -> agentproto.TerminalClose
-	11, // 14: agentproto.ServerMessage.file_request:type_name -> agentproto.FileRequest
-	15, // 15: agentproto.ServerMessage.cmd_request:type_name -> agentproto.CommandRequest
-	17, // 16: agentproto.ServerMessage.probe_request:type_name -> agentproto.ProbeRequest
-	21, // 17: agentproto.ServerMessage.http_proxy_request:type_name -> agentproto.HttpProxyRequest
-	14, // 18: agentproto.FileListResult.files:type_name -> agentproto.FileInfo
-	23, // 19: agentproto.ProbeRequest.headers:type_name -> agentproto.ProbeRequest.HeadersEntry
-	24, // 20: agentproto.ProbeRequest.params:type_name -> agentproto.ProbeRequest.ParamsEntry
-	18, // 21: agentproto.ProbeRequest.assertions:type_name -> agentproto.ProbeAssertion
-	25, // 22: agentproto.ProbeResult.response_headers:type_name -> agentproto.ProbeResult.ResponseHeadersEntry
-	20, // 23: agentproto.ProbeResult.assertion_results:type_name -> agentproto.ProbeAssertionResult
-	26, // 24: agentproto.HttpProxyRequest.headers:type_name -> agentproto.HttpProxyRequest.HeadersEntry
-	27, // 25: agentproto.HttpProxyResponse.headers:type_name -> agentproto.HttpProxyResponse.HeadersEntry
-	0,  // 26: agentproto.AgentHub.Connect:input_type -> agentproto.AgentMessage
-	1,  // 27: agentproto.AgentHub.Connect:output_type -> agentproto.ServerMessage
-	27, // [27:28] is the sub-list for method output_type
-	26, // [26:27] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	26, // 8: agentproto.AgentMessage.ws_session_result:type_name -> agentproto.WsSessionResult
+	3,  // 9: agentproto.ServerMessage.register_ack:type_name -> agentproto.RegisterResponse
+	5,  // 10: agentproto.ServerMessage.heartbeat_ack:type_name -> agentproto.HeartbeatResponse
+	6,  // 11: agentproto.ServerMessage.term_open:type_name -> agentproto.TerminalOpen
+	7,  // 12: agentproto.ServerMessage.term_input:type_name -> agentproto.TerminalInput
+	9,  // 13: agentproto.ServerMessage.term_resize:type_name -> agentproto.TerminalResize
+	10, // 14: agentproto.ServerMessage.term_close:type_name -> agentproto.TerminalClose
+	11, // 15: agentproto.ServerMessage.file_request:type_name -> agentproto.FileRequest
+	15, // 16: agentproto.ServerMessage.cmd_request:type_name -> agentproto.CommandRequest
+	17, // 17: agentproto.ServerMessage.probe_request:type_name -> agentproto.ProbeRequest
+	21, // 18: agentproto.ServerMessage.http_proxy_request:type_name -> agentproto.HttpProxyRequest
+	23, // 19: agentproto.ServerMessage.ws_session_open:type_name -> agentproto.WsSessionOpen
+	24, // 20: agentproto.ServerMessage.ws_session_action:type_name -> agentproto.WsSessionAction
+	25, // 21: agentproto.ServerMessage.ws_session_close:type_name -> agentproto.WsSessionClose
+	14, // 22: agentproto.FileListResult.files:type_name -> agentproto.FileInfo
+	27, // 23: agentproto.ProbeRequest.headers:type_name -> agentproto.ProbeRequest.HeadersEntry
+	28, // 24: agentproto.ProbeRequest.params:type_name -> agentproto.ProbeRequest.ParamsEntry
+	18, // 25: agentproto.ProbeRequest.assertions:type_name -> agentproto.ProbeAssertion
+	29, // 26: agentproto.ProbeResult.response_headers:type_name -> agentproto.ProbeResult.ResponseHeadersEntry
+	20, // 27: agentproto.ProbeResult.assertion_results:type_name -> agentproto.ProbeAssertionResult
+	30, // 28: agentproto.HttpProxyRequest.headers:type_name -> agentproto.HttpProxyRequest.HeadersEntry
+	31, // 29: agentproto.HttpProxyResponse.headers:type_name -> agentproto.HttpProxyResponse.HeadersEntry
+	32, // 30: agentproto.WsSessionOpen.headers:type_name -> agentproto.WsSessionOpen.HeadersEntry
+	33, // 31: agentproto.WsSessionOpen.params:type_name -> agentproto.WsSessionOpen.ParamsEntry
+	34, // 32: agentproto.WsSessionResult.headers:type_name -> agentproto.WsSessionResult.HeadersEntry
+	0,  // 33: agentproto.AgentHub.Connect:input_type -> agentproto.AgentMessage
+	1,  // 34: agentproto.AgentHub.Connect:output_type -> agentproto.ServerMessage
+	34, // [34:35] is the sub-list for method output_type
+	33, // [33:34] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_agent_proto_init() }
@@ -2533,6 +2997,7 @@ func file_api_proto_agent_proto_init() {
 		(*AgentMessage_FileList)(nil),
 		(*AgentMessage_ProbeResult)(nil),
 		(*AgentMessage_HttpProxyResponse)(nil),
+		(*AgentMessage_WsSessionResult)(nil),
 	}
 	file_api_proto_agent_proto_msgTypes[1].OneofWrappers = []any{
 		(*ServerMessage_RegisterAck)(nil),
@@ -2545,6 +3010,9 @@ func file_api_proto_agent_proto_init() {
 		(*ServerMessage_CmdRequest)(nil),
 		(*ServerMessage_ProbeRequest)(nil),
 		(*ServerMessage_HttpProxyRequest)(nil),
+		(*ServerMessage_WsSessionOpen)(nil),
+		(*ServerMessage_WsSessionAction)(nil),
+		(*ServerMessage_WsSessionClose)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2552,7 +3020,7 @@ func file_api_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_agent_proto_rawDesc), len(file_api_proto_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

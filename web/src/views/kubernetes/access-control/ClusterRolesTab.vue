@@ -144,7 +144,7 @@ const handleEdit = async (row: ClusterRoleInfo) => {
   isCreateMode.value = false
 
   try {
-    const token = localStorage.getItem('token') || ''
+    const token = localStorage.getItem('srehubtoken') || ''
     const response: any = await axios.get(
       `/api/v1/plugins/kubernetes/resources/clusterroles/${row.name}/yaml`,
       {

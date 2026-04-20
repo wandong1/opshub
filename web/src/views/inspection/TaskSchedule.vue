@@ -149,11 +149,18 @@
         <!-- 巡检任务配置 -->
         <template v-if="formData.taskType === 'inspection'">
           <a-form-item label="巡检组" field="inspectionGroupIds">
-            <a-select v-model="formData.inspectionGroupIds" multiple allow-search placeholder="选择巡检组（可多选）" style="width: 100%;" @change="handleInspectionGroupChange">
-              <a-option v-for="g in inspectionGroupOptions" :key="g.id" :label="g.name" :value="g.id">
-                {{ g.name }} <span style="float: right; color: var(--ops-text-tertiary); font-size: 12px;">{{ g.itemCount || 0 }} 个巡检项</span>
-              </a-option>
-            </a-select>
+            <div style="display: flex; gap: 8px; width: 100%;">
+              <a-select v-model="formData.inspectionGroupIds" multiple allow-search placeholder="选择巡检组（可多选）" style="flex: 1;" @change="handleInspectionGroupChange">
+                <a-option v-for="g in inspectionGroupOptions" :key="g.id" :label="g.name" :value="g.id">
+                  {{ g.name }} <span style="float: right; color: var(--ops-text-tertiary); font-size: 12px;">{{ g.itemCount || 0 }} 个巡检项</span>
+                </a-option>
+              </a-select>
+              <a-button v-if="formData.inspectionGroupIds.length > 0" size="small" @click="handleConfigureGroups">
+                <template #icon><icon-settings /></template>
+                配置巡检组
+                <a-badge v-if="getConfigCount() > 0" :count="getConfigCount()" :offset="[5, 0]" />
+              </a-button>
+            </div>
           </a-form-item>
           <a-form-item label="指定巡检项" v-if="formData.inspectionGroupIds.length > 0">
             <a-select v-model="formData.inspectionItemIds" multiple allow-search placeholder="不选则执行所有巡检项" style="width: 100%;">
@@ -262,6 +269,94 @@
       </template>
     </a-modal>
 
+    <!-- 巡检组配置弹窗 -->
+    <a-modal v-model:visible="groupConfigModalVisible" title="巡检组配置" :width="1200" :footer="false" @cancel="groupConfigModalVisible = false">
+      <a-alert type="info" style="margin-bottom: 16px;">
+        为特定巡检组设置配置覆盖，仅在当前任务中生效，不影响原始巡检组和巡检项配置
+      </a-alert>
+
+      <a-collapse :default-active-key="formData.inspectionGroupIds">
+        <a-collapse-item v-for="group in selectedGroups" :key="group.id" :header="group.name">
+          <!-- 业务分组覆盖配置 -->
+          <a-card title="业务分组配置" :bordered="false" style="margin-bottom: 16px;">
+            <a-form layout="inline">
+              <a-form-item label="原始业务分组">
+                <a-tag v-if="group.group_ids && group.group_ids.length > 0">
+                  {{ getBusinessGroupNames(group.group_ids) }}
+                </a-tag>
+                <span v-else style="color: var(--ops-text-tertiary);">未配置</span>
+              </a-form-item>
+
+              <a-form-item label="覆盖为">
+                <a-select v-model="groupBusinessGroupOverrides[group.id]" placeholder="不覆盖" allow-clear style="width: 300px;">
+                  <a-option v-for="bg in groupOptions" :key="bg.id" :value="bg.id">
+                    {{ bg.name }}
+                  </a-option>
+                </a-select>
+              </a-form-item>
+            </a-form>
+          </a-card>
+
+          <!-- 断言覆盖配置 -->
+          <a-card title="断言覆盖配置" :bordered="false">
+            <a-button type="primary" size="small" style="margin-bottom: 12px;" @click="loadItemsForGroup(group.id)">
+              <template #icon><icon-edit /></template>
+              配置断言覆盖
+            </a-button>
+
+            <a-tag v-if="getAssertionOverrideCountForGroup(group.id) > 0" color="blue">
+              已配置 {{ getAssertionOverrideCountForGroup(group.id) }} 项
+            </a-tag>
+          </a-card>
+        </a-collapse-item>
+      </a-collapse>
+
+      <div style="text-align: right; margin-top: 16px;">
+        <a-button @click="groupConfigModalVisible = false">关闭</a-button>
+      </div>
+    </a-modal>
+
+    <!-- 断言覆盖详细配置弹窗（嵌套弹窗） -->
+    <a-modal v-model:visible="assertionOverrideModalVisible" :title="`断言覆盖配置 - ${currentGroupName}`" :width="900" @ok="handleSaveAssertionOverrides" @cancel="assertionOverrideModalVisible = false">
+      <a-table :data="itemsForOverride" :pagination="false" :bordered="{ cell: true }">
+        <template #columns>
+          <a-table-column title="巡检项" data-index="name" :width="200" />
+
+          <a-table-column title="原始断言" :width="250">
+            <template #cell="{ record }">
+              <span v-if="record.assertionType">
+                {{ getAssertionTypeLabel(record.assertionType) }} : {{ record.assertionValue }}
+              </span>
+              <span v-else style="color: var(--ops-text-tertiary);">无断言</span>
+            </template>
+          </a-table-column>
+
+          <a-table-column title="覆盖类型" :width="180">
+            <template #cell="{ record }">
+              <a-select v-model="assertionOverrides[record.id].type" placeholder="不覆盖" allow-clear size="small">
+                <a-option value="">禁用断言</a-option>
+                <a-option value="gt">大于 (>)</a-option>
+                <a-option value="gte">大于等于 (>=)</a-option>
+                <a-option value="lt">小于 (<)</a-option>
+                <a-option value="lte">小于等于 (<=)</a-option>
+                <a-option value="eq">等于 (==)</a-option>
+                <a-option value="contains">包含</a-option>
+                <a-option value="not_contains">不包含</a-option>
+                <a-option value="regex">正则匹配</a-option>
+                <a-option value="not_regex">正则不匹配</a-option>
+              </a-select>
+            </template>
+          </a-table-column>
+
+          <a-table-column title="覆盖值">
+            <template #cell="{ record }">
+              <a-input v-model="assertionOverrides[record.id].value" placeholder="断言值" size="small" :disabled="!assertionOverrides[record.id].type" />
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
+    </a-modal>
+
     <!-- 需求二：立即运行同步结果抽屉 -->
     <a-drawer v-model:visible="syncResultVisible" title="立即运行结果" :width="1260" unmount-on-close>
       <div v-if="syncRunning" style="text-align:center;padding:60px 0;">
@@ -327,6 +422,9 @@
                       <div style="font-size: 12px;">
                         <!-- 执行配置 -->
                         <a-descriptions :column="1" size="small" bordered style="margin-bottom: 8px;">
+                          <a-descriptions-item v-if="record.business_group" label="业务分组">
+                            {{ record.business_group }}
+                          </a-descriptions-item>
                           <a-descriptions-item v-if="record.command" label="执行命令">
                             <pre class="code-block-inline">{{ record.command }}</pre>
                           </a-descriptions-item>
@@ -540,10 +638,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
-import { IconSchedule, IconSearch, IconRefresh, IconPlus, IconEdit, IconDelete, IconPoweroff, IconPlayArrow, IconStop, IconEye, IconCheckCircleFill, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
+import { IconSchedule, IconSearch, IconRefresh, IconPlus, IconEdit, IconDelete, IconPoweroff, IconPlayArrow, IconStop, IconEye, IconCheckCircleFill, IconExclamationCircleFill, IconSettings } from '@arco-design/web-vue/es/icon'
 import { getTaskList, createTask, updateTask, deleteTask, toggleTask, getTaskResults, getProbeList, getPushgatewayList, PROBE_CATEGORIES, CATEGORY_LABEL_MAP } from '@/api/networkProbe'
-import { getAllInspectionGroups, getInspectionItems } from '@/api/inspectionManagement'
-import { getInspectionTasks, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults, runInspectionTask, stopInspectionTask, runInspectionTaskSync } from '@/api/inspectionTask'
+import { getAllInspectionGroups, getInspectionItems, getInspectionGroup } from '@/api/inspectionManagement'
+import { getInspectionTasks, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults, runInspectionTask, stopInspectionTask, runInspectionTaskSync, type ItemAssertionOverride, type GroupBusinessGroupOverride } from '@/api/inspectionTask'
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
 import { getAgentStatuses } from '@/api/agent'
@@ -563,6 +661,21 @@ const groupOptions = ref<any[]>([])
 const inspectionGroupOptions = ref<any[]>([])
 const inspectionItemOptions = ref<any[]>([])
 const agentHostOptions = ref<any[]>([])
+
+// 巡检组配置状态
+const groupConfigModalVisible = ref(false)
+const selectedGroups = ref<any[]>([])
+const currentGroupForConfig = ref<number | null>(null)
+
+// 断言覆盖状态
+const itemsForOverride = ref<any[]>([])
+const assertionOverrides = ref<Record<number, { type: string; value: string }>>({})
+const assertionOverrideModalVisible = ref(false)
+const currentGroupName = ref('')
+
+// 业务分组覆盖状态
+const groupBusinessGroupOverrides = ref<Record<number, number>>({})
+
 // 需求四：自定义变量键值对列表
 const customVariablesList = ref<Array<{ key: string; value: string }>>([])
 
@@ -702,7 +815,10 @@ const loadData = async () => {
         executionMode: task.execution_mode || '',
         agentHostIds: task.agent_host_ids || '',
         businessGroupId: task.business_group_id || 0,
-        customVariables: task.custom_variables || ''
+        customVariables: task.custom_variables || '',
+        // 覆盖配置字段
+        itemAssertionOverrides: task.item_assertion_overrides || '',
+        groupBusinessGroupOverrides: task.group_business_group_overrides || ''
       }
 
       // 解析配置ID
@@ -802,6 +918,97 @@ const handleInspectionGroupChange = () => {
   )
 }
 
+// 打开巡检组配置弹窗
+const handleConfigureGroups = async () => {
+  try {
+    const groups: any[] = []
+    for (const groupId of formData.inspectionGroupIds) {
+      // 调用详情接口获取完整的巡检组信息（包括 group_ids）
+      const group = await getInspectionGroup(groupId)
+      groups.push(group)
+    }
+    selectedGroups.value = groups
+    groupConfigModalVisible.value = true
+  } catch (error) {
+    Message.error('加载巡检组失败')
+  }
+}
+
+// 加载指定巡检组的巡检项（用于断言覆盖配置）
+const loadItemsForGroup = async (groupId: number) => {
+  try {
+    const res = await getInspectionItems({ groupId, pageSize: 1000, status: 'enabled' })
+    itemsForOverride.value = res.list || []
+
+    // 初始化断言覆盖对象
+    for (const item of itemsForOverride.value) {
+      if (!assertionOverrides.value[item.id]) {
+        assertionOverrides.value[item.id] = { type: '', value: '' }
+      }
+    }
+
+    currentGroupForConfig.value = groupId
+    const group = selectedGroups.value.find(g => g.id === groupId)
+    currentGroupName.value = group?.name || ''
+    assertionOverrideModalVisible.value = true
+  } catch (error) {
+    Message.error('加载巡检项失败')
+  }
+}
+
+// 获取业务分组名称
+const getBusinessGroupNames = (groupIds: number[]) => {
+  if (!groupIds || groupIds.length === 0) return '未配置'
+  const names = groupIds.map(id => {
+    const bg = groupOptions.value.find((g: any) => g.id === id)
+    return bg?.name || `ID:${id}`
+  })
+  return names.join(', ')
+}
+
+// 保存断言覆盖配置
+const handleSaveAssertionOverrides = () => {
+  assertionOverrideModalVisible.value = false
+  Message.success('断言覆盖配置已保存')
+}
+
+// 获取指定巡检组的断言覆盖数量
+const getAssertionOverrideCountForGroup = (groupId: number) => {
+  let count = 0
+  for (const item of itemsForOverride.value) {
+    if (item.groupId === groupId) {
+      const override = assertionOverrides.value[item.id]
+      if (override && override.type) {
+        count++
+      }
+    }
+  }
+  return count
+}
+
+// 获取总配置数量（用于徽章显示）
+const getConfigCount = () => {
+  const assertionCount = Object.values(assertionOverrides.value).filter(o => o.type).length
+  const businessGroupCount = Object.keys(groupBusinessGroupOverrides.value).filter(k => groupBusinessGroupOverrides.value[Number(k)] > 0).length
+  return assertionCount + businessGroupCount
+}
+
+// 断言类型标签映射
+const getAssertionTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    gt: '大于 (>)',
+    gte: '大于等于 (>=)',
+    lt: '小于 (<)',
+    lte: '小于等于 (<=)',
+    eq: '等于 (==)',
+    contains: '包含',
+    not_contains: '不包含',
+    regex: '正则匹配',
+    not_regex: '正则不匹配'
+  }
+  return labels[type] || type
+}
+
 const handleTaskCategoryChange = () => {
   formData.probeConfigIds = formData.probeConfigIds.filter(id =>
     filteredProbeOptions.value.some((p: any) => p.id === id)
@@ -833,6 +1040,8 @@ const handleCreate = async () => {
   isEdit.value = false
   Object.assign(formData, defaultForm())
   customVariablesList.value = []
+  assertionOverrides.value = {}
+  groupBusinessGroupOverrides.value = {}
   selectedCategory.value = 'network'
   await loadOptions()
   dialogVisible.value = true
@@ -856,6 +1065,36 @@ const handleEdit = async (row: any) => {
   })
   // 需求四：反序列化变量为键值对列表
   deserializeCustomVariables(row.customVariables || '')
+
+  // 解析断言覆盖
+  assertionOverrides.value = {}
+  if (row.itemAssertionOverrides) {
+    try {
+      const overrides = JSON.parse(row.itemAssertionOverrides)
+      for (const o of overrides) {
+        assertionOverrides.value[o.item_id] = {
+          type: o.assertion_type,
+          value: o.assertion_value
+        }
+      }
+    } catch (e) {
+      console.error('解析断言覆盖失败:', e)
+    }
+  }
+
+  // 解析业务分组覆盖
+  groupBusinessGroupOverrides.value = {}
+  if (row.groupBusinessGroupOverrides) {
+    try {
+      const overrides = JSON.parse(row.groupBusinessGroupOverrides)
+      for (const o of overrides) {
+        groupBusinessGroupOverrides.value[o.group_id] = o.business_group_id
+      }
+    } catch (e) {
+      console.error('解析业务分组覆盖失败:', e)
+    }
+  }
+
   await loadOptions()
 
   if (formData.taskType === 'probe' && formData.probeConfigIds.length > 0) {
@@ -886,6 +1125,36 @@ const handleCopy = async (row: any) => {
   })
   // 需求四：反序列化变量为键值对列表
   deserializeCustomVariables(row.customVariables || '')
+
+  // 复制断言覆盖
+  assertionOverrides.value = {}
+  if (row.itemAssertionOverrides) {
+    try {
+      const overrides = JSON.parse(row.itemAssertionOverrides)
+      for (const o of overrides) {
+        assertionOverrides.value[o.item_id] = {
+          type: o.assertion_type,
+          value: o.assertion_value
+        }
+      }
+    } catch (e) {
+      console.error('解析断言覆盖失败:', e)
+    }
+  }
+
+  // 复制业务分组覆盖
+  groupBusinessGroupOverrides.value = {}
+  if (row.groupBusinessGroupOverrides) {
+    try {
+      const overrides = JSON.parse(row.groupBusinessGroupOverrides)
+      for (const o of overrides) {
+        groupBusinessGroupOverrides.value[o.group_id] = o.business_group_id
+      }
+    } catch (e) {
+      console.error('解析业务分组覆盖失败:', e)
+    }
+  }
+
   await loadOptions()
 
   if (formData.taskType === 'probe' && formData.probeConfigIds.length > 0) {
@@ -937,6 +1206,32 @@ const handleSubmit = async () => {
     requestData.agent_host_ids = formData.agentHostIds.length > 0 ? JSON.stringify(formData.agentHostIds) : ''
     requestData.business_group_id = formData.businessGroupId || 0
     requestData.custom_variables = serializeCustomVariables()
+
+    // 构建断言覆盖数组
+    const assertionOverridesArray: ItemAssertionOverride[] = []
+    for (const [itemIdStr, override] of Object.entries(assertionOverrides.value)) {
+      if (override.type !== undefined && override.type !== null && override.type !== '') {
+        assertionOverridesArray.push({
+          item_id: Number(itemIdStr),
+          assertion_type: override.type,
+          assertion_value: override.value
+        })
+      }
+    }
+
+    // 构建业务分组覆盖数组
+    const businessGroupOverridesArray: GroupBusinessGroupOverride[] = []
+    for (const [groupIdStr, businessGroupId] of Object.entries(groupBusinessGroupOverrides.value)) {
+      if (businessGroupId > 0) {
+        businessGroupOverridesArray.push({
+          group_id: Number(groupIdStr),
+          business_group_id: businessGroupId
+        })
+      }
+    }
+
+    requestData.item_assertion_overrides = assertionOverridesArray.length > 0 ? JSON.stringify(assertionOverridesArray) : ''
+    requestData.group_business_group_overrides = businessGroupOverridesArray.length > 0 ? JSON.stringify(businessGroupOverridesArray) : ''
 
     if (isEdit.value) {
       await updateInspectionTask(formData.id, requestData)

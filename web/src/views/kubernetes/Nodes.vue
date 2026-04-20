@@ -1301,7 +1301,7 @@ const startLabelEdit = async () => {
   if (!selectedNode.value) return
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const nodeName = selectedNode.value.name
 
     // 获取节点当前 YAML
@@ -1362,7 +1362,7 @@ const saveLabels = async () => {
 
   labelSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const nodeName = selectedNode.value.name
 
     // 判断是否为系统标签
@@ -1472,7 +1472,7 @@ const startTaintEdit = async () => {
   if (!selectedNode.value) return
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const nodeName = selectedNode.value.name
 
     // 获取节点当前 YAML
@@ -1534,7 +1534,7 @@ const saveTaints = async () => {
 
   taintSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const nodeName = selectedNode.value.name
 
     // 将 YAML 按行分割处理
@@ -1849,7 +1849,7 @@ const handleDrainNode = async () => {
     )
 
     // 用户确认后执行排空
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.post(
       `/api/v1/plugins/kubernetes/resources/nodes/${selectedNode.value.name}/drain`,
       {
@@ -1884,7 +1884,7 @@ const handleCordonNode = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.post(
       `/api/v1/plugins/kubernetes/resources/nodes/${selectedNode.value.name}/cordon`,
       {
@@ -1919,7 +1919,7 @@ const handleUncordonNode = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.post(
       `/api/v1/plugins/kubernetes/resources/nodes/${selectedNode.value.name}/uncordon`,
       {
@@ -1954,7 +1954,7 @@ const handleDeleteNode = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/nodes/${selectedNode.value.name}?clusterId=${selectedClusterId.value}`,
       {
@@ -1976,7 +1976,7 @@ const handleShowYAML = async () => {
   if (!selectedNode.value) return
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const nodeName = selectedNode.value.name
 
@@ -2000,7 +2000,7 @@ const handleSaveYAML = async () => {
 
   yamlSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.put(
       `/api/v1/plugins/kubernetes/resources/nodes/${selectedNode.value.name}/yaml`,
       {
@@ -2040,7 +2040,7 @@ const handleShell = async () => {
   if (!selectedNode.value) return
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     // 先获取CloudTTY的Service信息
     const serviceResponse = await axios.get(
@@ -2148,7 +2148,7 @@ const handleShellOpened = async () => {
   fitAddon.fit()
 
   // 建立WebSocket连接
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
   const wsUrl = `ws://localhost:9876/api/v1/plugins/kubernetes/shell/nodes/${selectedNode.value.name}?clusterId=${selectedClusterId.value}&token=${token}`
 
   ws = new WebSocket(wsUrl)
@@ -2204,7 +2204,7 @@ const handleCloseShell = () => {
 // 检查 CloudTTY 是否已安装
 const checkCloudTTY = async () => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/cloudtty/status`,
       {
@@ -2371,7 +2371,7 @@ const handleBatchLabels = async () => {
 
   batchLabelSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const labelsMap: Record<string, string> = {}
     validLabels.forEach(l => {
       labelsMap[l.key] = l.value
@@ -2434,7 +2434,7 @@ const handleBatchTaints = async () => {
 
   batchTaintSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/nodes/batch/taints',
       {
@@ -2472,7 +2472,7 @@ const handleBatchDrain = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/nodes/batch/drain',
       {
@@ -2507,7 +2507,7 @@ const handleBatchCordon = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/nodes/batch/cordon',
       {
@@ -2542,7 +2542,7 @@ const handleBatchUncordon = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/nodes/batch/uncordon',
       {
@@ -2577,7 +2577,7 @@ const handleBatchDelete = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/nodes/batch/delete',
       {

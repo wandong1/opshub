@@ -94,7 +94,7 @@
     </a-table>
 
     <!-- 新建/编辑对话框 -->
-    <a-modal v-model:visible="dialogVisible" :title="isEdit ? '编辑拨测' : '新增拨测'" :width="800" unmount-on-close>
+    <a-modal v-model:visible="dialogVisible" :title="isEdit ? '编辑拨测' : '新增拨测'" :width="1000" unmount-on-close>
       <a-form ref="formRef" :model="formData" :rules="formRules" layout="horizontal" auto-label-width>
         <a-form-item label="名称" field="name"><a-input v-model="formData.name" placeholder="请输入拨测名称" /></a-form-item>
         <a-form-item label="分类" field="category">
@@ -186,11 +186,11 @@
               <div v-for="(a, i) in appAssertions" :key="i" style="display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
                 <a-input v-model="a.name" placeholder="名称" style="width: 100px;" />
                 <a-select v-model="a.source" style="width: 100px;"><a-option value="body">Body</a-option><a-option value="header">Header</a-option><a-option value="response">Response</a-option></a-select>
-                <a-input v-if="a.source !== 'response'" v-model="a.path" placeholder="路径 $.data.id" style="width: 130px;" />
+                <a-input v-if="a.source !== 'response'" v-model="a.path" placeholder="路径 $.data.id" style="width: 150px;" />
                 <a-select v-model="a.condition" style="width: 110px;">
                   <a-option v-for="c in assertConditions" :key="c.value" :value="c.value">{{ c.label }}</a-option>
                 </a-select>
-                <a-input v-model="a.value" placeholder="期望值" style="width: 100px;" />
+                <a-input v-model="a.value" placeholder="期望值" style="width: 150px;" />
                 <a-button type="text" status="danger" size="small" @click="appAssertions.splice(i, 1)"><icon-minus /></a-button>
               </div>
               <a-button type="text" size="small" @click="appAssertions.push({ name: '', source: 'body', path: '', condition: '==', value: '' })"><icon-plus /> 添加断言</a-button>

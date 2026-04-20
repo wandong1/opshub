@@ -400,7 +400,7 @@ const loadConfigMaps = async () => {
 
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/configmaps`, {
       params: { clusterId: props.clusterId },
       headers: { Authorization: `Bearer ${token}` }
@@ -453,7 +453,7 @@ const handleCreateForm = () => {
 // 编辑表单
 const handleEditForm = async (row: ConfigMapInfo) => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/configmaps/${row.namespace}/${row.name}/yaml`,
       {
@@ -501,7 +501,7 @@ const handleEditYAML = async (row: ConfigMapInfo) => {
   isCreateMode.value = false
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/configmaps/${row.namespace}/${row.name}/yaml`,
       {
@@ -529,7 +529,7 @@ const handleEditYAML = async (row: ConfigMapInfo) => {
 const handleSaveYAML = async () => {
   saving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     // 从 YAML 中解析对象
     const yamlObj: any = yaml.load(yamlContent.value)
@@ -588,7 +588,7 @@ const handleSaveForm = async () => {
 
   saving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
 
     // 构建 ConfigMap 对象
@@ -688,7 +688,7 @@ const handleDelete = async (row: ConfigMapInfo) => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/configmaps/${row.namespace}/${row.name}`,
       {

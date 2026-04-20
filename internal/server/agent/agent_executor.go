@@ -82,3 +82,18 @@ func (f *AgentCommandFactory) NewExecutor(hostID uint) (collector.CommandExecuto
 func (f *AgentCommandFactory) SendProbeRequest(hostID uint, req *pb.ProbeRequest) (*pb.ProbeResult, error) {
 	return f.hub.SendProbeRequest(hostID, req)
 }
+
+// SendWsSessionOpen 打开 WebSocket 会话
+func (f *AgentCommandFactory) SendWsSessionOpen(hostID uint, sessionID, url string, headers, params map[string]string, timeout int32, skipVerify bool, proxyURL string) (*pb.WsSessionResult, error) {
+	return f.hub.SendWsSessionOpen(hostID, sessionID, url, headers, params, timeout, skipVerify, proxyURL)
+}
+
+// SendWsSessionAction 发送 WebSocket 会话操作
+func (f *AgentCommandFactory) SendWsSessionAction(hostID uint, sessionID, actionID, actionType, message string, messageType, readTimeout int32, receiveMode string) (*pb.WsSessionResult, error) {
+	return f.hub.SendWsSessionAction(hostID, sessionID, actionID, actionType, message, messageType, readTimeout, receiveMode)
+}
+
+// SendWsSessionClose 关闭 WebSocket 会话
+func (f *AgentCommandFactory) SendWsSessionClose(hostID uint, sessionID string) (*pb.WsSessionResult, error) {
+	return f.hub.SendWsSessionClose(hostID, sessionID)
+}

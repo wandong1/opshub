@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tidwall/gjson"
 	"github.com/ydcloud-dy/opshub/internal/biz/inspection/probers"
@@ -572,8 +573,29 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 	}
 
 	allowedGroupIDs := parseGroupIDs(cfg.GroupIDs)
-	// Initialize variable context with workflow-level variables
+	// 添加 cfg.GroupID 到允许的分组列表
+	if cfg.GroupID > 0 {
+		allowedGroupIDs = append(allowedGroupIDs, cfg.GroupID)
+	}
+
+	// Initialize variable context with global variables (lowest priority)
 	varCtx := make(map[string]string)
+
+	// 1. 加载全局环境变量（最低优先级）
+	if resolver != nil && resolver.variableRepo != nil {
+		// 获取所有全局变量（不限制名称）
+		globalVars, _, err := resolver.variableRepo.List(ctx, 1, 10000, "", "", "")
+		if err == nil {
+			for _, v := range globalVars {
+				// 检查变量的分组权限
+				if len(v.GroupIDs) == 0 || hasGroupAccess(v.GroupIDs, allowedGroupIDs) {
+					varCtx[v.Name] = v.Value
+				}
+			}
+		}
+	}
+
+	// 2. 加载业务流程定义中的内联变量（覆盖全局变量）
 	for k, v := range def.Variables {
 		varCtx[k] = v
 	}
@@ -672,182 +694,203 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 				wsEffMode = cfg.ExecMode
 			}
 			if wsEffMode == ExecModeAgent && agentFactory != nil {
-				// Scan ws block to find disconnect index and collect ordered send/receive actions
-				disconnectIdx := -1
-				var wsActions []WsAction
-				for j := i + 1; j < len(def.Steps); j++ {
-					st := def.Steps[j].StepType
-					if st == "ws_disconnect" {
-						disconnectIdx = j
-						break
-					}
-					if st == "ws_send" {
-						msgType := def.Steps[j].WSMessageType
-						if msgType == 0 {
-							msgType = 1
-						}
-						msg := def.Steps[j].WSMessage
-						if resolver != nil {
-							if v, err := resolver.ResolveText(ctx, msg, varCtx, allowedGroupIDs); err == nil {
-								msg = v
-							}
-						}
-						wsActions = append(wsActions, WsAction{
-							Type:        "send",
-							Message:     msg,
-							MessageType: msgType,
-						})
-					}
-					if st == "ws_receive" {
-						wsActions = append(wsActions, WsAction{
-							Type:        "receive",
-							ReadTimeout: def.Steps[j].WSReadTimeout,
-							ReceiveMode: def.Steps[j].WSReceiveMode,
-						})
-					}
-				}
-				// Pick an online agent
+				// Agent 模式：逐步执行 WebSocket 操作，支持跨步骤变量引用
+				// 1. 选择在线 Agent
 				agentHostIDs := parseHostIDs(cfg.AgentHostIDs)
-				var onlineAgents []uint
+				var pickedAgentID uint
 				for _, id := range agentHostIDs {
 					if agentFactory.IsOnline(id) {
-						onlineAgents = append(onlineAgents, id)
+						pickedAgentID = id
+						break
 					}
 				}
-				// Encode WS actions as JSON into ProbeRequest.Body
-				actionsJSON, _ := json.Marshal(wsActions)
-				wsCfg := &ProbeConfig{
-					Type:    "websocket",
-					Target:  resolvedURL,
-					Timeout: step.Timeout,
-					Body:    string(actionsJSON),
-				}
-				wsAppCfg := &probers.AppProbeConfig{
-					URL:        resolvedURL,
-					Method:     "GET",
-					Headers:    resolvedHeaders,
-					Params:     resolvedParams,
-					Timeout:    step.Timeout,
-					SkipVerify: stepSkipVerify,
-					ProxyURL:   step.ProxyURL,
-				}
-				probeReq := BuildProbeRequest(wsCfg, wsAppCfg)
-				probeReq.Body = string(actionsJSON) // ensure Body is set even if BuildProbeRequest clears it
-				var pbResult *pb.ProbeResult
-				var wsConnectErr string
-				var wsConnectSuccess bool
-				var wsConnectLatency float64
-				var wsConnectStatusCode int
-				var wsConnectHeaders map[string]string
-				if len(onlineAgents) == 0 {
-					wsConnectErr = "no online agent available for ws_connect"
-				} else {
-					pickedID := onlineAgents[rand.Intn(len(onlineAgents))]
-					pbRes, err := agentFactory.SendProbeRequest(pickedID, probeReq)
-					if err != nil {
-						wsConnectErr = err.Error()
-					} else {
-						wsConnectSuccess = pbRes.Success
-						wsConnectLatency = pbRes.Latency
-						wsConnectStatusCode = int(pbRes.HttpStatusCode)
-						wsConnectHeaders = pbRes.ResponseHeaders
-						if pbRes.Error != "" {
-							wsConnectErr = pbRes.Error
-						}
-						pbResult = pbRes
+				if pickedAgentID == 0 {
+					stepResult.Error = "no online agent available for ws_connect"
+					stepResult.Latency = float64(time.Since(start).Microseconds()) / 1000.0
+					totalLatency += stepResult.Latency
+					result.StepResults = append(result.StepResults, stepResult)
+					result.Success = false
+					if def.StopOnFailure {
+						appendSkippedSteps(result, def.Steps, i+1)
+						result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
+						result.TotalLatency = totalLatency
+						return result
 					}
+					continue
 				}
-				// Emit ws_connect result
-				stepResult.Success = wsConnectSuccess
-				stepResult.HTTPStatusCode = wsConnectStatusCode
-				stepResult.ResponseHeaders = wsConnectHeaders
-				stepResult.Latency = wsConnectLatency
+
+				// 2. 打开 WebSocket 会话
+				sessionID := uuid.New().String()
+				wsResult, err := agentFactory.SendWsSessionOpen(pickedAgentID, sessionID, resolvedURL, resolvedHeaders, resolvedParams, int32(step.Timeout), stepSkipVerify, step.ProxyURL)
+				if err != nil || !wsResult.Success {
+					errMsg := err.Error()
+					if wsResult != nil && wsResult.Error != "" {
+						errMsg = wsResult.Error
+					}
+					stepResult.Error = "ws_connect: " + errMsg
+					stepResult.Latency = float64(time.Since(start).Microseconds()) / 1000.0
+					if wsResult != nil {
+						stepResult.Latency = wsResult.Latency
+						stepResult.HTTPStatusCode = int(wsResult.StatusCode)
+						stepResult.ResponseHeaders = wsResult.Headers
+					}
+					totalLatency += stepResult.Latency
+					result.StepResults = append(result.StepResults, stepResult)
+					result.Success = false
+					if def.StopOnFailure {
+						appendSkippedSteps(result, def.Steps, i+1)
+						result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
+						result.TotalLatency = totalLatency
+						return result
+					}
+					continue
+				}
+
+				// 3. ws_connect 成功
+				stepResult.Success = true
+				stepResult.HTTPStatusCode = int(wsResult.StatusCode)
+				stepResult.ResponseHeaders = wsResult.Headers
+				stepResult.Latency = wsResult.Latency
 				totalLatency += stepResult.Latency
-				if wsConnectErr != "" {
-					stepResult.Error = wsConnectErr
-				}
-				// Extract variables from ws_connect upgrade headers
-				if wsConnectSuccess && len(step.Extractions) > 0 {
-					extracted := extractWorkflowVars(step.Extractions, &probers.AppResult{ResponseHeaders: wsConnectHeaders}, varCtx)
+
+				// 提取变量
+				if len(step.Extractions) > 0 {
+					extracted := extractWorkflowVars(step.Extractions, &probers.AppResult{ResponseHeaders: wsResult.Headers}, varCtx)
 					if len(extracted) > 0 {
 						stepResult.ExtractedVars = extracted
 					}
 				}
 				result.StepResults = append(result.StepResults, stepResult)
-				if !stepResult.Success {
-					result.Success = false
-					if def.StopOnFailure {
+
+				// 4. 逐步执行后续的 ws_send/ws_receive 步骤，直到 ws_disconnect
+				disconnectIdx := -1
+				for j := i + 1; j < len(def.Steps); j++ {
+					if def.Steps[j].StepType == "ws_disconnect" {
+						disconnectIdx = j
+						break
+					}
+				}
+
+				// 执行 ws_send/ws_receive 步骤
+				for j := i + 1; j < len(def.Steps) && (disconnectIdx < 0 || j < disconnectIdx); j++ {
+					subStep := def.Steps[j]
+					subType := subStep.StepType
+					if subType != "ws_send" && subType != "ws_receive" {
+						continue
+					}
+
+					subResult := WorkflowStepResult{
+						StepName:  subStep.Name,
+						StepIndex: j,
+						StepType:  subType,
+						Success:   true,
+					}
+					subStart := time.Now()
+
+					if subType == "ws_send" {
+						// 解析消息内容（此时 varCtx 已包含前面步骤提取的变量）
+						msg := subStep.WSMessage
+						if resolver != nil {
+							if v, err := resolver.ResolveText(ctx, msg, varCtx, allowedGroupIDs); err == nil {
+								msg = v
+							}
+						}
+						msgType := subStep.WSMessageType
+						if msgType == 0 {
+							msgType = 1
+						}
+
+						// 发送消息
+						actionID := uuid.New().String()
+						actionResult, err := agentFactory.SendWsSessionAction(pickedAgentID, sessionID, actionID, "send", msg, int32(msgType), 0, "")
+						if err != nil || !actionResult.Success {
+							errMsg := err.Error()
+							if actionResult != nil && actionResult.Error != "" {
+								errMsg = actionResult.Error
+							}
+							subResult.Success = false
+							subResult.Error = errMsg
+							result.Success = false
+						}
+						if actionResult != nil {
+							subResult.Latency = actionResult.Latency
+						} else {
+							subResult.Latency = float64(time.Since(subStart).Microseconds()) / 1000.0
+						}
+						totalLatency += subResult.Latency
+
+					} else if subType == "ws_receive" {
+						// 接收消息
+						actionID := uuid.New().String()
+						readTimeout := subStep.WSReadTimeout
+						if readTimeout == 0 {
+							readTimeout = 5
+						}
+						actionResult, err := agentFactory.SendWsSessionAction(pickedAgentID, sessionID, actionID, "receive", "", 0, int32(readTimeout), subStep.WSReceiveMode)
+						if err != nil || !actionResult.Success {
+							errMsg := err.Error()
+							if actionResult != nil && actionResult.Error != "" {
+								errMsg = actionResult.Error
+							}
+							subResult.Success = false
+							subResult.Error = errMsg
+							result.Success = false
+						} else {
+							subResult.ResponseBody = actionResult.ResponseBody
+
+							// 评估断言
+							if len(subStep.Assertions) > 0 {
+								assertions := toProberAssertions(subStep.Assertions)
+								assertionResults := probers.EvaluateAssertions(assertions, actionResult.ResponseBody, nil)
+								for idx, assertRes := range assertionResults {
+									subResult.AssertionResults = append(subResult.AssertionResults, WorkflowAssertionResult{
+										Name: assertRes.Name, Success: assertRes.Success, Actual: assertRes.Actual, Error: assertRes.Error,
+										Source: subStep.Assertions[idx].Source, Path: subStep.Assertions[idx].Path,
+										Condition: subStep.Assertions[idx].Condition, Value: subStep.Assertions[idx].Value,
+									})
+									if !assertRes.Success {
+										subResult.Success = false
+										result.Success = false
+									}
+								}
+							}
+
+							// 提取变量（关键：此时提取的变量会立即更新到 varCtx，供后续步骤使用）
+							if len(subStep.Extractions) > 0 {
+								extracted := extractWorkflowVars(subStep.Extractions, &probers.AppResult{ResponseBody: actionResult.ResponseBody}, varCtx)
+								if len(extracted) > 0 {
+									subResult.ExtractedVars = extracted
+								}
+							}
+						}
+						if actionResult != nil {
+							subResult.Latency = actionResult.Latency
+						} else {
+							subResult.Latency = float64(time.Since(subStart).Microseconds()) / 1000.0
+						}
+						totalLatency += subResult.Latency
+					}
+
+					result.StepResults = append(result.StepResults, subResult)
+
+					// 如果失败且需要停止
+					if !subResult.Success && def.StopOnFailure {
+						// 关闭会话
+						agentFactory.SendWsSessionClose(pickedAgentID, sessionID)
 						if disconnectIdx >= 0 {
 							appendSkippedSteps(result, def.Steps, disconnectIdx+1)
 						} else {
-							appendSkippedSteps(result, def.Steps, i+1)
+							appendSkippedSteps(result, def.Steps, j+1)
 						}
-						result.Error = fmt.Sprintf("step %d (%s) failed: %s", i+1, step.Name, stepResult.Error)
+						result.Error = fmt.Sprintf("step %d (%s) failed: %s", j+1, subStep.Name, subResult.Error)
 						result.TotalLatency = totalLatency
 						return result
 					}
-					if disconnectIdx >= 0 {
-						i = disconnectIdx
-					}
-					continue
 				}
-				// Decode per-action results from ResponseBody and synthesize step results
-				var actionResults []WsActionResult
-				if pbResult != nil {
-					_ = json.Unmarshal(pbResult.GetResponseBody(), &actionResults)
-				}
-				actionIdx := 0
+
+				// 5. 跳转到 ws_disconnect 步骤
 				if disconnectIdx >= 0 {
-					for j := i + 1; j <= disconnectIdx; j++ {
-						subStep := def.Steps[j]
-						subType := subStep.StepType
-						subResult := WorkflowStepResult{
-							StepName:  subStep.Name,
-							StepIndex: j,
-							StepType:  subType,
-							Success:   true,
-						}
-						if subType == "ws_send" || subType == "ws_receive" {
-							if actionIdx < len(actionResults) {
-								ar := actionResults[actionIdx]
-								subResult.Success = ar.Success
-								subResult.Error = ar.Error
-								subResult.Latency = ar.Latency
-								totalLatency += ar.Latency
-								if subType == "ws_receive" {
-									subResult.ResponseBody = ar.ResponseBody
-									// Evaluate assertions on received message
-									if len(subStep.Assertions) > 0 {
-										assertions := toProberAssertions(subStep.Assertions)
-										assertionResults := probers.EvaluateAssertions(assertions, ar.ResponseBody, nil)
-										for idx, assertRes := range assertionResults {
-											subResult.AssertionResults = append(subResult.AssertionResults, WorkflowAssertionResult{
-												Name: assertRes.Name, Success: assertRes.Success, Actual: assertRes.Actual, Error: assertRes.Error,
-												Source: subStep.Assertions[idx].Source, Path: subStep.Assertions[idx].Path,
-												Condition: subStep.Assertions[idx].Condition, Value: subStep.Assertions[idx].Value,
-											})
-											if !assertRes.Success {
-												subResult.Success = false
-											}
-										}
-									}
-									// Extract variables from received message into varCtx for subsequent steps
-									if len(subStep.Extractions) > 0 {
-										extracted := extractWorkflowVars(subStep.Extractions, &probers.AppResult{ResponseBody: ar.ResponseBody}, varCtx)
-										if len(extracted) > 0 {
-											subResult.ExtractedVars = extracted
-										}
-									}
-								}
-								if !ar.Success {
-									result.Success = false
-								}
-								actionIdx++
-							}
-						}
-						result.StepResults = append(result.StepResults, subResult)
-					}
-					i = disconnectIdx
+					i = disconnectIdx - 1 // 循环会 i++，所以这里 -1
 				}
 				continue
 			}

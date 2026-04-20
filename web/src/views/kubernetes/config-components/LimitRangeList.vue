@@ -257,7 +257,7 @@ const loadLimitRanges = async () => {
 
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/limitranges`, {
       params: { clusterId: props.clusterId },
       headers: { Authorization: `Bearer ${token}` }
@@ -281,7 +281,7 @@ const handleEditYAML = async (row: LimitRangeInfo) => {
   isCreateMode.value = false
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/limitranges/${row.namespace}/${row.name}/yaml`,
       {
@@ -319,7 +319,7 @@ const handleSaveYAML = async () => {
 
     saving.value = true
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       await axios.post(
         `/api/v1/plugins/kubernetes/resources/limitranges/${namespace}/yaml`,
         {
@@ -345,7 +345,7 @@ const handleSaveYAML = async () => {
 
     saving.value = true
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       await axios.put(
         `/api/v1/plugins/kubernetes/resources/limitranges/${selectedLimitRange.value.namespace}/${selectedLimitRange.value.name}/yaml`,
         {
@@ -382,7 +382,7 @@ const handleDelete = async (row: LimitRangeInfo) => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/limitranges/${row.namespace}/${row.name}`,
       {

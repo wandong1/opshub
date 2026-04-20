@@ -18,7 +18,7 @@ type WebsiteProxyAuditLog struct {
 	Username      string    `gorm:"column:username;type:varchar(100);not null;index;comment:用户名" json:"username"`
 	AgentHostID   uint      `gorm:"column:agent_host_id;not null;comment:Agent主机ID" json:"agentHostId"`
 	RequestMethod string    `gorm:"column:request_method;type:varchar(10);not null;comment:请求方法" json:"requestMethod"`
-	RequestURL    string    `gorm:"column:request_url;type:varchar(500);not null;comment:请求URL" json:"requestUrl"`
+	RequestURL    string    `gorm:"column:request_url;type:text;not null;comment:请求URL" json:"requestUrl"`
 	Status        string    `gorm:"column:status;type:varchar(20);not null;index;comment:状态 success/failed" json:"status"`
 	StatusCode    int       `gorm:"column:status_code;comment:HTTP状态码" json:"statusCode"`
 	ClientIP      string    `gorm:"column:client_ip;type:varchar(50);comment:客户端IP" json:"clientIp"`

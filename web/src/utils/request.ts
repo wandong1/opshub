@@ -12,7 +12,7 @@ let isRedirecting = false
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -54,7 +54,7 @@ request.interceptors.response.use(
         if (!isRedirecting) {
           isRedirecting = true
           Message.error('登录已过期，请重新登录')
-          localStorage.removeItem('token')
+          localStorage.removeItem('srehubtoken')
           // 延迟跳转，让用户看到提示
           setTimeout(() => {
             window.location.href = '/login'
@@ -92,7 +92,7 @@ request.interceptors.response.use(
       if (!url.includes('/login') && !isRedirecting) {
         isRedirecting = true
         Message.error('登录已过期，请重新登录')
-        localStorage.removeItem('token')
+        localStorage.removeItem('srehubtoken')
         setTimeout(() => {
           window.location.href = '/login'
         }, 1000)

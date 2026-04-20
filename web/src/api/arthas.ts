@@ -186,7 +186,7 @@ export function generateFlameGraph(params: ArthasBaseParams & {
 
 // 创建Arthas WebSocket连接
 export function createArthasWebSocket(params: ArthasBaseParams): WebSocket {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
 

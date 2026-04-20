@@ -183,7 +183,7 @@ const handleCreate = () => {
 // 编辑
 const handleEdit = async (row: ServiceAccountInfo) => {
   try {
-    const token = localStorage.getItem('token') || ''
+    const token = localStorage.getItem('srehubtoken') || ''
     const response: any = await axios.get(
       `/api/v1/plugins/kubernetes/resources/serviceaccounts/${row.namespace}/${row.name}/yaml`,
       {
@@ -255,7 +255,7 @@ const handleDelete = async (row: ServiceAccountInfo) => {
       }
     )
 
-    const token = localStorage.getItem('token') || ''
+    const token = localStorage.getItem('srehubtoken') || ''
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/serviceaccounts/${row.namespace}/${row.name}`,
       {
@@ -277,7 +277,7 @@ const handleDelete = async (row: ServiceAccountInfo) => {
 const handleSaveYaml = async () => {
   yamlSaving.value = true
   try {
-    const token = localStorage.getItem('token') || ''
+    const token = localStorage.getItem('srehubtoken') || ''
     const namespace = props.namespace || 'default'
 
     if (editingItem.value) {

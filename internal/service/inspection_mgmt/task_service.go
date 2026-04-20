@@ -19,21 +19,23 @@ func NewTaskService(taskRepo inspectionmgmtdata.TaskRepository) *TaskService {
 
 func (s *TaskService) Create(ctx context.Context, req *TaskCreateRequest) error {
 	task := &inspectionmgmtdata.InspectionTask{
-		Name:            req.Name,
-		Description:     req.Description,
-		TaskType:        req.TaskType,
-		CronExpr:        req.CronExpr,
-		Enabled:         req.Enabled,
-		GroupIDs:        req.GroupIDs,
-		ItemIDs:         req.ItemIDs,
-		PushgatewayID:   req.PushgatewayID,
-		Concurrency:     req.Concurrency,
-		Owner:           req.Owner,
-		ExecutionMode:   req.ExecutionMode,
-		AgentHostIDs:    req.AgentHostIDs,
-		BusinessGroupID: req.BusinessGroupID,
-		CustomVariables: req.CustomVariables,
-		Status:          "pending",
+		Name:                        req.Name,
+		Description:                 req.Description,
+		TaskType:                    req.TaskType,
+		CronExpr:                    req.CronExpr,
+		Enabled:                     req.Enabled,
+		GroupIDs:                    req.GroupIDs,
+		ItemIDs:                     req.ItemIDs,
+		PushgatewayID:               req.PushgatewayID,
+		Concurrency:                 req.Concurrency,
+		Owner:                       req.Owner,
+		ExecutionMode:               req.ExecutionMode,
+		AgentHostIDs:                req.AgentHostIDs,
+		BusinessGroupID:             req.BusinessGroupID,
+		CustomVariables:             req.CustomVariables,
+		ItemAssertionOverrides:      req.ItemAssertionOverrides,
+		GroupBusinessGroupOverrides: req.GroupBusinessGroupOverrides,
+		Status:                      "pending",
 	}
 
 	return s.taskRepo.Create(ctx, task)
@@ -74,6 +76,9 @@ func (s *TaskService) Update(ctx context.Context, id uint, req *TaskUpdateReques
 	task.AgentHostIDs = req.AgentHostIDs
 	task.BusinessGroupID = req.BusinessGroupID
 	task.CustomVariables = req.CustomVariables
+	// 任务级覆盖功能
+	task.ItemAssertionOverrides = req.ItemAssertionOverrides
+	task.GroupBusinessGroupOverrides = req.GroupBusinessGroupOverrides
 
 	return s.taskRepo.Update(ctx, task)
 }
@@ -107,25 +112,27 @@ func (s *TaskService) List(ctx context.Context, req *TaskListRequest) ([]*TaskRe
 
 func (s *TaskService) toResponse(task *inspectionmgmtdata.InspectionTask) *TaskResponse {
 	resp := &TaskResponse{
-		ID:              task.ID,
-		Name:            task.Name,
-		Description:     task.Description,
-		TaskType:        task.TaskType,
-		CronExpr:        task.CronExpr,
-		Status:          task.Status,
-		Enabled:         task.Enabled,
-		GroupIDs:        task.GroupIDs,
-		ItemIDs:         task.ItemIDs,
-		PushgatewayID:   task.PushgatewayID,
-		Concurrency:     task.Concurrency,
-		Owner:           task.Owner,
-		ExecutionMode:   task.ExecutionMode,
-		AgentHostIDs:    task.AgentHostIDs,
-		BusinessGroupID: task.BusinessGroupID,
-		CustomVariables: task.CustomVariables,
-		LastRunStatus:   task.LastRunStatus,
-		CreatedAt:       task.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       task.UpdatedAt.Format(time.RFC3339),
+		ID:                          task.ID,
+		Name:                        task.Name,
+		Description:                 task.Description,
+		TaskType:                    task.TaskType,
+		CronExpr:                    task.CronExpr,
+		Status:                      task.Status,
+		Enabled:                     task.Enabled,
+		GroupIDs:                    task.GroupIDs,
+		ItemIDs:                     task.ItemIDs,
+		PushgatewayID:               task.PushgatewayID,
+		Concurrency:                 task.Concurrency,
+		Owner:                       task.Owner,
+		ExecutionMode:               task.ExecutionMode,
+		AgentHostIDs:                task.AgentHostIDs,
+		BusinessGroupID:             task.BusinessGroupID,
+		CustomVariables:             task.CustomVariables,
+		ItemAssertionOverrides:      task.ItemAssertionOverrides,
+		GroupBusinessGroupOverrides: task.GroupBusinessGroupOverrides,
+		LastRunStatus:               task.LastRunStatus,
+		CreatedAt:                   task.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:                   task.UpdatedAt.Format(time.RFC3339),
 	}
 
 	if task.LastRunAt != nil {

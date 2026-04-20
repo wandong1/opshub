@@ -20,6 +20,7 @@
 package asset
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -50,6 +51,9 @@ type Website struct {
 
 	// 代理访问 Token（安全）
 	ProxyToken string `gorm:"type:varchar(64);uniqueIndex;comment:代理访问Token(UUID)" json:"proxyToken"`
+
+	// 站点基础路径（仅内部站点）
+	BasePath string `gorm:"type:varchar(200);default:'';comment:站点基础路径(如/nacos),仅内部站点生效" json:"basePath"`
 }
 
 // WebsiteGroup 站点与业务分组关联表
@@ -92,6 +96,9 @@ type WebsiteRequest struct {
 	RewriteHTML    *bool  `json:"rewriteHtml"`
 	RewriteCSS     *bool  `json:"rewriteCss"`
 	RewriteJS      *bool  `json:"rewriteJs"`
+
+	// 站点基础路径（仅内部站点）
+	BasePath string `json:"basePath"`
 }
 
 // WebsiteVO 站点VO
@@ -129,6 +136,9 @@ type WebsiteVO struct {
 	// 代理访问 Token
 	ProxyToken string `json:"proxyToken"`
 	ProxyURL   string `json:"proxyUrl"` // 完整的代理访问 URL
+
+	// 站点基础路径（仅内部站点）
+	BasePath string `json:"basePath"`
 }
 
 // ToModel 转换为模型
@@ -179,6 +189,17 @@ func (req *WebsiteRequest) ToModel() *Website {
 		website.RewriteJS = *req.RewriteJS
 	} else {
 		website.RewriteJS = false // 默认禁用（保守）
+	}
+
+	// 站点基础路径（仅内部站点生效）
+	if req.Type == "internal" {
+		website.BasePath = strings.TrimSpace(req.BasePath)
+		// 确保 BasePath 以 / 开头（如果不为空）
+		if website.BasePath != "" && !strings.HasPrefix(website.BasePath, "/") {
+			website.BasePath = "/" + website.BasePath
+		}
+		// 移除尾部斜杠
+		website.BasePath = strings.TrimRight(website.BasePath, "/")
 	}
 
 	return website

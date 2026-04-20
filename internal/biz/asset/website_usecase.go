@@ -27,6 +27,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -188,6 +189,39 @@ func (uc *WebsiteUseCase) Update(ctx context.Context, id uint, req *WebsiteReque
 	website.Description = req.Description
 	website.Status = req.Status
 
+	// 更新代理配置
+	if req.ProxyStrategy != "" {
+		website.ProxyStrategy = req.ProxyStrategy
+	}
+	website.ProxyWhitelist = req.ProxyWhitelist
+	website.ProxyBlacklist = req.ProxyBlacklist
+	if req.InjectScript != nil {
+		website.InjectScript = *req.InjectScript
+	}
+	if req.RewriteHTML != nil {
+		website.RewriteHTML = *req.RewriteHTML
+	}
+	if req.RewriteCSS != nil {
+		website.RewriteCSS = *req.RewriteCSS
+	}
+	if req.RewriteJS != nil {
+		website.RewriteJS = *req.RewriteJS
+	}
+
+	// 更新站点基础路径（仅内部站点生效）
+	if req.Type == "internal" {
+		basePath := strings.TrimSpace(req.BasePath)
+		// 确保 BasePath 以 / 开头（如果不为空）
+		if basePath != "" && !strings.HasPrefix(basePath, "/") {
+			basePath = "/" + basePath
+		}
+		// 移除尾部斜杠
+		website.BasePath = strings.TrimRight(basePath, "/")
+	} else {
+		// 外部站点清空 BasePath
+		website.BasePath = ""
+	}
+
 	// 加密敏感信息（只有明确提供了新密码才更新）
 	if req.AccessPassword != "" {
 		encrypted, err := uc.encrypt(req.AccessPassword)
@@ -296,6 +330,9 @@ func (uc *WebsiteUseCase) toVO(ctx context.Context, website *Website) (*WebsiteV
 		// 代理访问 Token
 		ProxyToken: website.ProxyToken,
 		ProxyURL:   fmt.Sprintf("/api/v1/websites/proxy/t/%s", website.ProxyToken),
+
+		// 站点基础路径（仅内部站点）
+		BasePath: website.BasePath,
 	}
 
 	// 类型文本

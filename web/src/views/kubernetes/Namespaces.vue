@@ -472,7 +472,7 @@ const copyToClipboard = async (text: string, type: string) => {
 const startLabelEdit = async () => {
   if (!selectedNamespace.value) return
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const namespaceName = selectedNamespace.value.name
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/namespaces/${namespaceName}/yaml`,
@@ -514,7 +514,7 @@ const saveLabels = async () => {
 
   labelSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const namespaceName = selectedNamespace.value.name
     const lines = labelOriginalYaml.value.split('\n')
     let updatedLines: string[] = []
@@ -673,7 +673,7 @@ const handleCreateSubmit = async () => {
 
   createLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const yaml = `apiVersion: v1\nkind: Namespace\nmetadata:\n  name: ${createForm.value.name}\n`
     await axios.post(
       `/api/v1/plugins/kubernetes/resources/namespaces`,
@@ -710,7 +710,7 @@ const handleEditLabels = () => {
 const handleShowYAML = async () => {
   if (!selectedNamespace.value) return
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/namespaces/${selectedNamespace.value.name}/yaml`,
       { params: { clusterId: selectedClusterId.value }, headers: { Authorization: `Bearer ${token}` } }
@@ -736,7 +736,7 @@ const handleDelete = async () => {
       '删除命名空间确认',
       { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'error' }
     )
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/namespaces/${selectedNamespace.value.name}?clusterId=${selectedClusterId.value}`,
       { headers: { Authorization: `Bearer ${token}` } }

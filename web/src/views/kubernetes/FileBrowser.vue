@@ -169,7 +169,7 @@ const uploadUrl = computed(() => {
 })
 
 const uploadHeaders = computed(() => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
   return {
     Authorization: `Bearer ${token}`
   }
@@ -223,7 +223,7 @@ const formatDate = (dateStr: string): string => {
 const loadFiles = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     const response = await axios.get('/api/v1/plugins/kubernetes/pods/files', {
       params: {
@@ -304,7 +304,7 @@ const handleFileClick = (file: FileInfo) => {
 
 const downloadFile = async (file: FileInfo) => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const filePath = currentPath.value === '/'
       ? '/' + file.name
       : currentPath.value + '/' + file.name

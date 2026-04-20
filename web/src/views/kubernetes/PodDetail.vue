@@ -506,7 +506,7 @@ const getVolumeConfig = (volume: any) => {
 const loadPodDetail = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/pods/${props.namespace}/${props.podName}`,
       {
@@ -525,7 +525,7 @@ const loadPodDetail = async () => {
 
 const loadPodEvents = async () => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/pods/${props.namespace}/${props.podName}/events`,
       {

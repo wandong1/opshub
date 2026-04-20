@@ -46,6 +46,14 @@ type InspectionTask struct {
 	// 自定义变量 ✅ 移除 default:''
 	CustomVariables string `gorm:"type:text" json:"custom_variables"`
 
+	// 巡检项断言覆盖（任务级断言覆盖功能）
+	// JSON 数组：[{"item_id": 123, "assertion_type": "lt", "assertion_value": "80"}]
+	ItemAssertionOverrides string `gorm:"type:text" json:"item_assertion_overrides"`
+
+	// 巡检组业务分组覆盖（任务级业务分组覆盖功能，优先级高于 BusinessGroupID）
+	// JSON 数组：[{"group_id": 10, "business_group_id": 5}]
+	GroupBusinessGroupOverrides string `gorm:"type:text" json:"group_business_group_overrides"`
+
 	// 执行记录
 	LastRunAt     *time.Time `json:"last_run_at"`
 	LastRunStatus string     `gorm:"size:20" json:"last_run_status"` // success/failed

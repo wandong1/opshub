@@ -1982,7 +1982,7 @@ const initTerminal = async () => {
 
 // 连接SSH
 const connectSSH = (host: any) => {
-  const token = localStorage.getItem('token') || ''
+  const token = localStorage.getItem('srehubtoken') || ''
   const wsUrl = `ws://localhost:9876/api/v1/asset/terminal/${host.id}?token=${token}`
 
   ws.value = new WebSocket(wsUrl)
@@ -2015,7 +2015,7 @@ const connectSSH = (host: any) => {
 }
 
 const getTerminalUrl = (host: any): string => {
-  const token = localStorage.getItem('token') || ''
+  const token = localStorage.getItem('srehubtoken') || ''
   return `/api/v1/asset/terminal/${host.id}?token=${token}`
 }
 

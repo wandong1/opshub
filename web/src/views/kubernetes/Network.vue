@@ -337,7 +337,7 @@ let logsRefreshTimer: number | null = null
 const handleTerminal = async (data: { namespace: string; name: string }) => {
   // 获取Pod详情以获取容器名称
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/pods/${data.namespace}/${data.name}`, {
       params: { clusterId: selectedClusterId.value },
       headers: { Authorization: `Bearer ${token}` }
@@ -365,7 +365,7 @@ const handleTerminal = async (data: { namespace: string; name: string }) => {
 const handleLogs = async (data: { namespace: string; name: string }) => {
   // 获取Pod详情以获取容器名称
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/pods/${data.namespace}/${data.name}`, {
       params: { clusterId: selectedClusterId.value },
       headers: { Authorization: `Bearer ${token}` }
@@ -455,7 +455,7 @@ const initTerminal = async () => {
   terminal.writeln('\x1b[1;32m正在连接到容器...\x1b[0m')
 
   // 获取token
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
   const clusterId = selectedClusterId.value
 
   // 构建WebSocket URL - 在开发环境直接连接后端，生产环境使用当前域名
@@ -553,7 +553,7 @@ const handleLogsDialogOpened = async () => {
 const handleLoadLogs = async () => {
   logsLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const { pod, container, namespace } = logsData.value
 

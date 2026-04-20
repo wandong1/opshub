@@ -388,7 +388,7 @@ const initTerminal = async (tabId: string, host: any) => {
   term.writeln('\x1b[1;32m正在连接...\x1b[0m')
 
   // 连接SSH - 直接连接到后端服务器（不通过 Vite 代理）
-  const token = localStorage.getItem('token') || ''
+  const token = localStorage.getItem('srehubtoken') || ''
   // 根据当前环境判断后端地址
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
