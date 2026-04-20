@@ -311,7 +311,7 @@ const handlePlay = async (row: TerminalSession) => {
 
   try {
     // 使用原生 axios 获取录制文件，因为后端直接返回文件内容（不是标准响应格式）
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/terminal/sessions/${row.id}/play`, {
       headers: {
         Authorization: `Bearer ${token}`

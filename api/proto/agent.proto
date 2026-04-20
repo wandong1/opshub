@@ -19,6 +19,7 @@ message AgentMessage {
     FileListResult file_list = 6;
     ProbeResult probe_result = 7;
     HttpProxyResponse http_proxy_response = 8;
+    WsSessionResult ws_session_result = 9;
   }
 }
 
@@ -35,6 +36,9 @@ message ServerMessage {
     CommandRequest cmd_request = 8;
     ProbeRequest probe_request = 9;
     HttpProxyRequest http_proxy_request = 10;
+    WsSessionOpen ws_session_open = 11;
+    WsSessionAction ws_session_action = 12;
+    WsSessionClose ws_session_close = 13;
   }
 }
 
@@ -250,4 +254,41 @@ message HttpProxyResponse {
   map<string, string> headers = 3;
   bytes body = 4;
   string error = 5;
+}
+
+// ========== WebSocket 会话管理 ==========
+message WsSessionOpen {
+  string session_id = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+  map<string, string> params = 4;
+  int32 timeout = 5;
+  bool skip_verify = 6;
+  string proxy_url = 7;
+}
+
+message WsSessionAction {
+  string session_id = 1;
+  string action_id = 2;
+  string action_type = 3; // "send" or "receive"
+  string message = 4; // for send
+  int32 message_type = 5; // 1=text, 2=binary
+  int32 read_timeout = 6; // for receive (seconds)
+  string receive_mode = 7; // "" / "single" = one message; "stream" = collect all until timeout
+}
+
+message WsSessionClose {
+  string session_id = 1;
+}
+
+message WsSessionResult {
+  string session_id = 1;
+  string action_id = 2;
+  string result_type = 3; // "open", "action", "close"
+  bool success = 4;
+  string error = 5;
+  double latency = 6; // ms
+  int32 status_code = 7; // for open: HTTP upgrade status
+  map<string, string> headers = 8; // for open: upgrade response headers
+  string response_body = 9; // for receive action
 }

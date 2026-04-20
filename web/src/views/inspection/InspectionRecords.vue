@@ -207,6 +207,7 @@
         <a-descriptions-item label="巡检项">{{ detailItemData.itemName }}</a-descriptions-item>
         <a-descriptions-item label="主机">{{ detailItemData.hostName }}</a-descriptions-item>
         <a-descriptions-item label="主机IP">{{ detailItemData.hostIp }}</a-descriptions-item>
+        <a-descriptions-item v-if="detailItemData.businessGroup" label="业务分组">{{ detailItemData.businessGroup }}</a-descriptions-item>
         <a-descriptions-item label="执行类型">
           <a-tag v-if="detailItemData.executionType === 'command'" size="small" color="blue">命令</a-tag>
           <a-tag v-else-if="detailItemData.executionType === 'script'" size="small" color="purple">脚本</a-tag>
@@ -442,7 +443,7 @@ const handleViewDetailItem = (record: ExecutionDetail) => {
 
 const handleExport = async (record: ExecutionRecord) => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const url = exportExecutionReport(record.id)
 
     // 使用 fetch 下载文件，携带 token

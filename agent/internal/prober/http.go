@@ -115,6 +115,7 @@ func (p *HTTPProber) Probe(ctx context.Context, req *pb.ProbeRequest) *pb.ProbeR
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: req.SkipVerify,
 		},
+		DisableKeepAlives: true, // 禁用 Keep-Alive，拨测场景每次请求后立即关闭连接，避免连接泄漏
 	}
 
 	// 设置代理

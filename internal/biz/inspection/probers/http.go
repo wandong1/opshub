@@ -62,7 +62,8 @@ func (p *HTTPProber) ProbeApp(config *AppProbeConfig) *AppResult {
 
 	// Build transport
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: config.SkipVerify},
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: config.SkipVerify},
+		DisableKeepAlives: true, // 禁用 Keep-Alive，拨测场景每次请求后立即关闭连接，避免连接泄漏
 	}
 	if config.ProxyURL != "" {
 		proxyURL, err := url.Parse(config.ProxyURL)

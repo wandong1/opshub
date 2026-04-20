@@ -21,6 +21,7 @@ export interface Website {
   agentHostIds: number[] | null
   agentHostNames: string[] | null
   agentOnline: boolean
+  basePath?: string  // 站点基础路径（仅内部站点）
 }
 
 export interface WebsiteRequest {
@@ -37,6 +38,7 @@ export interface WebsiteRequest {
   status: number
   groupIds: number[]
   agentHostIds: number[]
+  basePath?: string  // 站点基础路径（仅内部站点）
 }
 
 export interface WebsiteListParams {

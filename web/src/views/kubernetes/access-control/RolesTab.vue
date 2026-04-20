@@ -169,7 +169,7 @@ const handleEdit = async (row: RoleInfo) => {
   isCreateMode.value = false
 
   try {
-    const token = localStorage.getItem('token') || ''
+    const token = localStorage.getItem('srehubtoken') || ''
     const response: any = await axios.get(
       `/api/v1/plugins/kubernetes/resources/roles/${row.namespace}/${row.name}/yaml`,
       {

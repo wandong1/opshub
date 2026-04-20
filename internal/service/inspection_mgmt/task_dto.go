@@ -17,6 +17,9 @@ type TaskCreateRequest struct {
 	AgentHostIDs    string `json:"agent_host_ids"`   // Agent 主机 ID 列表（JSON 数组）
 	BusinessGroupID uint   `json:"business_group_id"` // 业务分组 ID
 	CustomVariables string `json:"custom_variables"` // 自定义变量（JSON 对象，拨测任务）
+	// 任务级覆盖功能
+	ItemAssertionOverrides      string `json:"item_assertion_overrides"`       // 巡检项断言覆盖（JSON 数组）
+	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"` // 巡检组业务分组覆盖（JSON 数组）
 }
 
 // TaskUpdateRequest 更新定时任务请求
@@ -36,6 +39,9 @@ type TaskUpdateRequest struct {
 	AgentHostIDs    string `json:"agent_host_ids"`
 	BusinessGroupID uint   `json:"business_group_id"`
 	CustomVariables string `json:"custom_variables"`
+	// 任务级覆盖功能
+	ItemAssertionOverrides      string `json:"item_assertion_overrides"`
+	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"`
 }
 
 // TaskListRequest 定时任务列表请求
@@ -65,6 +71,9 @@ type TaskResponse struct {
 	AgentHostIDs    string `json:"agent_host_ids"`
 	BusinessGroupID uint   `json:"business_group_id"`
 	CustomVariables string `json:"custom_variables"`
+	// 任务级覆盖功能
+	ItemAssertionOverrides      string `json:"item_assertion_overrides"`
+	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"`
 	LastRunAt       string `json:"last_run_at"`
 	LastRunStatus   string `json:"last_run_status"`
 	NextRunAt       string `json:"next_run_at"`

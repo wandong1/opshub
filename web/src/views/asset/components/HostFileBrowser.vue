@@ -282,7 +282,7 @@ const uploadUrl = computed(() => {
 })
 
 const uploadHeaders = computed(() => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
   return {
     Authorization: `Bearer ${token}`
   }
@@ -403,7 +403,7 @@ const handleCustomUpload = async (file: File) => {
   formData.append('file', file)
   formData.append('path', currentPath.value)
 
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()

@@ -206,6 +206,11 @@ func (h *WebsiteProxyHandlerV2) buildProxyContext(c *gin.Context, website *asset
 		targetPath = "/" + targetPath
 	}
 
+	// 如果是内部站点且配置了 BasePath，则在目标路径前添加 BasePath
+	if website.Type == "internal" && website.BasePath != "" {
+		targetPath = strings.TrimRight(website.BasePath, "/") + targetPath
+	}
+
 	targetURL := baseURL.ResolveReference(&url.URL{Path: targetPath})
 	targetURL.RawQuery = c.Request.URL.RawQuery
 
@@ -394,14 +399,27 @@ func (h *WebsiteProxyHandlerV2) rewriteLocationHeader(location string, proxyCtx 
 }
 
 func (h *WebsiteProxyHandlerV2) rewriteSetCookieHeader(cookie string, proxyBasePath string) string {
+	// 关键修复：不删除 Domain，而是设置为空字符串，让浏览器限制 Cookie 只在当前路径下有效
+	// 这样可以防止代理站点的 Cookie 覆盖平台的 Cookie
+
+	// 移除原有的 Domain 属性（如果存在）
 	cookie = regexp.MustCompile(`(?i);\s*Domain=[^;]+`).ReplaceAllString(cookie, "")
 
-	pathPattern := regexp.MustCompile(`(?i)Path=[^;]+`)
+	// 重写 Path 属性，限制 Cookie 只在代理路径下有效
+	pathPattern := regexp.MustCompile(`(?i);\s*Path=[^;]+`)
 	if pathPattern.MatchString(cookie) {
-		return pathPattern.ReplaceAllString(cookie, "Path="+proxyBasePath)
+		cookie = pathPattern.ReplaceAllString(cookie, "; Path="+proxyBasePath)
+	} else {
+		cookie = cookie + "; Path=" + proxyBasePath
 	}
 
-	return cookie + "; Path=" + proxyBasePath
+	// 关键修复：添加 SameSite=Lax 属性，进一步隔离 Cookie
+	// 防止跨站请求携带 Cookie，增强安全性
+	if !regexp.MustCompile(`(?i)SameSite=`).MatchString(cookie) {
+		cookie = cookie + "; SameSite=Lax"
+	}
+
+	return cookie
 }
 
 func cloneHeaderMap(src map[string]string) map[string]string {

@@ -1827,7 +1827,7 @@ const loadNamespaces = async () => {
   if (!selectedClusterId.value) return
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/namespaces`,
       {
@@ -2009,7 +2009,7 @@ const handleCreateFromYaml = async () => {
 
   createYamlLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.post(
       `/api/v1/plugins/kubernetes/resources/workloads/create`,
       {
@@ -2040,7 +2040,7 @@ const loadWorkloads = async () => {
 
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const params: any = { clusterId: selectedClusterId.value }
     // 不传 type 参数，获取所有类型的工作负载
     if (selectedNamespace.value) params.namespace = selectedNamespace.value
@@ -2147,7 +2147,7 @@ const handleActionCommand = async (command: string | any, row: Workload) => {
 const fetchPodDetailsForMenu = async (podName: string, namespace: string) => {
   podMenuLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/pods/${namespace}/${podName}`, {
       params: { clusterId: selectedClusterId.value },
       headers: { Authorization: `Bearer ${token}` }
@@ -2182,7 +2182,7 @@ const handleDeletePod = async (podName: string, namespace: string) => {
     })
 
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       await axios.delete(`/api/v1/plugins/kubernetes/resources/workloads/${namespace}/${podName}`, {
         params: {
           clusterId: selectedClusterId.value,
@@ -2257,7 +2257,7 @@ const handleBatchDelete = async () => {
     )
 
     batchActionLoading.value = true
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/workloads/batch/delete',
@@ -2317,7 +2317,7 @@ const handleBatchRestart = async () => {
     )
 
     batchActionLoading.value = true
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     const workloadData = selectedWorkloads.value.map(w => ({
       namespace: w.namespace,
@@ -2383,7 +2383,7 @@ const handleBatchPause = async () => {
     )
 
     batchActionLoading.value = true
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/workloads/batch/pause',
@@ -2443,7 +2443,7 @@ const handleBatchResume = async () => {
     )
 
     batchActionLoading.value = true
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     const response = await axios.post(
       '/api/v1/plugins/kubernetes/resources/workloads/batch/resume',
@@ -2493,7 +2493,7 @@ const loadNodes = async () => {
   }
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       '/api/v1/plugins/kubernetes/resources/nodes',
       {
@@ -2601,7 +2601,7 @@ const handlePodWorkloadClick = async (workload: Workload) => {
 // 显示工作负载详情
 const handleShowDetail = async (workload: Workload) => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
 
     // 并行获取所有数据
@@ -2892,7 +2892,7 @@ const handlePauseChange = async (value: boolean) => {
 
   pauseLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const namespace = detailData.value.namespace
     const name = detailData.value.name
@@ -3006,7 +3006,7 @@ const getStatusDotIcon = (statusType: string) => {
 // 查看 ReplicaSet YAML
 const handleViewReplicaSetYAML = async (replicaSet: any) => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const namespace = replicaSet.metadata?.namespace
     const name = replicaSet.metadata?.name
@@ -3051,7 +3051,7 @@ const handleRollback = async (replicaSet: any) => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const namespace = detailData.value.namespace
     const name = detailData.value.name
@@ -3393,7 +3393,7 @@ const initTerminal = async () => {
   terminal.writeln('\x1b[1;32m正在连接到容器...\x1b[0m')
 
   // 获取token
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
   const clusterId = selectedClusterId.value
 
   // 构建WebSocket URL - 在开发环境直接连接后端，生产环境使用当前域名
@@ -3523,7 +3523,7 @@ const handleOpenFileBrowser = (podName: string, containerName: string, namespace
 const handleLoadLogs = async () => {
   logsLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const { pod, container, namespace } = logsData.value
 
@@ -3628,7 +3628,7 @@ const handleShowYAML = async () => {
 
   yamlSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const name = selectedWorkload.value.name
     const namespace = selectedWorkload.value.namespace
@@ -3668,7 +3668,7 @@ const handleSaveYAML = async () => {
 
   yamlSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const name = selectedWorkload.value.name
     const namespace = selectedWorkload.value.namespace
@@ -3725,7 +3725,7 @@ const handleRestart = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.post(
       `/api/v1/plugins/kubernetes/resources/workloads/${selectedWorkload.value.namespace}/${selectedWorkload.value.name}/restart`,
       {
@@ -3768,7 +3768,7 @@ const handleScale = async () => {
       return
     }
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.post(
       `/api/v1/plugins/kubernetes/resources/workloads/${selectedWorkload.value.namespace}/${selectedWorkload.value.name}/scale`,
       {
@@ -3796,7 +3796,7 @@ const handleShowEditDialog = async () => {
 
   editSaving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const clusterId = selectedClusterId.value
     const workloadType = selectedWorkload.value.type
     const name = selectedWorkload.value.name
@@ -5073,7 +5073,7 @@ const handleSaveEdit = async () => {
 
     if (isCreateMode.value) {
       // 创建模式：调用创建API
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       await axios.post(
         `/api/v1/plugins/kubernetes/resources/workloads/create`,
         {
@@ -5340,7 +5340,7 @@ const handleDelete = async () => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/workloads/${selectedWorkload.value.namespace}/${selectedWorkload.value.name}`,
       {

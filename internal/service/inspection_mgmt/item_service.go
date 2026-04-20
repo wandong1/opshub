@@ -11,6 +11,13 @@ import (
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
 )
 
+// ItemAssertionOverride 巡检项断言覆盖结构
+type ItemAssertionOverride struct {
+	ItemID         uint   `json:"item_id"`
+	AssertionType  string `json:"assertion_type"`
+	AssertionValue string `json:"assertion_value"`
+}
+
 type ItemService struct {
 	itemRepo         inspectionmgmtdata.ItemRepository
 	groupRepo        inspectionmgmtdata.GroupRepository
@@ -240,7 +247,7 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 
 		// 拨测类型不需要主机匹配，直接执行
 		if item.ExecutionType == "probe" {
-			result := s.executeItem(ctx, item, group, nil, nil)
+			result := s.executeItem(ctx, item, group, nil, nil, nil)
 			results = append(results, result)
 			continue
 		}
@@ -253,7 +260,7 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 
 		// 对每个主机执行巡检
 		for _, host := range hosts {
-			result := s.executeItem(ctx, item, group, host, nil)
+			result := s.executeItem(ctx, item, group, host, nil, nil)
 			results = append(results, result)
 		}
 	}
@@ -313,7 +320,7 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 
 		// 拨测类型不需要主机匹配，直接执行
 		if item.ExecutionType == "probe" {
-			result := s.executeItem(ctx, item, group, nil, nil)
+			result := s.executeItem(ctx, item, group, nil, nil, nil)
 			results = append(results, result)
 			continue
 		}
@@ -326,7 +333,7 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 
 		// 对每个主机执行巡检
 		for _, host := range hosts {
-			result := s.executeItem(ctx, item, group, host, nil)
+			result := s.executeItem(ctx, item, group, host, nil, nil)
 			results = append(results, result)
 		}
 	}
@@ -334,7 +341,14 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 	return results, nil
 }
 
-func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.InspectionItem, group *inspectionmgmtdata.InspectionGroup, host *assetbiz.Host, runtimeVariables map[string]string) *TestRunResponse {
+func (s *ItemService) executeItem(
+	ctx context.Context,
+	item *inspectionmgmtdata.InspectionItem,
+	group *inspectionmgmtdata.InspectionGroup,
+	host *assetbiz.Host,
+	runtimeVariables map[string]string,
+	assertionOverride *ItemAssertionOverride,
+) *TestRunResponse {
 	result := &TestRunResponse{
 		ItemID:   item.ID,
 		ItemName: item.Name,
@@ -438,8 +452,18 @@ func (s *ItemService) executeItem(ctx context.Context, item *inspectionmgmtdata.
 	result.Status = "success"
 	fmt.Printf("[ItemService] Execution success - output length: %d\n", len(execResult.Output))
 
+	// 应用断言覆盖（如果提供）
+	effectiveAssertionType := item.AssertionType
+	effectiveAssertionValue := item.AssertionValue
+	if assertionOverride != nil {
+		effectiveAssertionType = assertionOverride.AssertionType
+		effectiveAssertionValue = assertionOverride.AssertionValue
+		fmt.Printf("[ItemService] 应用断言覆盖 - item_id: %d, override_type: %s, override_value: %s\n",
+			item.ID, effectiveAssertionType, effectiveAssertionValue)
+	}
+
 	// 断言校验
-	assertionResult := s.validator.Validate(item.AssertionType, item.AssertionValue, execResult.Output)
+	assertionResult := s.validator.Validate(effectiveAssertionType, effectiveAssertionValue, execResult.Output)
 	if assertionResult.Pass {
 		result.AssertionResult = "pass"
 	} else {
@@ -697,7 +721,7 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 	// 拨测类型不需要主机匹配，直接执行
 	if item.ExecutionType == "probe" {
 		variables := make(map[string]string)
-		result := s.executeItem(ctx, item, group, nil, variables)
+		result := s.executeItem(ctx, item, group, nil, variables, nil)
 
 		// 转换 AssertionDetails 为 JSON 字符串
 		assertionDetailsJSON := ""
@@ -743,7 +767,7 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 	variables := make(map[string]string)
 
 	for _, host := range hosts {
-		result := s.executeItem(ctx, item, group, host, variables)
+		result := s.executeItem(ctx, item, group, host, variables, nil)
 
 		// 转换 AssertionDetails 为 JSON 字符串
 		assertionDetailsJSON := ""
@@ -777,16 +801,18 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 	return records, nil
 }
 
-// ExecuteItemByIDWithOverride 执行巡检项，支持任务调度级覆盖（需求一、需求三）
+// ExecuteItemByIDWithOverride 执行巡检项，支持任务调度级覆盖（需求一、需求三、断言覆盖）
 // executionModeOverride: 覆盖执行方式，空=沿用巡检组配置
 // businessGroupIDOverride: 覆盖业务分组，0=沿用巡检组配置
 // extraVars: 任务调度级自定义变量（优先级最高，合并到运行时变量）
+// assertionOverride: 断言覆盖，nil=沿用巡检项配置
 func (s *ItemService) ExecuteItemByIDWithOverride(
 	ctx context.Context,
 	itemID uint,
 	executionModeOverride string,
 	businessGroupIDOverride uint,
 	extraVars map[string]string,
+	assertionOverride *ItemAssertionOverride,
 ) ([]*inspectionmgmtdata.InspectionRecord, error) {
 	// 获取巡检项
 	item, err := s.itemRepo.GetByID(ctx, itemID)
@@ -823,7 +849,7 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 		for k, v := range baseVars {
 			variables[k] = v
 		}
-		result := s.executeItem(ctx, item, &effectiveGroup, nil, variables)
+		result := s.executeItem(ctx, item, &effectiveGroup, nil, variables, assertionOverride)
 
 		assertionDetailsJSON := ""
 		if result.AssertionDetails != nil {
@@ -865,7 +891,7 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 		variables[k] = v
 	}
 	for _, host := range hosts {
-		result := s.executeItem(ctx, item, &effectiveGroup, host, variables)
+		result := s.executeItem(ctx, item, &effectiveGroup, host, variables, assertionOverride)
 
 		assertionDetailsJSON := ""
 		if result.AssertionDetails != nil {

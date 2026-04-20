@@ -314,7 +314,7 @@ export function registerPluginRoutes() {
 
 // 路由守卫
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('srehubtoken')
 
   // 如果访问登录页，且已登录，则跳转到首页
   if (to.path === '/login') {

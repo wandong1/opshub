@@ -217,3 +217,25 @@ func parseGroupIDs(s string) []uint {
 	}
 	return ids
 }
+
+// hasGroupAccess checks if any of the allowedGroupIDs is in the variable's GroupIDs
+func hasGroupAccess(varGroupIDs string, allowedGroupIDs []uint) bool {
+	if varGroupIDs == "" {
+		return true // 空表示全局可用
+	}
+	vgids := parseGroupIDs(varGroupIDs)
+	if len(vgids) == 0 {
+		return true
+	}
+	if len(allowedGroupIDs) == 0 {
+		return false // 没有允许的分组，无权访问
+	}
+	for _, allowed := range allowedGroupIDs {
+		for _, vgid := range vgids {
+			if allowed == vgid {
+				return true
+			}
+		}
+	}
+	return false
+}

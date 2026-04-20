@@ -56,11 +56,14 @@ var runCmd = &cobra.Command{
 		fileMgr := filemanager.NewFileManager()
 		cmdExec := executor.NewCommandExecutor()
 		probeMgr := prober.NewManager()
+		wsSessionMgr := prober.NewWsSessionManager()
 
 		grpcClient.SetHandlers(ptyMgr, fileMgr, cmdExec)
 		grpcClient.SetProbeHandler(probeMgr)
+		grpcClient.SetWsSessionHandler(wsSessionMgr)
 
 		logger.Info("拨测功能已启用")
+		logger.Info("WebSocket 会话管理已启用")
 
 		// 启动
 		ctx, cancel := context.WithCancel(context.Background())

@@ -277,6 +277,15 @@
           </a-select>
         </a-form-item>
 
+        <a-form-item v-if="formData.type === 'internal'" label="站点基础路径">
+          <a-input v-model="formData.basePath" placeholder="如 /nacos（可选）" />
+          <template #extra>
+            <div style="font-size: 12px; color: var(--ops-text-tertiary); margin-top: 4px;">
+              如果站点有固定的 URI 前缀（如 Nacos 的 /nacos，Grafana 的 /grafana），请填写此字段
+            </div>
+          </template>
+        </a-form-item>
+
         <a-form-item label="备注">
           <a-textarea v-model="formData.description" placeholder="请输入备注" :rows="3" />
         </a-form-item>
@@ -471,7 +480,8 @@ const formData = reactive<WebsiteRequest>({
   description: '',
   status: 1,
   groupIds: [],
-  agentHostIds: []
+  agentHostIds: [],
+  basePath: ''
 })
 
 const formRules = {
@@ -672,7 +682,8 @@ const handleEdit = (record: Website) => {
     description: record.description,
     status: record.status,
     groupIds: record.groupIds || [],
-    agentHostIds: record.agentHostIds || []
+    agentHostIds: record.agentHostIds || [],
+    basePath: record.basePath || ''
   })
   // 根据已选择的分组过滤 Agent 主机
   filterAgentHostsByGroups()

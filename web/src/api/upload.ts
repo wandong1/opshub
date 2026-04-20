@@ -13,7 +13,7 @@ export const uploadAvatar = (file: File) => {
   return axios.post('/api/v1/upload/avatar', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
-      'Authorization': `Bearer ${localStorage.getItem('token')}`
+      'Authorization': `Bearer ${localStorage.getItem('srehubtoken')}`
     }
   }).then(response => {
     // 返回完整的响应对象,包含 code, message, data

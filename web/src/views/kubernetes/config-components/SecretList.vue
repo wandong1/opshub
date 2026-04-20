@@ -428,7 +428,7 @@ const loadSecrets = async () => {
 
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/secrets`, {
       params: { clusterId: props.clusterId },
       headers: { Authorization: `Bearer ${token}` }
@@ -482,7 +482,7 @@ const handleCreateForm = () => {
 // 编辑表单
 const handleEditForm = async (row: SecretInfo) => {
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/secrets/${row.namespace}/${row.name}/yaml`,
       {
@@ -530,7 +530,7 @@ const handleEditYAML = async (row: SecretInfo) => {
   isCreateMode.value = false
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/secrets/${row.namespace}/${row.name}/yaml`,
       {
@@ -558,7 +558,7 @@ const handleEditYAML = async (row: SecretInfo) => {
 const handleSaveYAML = async () => {
   saving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     // 从 YAML 中解析对象
     const yamlObj: any = yaml.load(yamlContent.value)
@@ -627,7 +627,7 @@ const handleSaveForm = async () => {
 
   saving.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
 
     // 构建 Secret 对象
     const secretObj: any = {
@@ -725,7 +725,7 @@ const handleDelete = async (row: SecretInfo) => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/secrets/${row.namespace}/${row.name}`,
       {

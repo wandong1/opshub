@@ -4,29 +4,29 @@ import type { LoginParams, RegisterParams } from '@/api/auth'
 import { usePermissionStore } from '@/stores/permission'
 
 interface UserState {
-  token: string
+  srehubtoken: string
   userInfo: any
   avatarTimestamp: number
 }
 
 export const useUserStore = defineStore('user', {
   state: (): UserState => ({
-    token: localStorage.getItem('token') || '',
+    srehubtoken: localStorage.getItem('srehubtoken') || '',
     userInfo: null,
     avatarTimestamp: Date.now()
   }),
 
   getters: {
-    isLogin: (state) => !!state.token
+    isLogin: (state) => !!state.srehubtoken
   },
 
   actions: {
     // 登录
     async login(params: LoginParams) {
       const res = await login(params)
-      this.token = res.token
+      this.srehubtoken = res.token
       this.userInfo = res.user
-      localStorage.setItem('token', res.token)
+      localStorage.setItem('srehubtoken', res.token)
       return res
     },
 
@@ -47,9 +47,9 @@ export const useUserStore = defineStore('user', {
 
     // 退出登录
     logout() {
-      this.token = ''
+      this.srehubtoken = ''
       this.userInfo = null
-      localStorage.removeItem('token')
+      localStorage.removeItem('srehubtoken')
       const permissionStore = usePermissionStore()
       permissionStore.clearPermissions()
     },

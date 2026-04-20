@@ -225,6 +225,7 @@ services:
       - "8848:8848"
       - "9848:9848"
       - "9849:9849"
+    privileged: true
     environment:
       - SPRING_DATASOURCE_PLATFORM=mysql
       - MYSQL_SERVICE_PORT=3306

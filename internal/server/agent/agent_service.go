@@ -114,6 +114,16 @@ func (s *AgentService) Connect(stream pb.AgentHub_ConnectServer) error {
 			if as != nil {
 				as.ResolvePending(payload.HttpProxyResponse.RequestId, payload.HttpProxyResponse)
 			}
+
+		case *pb.AgentMessage_WsSessionResult:
+			if as != nil {
+				// WebSocket 会话结果，使用 session_id + action_id 作为 key
+				key := payload.WsSessionResult.SessionId
+				if payload.WsSessionResult.ActionId != "" {
+					key = payload.WsSessionResult.SessionId + ":" + payload.WsSessionResult.ActionId
+				}
+				as.ResolvePending(key, payload.WsSessionResult)
+			}
 		}
 	}
 }

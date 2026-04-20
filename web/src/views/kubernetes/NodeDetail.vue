@@ -441,7 +441,7 @@ const loadNodeDetail = async () => {
 const loadNodeMetrics = async () => {
   try {
     // 调用后端 API 获取节点指标
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/nodes/${nodeName}/metrics?clusterId=${clusterId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -456,7 +456,7 @@ const loadNodeMetrics = async () => {
 const loadPods = async () => {
   podsLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/pods?clusterId=${clusterId}&nodeName=${nodeName}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -472,7 +472,7 @@ const loadPods = async () => {
 const loadEvents = async () => {
   eventsLoading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     // 先尝试获取所有事件，然后在前端过滤节点相关的事件
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/events?clusterId=${clusterId}`, {
       headers: { Authorization: `Bearer ${token}` }

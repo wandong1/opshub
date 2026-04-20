@@ -260,7 +260,7 @@ const loadHPAs = async () => {
 
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers`, {
       params: { clusterId: props.clusterId },
       headers: { Authorization: `Bearer ${token}` }
@@ -284,7 +284,7 @@ const handleEditYAML = async (row: HPAInfo) => {
   isCreateMode.value = false
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/${row.namespace}/${row.name}/yaml`,
       {
@@ -322,7 +322,7 @@ const handleSaveYAML = async () => {
 
     saving.value = true
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       await axios.post(
         `/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/${namespace}/yaml`,
         {
@@ -348,7 +348,7 @@ const handleSaveYAML = async () => {
 
     saving.value = true
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       await axios.put(
         `/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/${selectedHPA.value.namespace}/${selectedHPA.value.name}/yaml`,
         {
@@ -385,7 +385,7 @@ const handleDelete = async (row: HPAInfo) => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/horizontalpodautoscalers/${row.namespace}/${row.name}`,
       {

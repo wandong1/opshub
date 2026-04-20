@@ -46,6 +46,14 @@ type ProbeHandler interface {
 	Probe(req *pb.ProbeRequest) *pb.ProbeResult
 }
 
+// WsSessionHandler WebSocket 会话管理回调
+type WsSessionHandler interface {
+	OpenSession(sessionID, url string, headers, params map[string]string, timeout int32, skipVerify bool, proxyURL string) (int, map[string]string, error)
+	SendMessage(sessionID string, messageType int, message string) error
+	ReceiveMessage(sessionID string, readTimeout int32, receiveMode string) (string, error)
+	CloseSession(sessionID string) error
+}
+
 // GRPCClient Agent gRPC客户端
 type GRPCClient struct {
 	cfg               *config.Config
@@ -56,6 +64,7 @@ type GRPCClient struct {
 	fileHandler       FileHandler
 	cmdHandler        CommandHandler
 	probeHandler      ProbeHandler
+	wsSessionHandler  WsSessionHandler
 	heartbeatInterval int32
 	intervalMu        sync.RWMutex
 	heartbeatCancel   context.CancelFunc
@@ -77,6 +86,11 @@ func (c *GRPCClient) SetHandlers(term TerminalHandler, file FileHandler, cmd Com
 // SetProbeHandler 设置拨测处理器
 func (c *GRPCClient) SetProbeHandler(probe ProbeHandler) {
 	c.probeHandler = probe
+}
+
+// SetWsSessionHandler 设置 WebSocket 会话处理器
+func (c *GRPCClient) SetWsSessionHandler(wsSession WsSessionHandler) {
+	c.wsSessionHandler = wsSession
 }
 
 // SendMessage 发送消息到服务端
@@ -337,6 +351,23 @@ func (c *GRPCClient) handleServerMessage(msg *pb.ServerMessage) {
 		logger.Info("收到 HTTP 代理请求: method=%s, url=%s, requestID=%s",
 			payload.HttpProxyRequest.Method, payload.HttpProxyRequest.Url, payload.HttpProxyRequest.RequestId)
 		go c.handleHttpProxyRequest(payload.HttpProxyRequest)
+
+	case *pb.ServerMessage_WsSessionOpen:
+		// 处理 WebSocket 会话打开请求
+		logger.Info("收到 WebSocket 会话打开请求: sessionID=%s, url=%s",
+			payload.WsSessionOpen.SessionId, payload.WsSessionOpen.Url)
+		go c.handleWsSessionOpen(payload.WsSessionOpen)
+
+	case *pb.ServerMessage_WsSessionAction:
+		// 处理 WebSocket 会话操作请求
+		logger.Info("收到 WebSocket 会话操作请求: sessionID=%s, actionID=%s, type=%s",
+			payload.WsSessionAction.SessionId, payload.WsSessionAction.ActionId, payload.WsSessionAction.ActionType)
+		go c.handleWsSessionAction(payload.WsSessionAction)
+
+	case *pb.ServerMessage_WsSessionClose:
+		// 处理 WebSocket 会话关闭请求
+		logger.Info("收到 WebSocket 会话关闭请求: sessionID=%s", payload.WsSessionClose.SessionId)
+		go c.handleWsSessionClose(payload.WsSessionClose)
 	}
 }
 
@@ -437,6 +468,143 @@ func (c *GRPCClient) sendHttpProxyError(requestID string, err error) {
 	c.SendMessage(&pb.AgentMessage{
 		Payload: &pb.AgentMessage_HttpProxyResponse{
 			HttpProxyResponse: proxyResp,
+		},
+	})
+}
+
+// handleWsSessionOpen 处理 WebSocket 会话打开请求
+func (c *GRPCClient) handleWsSessionOpen(req *pb.WsSessionOpen) {
+	if c.wsSessionHandler == nil {
+		logger.Error("WebSocket 会话处理器未设置")
+		c.sendWsSessionError(req.SessionId, "", "open", "WebSocket handler not set")
+		return
+	}
+
+	start := time.Now()
+	statusCode, headers, err := c.wsSessionHandler.OpenSession(
+		req.SessionId, req.Url, req.Headers, req.Params,
+		req.Timeout, req.SkipVerify, req.ProxyUrl,
+	)
+	latency := float64(time.Since(start).Milliseconds())
+
+	result := &pb.WsSessionResult{
+		SessionId:  req.SessionId,
+		ActionId:   "",
+		ResultType: "open",
+		Success:    err == nil,
+		Latency:    latency,
+		StatusCode: int32(statusCode),
+		Headers:    headers,
+	}
+
+	if err != nil {
+		result.Error = err.Error()
+		logger.Error("WebSocket 会话打开失败: sessionID=%s, error=%v", req.SessionId, err)
+	} else {
+		logger.Info("WebSocket 会话打开成功: sessionID=%s, status=%d", req.SessionId, statusCode)
+	}
+
+	c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_WsSessionResult{
+			WsSessionResult: result,
+		},
+	})
+}
+
+// handleWsSessionAction 处理 WebSocket 会话操作请求
+func (c *GRPCClient) handleWsSessionAction(req *pb.WsSessionAction) {
+	if c.wsSessionHandler == nil {
+		logger.Error("WebSocket 会话处理器未设置")
+		c.sendWsSessionError(req.SessionId, req.ActionId, "action", "WebSocket handler not set")
+		return
+	}
+
+	start := time.Now()
+	var err error
+	var responseBody string
+
+	if req.ActionType == "send" {
+		err = c.wsSessionHandler.SendMessage(req.SessionId, int(req.MessageType), req.Message)
+	} else if req.ActionType == "receive" {
+		responseBody, err = c.wsSessionHandler.ReceiveMessage(req.SessionId, req.ReadTimeout, req.ReceiveMode)
+	} else {
+		err = fmt.Errorf("unknown action type: %s", req.ActionType)
+	}
+
+	latency := float64(time.Since(start).Milliseconds())
+
+	result := &pb.WsSessionResult{
+		SessionId:    req.SessionId,
+		ActionId:     req.ActionId,
+		ResultType:   "action",
+		Success:      err == nil,
+		Latency:      latency,
+		ResponseBody: responseBody,
+	}
+
+	if err != nil {
+		result.Error = err.Error()
+		logger.Error("WebSocket 会话操作失败: sessionID=%s, actionID=%s, type=%s, error=%v",
+			req.SessionId, req.ActionId, req.ActionType, err)
+	} else {
+		logger.Info("WebSocket 会话操作成功: sessionID=%s, actionID=%s, type=%s",
+			req.SessionId, req.ActionId, req.ActionType)
+	}
+
+	c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_WsSessionResult{
+			WsSessionResult: result,
+		},
+	})
+}
+
+// handleWsSessionClose 处理 WebSocket 会话关闭请求
+func (c *GRPCClient) handleWsSessionClose(req *pb.WsSessionClose) {
+	if c.wsSessionHandler == nil {
+		logger.Error("WebSocket 会话处理器未设置")
+		c.sendWsSessionError(req.SessionId, "", "close", "WebSocket handler not set")
+		return
+	}
+
+	start := time.Now()
+	err := c.wsSessionHandler.CloseSession(req.SessionId)
+	latency := float64(time.Since(start).Milliseconds())
+
+	result := &pb.WsSessionResult{
+		SessionId:  req.SessionId,
+		ActionId:   "",
+		ResultType: "close",
+		Success:    err == nil,
+		Latency:    latency,
+	}
+
+	if err != nil {
+		result.Error = err.Error()
+		logger.Error("WebSocket 会话关闭失败: sessionID=%s, error=%v", req.SessionId, err)
+	} else {
+		logger.Info("WebSocket 会话关闭成功: sessionID=%s", req.SessionId)
+	}
+
+	c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_WsSessionResult{
+			WsSessionResult: result,
+		},
+	})
+}
+
+// sendWsSessionError 发送 WebSocket 会话错误响应
+func (c *GRPCClient) sendWsSessionError(sessionID, actionID, resultType, errMsg string) {
+	result := &pb.WsSessionResult{
+		SessionId:  sessionID,
+		ActionId:   actionID,
+		ResultType: resultType,
+		Success:    false,
+		Error:      errMsg,
+	}
+
+	c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_WsSessionResult{
+			WsSessionResult: result,
 		},
 	})
 }

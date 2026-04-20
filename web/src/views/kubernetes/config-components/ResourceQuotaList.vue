@@ -238,7 +238,7 @@ const loadResourceQuotas = async () => {
 
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(`/api/v1/plugins/kubernetes/resources/resourcequotas`, {
       params: { clusterId: props.clusterId },
       headers: { Authorization: `Bearer ${token}` }
@@ -262,7 +262,7 @@ const handleEditYAML = async (row: ResourceQuotaInfo) => {
   isCreateMode.value = false
 
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     const response = await axios.get(
       `/api/v1/plugins/kubernetes/resources/resourcequotas/${row.namespace}/${row.name}/yaml`,
       {
@@ -301,7 +301,7 @@ const handleSaveYAML = async () => {
 
     saving.value = true
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       // 注意：需要后端支持创建接口，暂时使用更新接口
       await axios.post(
         `/api/v1/plugins/kubernetes/resources/resourcequotas/${namespace}/yaml`,
@@ -328,7 +328,7 @@ const handleSaveYAML = async () => {
 
     saving.value = true
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('srehubtoken')
       await axios.put(
         `/api/v1/plugins/kubernetes/resources/resourcequotas/${selectedResourceQuota.value.namespace}/${selectedResourceQuota.value.name}/yaml`,
         {
@@ -365,7 +365,7 @@ const handleDelete = async (row: ResourceQuotaInfo) => {
       }
     )
 
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('srehubtoken')
     await axios.delete(
       `/api/v1/plugins/kubernetes/resources/resourcequotas/${row.namespace}/${row.name}`,
       {
