@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
@@ -23,6 +24,7 @@ type ItemService struct {
 	groupRepo        inspectionmgmtdata.GroupRepository
 	recordRepo       inspectionmgmtdata.RecordRepository
 	hostRepo         assetbiz.HostRepo
+	serviceLabelRepo assetbiz.ServiceLabelRepo
 	cmdExecutor      *inspectionmgmtbiz.CommandExecutor
 	probeExecutor    *ProbeExecutor
 	validator        *inspectionmgmtbiz.AssertionValidator
@@ -36,6 +38,7 @@ func NewItemService(
 	groupRepo inspectionmgmtdata.GroupRepository,
 	recordRepo inspectionmgmtdata.RecordRepository,
 	hostRepo assetbiz.HostRepo,
+	serviceLabelRepo assetbiz.ServiceLabelRepo,
 	cmdExecutor *inspectionmgmtbiz.CommandExecutor,
 	probeExecutor *ProbeExecutor,
 	variableResolver *VariableResolver,
@@ -45,6 +48,7 @@ func NewItemService(
 		groupRepo:        groupRepo,
 		recordRepo:       recordRepo,
 		hostRepo:         hostRepo,
+		serviceLabelRepo: serviceLabelRepo,
 		cmdExecutor:      cmdExecutor,
 		probeExecutor:    probeExecutor,
 		validator:        &inspectionmgmtbiz.AssertionValidator{},
@@ -258,9 +262,57 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 			continue
 		}
 
+		// 预加载所有启用的服务标签
+		enabledLabels, err := s.serviceLabelRepo.GetAllEnabled(ctx)
+		if err != nil {
+			continue
+		}
+		labelMap := make(map[string]*assetbiz.ServiceLabel)
+		for _, label := range enabledLabels {
+			labelMap[label.Name] = label
+		}
+
 		// 对每个主机执行巡检
 		for _, host := range hosts {
-			result := s.executeItem(ctx, item, group, host, nil, nil)
+			// 为每个主机创建独立的变量上下文
+			variables := make(map[string]string)
+
+			// 生成 instance 预设变量
+			exporterPort := 9100
+			if host.ExporterPort > 0 {
+				exporterPort = host.ExporterPort
+			}
+			variables["instance"] = fmt.Sprintf("%s:%d", host.IP, exporterPort)
+
+			// 生成 {label}_instance 预设变量
+			if host.Tags != "" {
+				hostTags := strings.Split(host.Tags, ",")
+
+				// 解析主机级端口覆盖配置
+				var labelPortOverrides map[string]int
+				if host.LabelPortOverrides != "" {
+					json.Unmarshal([]byte(host.LabelPortOverrides), &labelPortOverrides)
+				}
+
+				for _, tag := range hostTags {
+					tag = strings.TrimSpace(tag)
+					if label, exists := labelMap[tag]; exists && label.ExporterPort > 0 {
+						labelInstanceVar := fmt.Sprintf("%s_instance", label.Name)
+
+						// 优先级：主机级覆盖端口 > 服务标签默认端口
+						port := label.ExporterPort
+						if labelPortOverrides != nil {
+							if overridePort, hasOverride := labelPortOverrides[label.Name]; hasOverride && overridePort > 0 {
+								port = overridePort
+							}
+						}
+
+						variables[labelInstanceVar] = fmt.Sprintf("%s:%d", host.IP, port)
+					}
+				}
+			}
+
+			result := s.executeItem(ctx, item, group, host, variables, nil)
 			results = append(results, result)
 		}
 	}
@@ -331,9 +383,57 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 			continue
 		}
 
+		// 预加载所有启用的服务标签
+		enabledLabels, err := s.serviceLabelRepo.GetAllEnabled(ctx)
+		if err != nil {
+			continue
+		}
+		labelMap := make(map[string]*assetbiz.ServiceLabel)
+		for _, label := range enabledLabels {
+			labelMap[label.Name] = label
+		}
+
 		// 对每个主机执行巡检
 		for _, host := range hosts {
-			result := s.executeItem(ctx, item, group, host, nil, nil)
+			// 为每个主机创建独立的变量上下文
+			variables := make(map[string]string)
+
+			// 生成 instance 预设变量
+			exporterPort := 9100
+			if host.ExporterPort > 0 {
+				exporterPort = host.ExporterPort
+			}
+			variables["instance"] = fmt.Sprintf("%s:%d", host.IP, exporterPort)
+
+			// 生成 {label}_instance 预设变量
+			if host.Tags != "" {
+				hostTags := strings.Split(host.Tags, ",")
+
+				// 解析主机级端口覆盖配置
+				var labelPortOverrides map[string]int
+				if host.LabelPortOverrides != "" {
+					json.Unmarshal([]byte(host.LabelPortOverrides), &labelPortOverrides)
+				}
+
+				for _, tag := range hostTags {
+					tag = strings.TrimSpace(tag)
+					if label, exists := labelMap[tag]; exists && label.ExporterPort > 0 {
+						labelInstanceVar := fmt.Sprintf("%s_instance", label.Name)
+
+						// 优先级：主机级覆盖端口 > 服务标签默认端口
+						port := label.ExporterPort
+						if labelPortOverrides != nil {
+							if overridePort, hasOverride := labelPortOverrides[label.Name]; hasOverride && overridePort > 0 {
+								port = overridePort
+							}
+						}
+
+						variables[labelInstanceVar] = fmt.Sprintf("%s:%d", host.IP, port)
+					}
+				}
+			}
+
+			result := s.executeItem(ctx, item, group, host, variables, nil)
 			results = append(results, result)
 		}
 	}
@@ -374,6 +474,8 @@ func (s *ItemService) executeItem(
 		variables = runtimeVariables
 	}
 
+	fmt.Printf("[ItemService] Runtime variables before resolve: %+v\n", runtimeVariables)
+
 	// 尝试解析变量，如果失败则使用空变量继续执行
 	if s.variableResolver != nil {
 		resolvedVars, err := s.variableResolver.ResolveVariables(ctx, group.ID, runtimeVariables)
@@ -381,6 +483,7 @@ func (s *ItemService) executeItem(
 			fmt.Printf("[ItemService] Failed to resolve variables: %v, continuing with empty variables\n", err)
 		} else {
 			variables = resolvedVars
+			fmt.Printf("[ItemService] Variables after resolve: %+v\n", variables)
 		}
 	}
 
@@ -762,11 +865,58 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 		return nil, fmt.Errorf("no target hosts found for item %d", itemID)
 	}
 
+	// 预加载所有启用的服务标签
+	enabledLabels, err := s.serviceLabelRepo.GetAllEnabled(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load service labels failed: %w", err)
+	}
+	labelMap := make(map[string]*assetbiz.ServiceLabel)
+	for _, label := range enabledLabels {
+		labelMap[label.Name] = label
+	}
+
 	// 执行巡检并保存记录
 	records := make([]*inspectionmgmtdata.InspectionRecord, 0, len(hosts))
-	variables := make(map[string]string)
 
 	for _, host := range hosts {
+		// 为每个主机创建独立的变量上下文
+		variables := make(map[string]string)
+
+		// 生成 instance 预设变量
+		exporterPort := 9100
+		if host.ExporterPort > 0 {
+			exporterPort = host.ExporterPort
+		}
+		variables["instance"] = fmt.Sprintf("%s:%d", host.IP, exporterPort)
+
+		// 生成 {label}_instance 预设变量
+		if host.Tags != "" {
+			hostTags := strings.Split(host.Tags, ",")
+
+			// 解析主机级端口覆盖配置
+			var labelPortOverrides map[string]int
+			if host.LabelPortOverrides != "" {
+				json.Unmarshal([]byte(host.LabelPortOverrides), &labelPortOverrides)
+			}
+
+			for _, tag := range hostTags {
+				tag = strings.TrimSpace(tag)
+				if label, exists := labelMap[tag]; exists && label.ExporterPort > 0 {
+					labelInstanceVar := fmt.Sprintf("%s_instance", label.Name)
+
+					// 优先级：主机级覆盖端口 > 服务标签默认端口
+					port := label.ExporterPort
+					if labelPortOverrides != nil {
+						if overridePort, hasOverride := labelPortOverrides[label.Name]; hasOverride && overridePort > 0 {
+							port = overridePort
+						}
+					}
+
+					variables[labelInstanceVar] = fmt.Sprintf("%s:%d", host.IP, port)
+				}
+			}
+		}
+
 		result := s.executeItem(ctx, item, group, host, variables, nil)
 
 		// 转换 AssertionDetails 为 JSON 字符串
@@ -885,12 +1035,61 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 		return nil, fmt.Errorf("no target hosts found for item %d", itemID)
 	}
 
-	records := make([]*inspectionmgmtdata.InspectionRecord, 0, len(hosts))
-	variables := make(map[string]string)
-	for k, v := range baseVars {
-		variables[k] = v
+	// 预加载所有启用的服务标签
+	enabledLabels, err := s.serviceLabelRepo.GetAllEnabled(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load service labels failed: %w", err)
 	}
+	labelMap := make(map[string]*assetbiz.ServiceLabel)
+	for _, label := range enabledLabels {
+		labelMap[label.Name] = label
+	}
+
+	records := make([]*inspectionmgmtdata.InspectionRecord, 0, len(hosts))
 	for _, host := range hosts {
+		// 为每个主机创建独立的变量上下文
+		variables := make(map[string]string)
+
+		// 复制任务变量
+		for k, v := range baseVars {
+			variables[k] = v
+		}
+
+		// 生成 instance 预设变量
+		exporterPort := 9100
+		if host.ExporterPort > 0 {
+			exporterPort = host.ExporterPort
+		}
+		variables["instance"] = fmt.Sprintf("%s:%d", host.IP, exporterPort)
+
+		// 生成 {label}_instance 预设变量
+		if host.Tags != "" {
+			hostTags := strings.Split(host.Tags, ",")
+
+			// 解析主机级端口覆盖配置
+			var labelPortOverrides map[string]int
+			if host.LabelPortOverrides != "" {
+				json.Unmarshal([]byte(host.LabelPortOverrides), &labelPortOverrides)
+			}
+
+			for _, tag := range hostTags {
+				tag = strings.TrimSpace(tag)
+				if label, exists := labelMap[tag]; exists && label.ExporterPort > 0 {
+					labelInstanceVar := fmt.Sprintf("%s_instance", label.Name)
+
+					// 优先级：主机级覆盖端口 > 服务标签默认端口
+					port := label.ExporterPort
+					if labelPortOverrides != nil {
+						if overridePort, hasOverride := labelPortOverrides[label.Name]; hasOverride && overridePort > 0 {
+							port = overridePort
+						}
+					}
+
+					variables[labelInstanceVar] = fmt.Sprintf("%s:%d", host.IP, port)
+				}
+			}
+		}
+
 		result := s.executeItem(ctx, item, &effectiveGroup, host, variables, assertionOverride)
 
 		assertionDetailsJSON := ""

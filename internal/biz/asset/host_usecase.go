@@ -106,6 +106,8 @@ func (uc *HostUseCase) Update(ctx context.Context, req *HostRequest) error {
 	host.CredentialID = req.CredentialID
 	host.Tags = req.Tags
 	host.Description = req.Description
+	host.ExporterPort = req.ExporterPort
+	host.LabelPortOverrides = req.LabelPortOverrides
 
 	return uc.hostRepo.Update(ctx, host)
 }
@@ -255,16 +257,18 @@ func (uc *HostUseCase) toInfoVO(host *Host) *HostInfoVO {
 		CPUUsage:         host.CPUUsage,
 		MemoryTotal:      host.MemoryTotal,
 		MemoryUsed:       host.MemoryUsed,
-		MemoryUsage:      host.MemoryUsage,
-		DiskTotal:        host.DiskTotal,
-		DiskUsed:         host.DiskUsed,
-		DiskUsage:        host.DiskUsage,
-		Uptime:           host.Uptime,
-		Hostname:         host.Hostname,
+		MemoryUsage:        host.MemoryUsage,
+		DiskTotal:          host.DiskTotal,
+		DiskUsed:           host.DiskUsed,
+		DiskUsage:          host.DiskUsage,
+		Uptime:             host.Uptime,
+		Hostname:           host.Hostname,
 		// Agent相关
-		AgentID:          host.AgentID,
-		AgentStatus:      host.AgentStatus,
-		ConnectionMode:   host.ConnectionMode,
+		AgentID:            host.AgentID,
+		AgentStatus:        host.AgentStatus,
+		ConnectionMode:     host.ConnectionMode,
+		ExporterPort:       host.ExporterPort,
+		LabelPortOverrides: host.LabelPortOverrides,
 	}
 }
 
