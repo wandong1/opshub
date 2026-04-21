@@ -438,7 +438,7 @@
                     <VariableInput
                       v-model="item.command"
                       placeholder="如：uptime 或 echo {{api_host}}"
-                      :variables="variableOptions"
+                      :variables="getItemVariableOptions(item)"
                       :multiline="true"
                     />
                     <template #extra>
@@ -471,7 +471,7 @@
                       v-if="item.scriptType !== 'binary'"
                       v-model="item.scriptContent"
                       :placeholder="item.scriptType === 'shell' ? '#!/bin/bash\necho Hello {{username}}' : '#!/usr/bin/env python3\nprint(Hello {{username}})'"
-                      :variables="variableOptions"
+                      :variables="getItemVariableOptions(item)"
                       :multiline="true"
                     />
                     <a-textarea
@@ -513,7 +513,7 @@
                     <VariableInput
                       v-model="item.scriptArgs"
                       placeholder="如：{{env}} {{region}} prod（支持变量引用）"
-                      :variables="variableOptions"
+                      :variables="getItemVariableOptions(item)"
                     />
                     <template #extra>
                       <span style="color: var(--ops-text-tertiary); font-size: 12px;">
@@ -529,7 +529,7 @@
                     <VariableInput
                       v-model="item.promqlQuery"
                       placeholder="如：node_cpu_usage_percent{instance='{{instance}}'}"
-                      :variables="variableOptions"
+                      :variables="getItemVariableOptions(item)"
                       :multiline="true"
                     />
                     <template #extra>
@@ -1958,6 +1958,29 @@ const loadVariableOptions = async () => {
 
   variableOptions.value = options
   console.log('[loadVariableOptions] 加载变量选项:', options.length, '个')
+}
+
+// 获取巡检项的可用变量（包含预设变量）
+const getItemVariableOptions = (item: any) => {
+  const options = [...variableOptions.value]
+
+  // 添加预设变量：instance（主机 IP:ExporterPort）
+  options.push({
+    name: 'instance',
+    description: '预设变量 - 主机实例地址（格式：IP:端口）'
+  })
+
+  // 如果是按标签匹配，添加 {标签名}_instance 变量
+  if (item.hostMatchType === 'tag' && item.hostTags && item.hostTags.length > 0) {
+    item.hostTags.forEach((tag: string) => {
+      options.push({
+        name: `${tag}_instance`,
+        description: `预设变量 - ${tag} 服务实例地址（格式：IP:端口）`
+      })
+    })
+  }
+
+  return options
 }
 
 // 监听自定义变量列表变化，更新变量选项

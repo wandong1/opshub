@@ -63,6 +63,10 @@ type Host struct {
 	AgentID          string        `gorm:"type:varchar(100);comment:Agent唯一标识" json:"agentId"`
 	AgentStatus      string        `gorm:"type:varchar(20);default:'none';comment:Agent状态 none/installed/online/offline" json:"agentStatus"`
 	ConnectionMode   string        `gorm:"type:varchar(20);default:'ssh';comment:连接模式 ssh/agent" json:"connectionMode"`
+	// Exporter 端口
+	ExporterPort     int           `gorm:"type:int;default:9100;comment:Exporter端口" json:"exporterPort"`
+	// 服务标签端口覆盖配置（JSON格式：{"mysqld": 9104, "redis": 9121}）
+	LabelPortOverrides string      `gorm:"type:text;comment:服务标签端口覆盖配置JSON" json:"labelPortOverrides"`
 }
 
 // HostRequest 主机请求
@@ -80,6 +84,8 @@ type HostRequest struct {
 	CredentialID  uint   `json:"credentialId"`
 	Tags          string `json:"tags"`
 	Description   string `json:"description"`
+	ExporterPort  int    `json:"exporterPort"`
+	LabelPortOverrides string `json:"labelPortOverrides"`
 }
 
 // HostInfoVO 主机信息VO
@@ -123,6 +129,8 @@ type HostInfoVO struct {
 	AgentID          string  `json:"agentId"`
 	AgentStatus      string  `json:"agentStatus"`
 	ConnectionMode   string  `json:"connectionMode"`
+	ExporterPort     int     `json:"exporterPort"`
+	LabelPortOverrides string `json:"labelPortOverrides"`
 }
 
 // HostListVO 主机列表VO（用于分组下的主机列表）
@@ -139,19 +147,21 @@ type HostListVO struct {
 // ToModel 转换为模型
 func (req *HostRequest) ToModel() *Host {
 	return &Host{
-		Name:            req.Name,
-		GroupID:         req.GroupID,
-		Type:            req.Type,
-		CloudProvider:   req.CloudProvider,
-		CloudInstanceID: req.CloudInstanceID,
-		CloudAccountID:  req.CloudAccountID,
-		SSHUser:         req.SSHUser,
-		IP:              req.IP,
-		Port:            req.Port,
-		CredentialID:    req.CredentialID,
-		Tags:            req.Tags,
-		Description:     req.Description,
-		Status:          -1, // 初始状态未知
+		Name:               req.Name,
+		GroupID:            req.GroupID,
+		Type:               req.Type,
+		CloudProvider:      req.CloudProvider,
+		CloudInstanceID:    req.CloudInstanceID,
+		CloudAccountID:     req.CloudAccountID,
+		SSHUser:            req.SSHUser,
+		IP:                 req.IP,
+		Port:               req.Port,
+		CredentialID:       req.CredentialID,
+		Tags:               req.Tags,
+		Description:        req.Description,
+		Status:             -1, // 初始状态未知
+		ExporterPort:       req.ExporterPort,
+		LabelPortOverrides: req.LabelPortOverrides,
 	}
 }
 

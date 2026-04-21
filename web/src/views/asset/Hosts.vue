@@ -631,6 +631,35 @@
         </a-row>
 
         <a-row :gutter="20">
+          <a-col :span="12">
+            <a-form-item label="Exporter端口">
+              <a-input-number v-model="hostForm.exporterPort" :min="1" :max="65535" :step="1" placeholder="默认9100" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row :gutter="20" v-if="hostTagsArray.length > 0">
+          <a-col :span="24">
+            <a-form-item label="服务标签端口覆盖">
+              <template #extra>为选中的服务标签设置自定义端口，优先级高于服务标签默认端口</template>
+              <div class="label-port-overrides">
+                <div v-for="tag in hostTagsArray" :key="tag" class="label-port-item">
+                  <span class="label-name">{{ tag }}</span>
+                  <a-input-number
+                    v-model="labelPortOverridesMap[tag]"
+                    :min="1"
+                    :max="65535"
+                    :step="1"
+                    placeholder="使用标签默认端口"
+                    style="width: 200px;"
+                  />
+                </div>
+              </div>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row :gutter="20">
           <a-col :span="24">
             <a-form-item label="备注">
               <a-textarea v-model="hostForm.description" :auto-size="{ minRows: 3 }" placeholder="请输入备注信息" />
@@ -1462,8 +1491,13 @@ const hostForm = reactive({
   port: 22,
   credentialId: null as number | null,
   tags: '',
-  description: ''
+  description: '',
+  exporterPort: 9100,
+  labelPortOverrides: ''
 })
+
+// 服务标签端口覆盖映射（用于UI展示和编辑）
+const labelPortOverridesMap = reactive<Record<string, number>>({})
 
 // 凭证表单
 const credentialForm = reactive({
@@ -2080,8 +2114,14 @@ const handleDirectImport = async () => {
     port: 22,
     credentialId: null,
     tags: '',
-    description: ''
+    description: '',
+    exporterPort: 9100,
+    labelPortOverrides: ''
   })
+
+  // 清空端口覆盖映射
+  Object.keys(labelPortOverridesMap).forEach(key => delete labelPortOverridesMap[key])
+
   directImportVisible.value = true
 }
 
@@ -2097,6 +2137,15 @@ const handleDirectImportSubmit = async () => {
   if (errors) return
   hostSubmitting.value = true
   try {
+    // 将端口覆盖映射转换为JSON字符串
+    const overrides: Record<string, number> = {}
+    Object.keys(labelPortOverridesMap).forEach(key => {
+      if (labelPortOverridesMap[key] > 0) {
+        overrides[key] = labelPortOverridesMap[key]
+      }
+    })
+    hostForm.labelPortOverrides = Object.keys(overrides).length > 0 ? JSON.stringify(overrides) : ''
+
     let hostId = 0
     if (hostForm.id && hostForm.id > 0) {
       await updateHost(hostForm.id, hostForm)
@@ -2552,8 +2601,20 @@ const handleEditHost = async (row: any) => {
     port: row.port,
     credentialId: row.credentialId,
     tags: Array.isArray(row.tags) ? row.tags.join(',') : row.tags,
-    description: row.description
+    description: row.description,
+    exporterPort: row.exporterPort || 9100,
+    labelPortOverrides: row.labelPortOverrides || ''
   })
+
+  // 解析端口覆盖配置到映射对象
+  Object.keys(labelPortOverridesMap).forEach(key => delete labelPortOverridesMap[key])
+  if (row.labelPortOverrides) {
+    try {
+      const overrides = JSON.parse(row.labelPortOverrides)
+      Object.assign(labelPortOverridesMap, overrides)
+    } catch {}
+  }
+
   directImportVisible.value = true
 }
 
@@ -3361,6 +3422,28 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* 服务标签端口覆盖样式 */
+.label-port-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.label-port-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #f7f8fa;
+  border-radius: 6px;
+}
+
+.label-name {
+  min-width: 120px;
+  font-weight: 500;
+  color: var(--ops-text-primary);
 }
 
 /* Upload drag area */
