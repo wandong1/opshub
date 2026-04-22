@@ -22,10 +22,12 @@ package server
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -52,6 +54,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
+
+func init() {
+	// 初始化随机数种子，用于预置变量生成
+	rand.Seed(time.Now().UnixNano())
+}
 
 // 全局变量，用于在服务器生命周期内保持连接
 var (

@@ -959,7 +959,21 @@ const loadVariables = async () => {
     }
     const res = await getVariableList(params)
     const list = res?.list || res?.data || []
-    variableOptions.value = list.map((v: any) => ({ name: v.name, description: v.description || '' }))
+    const options = list.map((v: any) => ({ name: v.name, description: v.description || '' }))
+
+    // 添加系统预置变量（时间相关）
+    options.push({ name: 'timestamp', description: '系统预置 - Unix时间戳（秒）' })
+    options.push({ name: 'timestamp_ms', description: '系统预置 - Unix时间戳（毫秒）' })
+    options.push({ name: 'current_time', description: '系统预置 - 当前时间（HHmmss）' })
+    options.push({ name: 'current_date', description: '系统预置 - 当前日期（yyyyMMdd）' })
+    options.push({ name: 'current_datetime', description: '系统预置 - 当前日期时间（yyyyMMddHHmmss）' })
+
+    // 添加系统预置变量（随机数相关）
+    options.push({ name: 'random_number', description: '系统预置 - 10位随机数' })
+    options.push({ name: 'random_string', description: '系统预置 - 10位随机字符串' })
+    options.push({ name: 'random_uuid', description: '系统预置 - UUID' })
+
+    variableOptions.value = options
   } catch {}
 }
 

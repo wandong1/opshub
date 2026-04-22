@@ -13,18 +13,20 @@ import (
 
 // ProbeExecutor 拨测执行器，用于在巡检项中执行拨测配置
 type ProbeExecutor struct {
-	probeConfigRepo inspectionbiz.ProbeConfigRepo
+	probeConfigRepo  inspectionbiz.ProbeConfigRepo
+	variableResolver *inspectionbiz.VariableResolver
 }
 
 // NewProbeExecutor 创建拨测执行器
-func NewProbeExecutor(probeConfigRepo inspectionbiz.ProbeConfigRepo) *ProbeExecutor {
+func NewProbeExecutor(probeConfigRepo inspectionbiz.ProbeConfigRepo, variableResolver *inspectionbiz.VariableResolver) *ProbeExecutor {
 	return &ProbeExecutor{
-		probeConfigRepo: probeConfigRepo,
+		probeConfigRepo:  probeConfigRepo,
+		variableResolver: variableResolver,
 	}
 }
 
 // Execute 执行拨测配置并返回巡检兼容的结果
-func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout int) *inspectionmgmtbiz.ExecuteResult {
+func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout int, extraVars map[string]string) *inspectionmgmtbiz.ExecuteResult {
 	startTime := time.Now()
 
 	// 获取拨测配置
@@ -38,6 +40,17 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 	}
 
 	fmt.Printf("[ProbeExecutor] Executing probe config: id=%d, type=%s, target=%s\n", config.ID, config.Type, config.Target)
+
+	// 解析配置中的变量（使用 extraVars 作为最高优先级）
+	if e.variableResolver != nil && extraVars != nil {
+		resolvedConfig, err := e.variableResolver.ResolveConfigWithExtra(ctx, config, extraVars)
+		if err != nil {
+			fmt.Printf("[ProbeExecutor] Failed to resolve variables: %v\n", err)
+		} else {
+			config = resolvedConfig
+			fmt.Printf("[ProbeExecutor] Config after variable resolution: target=%s, url=%s\n", config.Target, config.URL)
+		}
+	}
 
 	// 覆盖超时设置
 	if timeout > 0 {
@@ -118,12 +131,33 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 
 // buildAppConfig 构建应用层拨测配置
 func (e *ProbeExecutor) buildAppConfig(config *inspectionbiz.ProbeConfig) *probers.AppProbeConfig {
+	// 解析 Headers（JSON 字符串 -> map）
+	headers := make(map[string]string)
+	if config.Headers != "" {
+		_ = json.Unmarshal([]byte(config.Headers), &headers)
+	}
+
+	// 解析 Params（JSON 字符串 -> map）
+	params := make(map[string]string)
+	if config.Params != "" {
+		_ = json.Unmarshal([]byte(config.Params), &params)
+	}
+
+	// 处理 SkipVerify（*bool -> bool）
+	skipVerify := true
+	if config.SkipVerify != nil {
+		skipVerify = *config.SkipVerify
+	}
+
 	return &probers.AppProbeConfig{
-		URL:         config.Target,
-		Method:      config.Method,
-		Timeout:     config.Timeout,
-		SkipVerify:  true,
-		WSMessage:   config.WSMessage,
+		URL:           config.URL,
+		Method:        config.Method,
+		Headers:       headers,
+		Params:        params,
+		Body:          config.Body,
+		Timeout:       config.Timeout,
+		SkipVerify:    skipVerify,
+		WSMessage:     config.WSMessage,
 		WSReadTimeout: config.Timeout,
 	}
 }

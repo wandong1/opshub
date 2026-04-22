@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 )
 
 var variablePattern = regexp.MustCompile(`\{\{(\w+)\}\}`)
@@ -61,7 +63,7 @@ func (r *VariableResolver) Resolve(ctx context.Context, text string, allowedGrou
 }
 
 // ResolveConfigWithExtra resolves variable references in a ProbeConfig with extra vars (highest priority).
-// Priority: extraVars > system ProbeVariables (scoped by GroupID) > unresolved placeholders kept as-is.
+// Priority: extraVars > system ProbeVariables (scoped by GroupID) > preset variables > unresolved placeholders kept as-is.
 func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *ProbeConfig, extraVars map[string]string) (*ProbeConfig, error) {
 	texts := []string{cfg.Target, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}
 	names := ExtractVariableNames(texts...)
@@ -75,7 +77,14 @@ func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *Prob
 	}
 
 	varMap := make(map[string]string)
-	// 先加载系统变量（低优先级）
+
+	// 1. 生成系统预置变量（最低优先级）
+	presetVars := utils.GeneratePresetVariables("")
+	for k, v := range presetVars {
+		varMap[k] = v
+	}
+
+	// 2. 加载系统变量（中优先级）
 	if len(names) > 0 && r.variableRepo != nil {
 		vars, err := r.variableRepo.GetByNames(ctx, names, allowedGroupIDs)
 		if err == nil {
@@ -84,7 +93,8 @@ func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *Prob
 			}
 		}
 	}
-	// extraVars 覆盖系统变量（高优先级）
+
+	// 3. extraVars 覆盖系统变量（最高优先级）
 	for k, v := range extraVars {
 		varMap[k] = v
 	}
@@ -156,6 +166,16 @@ func (r *VariableResolver) ResolveText(ctx context.Context, text string, extraVa
 	if len(names) == 0 {
 		return text, nil
 	}
+
+	varMap := make(map[string]string)
+
+	// 1. 生成系统预置变量（最低优先级）
+	presetVars := utils.GeneratePresetVariables("")
+	for k, v := range presetVars {
+		varMap[k] = v
+	}
+
+	// 2. 查询系统变量（中优先级）
 	// Only query system variables for names not in extraVars
 	var sysNames []string
 	for _, n := range names {
@@ -163,7 +183,6 @@ func (r *VariableResolver) ResolveText(ctx context.Context, text string, extraVa
 			sysNames = append(sysNames, n)
 		}
 	}
-	varMap := make(map[string]string, len(names))
 	if len(sysNames) > 0 && r.variableRepo != nil {
 		vars, err := r.variableRepo.GetByNames(ctx, sysNames, allowedGroupIDs)
 		if err != nil {
@@ -173,10 +192,12 @@ func (r *VariableResolver) ResolveText(ctx context.Context, text string, extraVa
 			varMap[v.Name] = v.Value
 		}
 	}
-	// extraVars override system variables
+
+	// 3. extraVars 覆盖（最高优先级）
 	for k, v := range extraVars {
 		varMap[k] = v
 	}
+
 	result := variablePattern.ReplaceAllStringFunc(text, func(match string) string {
 		name := match[2 : len(match)-2]
 		if val, ok := varMap[name]; ok {
