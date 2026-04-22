@@ -358,7 +358,13 @@
     </a-modal>
 
     <!-- 需求二：立即运行同步结果抽屉 -->
-    <a-drawer v-model:visible="syncResultVisible" title="立即运行结果" :width="1260" unmount-on-close>
+    <a-drawer v-model:visible="syncResultVisible" title="立即运行结果" :width="drawerWidth" unmount-on-close>
+      <!-- 自定义拖动手柄 -->
+      <div
+        class="drawer-resize-handle"
+        @mousedown="startResize"
+        :style="{ cursor: isResizing ? 'col-resize' : 'col-resize' }"
+      ></div>
       <div v-if="syncRunning" style="text-align:center;padding:60px 0;">
         <a-spin size="large" />
         <p style="margin-top:16px;color:var(--ops-text-secondary);">正在执行中，请稍候...</p>
@@ -386,6 +392,22 @@
             <template #columns>
               <a-table-column title="巡检组" data-index="group_name" :width="120" />
               <a-table-column title="巡检项" data-index="item_name" :width="140" />
+              <a-table-column title="巡检级别" :width="90" align="center">
+                <template #cell="{ record }">
+                  <a-tag v-if="record.inspectionLevel" size="small" :color="getLevelColor(record.inspectionLevel)">
+                    {{ getLevelText(record.inspectionLevel) }}
+                  </a-tag>
+                  <span v-else>-</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="风险等级" :width="90" align="center">
+                <template #cell="{ record }">
+                  <a-tag v-if="record.riskLevel" size="small" :color="getRiskColor(record.riskLevel)">
+                    {{ getLevelText(record.riskLevel) }}
+                  </a-tag>
+                  <span v-else>-</span>
+                </template>
+              </a-table-column>
               <a-table-column title="主机" :width="140">
                 <template #cell="{ record }">
                   <span v-if="record.host_name">{{ record.host_name }}<br/><span style="font-size:11px;color:var(--ops-text-tertiary)">{{ record.host_ip }}</span></span>
@@ -1273,6 +1295,31 @@ const handleViewResults = (row: any) => {
 const syncResultVisible = ref(false)
 const syncResultData = ref<any>(null)
 const syncRunning = ref(false)
+const drawerWidth = ref(1260)
+const isResizing = ref(false)
+
+// 抽屉拖动调整大小
+const startResize = (e: MouseEvent) => {
+  isResizing.value = true
+  const startX = e.clientX
+  const startWidth = drawerWidth.value
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    if (!isResizing.value) return
+    const deltaX = startX - moveEvent.clientX
+    const newWidth = Math.max(600, Math.min(window.innerWidth - 100, startWidth + deltaX))
+    drawerWidth.value = newWidth
+  }
+
+  const onMouseUp = () => {
+    isResizing.value = false
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
 
 const handleRun = async (row: any) => {
   syncRunning.value = true
@@ -1319,6 +1366,33 @@ const loadResults = async () => {
       resultPagination.total = res.data?.total || 0
     }
   } catch {} finally { resultsLoading.value = false }
+}
+
+const getLevelText = (level: string) => {
+  const map: Record<string, string> = {
+    high: '高',
+    medium: '中',
+    low: '低'
+  }
+  return map[level] || '中'
+}
+
+const getLevelColor = (level: string) => {
+  const map: Record<string, string> = {
+    high: 'red',
+    medium: 'orange',
+    low: 'green'
+  }
+  return map[level] || 'orange'
+}
+
+const getRiskColor = (level: string) => {
+  const map: Record<string, string> = {
+    high: 'red',
+    medium: 'orangered',
+    low: 'blue'
+  }
+  return map[level] || 'orangered'
 }
 
 onMounted(() => { loadData(); loadOptions() })
@@ -1412,5 +1486,26 @@ onMounted(() => { loadData(); loadOptions() })
   color: var(--ops-danger);
   font-size: 11px;
   white-space: normal;
+}
+
+/* 抽屉拖动手柄样式 */
+.drawer-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1000;
+  background: transparent;
+  transition: background 0.2s;
+}
+.drawer-resize-handle:hover {
+  background: var(--ops-primary);
+  opacity: 0.5;
+}
+.drawer-resize-handle:active {
+  background: var(--ops-primary);
+  opacity: 0.8;
 }
 </style>

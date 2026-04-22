@@ -2,6 +2,7 @@ package inspection_mgmt
 
 // ItemCreateRequest 创建巡检项请求
 type ItemCreateRequest struct {
+	ID                *uint  `json:"id"` // 可选，用于更新现有巡检项（保留 ID）
 	Name              string `json:"name" binding:"required"`
 	Description       string `json:"description"`
 	GroupID           uint   `json:"groupId" binding:"required"`
@@ -26,6 +27,8 @@ type ItemCreateRequest struct {
 	VariableName      string `json:"variableName"`
 	VariableRegex     string `json:"variableRegex"`
 	Timeout           int    `json:"timeout"`
+	InspectionLevel   string `json:"inspectionLevel"`
+	RiskLevel         string `json:"riskLevel"`
 }
 
 // ItemUpdateRequest 更新巡检项请求
@@ -54,6 +57,8 @@ type ItemUpdateRequest struct {
 	VariableName      string `json:"variableName"`
 	VariableRegex     string `json:"variableRegex"`
 	Timeout           int    `json:"timeout"`
+	InspectionLevel   string `json:"inspectionLevel"`
+	RiskLevel         string `json:"riskLevel"`
 }
 
 // ItemListRequest 巡检项列表请求
@@ -92,6 +97,8 @@ type ItemResponse struct {
 	VariableName      string `json:"variableName"`
 	VariableRegex     string `json:"variableRegex"`
 	Timeout           int    `json:"timeout"`
+	InspectionLevel   string `json:"inspectionLevel"`
+	RiskLevel         string `json:"riskLevel"`
 	CreatedAt         string `json:"createdAt"`
 	UpdatedAt         string `json:"updatedAt"`
 }
@@ -115,4 +122,6 @@ type TestRunResponse struct {
 	Duration         float64                `json:"duration"`
 	AssertionResult  string                 `json:"assertionResult"`
 	AssertionDetails map[string]interface{} `json:"assertionDetails"`
+	InspectionLevel  string                 `json:"inspectionLevel"`
+	RiskLevel        string                 `json:"riskLevel"`
 }

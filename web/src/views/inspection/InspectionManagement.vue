@@ -651,6 +651,27 @@
                   </a-col>
                 </a-row>
 
+                <a-row :gutter="12">
+                  <a-col :span="12">
+                    <a-form-item label="巡检级别" :label-col-flex="'100px'">
+                      <a-select v-model="item.inspectionLevel" placeholder="请选择巡检级别">
+                        <a-option value="high">高</a-option>
+                        <a-option value="medium">中</a-option>
+                        <a-option value="low">低</a-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                  <a-col :span="12">
+                    <a-form-item label="风险等级" :label-col-flex="'100px'">
+                      <a-select v-model="item.riskLevel" placeholder="请选择风险等级">
+                        <a-option value="high">高</a-option>
+                        <a-option value="medium">中</a-option>
+                        <a-option value="low">低</a-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+
                 <a-form-item label="描述" :label-col-flex="'100px'">
                   <a-textarea v-model="item.description" placeholder="请输入描述" :rows="2" />
                 </a-form-item>
@@ -688,6 +709,12 @@
               <div class="log-header">
                 <a-tag :color="getLogStatusColor(log.status)">{{ log.status }}</a-tag>
                 <span class="log-host">{{ log.hostName }} ({{ log.hostIp }})</span>
+                <a-tag v-if="log.inspectionLevel" :color="getLevelColor(log.inspectionLevel)" size="small">
+                  巡检级别: {{ getLevelText(log.inspectionLevel) }}
+                </a-tag>
+                <a-tag v-if="log.riskLevel" :color="getRiskColor(log.riskLevel)" size="small">
+                  风险等级: {{ getLevelText(log.riskLevel) }}
+                </a-tag>
                 <span class="log-time">{{ log.duration }}ms</span>
               </div>
               <div class="log-output">
@@ -1128,7 +1155,9 @@ const handleEdit = async (record: any) => {
         sort: item.sort,
         hostMatchType: item.hostMatchType || 'tag',
         hostTags: hostTags,
-        hostIds: hostIds
+        hostIds: hostIds,
+        inspectionLevel: item.inspectionLevel || 'medium',
+        riskLevel: item.riskLevel || 'medium'
       }
     })
 
@@ -1435,6 +1464,33 @@ const getLogStatusColor = (status: string) => {
   return map[status] || 'gray'
 }
 
+const getLevelText = (level: string) => {
+  const map: Record<string, string> = {
+    high: '高',
+    medium: '中',
+    low: '低'
+  }
+  return map[level] || '中'
+}
+
+const getLevelColor = (level: string) => {
+  const map: Record<string, string> = {
+    high: 'red',
+    medium: 'orange',
+    low: 'green'
+  }
+  return map[level] || 'orange'
+}
+
+const getRiskColor = (level: string) => {
+  const map: Record<string, string> = {
+    high: 'red',
+    medium: 'orangered',
+    low: 'blue'
+  }
+  return map[level] || 'orangered'
+}
+
 const handleSubmit = async () => {
   // 防止重复提交
   if (loading.value) {
@@ -1617,6 +1673,8 @@ const addInspectionItem = () => {
     variableRegex: '',
     timeout: 60,
     status: 'enabled',
+    inspectionLevel: 'medium',
+    riskLevel: 'medium',
     sort: inspectionItems.value.length,
     hostMatchType: 'tag',
     hostTags: [],

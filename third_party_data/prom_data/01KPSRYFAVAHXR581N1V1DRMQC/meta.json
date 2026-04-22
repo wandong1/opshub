@@ -1,0 +1,17 @@
+{
+	"ulid": "01KPSRYFAVAHXR581N1V1DRMQC",
+	"minTime": 1776823202107,
+	"maxTime": 1776830400000,
+	"stats": {
+		"numSamples": 1698240,
+		"numSeries": 1810,
+		"numChunks": 14152
+	},
+	"compaction": {
+		"level": 1,
+		"sources": [
+			"01KPSRYFAVAHXR581N1V1DRMQC"
+		]
+	},
+	"version": 1
+}

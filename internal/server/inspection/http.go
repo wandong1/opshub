@@ -10,6 +10,7 @@ import (
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	systembiz "github.com/ydcloud-dy/opshub/internal/biz/system"
 	biz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
+	assetdata "github.com/ydcloud-dy/opshub/internal/data/asset"
 	inspectiondata "github.com/ydcloud-dy/opshub/internal/data/inspection"
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
 	"github.com/ydcloud-dy/opshub/internal/server/agent"
@@ -347,7 +348,11 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	if !ok {
 		appLogger.Fatal("configUseCase type assertion failed")
 	}
-	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, cleanupService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _, execRecordRepo := InitInspectionMgmtServices(db, hostRepo, credentialRepo, agentHub, sysConfigUseCase)
+
+	// 创建 ServiceLabelRepo
+	serviceLabelRepo := assetdata.NewServiceLabelRepo(db)
+
+	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, cleanupService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _, execRecordRepo := InitInspectionMgmtServices(db, hostRepo, serviceLabelRepo, credentialRepo, agentHub, sysConfigUseCase)
 
 	// 启动清理服务
 	if err := cleanupService.Start(); err != nil {

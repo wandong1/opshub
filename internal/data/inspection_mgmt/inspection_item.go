@@ -56,6 +56,10 @@ type InspectionItem struct {
 
 	// 超时设置
 	Timeout int `gorm:"default:60" json:"timeout"` // 秒
+
+	// 巡检级别和风险等级
+	InspectionLevel string `gorm:"size:20;default:'medium'" json:"inspection_level"` // high/medium/low
+	RiskLevel       string `gorm:"size:20;default:'medium'" json:"risk_level"`       // high/medium/low
 }
 
 func (InspectionItem) TableName() string {
