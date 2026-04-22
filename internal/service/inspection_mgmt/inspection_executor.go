@@ -17,10 +17,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// GroupBusinessGroupOverride 巡检组业务分组覆盖结构
+// GroupBusinessGroupOverride 巡检组业务分组覆盖结构（支持多选）
 type GroupBusinessGroupOverride struct {
-	GroupID         uint `json:"group_id"`
-	BusinessGroupID uint `json:"business_group_id"`
+	GroupID          uint   `json:"group_id"`
+	BusinessGroupIDs []uint `json:"business_group_ids"` // 支持多个业务分组
 }
 
 // PushgatewayConfig 推送网关配置
@@ -116,8 +116,12 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 	}
 
 	// 需求一：解析任务级执行方式覆盖配置
-	taskExecutionMode := inspectionTask.ExecutionMode     // 覆盖巡检组执行方式（空=不覆盖）
-	taskBusinessGroupID := inspectionTask.BusinessGroupID // 覆盖业务分组（0=不覆盖）
+	taskExecutionMode := inspectionTask.ExecutionMode // 覆盖巡检组执行方式（空=不覆盖）
+	// 解析任务级全局业务分组覆盖（支持多选）
+	var taskBusinessGroupIDs []uint
+	if inspectionTask.BusinessGroupIDs != "" {
+		_ = json.Unmarshal([]byte(inspectionTask.BusinessGroupIDs), &taskBusinessGroupIDs)
+	}
 
 	// 需求三：解析任务级自定义变量（巡检任务，优先级最高）
 	taskExtraVars := make(map[string]string)
@@ -155,9 +159,9 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 
 	// 收集所有需要执行的巡检项（按巡检组分组，以便应用不同的业务分组覆盖）
 	type GroupItems struct {
-		GroupID                 uint
-		Items                   []*inspectionmgmtdata.InspectionItem
-		EffectiveBusinessGroupID uint // 应用优先级后的业务分组ID
+		GroupID                   uint
+		Items                     []*inspectionmgmtdata.InspectionItem
+		EffectiveBusinessGroupIDs []uint // 应用优先级后的业务分组ID列表（支持多选）
 	}
 	groupItemsMap := make(map[uint]*GroupItems)
 
@@ -168,23 +172,23 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 			continue
 		}
 
-		// 应用业务分组覆盖优先级
-		effectiveBusinessGroupID := uint(0)
+		// 应用业务分组覆盖优先级（支持多选）
+		var effectiveBusinessGroupIDs []uint
 
 		// 优先级 1：巡检组级业务分组覆盖（最高优先级）
-		if groupOverride, exists := groupBusinessGroupOverrideMap[groupID]; exists && groupOverride.BusinessGroupID > 0 {
-			effectiveBusinessGroupID = groupOverride.BusinessGroupID
+		if groupOverride, exists := groupBusinessGroupOverrideMap[groupID]; exists && len(groupOverride.BusinessGroupIDs) > 0 {
+			effectiveBusinessGroupIDs = groupOverride.BusinessGroupIDs
 			appLogger.Info("应用巡检组级业务分组覆盖",
 				zap.Uint("group_id", groupID),
-				zap.Uint("business_group_id", effectiveBusinessGroupID))
-		} else if taskBusinessGroupID > 0 {
+				zap.Any("business_group_ids", effectiveBusinessGroupIDs))
+		} else if len(taskBusinessGroupIDs) > 0 {
 			// 优先级 2：任务级全局业务分组覆盖
-			effectiveBusinessGroupID = taskBusinessGroupID
+			effectiveBusinessGroupIDs = taskBusinessGroupIDs
 			appLogger.Info("应用任务级全局业务分组覆盖",
 				zap.Uint("group_id", groupID),
-				zap.Uint("business_group_id", effectiveBusinessGroupID))
+				zap.Any("business_group_ids", effectiveBusinessGroupIDs))
 		}
-		// 优先级 3：如果 effectiveBusinessGroupID == 0，则使用巡检组原始配置（在 ExecuteItemByIDWithOverride 中处理）
+		// 优先级 3：如果 effectiveBusinessGroupIDs 为空，则使用巡检组原始配置（在 ExecuteItemByIDWithOverride 中处理）
 
 		// 获取该组的所有巡检项
 		items, err := e.itemRepo.GetByGroupID(ctx, groupID)
@@ -217,9 +221,9 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 
 		if len(enabledItems) > 0 {
 			groupItemsMap[groupID] = &GroupItems{
-				GroupID:                 groupID,
-				Items:                   enabledItems,
-				EffectiveBusinessGroupID: effectiveBusinessGroupID,
+				GroupID:                   groupID,
+				Items:                     enabledItems,
+				EffectiveBusinessGroupIDs: effectiveBusinessGroupIDs,
 			}
 		}
 	}
@@ -283,10 +287,10 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 		go func(itm *inspectionmgmtdata.InspectionItem) {
 			defer wg.Done()
 
-			// 查找该巡检项所属巡检组的有效业务分组ID（应用优先级后）
-			var effectiveBusinessGroupID uint
+			// 查找该巡检项所属巡检组的有效业务分组ID列表（应用优先级后）
+			var effectiveBusinessGroupIDs []uint
 			if gi, exists := groupItemsMap[itm.GroupID]; exists {
-				effectiveBusinessGroupID = gi.EffectiveBusinessGroupID
+				effectiveBusinessGroupIDs = gi.EffectiveBusinessGroupIDs
 			}
 
 			// 查找该巡检项的断言覆盖
@@ -296,7 +300,7 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 			}
 
 			// 需求一：使用覆盖参数执行巡检项（业务分组覆盖 + 断言覆盖）
-			itemResults, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupID, taskExtraVars, itemOverride)
+			itemResults, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupIDs, taskExtraVars, itemOverride)
 			if err != nil {
 				appLogger.Error("execute inspection item failed",
 					zap.Uint("itemID", itm.ID),
@@ -323,13 +327,6 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 				effectiveAssertionValue = itemOverride.AssertionValue
 			}
 
-			// 获取该巡检组的有效业务分组信息（覆盖后）
-			effectiveBusinessGroupName := group.Name
-			if gi, exists := groupItemsMap[itm.GroupID]; exists && gi.EffectiveBusinessGroupID > 0 {
-				// 使用业务分组 ID 作为标识（前端可以根据 ID 查询名称）
-				effectiveBusinessGroupName = fmt.Sprintf("业务分组ID:%d", gi.EffectiveBusinessGroupID)
-			}
-
 			mu.Lock()
 			// 将旧的 InspectionRecord 转换为新的 InspectionExecutionDetail
 			for _, oldRecord := range itemResults {
@@ -343,7 +340,7 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 					HostName:           oldRecord.HostName,
 					HostIP:             oldRecord.HostIP,
 					// 填充执行配置信息（使用覆盖后的值）
-					BusinessGroup:      effectiveBusinessGroupName,
+					BusinessGroup:      oldRecord.BusinessGroup,
 					ExecutionType:      itm.ExecutionType,
 					ExecutionMode:      group.ExecutionMode,
 					Command:            itm.Command,
@@ -678,7 +675,11 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 	}
 
 	taskExecutionMode := inspectionTask.ExecutionMode
-	taskBusinessGroupID := inspectionTask.BusinessGroupID
+	// 解析任务级全局业务分组覆盖（支持多选）
+	var taskBusinessGroupIDs []uint
+	if inspectionTask.BusinessGroupIDs != "" {
+		_ = json.Unmarshal([]byte(inspectionTask.BusinessGroupIDs), &taskBusinessGroupIDs)
+	}
 	// 需求三：解析任务级自定义变量（最高优先级）
 	taskExtraVars := make(map[string]string)
 	if inspectionTask.CustomVariables != "" {
@@ -711,9 +712,9 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 
 	// 收集要执行的巡检项，按巡检组分组
 	type GroupItems struct {
-		GroupID                  uint
-		Items                    []*inspectionmgmtdata.InspectionItem
-		EffectiveBusinessGroupID uint // 应用优先级后的业务分组ID
+		GroupID                   uint
+		Items                     []*inspectionmgmtdata.InspectionItem
+		EffectiveBusinessGroupIDs []uint // 应用优先级后的业务分组ID列表（支持多选）
 	}
 	groupItemsMap := make(map[uint]*GroupItems)
 	groupNameMap := make(map[uint]string)
@@ -724,22 +725,22 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 		}
 		groupNameMap[groupID] = group.Name
 
-		// 应用业务分组覆盖优先级
-		effectiveBusinessGroupID := uint(0)
+		// 应用业务分组覆盖优先级（支持多选）
+		var effectiveBusinessGroupIDs []uint
 		// 优先级 1：巡检组级业务分组覆盖（最高优先级）
-		if groupOverride, exists := groupBusinessGroupOverrideMap[groupID]; exists && groupOverride.BusinessGroupID > 0 {
-			effectiveBusinessGroupID = groupOverride.BusinessGroupID
+		if groupOverride, exists := groupBusinessGroupOverrideMap[groupID]; exists && len(groupOverride.BusinessGroupIDs) > 0 {
+			effectiveBusinessGroupIDs = groupOverride.BusinessGroupIDs
 			appLogger.Info("应用巡检组级业务分组覆盖",
 				zap.Uint("group_id", groupID),
-				zap.Uint("business_group_id", effectiveBusinessGroupID))
-		} else if taskBusinessGroupID > 0 {
+				zap.Any("business_group_ids", effectiveBusinessGroupIDs))
+		} else if len(taskBusinessGroupIDs) > 0 {
 			// 优先级 2：任务级全局业务分组覆盖
-			effectiveBusinessGroupID = taskBusinessGroupID
+			effectiveBusinessGroupIDs = taskBusinessGroupIDs
 			appLogger.Info("应用任务级全局业务分组覆盖",
 				zap.Uint("group_id", groupID),
-				zap.Uint("business_group_id", effectiveBusinessGroupID))
+				zap.Any("business_group_ids", effectiveBusinessGroupIDs))
 		}
-		// 优先级 3：如果 effectiveBusinessGroupID == 0，则使用巡检组原始配置（在 ExecuteItemByIDWithOverride 中处理）
+		// 优先级 3：如果 effectiveBusinessGroupIDs 为空，则使用巡检组原始配置（在 ExecuteItemByIDWithOverride 中处理）
 
 		items, err := e.itemRepo.GetByGroupID(ctx, groupID)
 		if err != nil {
@@ -747,9 +748,9 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 		}
 
 		groupItems := &GroupItems{
-			GroupID:                  groupID,
-			Items:                    make([]*inspectionmgmtdata.InspectionItem, 0),
-			EffectiveBusinessGroupID: effectiveBusinessGroupID,
+			GroupID:                   groupID,
+			Items:                     make([]*inspectionmgmtdata.InspectionItem, 0),
+			EffectiveBusinessGroupIDs: effectiveBusinessGroupIDs,
 		}
 
 		if len(itemIDs) > 0 {
@@ -789,10 +790,10 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 		go func(itm *inspectionmgmtdata.InspectionItem) {
 			defer wg.Done()
 
-			// 查找该巡检项所属巡检组的有效业务分组ID（应用优先级后）
-			var effectiveBusinessGroupID uint
+			// 查找该巡检项所属巡检组的有效业务分组ID列表（应用优先级后）
+			var effectiveBusinessGroupIDs []uint
 			if gi, exists := groupItemsMap[itm.GroupID]; exists {
-				effectiveBusinessGroupID = gi.EffectiveBusinessGroupID
+				effectiveBusinessGroupIDs = gi.EffectiveBusinessGroupIDs
 			}
 
 			// 查找该巡检项的断言覆盖
@@ -801,7 +802,7 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 				itemOverride = override
 			}
 
-			records, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupID, taskExtraVars, itemOverride)
+			records, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupIDs, taskExtraVars, itemOverride)
 			groupName := groupNameMap[itm.GroupID]
 			if err != nil {
 				mu.Lock()
@@ -831,12 +832,6 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 					effectiveAssertionValue = itemOverride.AssertionValue
 				}
 
-				// 计算实际使用的业务分组名称
-				effectiveBusinessGroupName := ""
-				if effectiveBusinessGroupID > 0 {
-					effectiveBusinessGroupName = fmt.Sprintf("业务分组ID:%d", effectiveBusinessGroupID)
-				}
-
 				d := RunSyncItemDetail{
 					GroupID:          itm.GroupID,
 					GroupName:        groupName,
@@ -846,7 +841,7 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 					HostName:         r.HostName,
 					HostIP:           r.HostIP,
 					// 执行配置信息（使用覆盖后的值）
-					BusinessGroup:    effectiveBusinessGroupName,
+					BusinessGroup:    r.BusinessGroup,
 					ExecutionType:    itm.ExecutionType,
 					ExecutionMode:    group.ExecutionMode,
 					Command:          itm.Command,

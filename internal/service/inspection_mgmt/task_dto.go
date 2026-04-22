@@ -13,10 +13,10 @@ type TaskCreateRequest struct {
 	Concurrency     int    `json:"concurrency"`
 	Owner           string `json:"owner"`
 	// 需求一新增字段
-	ExecutionMode   string `json:"execution_mode"`   // 执行方式覆盖
-	AgentHostIDs    string `json:"agent_host_ids"`   // Agent 主机 ID 列表（JSON 数组）
-	BusinessGroupID uint   `json:"business_group_id"` // 业务分组 ID
-	CustomVariables string `json:"custom_variables"` // 自定义变量（JSON 对象，拨测任务）
+	ExecutionMode      string `json:"execution_mode"`        // 执行方式覆盖
+	AgentHostIDs       string `json:"agent_host_ids"`        // Agent 主机 ID 列表（JSON 数组）
+	BusinessGroupIDs   string `json:"business_group_ids"`    // 业务分组 ID 列表（JSON 数组，支持多选）
+	CustomVariables    string `json:"custom_variables"`      // 自定义变量（JSON 对象，拨测任务）
 	// 任务级覆盖功能
 	ItemAssertionOverrides      string `json:"item_assertion_overrides"`       // 巡检项断言覆盖（JSON 数组）
 	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"` // 巡检组业务分组覆盖（JSON 数组）
@@ -35,10 +35,10 @@ type TaskUpdateRequest struct {
 	Concurrency     int    `json:"concurrency"`
 	Owner           string `json:"owner"`
 	// 需求一新增字段
-	ExecutionMode   string `json:"execution_mode"`
-	AgentHostIDs    string `json:"agent_host_ids"`
-	BusinessGroupID uint   `json:"business_group_id"`
-	CustomVariables string `json:"custom_variables"`
+	ExecutionMode      string `json:"execution_mode"`
+	AgentHostIDs       string `json:"agent_host_ids"`
+	BusinessGroupIDs   string `json:"business_group_ids"` // 业务分组 ID 列表（JSON 数组，支持多选）
+	CustomVariables    string `json:"custom_variables"`
 	// 任务级覆盖功能
 	ItemAssertionOverrides      string `json:"item_assertion_overrides"`
 	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"`
@@ -66,11 +66,11 @@ type TaskResponse struct {
 	ItemIDs         string `json:"item_ids"`
 	PushgatewayID   uint   `json:"pushgateway_id"`
 	Concurrency     int    `json:"concurrency"`
-	Owner           string `json:"owner"`
-	ExecutionMode   string `json:"execution_mode"`
-	AgentHostIDs    string `json:"agent_host_ids"`
-	BusinessGroupID uint   `json:"business_group_id"`
-	CustomVariables string `json:"custom_variables"`
+	Owner              string `json:"owner"`
+	ExecutionMode      string `json:"execution_mode"`
+	AgentHostIDs       string `json:"agent_host_ids"`
+	BusinessGroupIDs   string `json:"business_group_ids"` // 业务分组 ID 列表（JSON 数组，支持多选）
+	CustomVariables    string `json:"custom_variables"`
 	// 任务级覆盖功能
 	ItemAssertionOverrides      string `json:"item_assertion_overrides"`
 	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"`

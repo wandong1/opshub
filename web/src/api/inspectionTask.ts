@@ -10,7 +10,7 @@ export interface ItemAssertionOverride {
 // 巡检组业务分组覆盖结构
 export interface GroupBusinessGroupOverride {
   group_id: number
-  business_group_id: number
+  business_group_ids: number[]
 }
 
 // 巡检任务接口
@@ -27,7 +27,7 @@ export interface InspectionTask {
   concurrency: number
   executionMode?: string
   agentHostIds?: string
-  businessGroupId?: number
+  businessGroupIds?: string
   customVariables?: string
   itemAssertionOverrides?: string
   groupBusinessGroupOverrides?: string

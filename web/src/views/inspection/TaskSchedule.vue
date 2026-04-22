@@ -224,8 +224,7 @@
         </a-form-item>
 
         <a-form-item label="业务分组">
-          <a-select v-model="formData.businessGroupId" placeholder="不设置则沿用原配置" allow-clear allow-search style="width: 100%;">
-            <a-option :value="0" label="不覆盖" />
+          <a-select v-model="formData.businessGroupIds" multiple allow-search placeholder="不设置则沿用原配置" allow-clear style="width: 100%;" :multiple-limit="0">
             <a-option v-for="g in groupOptions" :key="g.id" :label="g.name" :value="g.id" />
           </a-select>
         </a-form-item>
@@ -288,7 +287,7 @@
               </a-form-item>
 
               <a-form-item label="覆盖为">
-                <a-select v-model="groupBusinessGroupOverrides[group.id]" placeholder="不覆盖" allow-clear style="width: 300px;">
+                <a-select v-model="groupBusinessGroupOverrides[group.id]" multiple allow-search placeholder="不覆盖" allow-clear style="width: 300px;" :multiple-limit="0">
                   <a-option v-for="bg in groupOptions" :key="bg.id" :value="bg.id">
                     {{ bg.name }}
                   </a-option>
@@ -411,6 +410,12 @@
               <a-table-column title="主机" :width="140">
                 <template #cell="{ record }">
                   <span v-if="record.host_name">{{ record.host_name }}<br/><span style="font-size:11px;color:var(--ops-text-tertiary)">{{ record.host_ip }}</span></span>
+                  <span v-else style="color:var(--ops-text-tertiary)">-</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="业务分组" :width="120">
+                <template #cell="{ record }">
+                  <span v-if="record.business_group">{{ record.business_group }}</span>
                   <span v-else style="color:var(--ops-text-tertiary)">-</span>
                 </template>
               </a-table-column>
@@ -637,6 +642,7 @@
           </a-table-column>
           <a-table-column title="巡检项" data-index="item_name" :width="150" ellipsis tooltip />
           <a-table-column title="主机" data-index="host_name" :width="120" ellipsis tooltip />
+          <a-table-column title="业务分组" data-index="business_group" :width="120" ellipsis tooltip />
           <a-table-column title="状态" :width="80" align="center">
             <template #cell="{ record }">
               <a-tag size="small" :color="record.status === 'success' ? 'green' : 'red'">{{ record.status === 'success' ? '成功' : '失败' }}</a-tag>
@@ -696,7 +702,7 @@ const assertionOverrideModalVisible = ref(false)
 const currentGroupName = ref('')
 
 // 业务分组覆盖状态
-const groupBusinessGroupOverrides = ref<Record<number, number>>({})
+const groupBusinessGroupOverrides = ref<Record<number, number[]>>({})
 
 // 需求四：自定义变量键值对列表
 const customVariablesList = ref<Array<{ key: string; value: string }>>([])
@@ -767,7 +773,7 @@ const defaultForm = () => ({
   // 需求一新增字段
   executionMode: '' as string,      // 执行方式覆盖：拨测=local/agent，巡检=auto/agent/ssh，空=不覆盖
   agentHostIds: [] as number[],      // Agent 主机 ID（executionMode=agent 时）
-  businessGroupId: 0 as number,      // 业务分组 ID 覆盖
+  businessGroupIds: [] as number[],  // 业务分组 ID 覆盖（支持多选）
   customVariables: '' as string      // 自定义变量 JSON（序列化后存储，由 customVariablesList 驱动）
 })
 const formData = reactive(defaultForm())
@@ -836,7 +842,7 @@ const loadData = async () => {
         // 需求一新增字段
         executionMode: task.execution_mode || '',
         agentHostIds: task.agent_host_ids || '',
-        businessGroupId: task.business_group_id || 0,
+        businessGroupIds: task.business_group_ids || '',
         customVariables: task.custom_variables || '',
         // 覆盖配置字段
         itemAssertionOverrides: task.item_assertion_overrides || '',
@@ -1011,7 +1017,10 @@ const getAssertionOverrideCountForGroup = (groupId: number) => {
 // 获取总配置数量（用于徽章显示）
 const getConfigCount = () => {
   const assertionCount = Object.values(assertionOverrides.value).filter(o => o.type).length
-  const businessGroupCount = Object.keys(groupBusinessGroupOverrides.value).filter(k => groupBusinessGroupOverrides.value[Number(k)] > 0).length
+  const businessGroupCount = Object.keys(groupBusinessGroupOverrides.value).filter(k => {
+    const ids = groupBusinessGroupOverrides.value[Number(k)]
+    return Array.isArray(ids) && ids.length > 0
+  }).length
   return assertionCount + businessGroupCount
 }
 
@@ -1082,7 +1091,7 @@ const handleEdit = async (row: any) => {
     // 需求一新增
     executionMode: row.executionMode || '',
     agentHostIds: (() => { try { return row.agentHostIds ? JSON.parse(row.agentHostIds) : [] } catch { return [] } })(),
-    businessGroupId: row.businessGroupId || 0,
+    businessGroupIds: (() => { try { return row.businessGroupIds ? JSON.parse(row.businessGroupIds) : [] } catch { return [] } })(),
     customVariables: row.customVariables || ''
   })
   // 需求四：反序列化变量为键值对列表
@@ -1110,7 +1119,7 @@ const handleEdit = async (row: any) => {
     try {
       const overrides = JSON.parse(row.groupBusinessGroupOverrides)
       for (const o of overrides) {
-        groupBusinessGroupOverrides.value[o.group_id] = o.business_group_id
+        groupBusinessGroupOverrides.value[o.group_id] = o.business_group_ids || []
       }
     } catch (e) {
       console.error('解析业务分组覆盖失败:', e)
@@ -1142,7 +1151,7 @@ const handleCopy = async (row: any) => {
     // 需求一新增
     executionMode: row.executionMode || '',
     agentHostIds: (() => { try { return row.agentHostIds ? JSON.parse(row.agentHostIds) : [] } catch { return [] } })(),
-    businessGroupId: row.businessGroupId || 0,
+    businessGroupIds: (() => { try { return row.businessGroupIds ? JSON.parse(row.businessGroupIds) : [] } catch { return [] } })(),
     customVariables: row.customVariables || ''
   })
   // 需求四：反序列化变量为键值对列表
@@ -1170,7 +1179,7 @@ const handleCopy = async (row: any) => {
     try {
       const overrides = JSON.parse(row.groupBusinessGroupOverrides)
       for (const o of overrides) {
-        groupBusinessGroupOverrides.value[o.group_id] = o.business_group_id
+        groupBusinessGroupOverrides.value[o.group_id] = o.business_group_ids || []
       }
     } catch (e) {
       console.error('解析业务分组覆盖失败:', e)
@@ -1226,7 +1235,7 @@ const handleSubmit = async () => {
     // 需求一、三、四：新增执行覆盖配置和变量
     requestData.execution_mode = formData.executionMode || ''
     requestData.agent_host_ids = formData.agentHostIds.length > 0 ? JSON.stringify(formData.agentHostIds) : ''
-    requestData.business_group_id = formData.businessGroupId || 0
+    requestData.business_group_ids = formData.businessGroupIds.length > 0 ? JSON.stringify(formData.businessGroupIds) : ''
     requestData.custom_variables = serializeCustomVariables()
 
     // 构建断言覆盖数组
@@ -1243,11 +1252,11 @@ const handleSubmit = async () => {
 
     // 构建业务分组覆盖数组
     const businessGroupOverridesArray: GroupBusinessGroupOverride[] = []
-    for (const [groupIdStr, businessGroupId] of Object.entries(groupBusinessGroupOverrides.value)) {
-      if (businessGroupId > 0) {
+    for (const [groupIdStr, businessGroupIds] of Object.entries(groupBusinessGroupOverrides.value)) {
+      if (Array.isArray(businessGroupIds) && businessGroupIds.length > 0) {
         businessGroupOverridesArray.push({
           group_id: Number(groupIdStr),
-          business_group_id: businessGroupId
+          business_group_ids: businessGroupIds
         })
       }
     }

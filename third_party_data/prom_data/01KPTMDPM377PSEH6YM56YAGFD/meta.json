@@ -1,0 +1,17 @@
+{
+	"ulid": "01KPTMDPM377PSEH6YM56YAGFD",
+	"minTime": 1776852011535,
+	"maxTime": 1776859200000,
+	"stats": {
+		"numSamples": 80278,
+		"numSeries": 1847,
+		"numChunks": 1847
+	},
+	"compaction": {
+		"level": 1,
+		"sources": [
+			"01KPTMDPM377PSEH6YM56YAGFD"
+		]
+	},
+	"version": 1
+}

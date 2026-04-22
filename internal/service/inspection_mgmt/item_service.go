@@ -24,6 +24,7 @@ type ItemService struct {
 	groupRepo        inspectionmgmtdata.GroupRepository
 	recordRepo       inspectionmgmtdata.RecordRepository
 	hostRepo         assetbiz.HostRepo
+	assetGroupRepo   assetbiz.AssetGroupRepo
 	serviceLabelRepo assetbiz.ServiceLabelRepo
 	cmdExecutor      *inspectionmgmtbiz.CommandExecutor
 	probeExecutor    *ProbeExecutor
@@ -38,6 +39,7 @@ func NewItemService(
 	groupRepo inspectionmgmtdata.GroupRepository,
 	recordRepo inspectionmgmtdata.RecordRepository,
 	hostRepo assetbiz.HostRepo,
+	assetGroupRepo assetbiz.AssetGroupRepo,
 	serviceLabelRepo assetbiz.ServiceLabelRepo,
 	cmdExecutor *inspectionmgmtbiz.CommandExecutor,
 	probeExecutor *ProbeExecutor,
@@ -48,6 +50,7 @@ func NewItemService(
 		groupRepo:        groupRepo,
 		recordRepo:       recordRepo,
 		hostRepo:         hostRepo,
+		assetGroupRepo:   assetGroupRepo,
 		serviceLabelRepo: serviceLabelRepo,
 		cmdExecutor:      cmdExecutor,
 		probeExecutor:    probeExecutor,
@@ -934,6 +937,21 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 		return nil, fmt.Errorf("no target hosts found for item %d", itemID)
 	}
 
+	// 批量查询业务分组名称（避免 N+1 查询）
+	groupIDSet := make(map[uint]bool)
+	for _, host := range hosts {
+		if host.GroupID > 0 {
+			groupIDSet[host.GroupID] = true
+		}
+	}
+
+	groupNameMap := make(map[uint]string)
+	for groupID := range groupIDSet {
+		if assetGroup, err := s.assetGroupRepo.GetByID(ctx, groupID); err == nil {
+			groupNameMap[groupID] = assetGroup.Name
+		}
+	}
+
 	// 预加载所有启用的服务标签
 	enabledLabels, err := s.serviceLabelRepo.GetAllEnabled(ctx)
 	if err != nil {
@@ -996,15 +1014,24 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 			}
 		}
 
+		// 获取主机的业务分组名称
+		businessGroupName := ""
+		if host.GroupID > 0 {
+			if name, exists := groupNameMap[host.GroupID]; exists {
+				businessGroupName = name
+			}
+		}
+
 		// 保存执行记录
 		record := &inspectionmgmtdata.InspectionRecord{
-			GroupID:          item.GroupID,
-			ItemID:           item.ID,
-			HostID:           host.ID,
-			Status:           result.Status,
-			Output:           result.Output,
-			ErrorMessage:     result.ErrorMessage,
-			Duration:         result.Duration,
+			GroupID:       item.GroupID,
+			ItemID:        item.ID,
+			HostID:        host.ID,
+			BusinessGroup: businessGroupName,
+			Status:        result.Status,
+			Output:        result.Output,
+			ErrorMessage:  result.ErrorMessage,
+			Duration:      result.Duration,
 			AssertionResult:  result.AssertionResult,
 			AssertionDetails: assertionDetailsJSON,
 			ExecutedAt:       time.Now(),
@@ -1022,14 +1049,14 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 
 // ExecuteItemByIDWithOverride 执行巡检项，支持任务调度级覆盖（需求一、需求三、断言覆盖）
 // executionModeOverride: 覆盖执行方式，空=沿用巡检组配置
-// businessGroupIDOverride: 覆盖业务分组，0=沿用巡检组配置
+// businessGroupIDsOverride: 覆盖业务分组（支持多选），空数组=沿用巡检组配置
 // extraVars: 任务调度级自定义变量（优先级最高，合并到运行时变量）
 // assertionOverride: 断言覆盖，nil=沿用巡检项配置
 func (s *ItemService) ExecuteItemByIDWithOverride(
 	ctx context.Context,
 	itemID uint,
 	executionModeOverride string,
-	businessGroupIDOverride uint,
+	businessGroupIDsOverride []uint,
 	extraVars map[string]string,
 	assertionOverride *ItemAssertionOverride,
 ) ([]*inspectionmgmtdata.InspectionRecord, error) {
@@ -1050,9 +1077,9 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 	if executionModeOverride != "" {
 		effectiveGroup.ExecutionMode = executionModeOverride
 	}
-	if businessGroupIDOverride > 0 {
-		// 将业务分组 ID 序列化为 JSON 数组格式
-		groupIDsJSON, _ := json.Marshal([]uint{businessGroupIDOverride})
+	if len(businessGroupIDsOverride) > 0 {
+		// 将业务分组 ID 列表序列化为 JSON 数组格式
+		groupIDsJSON, _ := json.Marshal(businessGroupIDsOverride)
 		effectiveGroup.GroupIDs = string(groupIDsJSON)
 	}
 
@@ -1102,6 +1129,21 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 	}
 	if len(hosts) == 0 {
 		return nil, fmt.Errorf("no target hosts found for item %d", itemID)
+	}
+
+	// 批量查询业务分组名称（避免 N+1 查询）
+	groupIDSet := make(map[uint]bool)
+	for _, host := range hosts {
+		if host.GroupID > 0 {
+			groupIDSet[host.GroupID] = true
+		}
+	}
+
+	groupNameMap := make(map[uint]string)
+	for groupID := range groupIDSet {
+		if assetGroup, err := s.assetGroupRepo.GetByID(ctx, groupID); err == nil {
+			groupNameMap[groupID] = assetGroup.Name
+		}
 	}
 
 	// 预加载所有启用的服务标签
@@ -1168,12 +1210,21 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 			}
 		}
 
+		// 获取主机的业务分组名称
+		businessGroupName := ""
+		if host.GroupID > 0 {
+			if name, exists := groupNameMap[host.GroupID]; exists {
+				businessGroupName = name
+			}
+		}
+
 		record := &inspectionmgmtdata.InspectionRecord{
 			GroupID:          item.GroupID,
 			ItemID:           item.ID,
 			HostID:           host.ID,
 			HostName:         host.Name,
 			HostIP:           host.IP,
+			BusinessGroup:    businessGroupName,
 			Status:           result.Status,
 			Output:           result.Output,
 			ErrorMessage:     result.ErrorMessage,

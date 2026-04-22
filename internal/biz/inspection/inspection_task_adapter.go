@@ -23,19 +23,19 @@ func (a *inspectionTaskRepoAdapter) GetByID(ctx context.Context, id uint) (*Insp
 		return nil, err
 	}
 	return &InspectionTaskV2{
-		ID:              task.ID,
-		Name:            task.Name,
-		TaskType:        task.TaskType,
-		CronExpr:        task.CronExpr,
-		Enabled:         task.Enabled,
-		GroupIDs:        task.GroupIDs,
-		ItemIDs:         task.ItemIDs,
-		PushgatewayID:   task.PushgatewayID,
-		Concurrency:     task.Concurrency,
-		ExecutionMode:   task.ExecutionMode,
-		AgentHostIDs:    task.AgentHostIDs,
-		BusinessGroupID: task.BusinessGroupID,
-		CustomVariables: task.CustomVariables,
+		ID:               task.ID,
+		Name:             task.Name,
+		TaskType:         task.TaskType,
+		CronExpr:         task.CronExpr,
+		Enabled:          task.Enabled,
+		GroupIDs:         task.GroupIDs,
+		ItemIDs:          task.ItemIDs,
+		PushgatewayID:    task.PushgatewayID,
+		Concurrency:      task.Concurrency,
+		ExecutionMode:    task.ExecutionMode,
+		AgentHostIDs:     task.AgentHostIDs,
+		BusinessGroupIDs: task.BusinessGroupIDs,
+		CustomVariables:  task.CustomVariables,
 	}, nil
 }
 

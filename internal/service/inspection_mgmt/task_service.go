@@ -31,7 +31,7 @@ func (s *TaskService) Create(ctx context.Context, req *TaskCreateRequest) error 
 		Owner:                       req.Owner,
 		ExecutionMode:               req.ExecutionMode,
 		AgentHostIDs:                req.AgentHostIDs,
-		BusinessGroupID:             req.BusinessGroupID,
+		BusinessGroupIDs:            req.BusinessGroupIDs,
 		CustomVariables:             req.CustomVariables,
 		ItemAssertionOverrides:      req.ItemAssertionOverrides,
 		GroupBusinessGroupOverrides: req.GroupBusinessGroupOverrides,
@@ -74,7 +74,7 @@ func (s *TaskService) Update(ctx context.Context, id uint, req *TaskUpdateReques
 	// 需求一：更新执行覆盖配置（允许置空，故直接赋值）
 	task.ExecutionMode = req.ExecutionMode
 	task.AgentHostIDs = req.AgentHostIDs
-	task.BusinessGroupID = req.BusinessGroupID
+	task.BusinessGroupIDs = req.BusinessGroupIDs
 	task.CustomVariables = req.CustomVariables
 	// 任务级覆盖功能
 	task.ItemAssertionOverrides = req.ItemAssertionOverrides
@@ -126,7 +126,7 @@ func (s *TaskService) toResponse(task *inspectionmgmtdata.InspectionTask) *TaskR
 		Owner:                       task.Owner,
 		ExecutionMode:               task.ExecutionMode,
 		AgentHostIDs:                task.AgentHostIDs,
-		BusinessGroupID:             task.BusinessGroupID,
+		BusinessGroupIDs:            task.BusinessGroupIDs,
 		CustomVariables:             task.CustomVariables,
 		ItemAssertionOverrides:      task.ItemAssertionOverrides,
 		GroupBusinessGroupOverrides: task.GroupBusinessGroupOverrides,

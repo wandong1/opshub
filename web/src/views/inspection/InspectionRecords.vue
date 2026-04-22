@@ -343,6 +343,7 @@ const detailColumns = [
   { title: '风险等级', slotName: 'riskLevel', width: 90 },
   { title: '主机', dataIndex: 'hostName', width: 120 },
   { title: '主机IP', dataIndex: 'hostIp', width: 130 },
+  { title: '业务分组', dataIndex: 'businessGroup', width: 120 },
   { title: '执行类型', slotName: 'executionType', width: 90 },
   { title: '执行状态', slotName: 'status', width: 90 },
   { title: '断言结果', slotName: 'assertionResult', width: 90 },
