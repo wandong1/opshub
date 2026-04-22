@@ -40,8 +40,8 @@ type InspectionTask struct {
 	// Agent 主机 ID 列表 ✅ 移除 default:''
 	AgentHostIDs string `gorm:"type:text" json:"agent_host_ids"`
 
-	// 业务分组
-	BusinessGroupID uint `gorm:"default:0" json:"business_group_id"`
+	// 业务分组（支持多选）
+	BusinessGroupIDs string `gorm:"type:text" json:"business_group_ids"` // JSON 数组 [1,2,3]
 
 	// 自定义变量 ✅ 移除 default:''
 	CustomVariables string `gorm:"type:text" json:"custom_variables"`
@@ -50,8 +50,8 @@ type InspectionTask struct {
 	// JSON 数组：[{"item_id": 123, "assertion_type": "lt", "assertion_value": "80"}]
 	ItemAssertionOverrides string `gorm:"type:text" json:"item_assertion_overrides"`
 
-	// 巡检组业务分组覆盖（任务级业务分组覆盖功能，优先级高于 BusinessGroupID）
-	// JSON 数组：[{"group_id": 10, "business_group_id": 5}]
+	// 巡检组业务分组覆盖（任务级业务分组覆盖功能，支持多选）
+	// JSON 数组：[{"group_id": 10, "business_group_ids": [5, 6]}]
 	GroupBusinessGroupOverrides string `gorm:"type:text" json:"group_business_group_overrides"`
 
 	// 执行记录

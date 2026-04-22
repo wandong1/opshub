@@ -352,7 +352,10 @@ func NewInspectionServices(db *gorm.DB, redisClient *redis.Client, hostRepo asse
 	// 创建 ServiceLabelRepo
 	serviceLabelRepo := assetdata.NewServiceLabelRepo(db)
 
-	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, cleanupService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _, execRecordRepo := InitInspectionMgmtServices(db, hostRepo, serviceLabelRepo, credentialRepo, agentHub, sysConfigUseCase)
+	// 创建 AssetGroupRepo
+	assetGroupRepo := assetdata.NewAssetGroupRepo(db)
+
+	inspectionGroupService, inspectionItemService, inspectionRecordService, inspectionTaskService, executionRecordService, cleanupService, inspectionGroupRepo, inspectionItemRepo, inspectionRecordRepo, _, execRecordRepo := InitInspectionMgmtServices(db, hostRepo, serviceLabelRepo, credentialRepo, assetGroupRepo, agentHub, sysConfigUseCase)
 
 	// 启动清理服务
 	if err := cleanupService.Start(); err != nil {

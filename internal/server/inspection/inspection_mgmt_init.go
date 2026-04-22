@@ -19,6 +19,7 @@ func InitInspectionMgmtServices(
 	hostRepo assetbiz.HostRepo,
 	serviceLabelRepo assetbiz.ServiceLabelRepo,
 	credentialRepo assetbiz.CredentialRepo,
+	assetGroupRepo assetbiz.AssetGroupRepo,
 	agentHub *agent.AgentHub,
 	configUseCase *systembiz.ConfigUseCase,
 ) (
@@ -66,7 +67,7 @@ func InitInspectionMgmtServices(
 
 	// 初始化 Service
 	groupService := inspectionmgmtsvc.NewGroupService(groupRepo, itemRepo)
-	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, serviceLabelRepo, cmdExecutor, probeExecutor, variableResolver)
+	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, assetGroupRepo, serviceLabelRepo, cmdExecutor, probeExecutor, variableResolver)
 	recordService := inspectionmgmtsvc.NewRecordService(recordRepo, itemRepo, groupRepo)
 	recordService.SetHostRepo(hostRepo)
 	taskService := inspectionmgmtsvc.NewTaskService(taskRepo)

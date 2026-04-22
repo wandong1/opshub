@@ -722,8 +722,11 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 				// 2. 打开 WebSocket 会话
 				sessionID := uuid.New().String()
 				wsResult, err := agentFactory.SendWsSessionOpen(pickedAgentID, sessionID, resolvedURL, resolvedHeaders, resolvedParams, int32(step.Timeout), stepSkipVerify, step.ProxyURL)
-				if err != nil || !wsResult.Success {
-					errMsg := err.Error()
+				if err != nil || (wsResult != nil && !wsResult.Success) {
+					errMsg := ""
+					if err != nil {
+						errMsg = err.Error()
+					}
 					if wsResult != nil && wsResult.Error != "" {
 						errMsg = wsResult.Error
 					}
@@ -803,8 +806,11 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 						// 发送消息
 						actionID := uuid.New().String()
 						actionResult, err := agentFactory.SendWsSessionAction(pickedAgentID, sessionID, actionID, "send", msg, int32(msgType), 0, "")
-						if err != nil || !actionResult.Success {
-							errMsg := err.Error()
+						if err != nil || (actionResult != nil && !actionResult.Success) {
+							errMsg := ""
+							if err != nil {
+								errMsg = err.Error()
+							}
 							if actionResult != nil && actionResult.Error != "" {
 								errMsg = actionResult.Error
 							}
@@ -827,8 +833,11 @@ func ExecuteWorkflowProbe(ctx context.Context, cfg *ProbeConfig, resolver *Varia
 							readTimeout = 5
 						}
 						actionResult, err := agentFactory.SendWsSessionAction(pickedAgentID, sessionID, actionID, "receive", "", 0, int32(readTimeout), subStep.WSReceiveMode)
-						if err != nil || !actionResult.Success {
-							errMsg := err.Error()
+						if err != nil || (actionResult != nil && !actionResult.Success) {
+							errMsg := ""
+							if err != nil {
+								errMsg = err.Error()
+							}
 							if actionResult != nil && actionResult.Error != "" {
 								errMsg = actionResult.Error
 							}
@@ -2067,20 +2076,20 @@ type InspectionTaskRepo interface {
 
 // InspectionTaskV2 represents a task from inspection_tasks table
 type InspectionTaskV2 struct {
-	ID              uint
-	Name            string
-	TaskType        string
-	CronExpr        string
-	Enabled         bool
-	GroupIDs        string
-	ItemIDs         string
-	PushgatewayID   uint
-	Concurrency     int
+	ID               uint
+	Name             string
+	TaskType         string
+	CronExpr         string
+	Enabled          bool
+	GroupIDs         string
+	ItemIDs          string
+	PushgatewayID    uint
+	Concurrency      int
 	// 需求一新增：任务调度级别覆盖配置
-	ExecutionMode   string // 执行方式覆盖（拨测：local/agent；空=不覆盖）
-	AgentHostIDs    string // Agent 主机 ID 列表（JSON 数组）
-	BusinessGroupID uint   // 业务分组 ID 覆盖
-	CustomVariables string // 自定义变量 JSON 对象（优先级最高）
+	ExecutionMode    string // 执行方式覆盖（拨测：local/agent；空=不覆盖）
+	AgentHostIDs     string // Agent 主机 ID 列表（JSON 数组）
+	BusinessGroupIDs string // 业务分组 ID 列表（JSON 数组，支持多选）
+	CustomVariables  string // 自定义变量 JSON 对象（优先级最高）
 }
 
 // NewNetworkProbeV2Executor creates a new executor for probe tasks from inspection_tasks table.
@@ -2202,8 +2211,12 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 				}
 			}
 			// 需求一：业务分组覆盖（影响变量作用域）
-			if inspectionTask.BusinessGroupID > 0 {
-				effectiveCfg.GroupID = inspectionTask.BusinessGroupID
+			// 拨测任务只支持单个业务分组，如果配置了多个，取第一个
+			if inspectionTask.BusinessGroupIDs != "" {
+				var businessGroupIDs []uint
+				if err := json.Unmarshal([]byte(inspectionTask.BusinessGroupIDs), &businessGroupIDs); err == nil && len(businessGroupIDs) > 0 {
+					effectiveCfg.GroupID = businessGroupIDs[0]
+				}
 			}
 			cfgPtr := &effectiveCfg
 
@@ -2343,8 +2356,12 @@ func (e *NetworkProbeV2Executor) ExecuteSync(ctx context.Context, taskID uint) (
 					effectiveCfg.AgentHostIDs = inspectionTask.AgentHostIDs
 				}
 			}
-			if inspectionTask.BusinessGroupID > 0 {
-				effectiveCfg.GroupID = inspectionTask.BusinessGroupID
+			// 拨测任务只支持单个业务分组，如果配置了多个，取第一个
+			if inspectionTask.BusinessGroupIDs != "" {
+				var businessGroupIDs []uint
+				if err := json.Unmarshal([]byte(inspectionTask.BusinessGroupIDs), &businessGroupIDs); err == nil && len(businessGroupIDs) > 0 {
+					effectiveCfg.GroupID = businessGroupIDs[0]
+				}
 			}
 			cfgPtr := &effectiveCfg
 

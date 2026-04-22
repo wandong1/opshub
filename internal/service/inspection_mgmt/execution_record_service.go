@@ -49,6 +49,8 @@ type ExecutionDetailResponse struct {
 	GroupName          string  `json:"groupName"`
 	ItemID             uint    `json:"itemId"`
 	ItemName           string  `json:"itemName"`
+	InspectionLevel    string  `json:"inspectionLevel"` // 巡检级别
+	RiskLevel          string  `json:"riskLevel"`       // 风险等级
 	HostID             uint    `json:"hostId"`
 	HostName           string  `json:"hostName"`
 	HostIP             string  `json:"hostIp"`
@@ -184,6 +186,8 @@ func (s *ExecutionRecordService) toDetailResponse(detail *inspectionmgmtdata.Ins
 		GroupName:          detail.GroupName,
 		ItemID:             detail.ItemID,
 		ItemName:           detail.ItemName,
+		InspectionLevel:    detail.InspectionLevel,
+		RiskLevel:          detail.RiskLevel,
 		HostID:             detail.HostID,
 		HostName:           detail.HostName,
 		HostIP:             detail.HostIP,
