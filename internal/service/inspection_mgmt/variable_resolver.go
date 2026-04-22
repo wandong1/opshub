@@ -7,6 +7,7 @@ import (
 
 	inspectionbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 )
 
 // VariableResolver 变量解析器，负责合并三个来源的变量
@@ -23,12 +24,18 @@ func NewVariableResolver(variableRepo inspectionbiz.ProbeVariableRepo, groupRepo
 	}
 }
 
-// ResolveVariables 解析变量，合并三个来源：全局变量、巡检组自定义变量、运行时提取的变量
-// 优先级：运行时提取的变量 > 巡检组自定义变量 > 全局变量
-func (r *VariableResolver) ResolveVariables(ctx context.Context, groupID uint, runtimeVars map[string]string) (map[string]string, error) {
+// ResolveVariables 解析变量，合并四个来源：预置变量、全局变量、巡检组自定义变量、运行时提取的变量
+// 优先级：运行时提取的变量 > 巡检组自定义变量 > 全局变量 > 预置变量
+func (r *VariableResolver) ResolveVariables(ctx context.Context, groupID uint, runtimeVars map[string]string, hostIP string) (map[string]string, error) {
 	result := make(map[string]string)
 
-	// 1. 加载全局变量
+	// 1. 生成系统预置变量（最低优先级）
+	presetVars := utils.GeneratePresetVariables(hostIP)
+	for k, v := range presetVars {
+		result[k] = v
+	}
+
+	// 2. 加载全局变量
 	globalVars, err := r.loadGlobalVariables(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("加载全局变量失败: %v", err)
@@ -37,7 +44,7 @@ func (r *VariableResolver) ResolveVariables(ctx context.Context, groupID uint, r
 		result[k] = v
 	}
 
-	// 2. 加载巡检组自定义变量（覆盖全局变量）
+	// 3. 加载巡检组自定义变量（覆盖全局变量）
 	groupVars, err := r.loadGroupVariables(ctx, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("加载巡检组变量失败: %v", err)
@@ -46,7 +53,7 @@ func (r *VariableResolver) ResolveVariables(ctx context.Context, groupID uint, r
 		result[k] = v
 	}
 
-	// 3. 合并运行时提取的变量（优先级最高）
+	// 4. 合并运行时提取的变量（优先级最高）
 	for k, v := range runtimeVars {
 		result[k] = v
 	}

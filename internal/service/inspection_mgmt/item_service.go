@@ -10,6 +10,7 @@ import (
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
 	inspectionmgmtbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection_mgmt"
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 )
 
 // ItemAssertionOverride 巡检项断言覆盖结构
@@ -493,7 +494,12 @@ func (s *ItemService) executeItem(
 
 	// 尝试解析变量，如果失败则使用空变量继续执行
 	if s.variableResolver != nil {
-		resolvedVars, err := s.variableResolver.ResolveVariables(ctx, group.ID, runtimeVariables)
+		// 获取主机IP（拨测类型时为空字符串）
+		hostIP := ""
+		if host != nil {
+			hostIP = host.IP
+		}
+		resolvedVars, err := s.variableResolver.ResolveVariables(ctx, group.ID, runtimeVariables, hostIP)
 		if err != nil {
 			fmt.Printf("[ItemService] Failed to resolve variables: %v, continuing with empty variables\n", err)
 		} else {
@@ -543,9 +549,9 @@ func (s *ItemService) executeItem(
 		}
 
 	case "probe":
-		// 拨测执行
-		fmt.Printf("[ItemService] Executing probe - configID: %d\n", item.ProbeConfigID)
-		execResult = s.probeExecutor.Execute(ctx, item.ProbeConfigID, item.Timeout)
+		// 拨测执行 - 传递变量用于解析配置
+		fmt.Printf("[ItemService] Executing probe - configID: %d, variables: %+v\n", item.ProbeConfigID, variables)
+		execResult = s.probeExecutor.Execute(ctx, item.ProbeConfigID, item.Timeout, variables)
 
 	default:
 		fmt.Printf("[ItemService] Unknown execution type: %s\n", item.ExecutionType)
@@ -1161,19 +1167,25 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 		// 为每个主机创建独立的变量上下文
 		variables := make(map[string]string)
 
-		// 复制任务变量
+		// 1. 生成系统预置变量（包含 exec_node_ip）
+		presetVars := utils.GeneratePresetVariables(host.IP)
+		for k, v := range presetVars {
+			variables[k] = v
+		}
+
+		// 2. 复制任务变量（覆盖预置变量）
 		for k, v := range baseVars {
 			variables[k] = v
 		}
 
-		// 生成 instance 预设变量
+		// 3. 生成 instance 预设变量
 		exporterPort := 9100
 		if host.ExporterPort > 0 {
 			exporterPort = host.ExporterPort
 		}
 		variables["instance"] = fmt.Sprintf("%s:%d", host.IP, exporterPort)
 
-		// 生成 {label}_instance 预设变量
+		// 4. 生成 {label}_instance 预设变量
 		if host.Tags != "" {
 			hostTags := strings.Split(host.Tags, ",")
 

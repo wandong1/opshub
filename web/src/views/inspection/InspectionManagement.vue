@@ -2022,6 +2022,21 @@ const loadVariableOptions = async () => {
 const getItemVariableOptions = (item: any) => {
   const options = [...variableOptions.value]
 
+  // 添加系统预置变量（时间相关）
+  options.push({ name: 'timestamp', description: '系统预置 - Unix时间戳（秒）' })
+  options.push({ name: 'timestamp_ms', description: '系统预置 - Unix时间戳（毫秒）' })
+  options.push({ name: 'current_time', description: '系统预置 - 当前时间（HHmmss）' })
+  options.push({ name: 'current_date', description: '系统预置 - 当前日期（yyyyMMdd）' })
+  options.push({ name: 'current_datetime', description: '系统预置 - 当前日期时间（yyyyMMddHHmmss）' })
+
+  // 添加系统预置变量（随机数相关）
+  options.push({ name: 'random_number', description: '系统预置 - 10位随机数' })
+  options.push({ name: 'random_string', description: '系统预置 - 10位随机字符串' })
+  options.push({ name: 'random_uuid', description: '系统预置 - UUID' })
+
+  // 添加巡检专属预置变量
+  options.push({ name: 'exec_node_ip', description: '系统预置 - 执行主机IP地址' })
+
   // 添加预设变量：instance（主机 IP:ExporterPort）
   options.push({
     name: 'instance',

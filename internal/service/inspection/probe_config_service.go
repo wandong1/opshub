@@ -14,6 +14,7 @@ import (
 	biz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
 	"github.com/ydcloud-dy/opshub/internal/biz/inspection/probers"
 	"github.com/ydcloud-dy/opshub/pkg/response"
+	"github.com/ydcloud-dy/opshub/pkg/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -198,10 +199,10 @@ func (s *ProbeConfigService) Import(c *gin.Context) {
 			Tags: item.Tags, GroupIDs: item.GroupIDs,
 			ExecMode: item.ExecMode, AgentHostIDs: item.AgentHostIDs, RetryCount: item.RetryCount,
 			SkipVerify: item.SkipVerify,
-			Method: item.Method, URL: item.URL, Headers: item.Headers, Params: item.Params,
+			Method:     item.Method, URL: item.URL, Headers: item.Headers, Params: item.Params,
 			Body: item.Body, ProxyURL: item.ProxyURL, Assertions: item.Assertions,
 			ContentType: item.ContentType,
-			WSMessage: item.WSMessage, WSMessageType: item.WSMessageType,
+			WSMessage:   item.WSMessage, WSMessageType: item.WSMessageType,
 			WSMessageFormat: item.WSMessageFormat, WSReadTimeout: item.WSReadTimeout,
 			Status: 1,
 		}
@@ -240,10 +241,10 @@ func (s *ProbeConfigService) Export(c *gin.Context) {
 			Tags: cfg.Tags, GroupIDs: cfg.GroupIDs,
 			ExecMode: cfg.ExecMode, AgentHostIDs: cfg.AgentHostIDs, RetryCount: cfg.RetryCount,
 			SkipVerify: cfg.SkipVerify,
-			Method: cfg.Method, URL: cfg.URL, Headers: cfg.Headers, Params: cfg.Params,
+			Method:     cfg.Method, URL: cfg.URL, Headers: cfg.Headers, Params: cfg.Params,
 			Body: cfg.Body, ProxyURL: cfg.ProxyURL, Assertions: cfg.Assertions,
 			ContentType: cfg.ContentType,
-			WSMessage: cfg.WSMessage, WSMessageType: cfg.WSMessageType,
+			WSMessage:   cfg.WSMessage, WSMessageType: cfg.WSMessageType,
 			WSMessageFormat: cfg.WSMessageFormat, WSReadTimeout: cfg.WSReadTimeout,
 		})
 	}
@@ -267,17 +268,33 @@ func (s *ProbeConfigService) RunOnce(c *gin.Context) {
 		response.ErrorCode(c, http.StatusNotFound, "未找到: "+err.Error())
 		return
 	}
-
-	// Variable resolution
+	// Variable resolution with preset variables
 	resolvedConfig := config
 	if s.variableResolver != nil {
-		if rc, err := s.variableResolver.ResolveConfig(c.Request.Context(), config); err != nil {
-			response.ErrorCode(c, http.StatusInternalServerError, "变量替换失败: "+err.Error())
-			return
-		} else {
+		// 生成预置变量（不包含 exec_node_ip，因为拨测不关联主机）
+		presetVars := utils.GeneratePresetVariables("")
+		fmt.Printf("[TestProbe] Preset variables: %+v\n", presetVars)
+		fmt.Printf("[TestProbe] Original config.Body: %s\n", config.Body)
+
+		// 使用 ResolveConfigWithExtra 解析变量（预置变量优先级最高）
+		if rc, err := s.variableResolver.ResolveConfigWithExtra(c.Request.Context(), config, presetVars); err == nil {
 			resolvedConfig = rc
+			fmt.Printf("[TestProbe] Resolved config.Body: %s\n", resolvedConfig.Body)
+		} else {
+			fmt.Printf("[TestProbe] Failed to resolve variables: %v\n", err)
 		}
 	}
+
+	// // Variable resolution
+	// resolvedConfig := config
+	// if s.variableResolver != nil {
+	// 	if rc, err := s.variableResolver.ResolveConfig(c.Request.Context(), config); err != nil {
+	// 		response.ErrorCode(c, http.StatusInternalServerError, "变量替换失败: "+err.Error())
+	// 		return
+	// 	} else {
+	// 		resolvedConfig = rc
+	// 	}
+	// }
 
 	// Application probe
 	if resolvedConfig.Category == biz.ProbeCategoryApplication {
@@ -566,11 +583,20 @@ func (s *ProbeConfigService) TestProbe(c *gin.Context) {
 		}
 	}
 
-	// Variable resolution
+	// Variable resolution with preset variables
 	resolvedConfig := &config
 	if s.variableResolver != nil {
-		if rc, err := s.variableResolver.ResolveConfig(c.Request.Context(), &config); err == nil {
+		// 生成预置变量（不包含 exec_node_ip，因为拨测不关联主机）
+		presetVars := utils.GeneratePresetVariables("")
+		fmt.Printf("[TestProbe] Preset variables: %+v\n", presetVars)
+		fmt.Printf("[TestProbe] Original config.Body: %s\n", config.Body)
+
+		// 使用 ResolveConfigWithExtra 解析变量（预置变量优先级最高）
+		if rc, err := s.variableResolver.ResolveConfigWithExtra(c.Request.Context(), &config, presetVars); err == nil {
 			resolvedConfig = rc
+			fmt.Printf("[TestProbe] Resolved config.Body: %s\n", resolvedConfig.Body)
+		} else {
+			fmt.Printf("[TestProbe] Failed to resolve variables: %v\n", err)
 		}
 	}
 
