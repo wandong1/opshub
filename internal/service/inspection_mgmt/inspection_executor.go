@@ -351,6 +351,9 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 					ScriptContent:      itm.ScriptContent,
 					AssertionType:      effectiveAssertionType,
 					AssertionValue:     effectiveAssertionValue,
+					// 巡检级别和风险等级（快照）
+					InspectionLevel:    itm.InspectionLevel,
+					RiskLevel:          itm.RiskLevel,
 					// 执行结果
 					Status:             oldRecord.Status,
 					Output:             oldRecord.Output,
@@ -638,6 +641,8 @@ type RunSyncItemDetail struct {
 	ScriptContent    string   `json:"script_content,omitempty"`
 	AssertionType    string   `json:"assertion_type,omitempty"`
 	AssertionValue   string   `json:"assertion_value,omitempty"`
+	InspectionLevel  string   `json:"inspectionLevel,omitempty"`
+	RiskLevel        string   `json:"riskLevel,omitempty"`
 	// 执行结果
 	Status           string   `json:"status"`           // success/failed
 	Output           string   `json:"output"`
@@ -849,6 +854,8 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 					ScriptContent:    itm.ScriptContent,
 					AssertionType:    effectiveAssertionType,
 					AssertionValue:   effectiveAssertionValue,
+					InspectionLevel:  itm.InspectionLevel,
+					RiskLevel:        itm.RiskLevel,
 					// 执行结果
 					Status:           r.Status,
 					Output:           r.Output,

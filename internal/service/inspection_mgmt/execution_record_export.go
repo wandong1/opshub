@@ -219,13 +219,15 @@ func (s *ExecutionRecordService) generateDetailsSheet(f *excelize.File, details 
 	f.SetColWidth(sheetName, "A", "A", 12)
 	f.SetColWidth(sheetName, "B", "B", 20)
 	f.SetColWidth(sheetName, "C", "C", 20)
-	f.SetColWidth(sheetName, "D", "D", 20)
-	f.SetColWidth(sheetName, "E", "E", 15)
-	f.SetColWidth(sheetName, "F", "F", 10)
-	f.SetColWidth(sheetName, "G", "G", 12)
-	f.SetColWidth(sheetName, "H", "H", 12)
-	f.SetColWidth(sheetName, "I", "I", 20)
-	f.SetColWidth(sheetName, "J", "J", 40)
+	f.SetColWidth(sheetName, "D", "D", 12)
+	f.SetColWidth(sheetName, "E", "E", 12)
+	f.SetColWidth(sheetName, "F", "F", 20)
+	f.SetColWidth(sheetName, "G", "G", 15)
+	f.SetColWidth(sheetName, "H", "H", 10)
+	f.SetColWidth(sheetName, "I", "I", 12)
+	f.SetColWidth(sheetName, "J", "J", 12)
+	f.SetColWidth(sheetName, "K", "K", 20)
+	f.SetColWidth(sheetName, "L", "L", 40)
 
 	// 表头样式
 	headerStyle, _ := f.NewStyle(&excelize.Style{
@@ -259,7 +261,7 @@ func (s *ExecutionRecordService) generateDetailsSheet(f *excelize.File, details 
 	})
 
 	// 表头
-	headers := []string{"ID", "巡检组", "巡检项", "主机", "IP", "状态", "断言结果", "时长(秒)", "执行时间", "错误信息"}
+	headers := []string{"ID", "巡检组", "巡检项", "巡检级别", "风险等级", "主机", "IP", "状态", "断言结果", "时长(秒)", "执行时间", "错误信息"}
 	for i, header := range headers {
 		cell := string(rune('A'+i)) + "1"
 		f.SetCellValue(sheetName, cell, header)
@@ -275,16 +277,18 @@ func (s *ExecutionRecordService) generateDetailsSheet(f *excelize.File, details 
 		f.SetCellValue(sheetName, "A"+rowStr, detail.ID)
 		f.SetCellValue(sheetName, "B"+rowStr, detail.GroupName)
 		f.SetCellValue(sheetName, "C"+rowStr, detail.ItemName)
-		f.SetCellValue(sheetName, "D"+rowStr, detail.HostName)
-		f.SetCellValue(sheetName, "E"+rowStr, detail.HostIP)
-		f.SetCellValue(sheetName, "F"+rowStr, detail.Status)
-		f.SetCellValue(sheetName, "G"+rowStr, detail.AssertionResult)
-		f.SetCellValue(sheetName, "H"+rowStr, fmt.Sprintf("%.2f", detail.Duration))
-		f.SetCellValue(sheetName, "I"+rowStr, detail.ExecutedAt.Format("2006-01-02 15:04:05"))
-		f.SetCellValue(sheetName, "J"+rowStr, detail.ErrorMessage)
+		f.SetCellValue(sheetName, "D"+rowStr, detail.InspectionLevel)
+		f.SetCellValue(sheetName, "E"+rowStr, detail.RiskLevel)
+		f.SetCellValue(sheetName, "F"+rowStr, detail.HostName)
+		f.SetCellValue(sheetName, "G"+rowStr, detail.HostIP)
+		f.SetCellValue(sheetName, "H"+rowStr, detail.Status)
+		f.SetCellValue(sheetName, "I"+rowStr, detail.AssertionResult)
+		f.SetCellValue(sheetName, "J"+rowStr, fmt.Sprintf("%.2f", detail.Duration))
+		f.SetCellValue(sheetName, "K"+rowStr, detail.ExecutedAt.Format("2006-01-02 15:04:05"))
+		f.SetCellValue(sheetName, "L"+rowStr, detail.ErrorMessage)
 
 		// 应用样式
-		for col := 'A'; col <= 'J'; col++ {
+		for col := 'A'; col <= 'L'; col++ {
 			cell := string(col) + rowStr
 			f.SetCellStyle(sheetName, cell, cell, dataStyle)
 		}
@@ -294,7 +298,7 @@ func (s *ExecutionRecordService) generateDetailsSheet(f *excelize.File, details 
 
 	// 启用自动筛选
 	lastRow := len(details) + 1
-	f.AutoFilter(sheetName, fmt.Sprintf("A1:J%d", lastRow), []excelize.AutoFilterOptions{})
+	f.AutoFilter(sheetName, fmt.Sprintf("A1:L%d", lastRow), []excelize.AutoFilterOptions{})
 
 	return nil
 }
@@ -318,9 +322,11 @@ func (s *ExecutionRecordService) generateFailureAnalysisSheet(f *excelize.File, 
 	// 设置列宽
 	f.SetColWidth(sheetName, "A", "A", 20)
 	f.SetColWidth(sheetName, "B", "B", 20)
-	f.SetColWidth(sheetName, "C", "C", 20)
-	f.SetColWidth(sheetName, "D", "D", 15)
-	f.SetColWidth(sheetName, "E", "E", 50)
+	f.SetColWidth(sheetName, "C", "C", 12)
+	f.SetColWidth(sheetName, "D", "D", 12)
+	f.SetColWidth(sheetName, "E", "E", 20)
+	f.SetColWidth(sheetName, "F", "F", 15)
+	f.SetColWidth(sheetName, "G", "G", 50)
 
 	// 表头样式
 	headerStyle, _ := f.NewStyle(&excelize.Style{
@@ -354,7 +360,7 @@ func (s *ExecutionRecordService) generateFailureAnalysisSheet(f *excelize.File, 
 	})
 
 	// 表头
-	headers := []string{"巡检组", "巡检项", "主机", "IP", "错误信息"}
+	headers := []string{"巡检组", "巡检项", "巡检级别", "风险等级", "主机", "IP", "错误信息"}
 	for i, header := range headers {
 		cell := string(rune('A'+i)) + "1"
 		f.SetCellValue(sheetName, cell, header)
@@ -369,12 +375,14 @@ func (s *ExecutionRecordService) generateFailureAnalysisSheet(f *excelize.File, 
 
 		f.SetCellValue(sheetName, "A"+rowStr, detail.GroupName)
 		f.SetCellValue(sheetName, "B"+rowStr, detail.ItemName)
-		f.SetCellValue(sheetName, "C"+rowStr, detail.HostName)
-		f.SetCellValue(sheetName, "D"+rowStr, detail.HostIP)
-		f.SetCellValue(sheetName, "E"+rowStr, detail.ErrorMessage)
+		f.SetCellValue(sheetName, "C"+rowStr, detail.InspectionLevel)
+		f.SetCellValue(sheetName, "D"+rowStr, detail.RiskLevel)
+		f.SetCellValue(sheetName, "E"+rowStr, detail.HostName)
+		f.SetCellValue(sheetName, "F"+rowStr, detail.HostIP)
+		f.SetCellValue(sheetName, "G"+rowStr, detail.ErrorMessage)
 
 		// 应用样式
-		for col := 'A'; col <= 'E'; col++ {
+		for col := 'A'; col <= 'G'; col++ {
 			cell := string(col) + rowStr
 			f.SetCellStyle(sheetName, cell, cell, dataStyle)
 		}

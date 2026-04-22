@@ -83,6 +83,10 @@ type InspectionExecutionDetail struct {
 	AssertionDetails string `gorm:"type:text" json:"assertionDetails"`    // JSON格式
 	ExtractedVariables string `gorm:"type:text" json:"extractedVariables"` // JSON格式
 
+	// 巡检级别和风险等级（快照）
+	InspectionLevel string `gorm:"size:20" json:"inspectionLevel"` // high/medium/low
+	RiskLevel       string `gorm:"size:20" json:"riskLevel"`       // high/medium/low
+
 	ExecutedAt time.Time `gorm:"not null" json:"executedAt"`
 }
 

@@ -312,6 +312,8 @@ func (s *GroupService) buildExportData(group *inspectionmgmtdata.InspectionGroup
 			AssertionValue:    item.AssertionValue,
 			VariableName:      item.VariableName,
 			VariableRegex:     item.VariableRegex,
+			InspectionLevel:   item.InspectionLevel,
+			RiskLevel:         item.RiskLevel,
 			Timeout:           item.Timeout,
 			Status:            item.Status,
 		}
@@ -469,11 +471,53 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 			VariableName:      itemData.VariableName,
 			VariableRegex:     itemData.VariableRegex,
 			Timeout:           itemData.Timeout,
+			InspectionLevel:   itemData.InspectionLevel,
+			RiskLevel:         itemData.RiskLevel,
 		}
 
-		// 需要注入 ItemService 来创建巡检项
-		itemService := NewItemService(s.itemRepo, s.groupRepo, nil, nil, nil, nil, nil)
-		if _, err := itemService.Create(ctx, itemReq); err != nil {
+		// 直接使用 itemRepo 创建巡检项
+		item := &inspectionmgmtdata.InspectionItem{
+			Name:              itemReq.Name,
+			Description:       itemReq.Description,
+			GroupID:           itemReq.GroupID,
+			Sort:              itemReq.Sort,
+			Status:            itemReq.Status,
+			ExecutionStrategy: itemReq.ExecutionStrategy,
+			ExecutionType:     itemReq.ExecutionType,
+			Command:           itemReq.Command,
+			ScriptType:        itemReq.ScriptType,
+			ScriptContent:     itemReq.ScriptContent,
+			ScriptFile:        itemReq.ScriptFile,
+			ScriptArgs:        itemReq.ScriptArgs,
+			PromQLQuery:       itemReq.PromQLQuery,
+			HostMatchType:     itemReq.HostMatchType,
+			HostTags:          itemReq.HostTags,
+			HostIDs:           itemReq.HostIDs,
+			AssertionType:     itemReq.AssertionType,
+			AssertionValue:    itemReq.AssertionValue,
+			VariableName:      itemReq.VariableName,
+			VariableRegex:     itemReq.VariableRegex,
+			Timeout:           itemReq.Timeout,
+			InspectionLevel:   itemReq.InspectionLevel,
+			RiskLevel:         itemReq.RiskLevel,
+		}
+		if item.Status == "" {
+			item.Status = "enabled"
+		}
+		if item.ExecutionStrategy == "" {
+			item.ExecutionStrategy = "concurrent"
+		}
+		if item.Timeout == 0 {
+			item.Timeout = 60
+		}
+		if item.InspectionLevel == "" {
+			item.InspectionLevel = "medium"
+		}
+		if item.RiskLevel == "" {
+			item.RiskLevel = "medium"
+		}
+
+		if err := s.itemRepo.Create(ctx, item); err != nil {
 			// 如果创建巡检项失败，删除已创建的巡检组
 			s.groupRepo.Delete(ctx, groupID)
 			return 0, fmt.Errorf("创建巡检项失败: %v", err)

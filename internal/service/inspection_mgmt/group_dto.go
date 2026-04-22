@@ -97,6 +97,8 @@ type ItemExportData struct {
 	AssertionValue    string   `json:"assertionValue,omitempty" yaml:"assertionValue,omitempty"`
 	VariableName      string   `json:"variableName,omitempty" yaml:"variableName,omitempty"`
 	VariableRegex     string   `json:"variableRegex,omitempty" yaml:"variableRegex,omitempty"`
+	InspectionLevel   string   `json:"inspectionLevel,omitempty" yaml:"inspectionLevel,omitempty"`
+	RiskLevel         string   `json:"riskLevel,omitempty" yaml:"riskLevel,omitempty"`
 	Timeout           int      `json:"timeout" yaml:"timeout"`
 	Status            string   `json:"status" yaml:"status"`
 }

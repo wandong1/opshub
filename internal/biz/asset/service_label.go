@@ -7,6 +7,7 @@ type ServiceLabel struct {
 	gorm.Model
 	Name            string `gorm:"type:varchar(100);not null;uniqueIndex;comment:标签名" json:"name"`
 	MatchProcesses  string `gorm:"type:varchar(500);not null;comment:匹配进程名(逗号分隔)" json:"matchProcesses"`
+	ExporterPort    int    `gorm:"type:int;default:0;comment:Exporter端口" json:"exporterPort"`
 	Description     string `gorm:"type:varchar(500);comment:描述" json:"description"`
 	Status          int    `gorm:"type:tinyint;default:1;comment:状态 1:启用 0:禁用" json:"status"`
 }
@@ -16,6 +17,7 @@ type ServiceLabelRequest struct {
 	ID             uint   `json:"id"`
 	Name           string `json:"name" binding:"required,min=1,max=100"`
 	MatchProcesses string `json:"matchProcesses" binding:"required"`
+	ExporterPort   int    `json:"exporterPort"`
 	Description    string `json:"description"`
 	Status         int    `json:"status"`
 }
@@ -25,6 +27,7 @@ type ServiceLabelVO struct {
 	ID             uint   `json:"id"`
 	Name           string `json:"name"`
 	MatchProcesses string `json:"matchProcesses"`
+	ExporterPort   int    `json:"exporterPort"`
 	Description    string `json:"description"`
 	Status         int    `json:"status"`
 	CreateTime     string `json:"createTime"`
@@ -36,6 +39,7 @@ func (req *ServiceLabelRequest) ToModel() *ServiceLabel {
 	return &ServiceLabel{
 		Name:           req.Name,
 		MatchProcesses: req.MatchProcesses,
+		ExporterPort:   req.ExporterPort,
 		Description:    req.Description,
 		Status:         req.Status,
 	}

@@ -95,6 +95,8 @@ func (s *ItemService) Create(ctx context.Context, req *ItemCreateRequest) (uint,
 		VariableName:      req.VariableName,
 		VariableRegex:     req.VariableRegex,
 		Timeout:           req.Timeout,
+		InspectionLevel:   req.InspectionLevel,
+		RiskLevel:         req.RiskLevel,
 	}
 
 	if item.Status == "" {
@@ -202,6 +204,12 @@ func (s *ItemService) Update(ctx context.Context, id uint, req *ItemUpdateReques
 	item.VariableRegex = req.VariableRegex
 	if req.Timeout > 0 {
 		item.Timeout = req.Timeout
+	}
+	if req.InspectionLevel != "" {
+		item.InspectionLevel = req.InspectionLevel
+	}
+	if req.RiskLevel != "" {
+		item.RiskLevel = req.RiskLevel
 	}
 
 	return s.itemRepo.Update(ctx, item)
@@ -357,6 +365,8 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 			VariableName:      itemReq.VariableName,
 			VariableRegex:     itemReq.VariableRegex,
 			Timeout:           itemReq.Timeout,
+			InspectionLevel:   itemReq.InspectionLevel,
+			RiskLevel:         itemReq.RiskLevel,
 		}
 
 		// 设置默认值
@@ -450,8 +460,10 @@ func (s *ItemService) executeItem(
 	assertionOverride *ItemAssertionOverride,
 ) *TestRunResponse {
 	result := &TestRunResponse{
-		ItemID:   item.ID,
-		ItemName: item.Name,
+		ItemID:          item.ID,
+		ItemName:        item.Name,
+		InspectionLevel: item.InspectionLevel,
+		RiskLevel:       item.RiskLevel,
 	}
 
 	// 拨测类型不需要主机信息
@@ -784,6 +796,8 @@ func (s *ItemService) toResponse(item *inspectionmgmtdata.InspectionItem) *ItemR
 		VariableName:      item.VariableName,
 		VariableRegex:     item.VariableRegex,
 		Timeout:           item.Timeout,
+		InspectionLevel:   item.InspectionLevel,
+		RiskLevel:         item.RiskLevel,
 		CreatedAt:         item.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:         item.UpdatedAt.Format(time.RFC3339),
 	}
@@ -791,16 +805,71 @@ func (s *ItemService) toResponse(item *inspectionmgmtdata.InspectionItem) *ItemR
 
 // BatchSave 批量保存巡检项
 func (s *ItemService) BatchSave(ctx context.Context, groupID uint, items []ItemCreateRequest) error {
-	// 先删除该组下的所有巡检项
-	if err := s.itemRepo.DeleteByGroupID(ctx, groupID); err != nil {
-		return fmt.Errorf("删除旧巡检项失败: %v", err)
+	// 1. 获取该组现有的所有巡检项
+	existingItems, err := s.itemRepo.GetByGroupID(ctx, groupID)
+	if err != nil {
+		return fmt.Errorf("获取现有巡检项失败: %v", err)
 	}
 
-	// 批量创建新巡检项
+	// 构建现有巡检项 ID 集合
+	existingIDs := make(map[uint]bool)
+	for _, item := range existingItems {
+		existingIDs[item.ID] = true
+	}
+
+	// 2. 处理前端传来的巡检项（更新或创建）
+	submittedIDs := make(map[uint]bool)
 	for _, req := range items {
-		req.GroupID = groupID
-		if _, err := s.Create(ctx, &req); err != nil {
-			return fmt.Errorf("创建巡检项失败: %v", err)
+		req.GroupID = groupID // 确保 GroupID 正确
+
+		if req.ID != nil && *req.ID > 0 && existingIDs[*req.ID] {
+			// 更新现有巡检项（保留 ID）
+			submittedIDs[*req.ID] = true
+			updateReq := &ItemUpdateRequest{
+				Name:              req.Name,
+				Description:       req.Description,
+				GroupID:           req.GroupID,
+				Sort:              req.Sort,
+				Status:            req.Status,
+				ExecutionStrategy: req.ExecutionStrategy,
+				ExecutionType:     req.ExecutionType,
+				Command:           req.Command,
+				ScriptType:        req.ScriptType,
+				ScriptContent:     req.ScriptContent,
+				ScriptFile:        req.ScriptFile,
+				ScriptArgs:        req.ScriptArgs,
+				PromQLQuery:       req.PromQLQuery,
+				ProbeCategory:     req.ProbeCategory,
+				ProbeType:         req.ProbeType,
+				ProbeConfigID:     req.ProbeConfigID,
+				HostMatchType:     req.HostMatchType,
+				HostTags:          req.HostTags,
+				HostIDs:           req.HostIDs,
+				AssertionType:     req.AssertionType,
+				AssertionValue:    req.AssertionValue,
+				VariableName:      req.VariableName,
+				VariableRegex:     req.VariableRegex,
+				Timeout:           req.Timeout,
+				InspectionLevel:   req.InspectionLevel,
+				RiskLevel:         req.RiskLevel,
+			}
+			if err := s.Update(ctx, *req.ID, updateReq); err != nil {
+				return fmt.Errorf("更新巡检项 %d 失败: %v", *req.ID, err)
+			}
+		} else {
+			// 创建新巡检项
+			if _, err := s.Create(ctx, &req); err != nil {
+				return fmt.Errorf("创建巡检项失败: %v", err)
+			}
+		}
+	}
+
+	// 3. 删除前端未传递的巡检项（用户已删除）
+	for id := range existingIDs {
+		if !submittedIDs[id] {
+			if err := s.itemRepo.Delete(ctx, id); err != nil {
+				return fmt.Errorf("删除巡检项 %d 失败: %v", id, err)
+			}
 		}
 	}
 

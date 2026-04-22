@@ -161,6 +161,20 @@
             :pagination="{ pageSize: 20, showTotal: true }"
             size="small"
           >
+            <template #inspectionLevel="{ record }">
+              <a-tag v-if="record.inspectionLevel" size="small" :color="getLevelColor(record.inspectionLevel)">
+                {{ getLevelText(record.inspectionLevel) }}
+              </a-tag>
+              <span v-else>-</span>
+            </template>
+
+            <template #riskLevel="{ record }">
+              <a-tag v-if="record.riskLevel" size="small" :color="getRiskColor(record.riskLevel)">
+                {{ getLevelText(record.riskLevel) }}
+              </a-tag>
+              <span v-else>-</span>
+            </template>
+
             <template #executionType="{ record }">
               <a-tag v-if="record.executionType === 'command'" size="small" color="blue">命令</a-tag>
               <a-tag v-else-if="record.executionType === 'script'" size="small" color="purple">脚本</a-tag>
@@ -205,6 +219,18 @@
       <a-descriptions :column="2" bordered>
         <a-descriptions-item label="巡检组">{{ detailItemData.groupName }}</a-descriptions-item>
         <a-descriptions-item label="巡检项">{{ detailItemData.itemName }}</a-descriptions-item>
+        <a-descriptions-item label="巡检级别">
+          <a-tag v-if="detailItemData.inspectionLevel" size="small" :color="getLevelColor(detailItemData.inspectionLevel)">
+            {{ getLevelText(detailItemData.inspectionLevel) }}
+          </a-tag>
+          <span v-else>-</span>
+        </a-descriptions-item>
+        <a-descriptions-item label="风险等级">
+          <a-tag v-if="detailItemData.riskLevel" size="small" :color="getRiskColor(detailItemData.riskLevel)">
+            {{ getLevelText(detailItemData.riskLevel) }}
+          </a-tag>
+          <span v-else>-</span>
+        </a-descriptions-item>
         <a-descriptions-item label="主机">{{ detailItemData.hostName }}</a-descriptions-item>
         <a-descriptions-item label="主机IP">{{ detailItemData.hostIp }}</a-descriptions-item>
         <a-descriptions-item v-if="detailItemData.businessGroup" label="业务分组">{{ detailItemData.businessGroup }}</a-descriptions-item>
@@ -313,6 +339,8 @@ const columns = [
 const detailColumns = [
   { title: '巡检组', dataIndex: 'groupName', width: 120 },
   { title: '巡检项', dataIndex: 'itemName', width: 150 },
+  { title: '巡检级别', slotName: 'inspectionLevel', width: 90 },
+  { title: '风险等级', slotName: 'riskLevel', width: 90 },
   { title: '主机', dataIndex: 'hostName', width: 120 },
   { title: '主机IP', dataIndex: 'hostIp', width: 130 },
   { title: '执行类型', slotName: 'executionType', width: 90 },
@@ -492,6 +520,33 @@ const handleDelete = async (id: number) => {
   } catch (error: any) {
     Message.error(error.message || '删除失败')
   }
+}
+
+const getLevelText = (level: string) => {
+  const map: Record<string, string> = {
+    high: '高',
+    medium: '中',
+    low: '低'
+  }
+  return map[level] || '中'
+}
+
+const getLevelColor = (level: string) => {
+  const map: Record<string, string> = {
+    high: 'red',
+    medium: 'orange',
+    low: 'green'
+  }
+  return map[level] || 'orange'
+}
+
+const getRiskColor = (level: string) => {
+  const map: Record<string, string> = {
+    high: 'red',
+    medium: 'orangered',
+    low: 'blue'
+  }
+  return map[level] || 'orangered'
 }
 
 onMounted(() => {
