@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -563,6 +564,13 @@ func (s *HTTPServer) getExecutionDetails(c *gin.Context) {
 func (s *HTTPServer) exportExecutionReport(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 
+	// 获取执行记录以获取任务名称
+	record, err := s.executionRecordService.GetByID(c.Request.Context(), uint(id))
+	if err != nil {
+		response.ErrorCode(c, http.StatusNotFound, "执行记录不存在: "+err.Error())
+		return
+	}
+
 	// 生成 Excel 文件
 	f, err := s.executionRecordService.ExportReport(c.Request.Context(), uint(id))
 	if err != nil {
@@ -570,10 +578,12 @@ func (s *HTTPServer) exportExecutionReport(c *gin.Context) {
 		return
 	}
 
-	// 设置响应头
-	filename := fmt.Sprintf("inspection_execution_report_%d.xlsx", id)
+	// 使用任务名称作为文件名，并进行 URL 编码
+	filename := fmt.Sprintf("%s-巡检执行报告.xlsx", record.TaskName)
+	encodedFilename := fmt.Sprintf("filename*=UTF-8''%s", url.QueryEscape(filename))
+
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; %s", encodedFilename))
 	c.Header("Content-Transfer-Encoding", "binary")
 
 	// 写入响应
