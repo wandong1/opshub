@@ -26,6 +26,7 @@ type AssetGroupRepo interface {
 	Update(ctx context.Context, group *AssetGroup) error
 	Delete(ctx context.Context, id uint) error
 	GetByID(ctx context.Context, id uint) (*AssetGroup, error)
+	GetByIDs(ctx context.Context, ids []uint) ([]*AssetGroup, error)
 	GetTree(ctx context.Context) ([]*AssetGroup, error)
 	GetAll(ctx context.Context) ([]*AssetGroup, error)
 	List(ctx context.Context, page, pageSize int, keyword string) ([]*AssetGroup, int64, error)

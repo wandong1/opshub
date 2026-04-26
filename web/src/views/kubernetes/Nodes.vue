@@ -943,6 +943,7 @@ const tableColumns = [
 import { ref, onMounted, computed, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { IconLineChart } from '@arco-design/web-vue/es/icon'
 import axios from 'axios'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'

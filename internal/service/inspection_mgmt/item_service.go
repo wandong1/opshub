@@ -29,6 +29,7 @@ type ItemService struct {
 	serviceLabelRepo assetbiz.ServiceLabelRepo
 	cmdExecutor      *inspectionmgmtbiz.CommandExecutor
 	probeExecutor    *ProbeExecutor
+	promqlExecutor   *PromQLExecutor
 	validator        *inspectionmgmtbiz.AssertionValidator
 	extractor        *inspectionmgmtbiz.VariableExtractor
 	replacer         *VariableReplacer
@@ -44,6 +45,7 @@ func NewItemService(
 	serviceLabelRepo assetbiz.ServiceLabelRepo,
 	cmdExecutor *inspectionmgmtbiz.CommandExecutor,
 	probeExecutor *ProbeExecutor,
+	promqlExecutor *PromQLExecutor,
 	variableResolver *VariableResolver,
 ) *ItemService {
 	return &ItemService{
@@ -55,6 +57,7 @@ func NewItemService(
 		serviceLabelRepo: serviceLabelRepo,
 		cmdExecutor:      cmdExecutor,
 		probeExecutor:    probeExecutor,
+		promqlExecutor:   promqlExecutor,
 		validator:        &inspectionmgmtbiz.AssertionValidator{},
 		extractor:        &inspectionmgmtbiz.VariableExtractor{},
 		replacer:         NewVariableReplacer(),
@@ -263,7 +266,7 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 
 		// 拨测类型不需要主机匹配，直接执行
 		if item.ExecutionType == "probe" {
-			result := s.executeItem(ctx, item, group, nil, nil, nil)
+			result := s.executeItem(ctx, item, group, nil, nil, nil, 0)
 			results = append(results, result)
 			continue
 		}
@@ -324,7 +327,7 @@ func (s *ItemService) TestRun(ctx context.Context, req *TestRunRequest) ([]*Test
 				}
 			}
 
-			result := s.executeItem(ctx, item, group, host, variables, nil)
+			result := s.executeItem(ctx, item, group, host, variables, nil, 0)
 			results = append(results, result)
 		}
 	}
@@ -386,7 +389,7 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 
 		// 拨测类型不需要主机匹配，直接执行
 		if item.ExecutionType == "probe" {
-			result := s.executeItem(ctx, item, group, nil, nil, nil)
+			result := s.executeItem(ctx, item, group, nil, nil, nil, 0)
 			results = append(results, result)
 			continue
 		}
@@ -447,7 +450,7 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 				}
 			}
 
-			result := s.executeItem(ctx, item, group, host, variables, nil)
+			result := s.executeItem(ctx, item, group, host, variables, nil, 0)
 			results = append(results, result)
 		}
 	}
@@ -462,6 +465,7 @@ func (s *ItemService) executeItem(
 	host *assetbiz.Host,
 	runtimeVariables map[string]string,
 	assertionOverride *ItemAssertionOverride,
+	datasourceIDOverride uint,
 ) *TestRunResponse {
 	result := &TestRunResponse{
 		ItemID:          item.ID,
@@ -541,11 +545,47 @@ func (s *ItemService) executeItem(
 		promql := s.replacer.ReplacePromQL(item.PromQLQuery, variables)
 		fmt.Printf("[ItemService] PromQL after variable replacement: %s\n", promql)
 
-		// PromQL 执行（暂不实现）
-		execResult = &inspectionmgmtbiz.ExecuteResult{
-			Output:   "",
-			Error:    fmt.Errorf("PromQL 执行暂未实现"),
-			Duration: 0,
+		// 确定有效的数据源 ID（应用覆盖）
+		effectiveDataSourceID := group.DataSourceID
+		if datasourceIDOverride > 0 {
+			effectiveDataSourceID = datasourceIDOverride
+			fmt.Printf("[ItemService] 应用数据源覆盖 - original: %d, override: %d\n", group.DataSourceID, datasourceIDOverride)
+		}
+
+		// 检查数据源配置
+		if effectiveDataSourceID == 0 {
+			execResult = &inspectionmgmtbiz.ExecuteResult{
+				Output:   "",
+				Error:    fmt.Errorf("巡检组未配置数据源"),
+				Duration: 0,
+			}
+		} else {
+			// 执行 PromQL 查询（使用覆盖后的数据源 ID）
+			promqlResult := s.promqlExecutor.Execute(ctx, promql, host, effectiveDataSourceID, "instant")
+
+			if promqlResult.Status != "success" {
+				execResult = &inspectionmgmtbiz.ExecuteResult{
+					Output:   promqlResult.PromQLResult,
+					Error:    fmt.Errorf("%s", promqlResult.ErrorMessage),
+					Duration: promqlResult.Duration,
+				}
+			} else {
+				// 成功：直接输出指标值，方便在报告中展示
+				output := fmt.Sprintf("%.2f", promqlResult.MetricValue)
+
+				execResult = &inspectionmgmtbiz.ExecuteResult{
+					Output:   output,
+					Error:    nil,
+					Duration: promqlResult.Duration,
+				}
+			}
+
+			// 保存 PromQL 执行结果到 result（用于传递到 ExecutionDetail）
+			result.DataSourceID = promqlResult.DataSourceID
+			result.PromQL = promqlResult.PromQL
+			result.PromQLResult = promqlResult.PromQLResult
+			result.MetricValue = promqlResult.MetricValue
+			result.MetricLabels = promqlResult.MetricLabels
 		}
 
 	case "probe":
@@ -902,7 +942,7 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 	// 拨测类型不需要主机匹配，直接执行
 	if item.ExecutionType == "probe" {
 		variables := make(map[string]string)
-		result := s.executeItem(ctx, item, group, nil, variables, nil)
+		result := s.executeItem(ctx, item, group, nil, variables, nil, 0)
 
 		// 转换 AssertionDetails 为 JSON 字符串
 		assertionDetailsJSON := ""
@@ -1010,7 +1050,7 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 			}
 		}
 
-		result := s.executeItem(ctx, item, group, host, variables, nil)
+		result := s.executeItem(ctx, item, group, host, variables, nil, 0)
 
 		// 转换 AssertionDetails 为 JSON 字符串
 		assertionDetailsJSON := ""
@@ -1053,11 +1093,12 @@ func (s *ItemService) ExecuteItemByID(ctx context.Context, itemID uint) ([]*insp
 	return records, nil
 }
 
-// ExecuteItemByIDWithOverride 执行巡检项，支持任务调度级覆盖（需求一、需求三、断言覆盖）
+// ExecuteItemByIDWithOverride 执行巡检项，支持任务调度级覆盖（需求一、需求三、断言覆盖、数据源覆盖）
 // executionModeOverride: 覆盖执行方式，空=沿用巡检组配置
 // businessGroupIDsOverride: 覆盖业务分组（支持多选），空数组=沿用巡检组配置
 // extraVars: 任务调度级自定义变量（优先级最高，合并到运行时变量）
 // assertionOverride: 断言覆盖，nil=沿用巡检项配置
+// datasourceIDOverride: 数据源覆盖，0=沿用巡检组配置
 func (s *ItemService) ExecuteItemByIDWithOverride(
 	ctx context.Context,
 	itemID uint,
@@ -1065,6 +1106,7 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 	businessGroupIDsOverride []uint,
 	extraVars map[string]string,
 	assertionOverride *ItemAssertionOverride,
+	datasourceIDOverride uint,
 ) ([]*inspectionmgmtdata.InspectionRecord, error) {
 	// 获取巡检项
 	item, err := s.itemRepo.GetByID(ctx, itemID)
@@ -1101,7 +1143,7 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 		for k, v := range baseVars {
 			variables[k] = v
 		}
-		result := s.executeItem(ctx, item, &effectiveGroup, nil, variables, assertionOverride)
+		result := s.executeItem(ctx, item, &effectiveGroup, nil, variables, assertionOverride, datasourceIDOverride)
 
 		assertionDetailsJSON := ""
 		if result.AssertionDetails != nil {
@@ -1213,7 +1255,7 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 			}
 		}
 
-		result := s.executeItem(ctx, item, &effectiveGroup, host, variables, assertionOverride)
+		result := s.executeItem(ctx, item, &effectiveGroup, host, variables, assertionOverride, datasourceIDOverride)
 
 		assertionDetailsJSON := ""
 		if result.AssertionDetails != nil {
@@ -1244,6 +1286,12 @@ func (s *ItemService) ExecuteItemByIDWithOverride(
 			AssertionResult:  result.AssertionResult,
 			AssertionDetails: assertionDetailsJSON,
 			ExecutedAt:       time.Now(),
+			// PromQL 相关字段（transient，不持久化）
+			DataSourceID:     result.DataSourceID,
+			PromQL:           result.PromQL,
+			PromQLResult:     result.PromQLResult,
+			MetricValue:      result.MetricValue,
+			MetricLabels:     result.MetricLabels,
 		}
 		if err := s.recordRepo.Create(ctx, record); err != nil {
 			return nil, fmt.Errorf("save inspection record failed: %w", err)

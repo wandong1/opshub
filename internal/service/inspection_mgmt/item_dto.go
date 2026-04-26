@@ -124,4 +124,10 @@ type TestRunResponse struct {
 	AssertionDetails map[string]interface{} `json:"assertionDetails"`
 	InspectionLevel  string                 `json:"inspectionLevel"`
 	RiskLevel        string                 `json:"riskLevel"`
+	// PromQL 相关字段
+	DataSourceID     uint              `json:"dataSourceId,omitempty"`
+	PromQL           string            `json:"promql,omitempty"`
+	PromQLResult     string            `json:"promqlResult,omitempty"`
+	MetricValue      float64           `json:"metricValue,omitempty"`
+	MetricLabels     map[string]string `json:"metricLabels,omitempty"`
 }

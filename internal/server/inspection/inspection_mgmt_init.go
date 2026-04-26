@@ -7,6 +7,7 @@ import (
 	inspectionbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
 	inspectionmgmtbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection_mgmt"
 	systembiz "github.com/ydcloud-dy/opshub/internal/biz/system"
+	alertdata "github.com/ydcloud-dy/opshub/internal/data/alert"
 	inspectiondata "github.com/ydcloud-dy/opshub/internal/data/inspection"
 	inspectionmgmtdata "github.com/ydcloud-dy/opshub/internal/data/inspection_mgmt"
 	"github.com/ydcloud-dy/opshub/internal/server/agent"
@@ -68,12 +69,16 @@ func InitInspectionMgmtServices(
 	// 初始化拨测执行器（传入变量解析器）
 	probeExecutor := inspectionmgmtsvc.NewProbeExecutor(probeConfigRepo, probeVariableResolver)
 
+	// 初始化 PromQL 执行器
+	datasourceRepo := alertdata.NewDataSourceRepo(db)
+	promqlExecutor := inspectionmgmtsvc.NewPromQLExecutor(datasourceRepo, 50)
+
 	// 初始化巡检模块的变量解析器（用于解析巡检项中的变量）
 	inspectionVariableResolver := inspectionmgmtsvc.NewVariableResolver(variableRepo, groupRepo)
 
 	// 初始化 Service
 	groupService := inspectionmgmtsvc.NewGroupService(groupRepo, itemRepo)
-	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, assetGroupRepo, serviceLabelRepo, cmdExecutor, probeExecutor, inspectionVariableResolver)
+	itemService := inspectionmgmtsvc.NewItemService(itemRepo, groupRepo, recordRepo, hostRepo, assetGroupRepo, serviceLabelRepo, cmdExecutor, probeExecutor, promqlExecutor, inspectionVariableResolver)
 	recordService := inspectionmgmtsvc.NewRecordService(recordRepo, itemRepo, groupRepo)
 	recordService.SetHostRepo(hostRepo)
 	taskService := inspectionmgmtsvc.NewTaskService(taskRepo)

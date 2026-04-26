@@ -58,6 +58,15 @@
           绑定用户
         </a-button>
       </h3>
+
+      <!-- 操作提示 -->
+      <a-alert type="info" :closable="false" style="margin-bottom: 16px;">
+        <template #icon><icon-info-circle /></template>
+        <div style="font-size: 13px;">
+          <strong>绑定说明：</strong>用户需要先在"集群管理"页面申请该集群的访问凭据，才能在此处绑定角色。绑定后用户将获得该角色定义的权限。
+        </div>
+      </a-alert>
+
       <div class="user-bindings">
         <a-table :data="boundUsers" border stripe :columns="tableColumns">
           <template #boundAt="{ record }">

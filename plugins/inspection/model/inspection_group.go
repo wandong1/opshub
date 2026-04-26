@@ -17,10 +17,8 @@ type InspectionGroup struct {
 	Status      string         `gorm:"size:20;default:'enabled'" json:"status"` // enabled/disabled
 	Sort        int            `gorm:"default:0" json:"sort"`
 
-	// Prometheus 配置
-	PrometheusURL      string `gorm:"size:200" json:"prometheus_url"`
-	PrometheusUsername string `gorm:"size:100" json:"prometheus_username"`
-	PrometheusPassword string `gorm:"size:200" json:"prometheus_password"` // 加密存储
+	// 数据源配置（单个数据源）
+	DataSourceID uint `gorm:"default:0;index" json:"datasource_id"` // 关联的数据源ID
 
 	// 执行方式
 	ExecutionMode string `gorm:"size:20;default:'auto'" json:"execution_mode"` // ssh/agent/auto

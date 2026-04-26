@@ -33,6 +33,25 @@
       style="margin-bottom: 20px;"
     />
 
+    <!-- 操作指南 -->
+    <a-alert
+      v-if="selectedClusterId"
+      type="info"
+      :closable="false"
+      style="margin-bottom: 20px;"
+    >
+      <template #icon><icon-info-circle /></template>
+      <div>
+        <strong>角色管理说明：</strong>
+        <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+          <li><strong>集群角色（ClusterRole）</strong>：作用于整个集群，可以管理集群级别的资源（如节点、命名空间等）</li>
+          <li><strong>命名空间角色（Role）</strong>：作用于特定命名空间，只能管理该命名空间内的资源</li>
+          <li>点击角色名称可以查看角色详情和权限规则</li>
+          <li>在角色详情中可以绑定平台用户，用户需要先在集群管理页面申请凭据</li>
+        </ul>
+      </div>
+    </a-alert>
+
     <!-- 角色类型标签页 -->
     <a-tabs v-if="selectedClusterId" v-model:active-key="activeTab" class="role-tabs" @tab-change="handleTabChange">
       <a-tab-pane title="集群角色" key="cluster">

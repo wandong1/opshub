@@ -2,6 +2,7 @@ package inspection
 
 import (
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	alertdata "github.com/ydcloud-dy/opshub/internal/data/alert"
 	"github.com/ydcloud-dy/opshub/internal/plugin"
 	"github.com/ydcloud-dy/opshub/internal/server/agent"
 	"github.com/ydcloud-dy/opshub/plugins/inspection/executor"
@@ -59,13 +60,14 @@ func (p *Plugin) Enable(db *gorm.DB) error {
 	itemRepo := repository.NewItemRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	recordRepo := repository.NewRecordRepository(db)
+	datasourceRepo := alertdata.NewDataSourceRepo(db)
 
 	// 初始化执行器
 	cmdExecutor := executor.NewCommandExecutor(p.agentHub)
 
 	// 初始化 Service
 	groupService := service.NewGroupService(groupRepo)
-	itemService := service.NewItemService(itemRepo, groupRepo, recordRepo, p.hostRepo, cmdExecutor)
+	itemService := service.NewItemService(itemRepo, groupRepo, recordRepo, p.hostRepo, cmdExecutor, datasourceRepo)
 	taskService := service.NewTaskService(taskRepo)
 	recordService := service.NewRecordService(recordRepo, itemRepo)
 

@@ -87,6 +87,16 @@ type InspectionExecutionDetail struct {
 	InspectionLevel string `gorm:"size:20" json:"inspectionLevel"` // high/medium/low
 	RiskLevel       string `gorm:"size:20" json:"riskLevel"`       // high/medium/low
 
+	// PromQL 相关字段
+	DataSourceID   uint    `gorm:"default:0;index:idx_datasource_id" json:"dataSourceId"`     // 使用的数据源ID
+	PromQL         string  `gorm:"column:prom_ql;type:text" json:"promql"`                    // 实际执行的PromQL（变量已替换）
+	PromQLResult   string  `gorm:"column:prom_ql_result;type:longtext" json:"promqlResult"`  // 原始查询结果（JSON）
+	MetricValue    float64 `gorm:"type:decimal(20,4)" json:"metricValue"`                     // 提取的指标值
+	MetricLabels   string  `gorm:"type:json" json:"metricLabels"`                             // 指标标签（JSON）
+	AssertionPass  *bool   `gorm:"default:null" json:"assertionPass"`                     // 断言是否通过
+	AssertionRule  string  `gorm:"type:text" json:"assertionRule"`                        // 应用的断言规则（JSON）
+	FailureReason  string  `gorm:"type:text" json:"failureReason"`                        // 失败原因详情
+
 	ExecutedAt time.Time `gorm:"not null" json:"executedAt"`
 }
 

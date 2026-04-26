@@ -479,6 +479,9 @@ func (s *ExecutionRecordService) getExecutionCommand(detail *inspectionmgmtdata.
 	if detail.ScriptContent != "" {
 		return fmt.Sprintf("[%s脚本]\n%s", detail.ScriptType, detail.ScriptContent)
 	}
+	if detail.PromQL != "" {
+		return detail.PromQL
+	}
 	return "-"
 }
 

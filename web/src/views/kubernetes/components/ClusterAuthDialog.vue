@@ -1,5 +1,18 @@
 <template>
   <div class="cluster-auth-content" v-if="modelValue">
+    <!-- 操作说明 -->
+    <a-alert type="info" :closable="false" style="margin-bottom: 16px;">
+      <template #icon><icon-info-circle /></template>
+      <div>
+        <strong>操作说明：</strong>
+        <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+          <li>点击"授权角色"按钮为用户分配 Kubernetes 集群权限</li>
+          <li>支持分配集群级别权限（ClusterRole）和命名空间级别权限（Role）</li>
+          <li>建议为每个用户至少分配一个角色，否则无法访问集群资源</li>
+        </ul>
+      </div>
+    </a-alert>
+
     <!-- 操作栏 -->
     <div class="action-bar">
       <div class="page-info">
@@ -69,9 +82,15 @@
           </template>
           <template #actions="{ record }">
             <a-space>
-              <a-button type="text" size="small" class="action-authorize" @click="handleAuthorize(record)">
+              <a-button
+                type="primary"
+                size="small"
+                class="action-authorize"
+                @click="handleAuthorize(record)"
+                :status="userRoleCounts[record.userId] === 0 ? 'warning' : 'normal'"
+              >
                 <template #icon><icon-safe /></template>
-                授权角色
+                {{ userRoleCounts[record.userId] === 0 ? '立即授权' : '管理权限' }}
               </a-button>
               <a-button type="text" size="small" class="action-view" @click="handleViewCredential(record)">
                 <template #icon><icon-file /></template>
@@ -242,6 +261,48 @@
 
             <!-- 集群角色选择 -->
             <template v-if="authorizeForm.permissionLevel === 'cluster'">
+              <!-- 常用角色快速选择 -->
+              <a-form-item label="常用角色">
+                <div class="quick-role-buttons">
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('cluster-owner')"
+                    :type="authorizeForm.clusterRoleNames.includes('cluster-owner') ? 'primary' : 'outline'"
+                  >
+                    <icon-user-group />
+                    集群管理员
+                  </a-button>
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('cluster-viewer')"
+                    :type="authorizeForm.clusterRoleNames.includes('cluster-viewer') ? 'primary' : 'outline'"
+                  >
+                    <icon-eye />
+                    集群查看者
+                  </a-button>
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('manage-namespaces')"
+                    :type="authorizeForm.clusterRoleNames.includes('manage-namespaces') ? 'primary' : 'outline'"
+                  >
+                    <icon-folder />
+                    命名空间管理
+                  </a-button>
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('view-nodes')"
+                    :type="authorizeForm.clusterRoleNames.includes('view-nodes') ? 'primary' : 'outline'"
+                  >
+                    <icon-desktop />
+                    节点查看
+                  </a-button>
+                </div>
+                <div class="quick-role-tip">
+                  <icon-info-circle />
+                  <span>点击快速选择常用角色，也可以在下方下拉框中选择其他角色</span>
+                </div>
+              </a-form-item>
+
               <a-form-item label="集群角色">
                 <a-select
                   v-model="authorizeForm.clusterRoleNames"
@@ -291,6 +352,52 @@
                     </div>
                   </a-option>
                 </a-select>
+              </a-form-item>
+
+              <!-- 常用角色快速选择 -->
+              <a-form-item label="常用角色">
+                <div class="quick-role-buttons">
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('namespace-owner')"
+                    :type="authorizeForm.namespaceRoleNames.includes('namespace-owner') ? 'primary' : 'outline'"
+                    :disabled="!authorizeForm.namespace"
+                  >
+                    <icon-user-group />
+                    命名空间管理员
+                  </a-button>
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('namespace-viewer')"
+                    :type="authorizeForm.namespaceRoleNames.includes('namespace-viewer') ? 'primary' : 'outline'"
+                    :disabled="!authorizeForm.namespace"
+                  >
+                    <icon-eye />
+                    命名空间查看者
+                  </a-button>
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('manage-workload')"
+                    :type="authorizeForm.namespaceRoleNames.includes('manage-workload') ? 'primary' : 'outline'"
+                    :disabled="!authorizeForm.namespace"
+                  >
+                    <icon-apps />
+                    工作负载管理
+                  </a-button>
+                  <a-button
+                    size="small"
+                    @click="selectQuickRole('view-workload')"
+                    :type="authorizeForm.namespaceRoleNames.includes('view-workload') ? 'primary' : 'outline'"
+                    :disabled="!authorizeForm.namespace"
+                  >
+                    <icon-eye />
+                    工作负载查看
+                  </a-button>
+                </div>
+                <div class="quick-role-tip">
+                  <icon-info-circle />
+                  <span>点击快速选择常用角色，也可以在下方下拉框中选择其他角色</span>
+                </div>
               </a-form-item>
 
               <a-form-item label="角色">
@@ -614,6 +721,29 @@ const handlePermissionLevelChange = () => {
 
 const handleNamespaceChange = () => {
   authorizeForm.value.namespaceRoleNames = []
+}
+
+// 快速选择角色
+const selectQuickRole = (roleName: string) => {
+  if (authorizeForm.value.permissionLevel === 'cluster') {
+    const index = authorizeForm.value.clusterRoleNames.indexOf(roleName)
+    if (index > -1) {
+      // 已选中，取消选择
+      authorizeForm.value.clusterRoleNames.splice(index, 1)
+    } else {
+      // 未选中，添加选择
+      authorizeForm.value.clusterRoleNames.push(roleName)
+    }
+  } else {
+    const index = authorizeForm.value.namespaceRoleNames.indexOf(roleName)
+    if (index > -1) {
+      // 已选中，取消选择
+      authorizeForm.value.namespaceRoleNames.splice(index, 1)
+    } else {
+      // 未选中，添加选择
+      authorizeForm.value.namespaceRoleNames.push(roleName)
+    }
+  }
 }
 
 const loadClusterRoles = async () => {
@@ -1208,6 +1338,31 @@ const handleRemoveExistingRole = async (role: any) => {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  // 快速角色选择按钮
+  .quick-role-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .quick-role-tip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #f7f8fa;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #4e5969;
+    margin-top: 8px;
+
+    :deep(.arco-icon) {
+      font-size: 14px;
+      color: #165dff;
+    }
   }
 }
 </style>

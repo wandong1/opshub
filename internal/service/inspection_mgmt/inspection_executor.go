@@ -23,6 +23,12 @@ type GroupBusinessGroupOverride struct {
 	BusinessGroupIDs []uint `json:"business_group_ids"` // 支持多个业务分组
 }
 
+// GroupDataSourceOverride 巡检组数据源覆盖结构
+type GroupDataSourceOverride struct {
+	GroupID      uint `json:"group_id"`
+	DataSourceID uint `json:"datasource_id"`
+}
+
 // PushgatewayConfig 推送网关配置
 type PushgatewayConfig struct {
 	ID       uint
@@ -157,11 +163,26 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 		groupBusinessGroupOverrideMap[groupBusinessGroupOverrides[i].GroupID] = &groupBusinessGroupOverrides[i]
 	}
 
+	// 解析数据源覆盖配置
+	var groupDataSourceOverrides []GroupDataSourceOverride
+	if inspectionTask.GroupDataSourceOverrides != "" {
+		if err := json.Unmarshal([]byte(inspectionTask.GroupDataSourceOverrides), &groupDataSourceOverrides); err != nil {
+			appLogger.Warn("解析数据源覆盖失败", zap.Error(err))
+		}
+	}
+
+	// 构建数据源覆盖映射表
+	groupDataSourceOverrideMap := make(map[uint]*GroupDataSourceOverride)
+	for i := range groupDataSourceOverrides {
+		groupDataSourceOverrideMap[groupDataSourceOverrides[i].GroupID] = &groupDataSourceOverrides[i]
+	}
+
 	// 收集所有需要执行的巡检项（按巡检组分组，以便应用不同的业务分组覆盖）
 	type GroupItems struct {
 		GroupID                   uint
 		Items                     []*inspectionmgmtdata.InspectionItem
 		EffectiveBusinessGroupIDs []uint // 应用优先级后的业务分组ID列表（支持多选）
+		EffectiveDataSourceID     uint   // 应用覆盖后的数据源ID（0表示使用巡检组原始配置）
 	}
 	groupItemsMap := make(map[uint]*GroupItems)
 
@@ -189,6 +210,16 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 				zap.Any("business_group_ids", effectiveBusinessGroupIDs))
 		}
 		// 优先级 3：如果 effectiveBusinessGroupIDs 为空，则使用巡检组原始配置（在 ExecuteItemByIDWithOverride 中处理）
+
+		// 应用数据源覆盖
+		var effectiveDataSourceID uint
+		if dsOverride, exists := groupDataSourceOverrideMap[groupID]; exists && dsOverride.DataSourceID > 0 {
+			effectiveDataSourceID = dsOverride.DataSourceID
+			appLogger.Info("应用巡检组级数据源覆盖",
+				zap.Uint("group_id", groupID),
+				zap.Uint("datasource_id", effectiveDataSourceID))
+		}
+		// 如果 effectiveDataSourceID 为 0，则使用巡检组原始配置
 
 		// 获取该组的所有巡检项
 		items, err := e.itemRepo.GetByGroupID(ctx, groupID)
@@ -224,6 +255,7 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 				GroupID:                   groupID,
 				Items:                     enabledItems,
 				EffectiveBusinessGroupIDs: effectiveBusinessGroupIDs,
+				EffectiveDataSourceID:     effectiveDataSourceID,
 			}
 		}
 	}
@@ -289,8 +321,10 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 
 			// 查找该巡检项所属巡检组的有效业务分组ID列表（应用优先级后）
 			var effectiveBusinessGroupIDs []uint
+			var effectiveDataSourceID uint
 			if gi, exists := groupItemsMap[itm.GroupID]; exists {
 				effectiveBusinessGroupIDs = gi.EffectiveBusinessGroupIDs
+				effectiveDataSourceID = gi.EffectiveDataSourceID
 			}
 
 			// 查找该巡检项的断言覆盖
@@ -299,8 +333,8 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 				itemOverride = override
 			}
 
-			// 需求一：使用覆盖参数执行巡检项（业务分组覆盖 + 断言覆盖）
-			itemResults, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupIDs, taskExtraVars, itemOverride)
+			// 需求一：使用覆盖参数执行巡检项（业务分组覆盖 + 断言覆盖 + 数据源覆盖）
+			itemResults, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupIDs, taskExtraVars, itemOverride, effectiveDataSourceID)
 			if err != nil {
 				appLogger.Error("execute inspection item failed",
 					zap.Uint("itemID", itm.ID),
@@ -361,6 +395,28 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 					ExtractedVariables: oldRecord.ExtractedVariables,
 					ExecutedAt:         oldRecord.ExecutedAt,
 				}
+
+				// 填充 PromQL 相关字段（如果是 PromQL 类型）
+				if itm.ExecutionType == "promql" {
+					detail.DataSourceID = oldRecord.DataSourceID
+					detail.PromQL = oldRecord.PromQL
+					detail.PromQLResult = oldRecord.PromQLResult
+					detail.MetricValue = oldRecord.MetricValue
+					// 将 map 转换为 JSON 字符串
+					if oldRecord.MetricLabels != nil && len(oldRecord.MetricLabels) > 0 {
+						if labelsJSON, err := json.Marshal(oldRecord.MetricLabels); err == nil {
+							detail.MetricLabels = string(labelsJSON)
+						} else {
+							detail.MetricLabels = "{}"
+						}
+					} else {
+						detail.MetricLabels = "{}"
+					}
+				} else {
+					// 非 PromQL 类型，设置为空 JSON 对象
+					detail.MetricLabels = "{}"
+				}
+
 				details = append(details, detail)
 				hostSet[oldRecord.HostID] = true
 
@@ -640,6 +696,12 @@ type RunSyncItemDetail struct {
 	AssertionValue   string   `json:"assertion_value,omitempty"`
 	InspectionLevel  string   `json:"inspectionLevel,omitempty"`
 	RiskLevel        string   `json:"riskLevel,omitempty"`
+	// PromQL 相关字段
+	DataSourceID     uint     `json:"dataSourceId,omitempty"`
+	PromQL           string   `json:"promql,omitempty"`
+	PromQLResult     string   `json:"promqlResult,omitempty"`
+	MetricValue      float64  `json:"metricValue,omitempty"`
+	MetricLabels     string   `json:"metricLabels,omitempty"`
 	// 执行结果
 	Status           string   `json:"status"`           // success/failed
 	Output           string   `json:"output"`
@@ -710,11 +772,24 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 		groupBusinessGroupOverrideMap[groupBusinessGroupOverrides[i].GroupID] = &groupBusinessGroupOverrides[i]
 	}
 
+	// 解析数据源覆盖配置
+	var groupDataSourceOverrides []GroupDataSourceOverride
+	if inspectionTask.GroupDataSourceOverrides != "" {
+		if err := json.Unmarshal([]byte(inspectionTask.GroupDataSourceOverrides), &groupDataSourceOverrides); err != nil {
+			appLogger.Warn("解析数据源覆盖失败", zap.Error(err))
+		}
+	}
+	groupDataSourceOverrideMap := make(map[uint]*GroupDataSourceOverride)
+	for i := range groupDataSourceOverrides {
+		groupDataSourceOverrideMap[groupDataSourceOverrides[i].GroupID] = &groupDataSourceOverrides[i]
+	}
+
 	// 收集要执行的巡检项，按巡检组分组
 	type GroupItems struct {
 		GroupID                   uint
 		Items                     []*inspectionmgmtdata.InspectionItem
 		EffectiveBusinessGroupIDs []uint // 应用优先级后的业务分组ID列表（支持多选）
+		EffectiveDataSourceID     uint   // 应用覆盖后的数据源ID（0表示使用巡检组原始配置）
 	}
 	groupItemsMap := make(map[uint]*GroupItems)
 	groupNameMap := make(map[uint]string)
@@ -742,6 +817,16 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 		}
 		// 优先级 3：如果 effectiveBusinessGroupIDs 为空，则使用巡检组原始配置（在 ExecuteItemByIDWithOverride 中处理）
 
+		// 应用数据源覆盖
+		var effectiveDataSourceID uint
+		if dsOverride, exists := groupDataSourceOverrideMap[groupID]; exists && dsOverride.DataSourceID > 0 {
+			effectiveDataSourceID = dsOverride.DataSourceID
+			appLogger.Info("应用巡检组级数据源覆盖",
+				zap.Uint("group_id", groupID),
+				zap.Uint("datasource_id", effectiveDataSourceID))
+		}
+		// 如果 effectiveDataSourceID 为 0，则使用巡检组原始配置
+
 		items, err := e.itemRepo.GetByGroupID(ctx, groupID)
 		if err != nil {
 			continue
@@ -751,6 +836,7 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 			GroupID:                   groupID,
 			Items:                     make([]*inspectionmgmtdata.InspectionItem, 0),
 			EffectiveBusinessGroupIDs: effectiveBusinessGroupIDs,
+			EffectiveDataSourceID:     effectiveDataSourceID,
 		}
 
 		if len(itemIDs) > 0 {
@@ -792,8 +878,10 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 
 			// 查找该巡检项所属巡检组的有效业务分组ID列表（应用优先级后）
 			var effectiveBusinessGroupIDs []uint
+			var effectiveDataSourceID uint
 			if gi, exists := groupItemsMap[itm.GroupID]; exists {
 				effectiveBusinessGroupIDs = gi.EffectiveBusinessGroupIDs
+				effectiveDataSourceID = gi.EffectiveDataSourceID
 			}
 
 			// 查找该巡检项的断言覆盖
@@ -802,7 +890,7 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 				itemOverride = override
 			}
 
-			records, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupIDs, taskExtraVars, itemOverride)
+			records, err := e.itemSvc.ExecuteItemByIDWithOverride(ctx, itm.ID, taskExecutionMode, effectiveBusinessGroupIDs, taskExtraVars, itemOverride, effectiveDataSourceID)
 			groupName := groupNameMap[itm.GroupID]
 			if err != nil {
 				mu.Lock()
@@ -861,6 +949,21 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 					ExtractedVars:    r.ExtractedVariables,
 					ExecutedAt:       r.ExecutedAt.Format(time.RFC3339),
 				}
+
+				// 填充 PromQL 相关字段（如果是 PromQL 类型）
+				if itm.ExecutionType == "promql" {
+					d.DataSourceID = r.DataSourceID
+					d.PromQL = r.PromQL
+					d.PromQLResult = r.PromQLResult
+					d.MetricValue = r.MetricValue
+					// 将 map 转换为 JSON 字符串
+					if r.MetricLabels != nil {
+						if labelsJSON, err := json.Marshal(r.MetricLabels); err == nil {
+							d.MetricLabels = string(labelsJSON)
+						}
+					}
+				}
+
 				details = append(details, d)
 				if r.Status == "failed" {
 					failCount++

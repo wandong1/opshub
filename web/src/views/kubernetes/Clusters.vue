@@ -201,9 +201,9 @@
                 <icon-safe />
               </a-button>
             </a-tooltip>
-            <a-tooltip content="授权" placement="top">
+            <a-tooltip content="用户授权" placement="top">
               <a-button type="text" class="action-btn action-auth" @click="handleAuthorize(record)">
-                <icon-lock />
+                <icon-user-group />
               </a-button>
             </a-tooltip>
             <a-tooltip content="同步" placement="top">
@@ -551,14 +551,19 @@
           </div>
         </a-tab-pane>
 
-        <!-- 用户 -->
-        <a-tab-pane v-if="isAdmin" key="users">
+        <!-- 用户凭据 -->
+        <a-tab-pane key="users">
           <template #label>
             <span class="tab-label">
               <icon-user />
-              用户
+              用户凭据
+              <a-badge :count="clusterCredentialUsers.length" :offset="[8, -2]" style="margin-left: 4px;" />
             </span>
           </template>
+          <div class="tab-description">
+            <icon-info-circle style="margin-right: 4px;" />
+            管理已申请该集群访问凭据的用户，可为用户分配 Kubernetes 角色权限
+          </div>
           <div class="tab-content">
             <ClusterAuthDialog
               v-if="currentCluster"
@@ -571,14 +576,18 @@
           </div>
         </a-tab-pane>
 
-        <!-- 角色 -->
-        <a-tab-pane v-if="isAdmin" key="roles">
+        <!-- 角色授权 -->
+        <a-tab-pane key="roles">
           <template #label>
             <span class="tab-label">
               <icon-safe />
-              角色
+              角色授权
             </span>
           </template>
+          <div class="tab-description">
+            <icon-info-circle style="margin-right: 4px;" />
+            查看和管理用户在该集群中的角色绑定关系
+          </div>
           <div class="tab-content">
             <UserRoleBinding
               v-if="currentCluster"
@@ -644,16 +653,20 @@ import { useUserStore } from '@/stores/user'
 const userStore = useUserStore()
 const isAdmin = computed(() => {
   if (!userStore.userInfo) {
+    console.log('isAdmin: userInfo is null')
     return false
   }
 
   // 确保 roles 是数组，如果不是则返回 false
   if (!Array.isArray(userStore.userInfo.roles)) {
+    console.log('isAdmin: roles is not array', userStore.userInfo.roles)
     return false
   }
 
   // 检查是否有 admin 角色
-  return userStore.userInfo.roles.some((role: any) => role.code === 'admin')
+  const hasAdmin = userStore.userInfo.roles.some((role: any) => role.code === 'admin')
+  console.log('isAdmin:', hasAdmin, 'roles:', userStore.userInfo.roles)
+  return hasAdmin
 })
 
 const loading = ref(false)
@@ -1852,9 +1865,13 @@ watch(paginatedClusterList, () => {
   color: var(--ops-primary, #165dff);
 }
 
+.action-auth {
+  color: #722ed1;
+}
+
 .action-auth:hover {
-  background-color: var(--ops-primary-bg, #e8f0ff);
-  color: var(--ops-primary, #165dff);
+  background-color: #f5e8ff;
+  color: #722ed1;
 }
 
 .action-sync:hover {
@@ -2010,6 +2027,17 @@ watch(paginatedClusterList, () => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.tab-description {
+  padding: 12px 16px;
+  background-color: #f7f8fa;
+  border-radius: 4px;
+  margin: 0 16px 16px 16px;
+  font-size: 13px;
+  color: #4e5969;
+  display: flex;
+  align-items: center;
 }
 
 /* 对话框样式 */

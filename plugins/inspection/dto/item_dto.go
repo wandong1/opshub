@@ -14,6 +14,7 @@ type ItemCreateRequest struct {
 	ScriptContent     string `json:"script_content"`
 	ScriptFile        string `json:"script_file"`
 	PromQLQuery       string `json:"promql_query"`
+	PromQLQueryType   string `json:"promql_query_type"` // instant/range
 	HostMatchType     string `json:"host_match_type"`
 	HostTags          string `json:"host_tags"`
 	HostIDs           string `json:"host_ids"`
@@ -38,6 +39,7 @@ type ItemUpdateRequest struct {
 	ScriptContent     string `json:"script_content"`
 	ScriptFile        string `json:"script_file"`
 	PromQLQuery       string `json:"promql_query"`
+	PromQLQueryType   string `json:"promql_query_type"` // instant/range
 	HostMatchType     string `json:"host_match_type"`
 	HostTags          string `json:"host_tags"`
 	HostIDs           string `json:"host_ids"`
@@ -72,6 +74,7 @@ type ItemResponse struct {
 	ScriptContent     string `json:"script_content"`
 	ScriptFile        string `json:"script_file"`
 	PromQLQuery       string `json:"promql_query"`
+	PromQLQueryType   string `json:"promql_query_type"` // instant/range
 	HostMatchType     string `json:"host_match_type"`
 	HostTags          string `json:"host_tags"`
 	HostIDs           string `json:"host_ids"`

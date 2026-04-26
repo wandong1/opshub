@@ -35,6 +35,13 @@ type InspectionRecord struct {
 
 	// 执行时间
 	ExecutedAt time.Time `gorm:"index" json:"executed_at"`
+
+	// PromQL 相关字段（用于传递 PromQL 执行结果到 ExecutionDetail，不持久化到数据库）
+	DataSourceID   uint              `gorm:"-" json:"data_source_id,omitempty"`
+	PromQL         string            `gorm:"-" json:"promql,omitempty"`
+	PromQLResult   string            `gorm:"-" json:"promql_result,omitempty"`
+	MetricValue    float64           `gorm:"-" json:"metric_value,omitempty"`
+	MetricLabels   map[string]string `gorm:"-" json:"metric_labels,omitempty"`
 }
 
 func (InspectionRecord) TableName() string {

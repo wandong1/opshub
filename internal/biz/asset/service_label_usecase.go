@@ -32,6 +32,7 @@ func (uc *ServiceLabelUseCase) Update(ctx context.Context, id uint, req *Service
 	}
 	label.Name = req.Name
 	label.MatchProcesses = req.MatchProcesses
+	label.ExporterPort = req.ExporterPort
 	label.Description = req.Description
 	label.Status = req.Status
 	if err := uc.repo.Update(ctx, label); err != nil {
@@ -77,6 +78,7 @@ func (uc *ServiceLabelUseCase) toVO(label *ServiceLabel) *ServiceLabelVO {
 		ID:             label.ID,
 		Name:           label.Name,
 		MatchProcesses: label.MatchProcesses,
+		ExporterPort:   label.ExporterPort,
 		Description:    label.Description,
 		Status:         int(label.Status),
 		CreateTime:     label.CreatedAt.Format("2006-01-02 15:04:05"),

@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	biz "github.com/ydcloud-dy/opshub/internal/biz/alert"
 	alertsvc "github.com/ydcloud-dy/opshub/internal/service/alert"
 	"github.com/ydcloud-dy/opshub/pkg/logger"
@@ -17,11 +19,49 @@ import (
 )
 
 func (s *HTTPServer) listDataSources(c *gin.Context) {
-	list, err := s.dsRepo.List(c.Request.Context())
+	// 获取业务分组ID参数（可选）
+	assetGroupIDStr := c.Query("asset_group_id")
+
+	var list []*biz.AlertDataSource
+	var err error
+
+	if assetGroupIDStr != "" {
+		assetGroupID, _ := strconv.ParseUint(assetGroupIDStr, 10, 64)
+		list, err = s.dsRepo.ListByAssetGroupIDs(c.Request.Context(), []uint{uint(assetGroupID)})
+	} else {
+		list, err = s.dsRepo.List(c.Request.Context())
+	}
+
 	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "查询失败")
 		return
 	}
+
+	// 填充业务分组信息
+	for _, ds := range list {
+		relations, _ := s.dsGroupRelationRepo.ListByDataSourceID(c.Request.Context(), ds.ID)
+		if len(relations) > 0 {
+			groupIDs := make([]uint, 0, len(relations))
+			for _, rel := range relations {
+				groupIDs = append(groupIDs, rel.AssetGroupID)
+			}
+			ds.AssetGroupIDs = groupIDs
+
+			// 查询分组详情（用于前端展示）
+			groups, _ := s.assetGroupRepo.GetByIDs(c.Request.Context(), groupIDs)
+			if len(groups) > 0 {
+				ds.AssetGroups = make([]biz.AssetGroupInfo, 0, len(groups))
+				for _, g := range groups {
+					ds.AssetGroups = append(ds.AssetGroups, biz.AssetGroupInfo{
+						ID:   g.ID,
+						Name: g.Name,
+						Code: g.Code,
+					})
+				}
+			}
+		}
+	}
+
 	response.Success(c, list)
 }
 
@@ -58,7 +98,31 @@ func (s *HTTPServer) createDataSource(c *gin.Context) {
 		ds.ProxyEnabled = true
 	}
 
-	if err := s.dsRepo.Create(c.Request.Context(), ds); err != nil {
+	// 使用事务创建数据源和关联
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 创建数据源
+		if err := tx.Create(ds).Error; err != nil {
+			return err
+		}
+
+		// 创建业务分组关联
+		if len(req.AssetGroupIDs) > 0 {
+			relations := make([]*biz.DataSourceGroupRelation, 0, len(req.AssetGroupIDs))
+			for _, groupID := range req.AssetGroupIDs {
+				relations = append(relations, &biz.DataSourceGroupRelation{
+					DataSourceID: ds.ID,
+					AssetGroupID: groupID,
+				})
+			}
+			if err := tx.Create(&relations).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "创建失败: "+err.Error())
 		return
 	}
@@ -72,6 +136,30 @@ func (s *HTTPServer) getDataSource(c *gin.Context) {
 		response.ErrorCode(c, http.StatusNotFound, "数据源不存在")
 		return
 	}
+
+	// 填充业务分组信息
+	relations, _ := s.dsGroupRelationRepo.ListByDataSourceID(c.Request.Context(), ds.ID)
+	if len(relations) > 0 {
+		groupIDs := make([]uint, 0, len(relations))
+		for _, rel := range relations {
+			groupIDs = append(groupIDs, rel.AssetGroupID)
+		}
+		ds.AssetGroupIDs = groupIDs
+
+		// 查询分组详情
+		groups, _ := s.assetGroupRepo.GetByIDs(c.Request.Context(), groupIDs)
+		if len(groups) > 0 {
+			ds.AssetGroups = make([]biz.AssetGroupInfo, 0, len(groups))
+			for _, g := range groups {
+				ds.AssetGroups = append(ds.AssetGroups, biz.AssetGroupInfo{
+					ID:   g.ID,
+					Name: g.Name,
+					Code: g.Code,
+				})
+			}
+		}
+	}
+
 	response.Success(c, ds)
 }
 
@@ -118,7 +206,39 @@ func (s *HTTPServer) updateDataSource(c *gin.Context) {
 		existingDS.Status = req.Status
 	}
 
-	if err := s.dsRepo.Update(c.Request.Context(), existingDS); err != nil {
+	// 使用事务更新数据源和关联
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// 更新数据源
+		if err := tx.Model(existingDS).Omit("created_at").Updates(existingDS).Error; err != nil {
+			return err
+		}
+
+		// 更新业务分组关联（如果提供了）
+		if req.AssetGroupIDs != nil {
+			// 删除旧关联
+			if err := tx.Where("data_source_id = ?", id).Delete(&biz.DataSourceGroupRelation{}).Error; err != nil {
+				return err
+			}
+
+			// 创建新关联
+			if len(*req.AssetGroupIDs) > 0 {
+				relations := make([]*biz.DataSourceGroupRelation, 0, len(*req.AssetGroupIDs))
+				for _, groupID := range *req.AssetGroupIDs {
+					relations = append(relations, &biz.DataSourceGroupRelation{
+						DataSourceID: uint(id),
+						AssetGroupID: groupID,
+					})
+				}
+				if err := tx.Create(&relations).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "更新失败: "+err.Error())
 		return
 	}
@@ -127,7 +247,23 @@ func (s *HTTPServer) updateDataSource(c *gin.Context) {
 
 func (s *HTTPServer) deleteDataSource(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := s.dsRepo.Delete(c.Request.Context(), uint(id)); err != nil {
+
+	// 使用事务删除数据源和关联
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 删除业务分组关联
+		if err := tx.Where("data_source_id = ?", id).Delete(&biz.DataSourceGroupRelation{}).Error; err != nil {
+			return err
+		}
+
+		// 删除数据源
+		if err := tx.Delete(&biz.AlertDataSource{}, id).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
@@ -151,16 +287,18 @@ func (s *HTTPServer) testDataSource(c *gin.Context) {
 			return
 		}
 
-		// 获取首个在线的Agent（这里应该按优先级排序，但暂时取第一个）
+		// 获取首个在线的Agent
 		var targetAgent *biz.DataSourceAgentRelation
 		for _, rel := range relations {
-			// TODO: 检查Agent是否在线
-			targetAgent = rel
-			break
+			// 检查Agent是否在线
+			if s.agentHub != nil && s.agentHub.IsOnline(rel.AgentHostID) {
+				targetAgent = rel
+				break
+			}
 		}
 
 		if targetAgent == nil {
-			response.ErrorCode(c, http.StatusServiceUnavailable, "没有可用的Agent")
+			response.ErrorCode(c, http.StatusServiceUnavailable, "没有在线的Agent可用")
 			return
 		}
 

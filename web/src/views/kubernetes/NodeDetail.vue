@@ -4,9 +4,12 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-top">
-          <a-button class="back-btn" @click="goBack" :icon="ArrowLeft">返回列表</a-button>
+          <a-button class="back-btn" @click="goBack">
+            <template #icon><icon-arrow-left /></template>
+            返回列表
+          </a-button>
           <a-button class="black-button" @click="refreshData">
-            <icon-refresh />
+            <template #icon><icon-refresh /></template>
             刷新
           </a-button>
         </div>
@@ -21,17 +24,14 @@
         <div class="node-meta">
           <span class="meta-item">
             <icon-apps />
-          </span>
             {{ clusterName }}
           </span>
           <span class="meta-item">
             <icon-link />
-          </span>
             {{ nodeInfo.internalIP }}
           </span>
           <span class="meta-item" v-if="nodeInfo.version">
             <icon-info-circle />
-          </span>
             {{ nodeInfo.version }}
           </span>
         </div>
@@ -336,6 +336,12 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Message, Modal } from '@arco-design/web-vue'
+import { getNodes, type NodeInfo } from '@/api/kubernetes'
+import axios from 'axios'
+
 const tableColumns3 = [
   { title: 'Pod 名称', dataIndex: 'name', slotName: 'name', width: 200 },
   { title: '命名空间', dataIndex: 'namespace', width: 150 },
@@ -363,12 +369,6 @@ const tableColumns = [
   { title: '次数', dataIndex: 'count', width: 80, align: 'center' },
   { title: '最后时间', dataIndex: 'lastTimestamp', width: 180 }
 ]
-
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
-import { getNodes, type NodeInfo } from '@/api/kubernetes'
-import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()

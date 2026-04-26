@@ -62,6 +62,13 @@ type ExecutionDetailResponse struct {
 	ScriptContent      string  `json:"scriptContent"`
 	AssertionType      string  `json:"assertionType"`
 	AssertionValue     string  `json:"assertionValue"`
+	// PromQL 相关字段
+	DataSourceID       uint    `json:"dataSourceId,omitempty"`
+	PromQL             string  `json:"promql,omitempty"`
+	PromQLResult       string  `json:"promqlResult,omitempty"`
+	MetricValue        float64 `json:"metricValue,omitempty"`
+	MetricLabels       string  `json:"metricLabels,omitempty"`
+	// 执行结果
 	Status             string  `json:"status"`
 	Output             string  `json:"output"`
 	ErrorMessage       string  `json:"errorMessage"`
@@ -199,6 +206,13 @@ func (s *ExecutionRecordService) toDetailResponse(detail *inspectionmgmtdata.Ins
 		ScriptContent:      detail.ScriptContent,
 		AssertionType:      detail.AssertionType,
 		AssertionValue:     detail.AssertionValue,
+		// PromQL 相关字段
+		DataSourceID:       detail.DataSourceID,
+		PromQL:             detail.PromQL,
+		PromQLResult:       detail.PromQLResult,
+		MetricValue:        detail.MetricValue,
+		MetricLabels:       detail.MetricLabels,
+		// 执行结果
 		Status:             detail.Status,
 		Output:             detail.Output,
 		ErrorMessage:       detail.ErrorMessage,

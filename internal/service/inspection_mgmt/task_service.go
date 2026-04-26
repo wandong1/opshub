@@ -35,6 +35,7 @@ func (s *TaskService) Create(ctx context.Context, req *TaskCreateRequest) error 
 		CustomVariables:             req.CustomVariables,
 		ItemAssertionOverrides:      req.ItemAssertionOverrides,
 		GroupBusinessGroupOverrides: req.GroupBusinessGroupOverrides,
+		GroupDataSourceOverrides:    req.GroupDataSourceOverrides,
 		Status:                      "pending",
 	}
 
@@ -79,6 +80,7 @@ func (s *TaskService) Update(ctx context.Context, id uint, req *TaskUpdateReques
 	// 任务级覆盖功能
 	task.ItemAssertionOverrides = req.ItemAssertionOverrides
 	task.GroupBusinessGroupOverrides = req.GroupBusinessGroupOverrides
+	task.GroupDataSourceOverrides = req.GroupDataSourceOverrides
 
 	return s.taskRepo.Update(ctx, task)
 }
@@ -130,6 +132,7 @@ func (s *TaskService) toResponse(task *inspectionmgmtdata.InspectionTask) *TaskR
 		CustomVariables:             task.CustomVariables,
 		ItemAssertionOverrides:      task.ItemAssertionOverrides,
 		GroupBusinessGroupOverrides: task.GroupBusinessGroupOverrides,
+		GroupDataSourceOverrides:    task.GroupDataSourceOverrides,
 		LastRunStatus:               task.LastRunStatus,
 		CreatedAt:                   task.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:                   task.UpdatedAt.Format(time.RFC3339),

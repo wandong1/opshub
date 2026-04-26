@@ -6,9 +6,7 @@ type GroupCreateRequest struct {
 	Description       string `json:"description"`
 	Status            string `json:"status"`
 	Sort              int    `json:"sort"`
-	PrometheusURL     string `json:"prometheusUrl"`
-	PrometheusUsername string `json:"prometheusUsername"`
-	PrometheusPassword string `json:"prometheusPassword"`
+	DataSourceID      uint   `json:"dataSourceId"`
 	ExecutionMode     string `json:"executionMode"`
 	ExecutionStrategy string `json:"executionStrategy"`
 	Concurrency       int    `json:"concurrency"`
@@ -23,9 +21,7 @@ type GroupUpdateRequest struct {
 	Description       string `json:"description"`
 	Status            string `json:"status"`
 	Sort              int    `json:"sort"`
-	PrometheusURL     string `json:"prometheusUrl"`
-	PrometheusUsername string `json:"prometheusUsername"`
-	PrometheusPassword string `json:"prometheusPassword"`
+	DataSourceID      uint   `json:"dataSourceId"`
 	ExecutionMode     string `json:"executionMode"`
 	ExecutionStrategy string `json:"executionStrategy"`
 	Concurrency       int    `json:"concurrency"`
@@ -49,8 +45,7 @@ type GroupResponse struct {
 	Description       string   `json:"description"`
 	Status            string   `json:"status"`
 	Sort              int      `json:"sort"`
-	PrometheusURL     string   `json:"prometheusUrl"`
-	PrometheusUsername string   `json:"prometheusUsername"`
+	DataSourceID      uint     `json:"dataSourceId"`
 	ExecutionMode     string   `json:"executionMode"`
 	ExecutionStrategy string   `json:"executionStrategy"`
 	Concurrency       int      `json:"concurrency"`
@@ -68,8 +63,7 @@ type GroupExportData struct {
 	Name              string                  `json:"name" yaml:"name"`
 	Description       string                  `json:"description" yaml:"description"`
 	Status            string                  `json:"status" yaml:"status"`
-	PrometheusURL     string                  `json:"prometheusUrl,omitempty" yaml:"prometheusUrl,omitempty"`
-	PrometheusUsername string                  `json:"prometheusUsername,omitempty" yaml:"prometheusUsername,omitempty"`
+	DataSourceID      uint                    `json:"dataSourceId,omitempty" yaml:"dataSourceId,omitempty"`
 	ExecutionMode     string                  `json:"executionMode" yaml:"executionMode"`
 	ExecutionStrategy string                  `json:"executionStrategy" yaml:"executionStrategy"`
 	Concurrency       int                     `json:"concurrency" yaml:"concurrency"`

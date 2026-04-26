@@ -63,6 +63,15 @@ func (r *assetGroupRepo) GetByID(ctx context.Context, id uint) (*asset.AssetGrou
 	return &group, err
 }
 
+func (r *assetGroupRepo) GetByIDs(ctx context.Context, ids []uint) ([]*asset.AssetGroup, error) {
+	if len(ids) == 0 {
+		return []*asset.AssetGroup{}, nil
+	}
+	var groups []*asset.AssetGroup
+	err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&groups).Error
+	return groups, err
+}
+
 func (r *assetGroupRepo) GetTree(ctx context.Context) ([]*asset.AssetGroup, error) {
 	var groups []*asset.AssetGroup
 	err := r.db.WithContext(ctx).Order("sort ASC").Find(&groups).Error

@@ -249,6 +249,38 @@
         <a-descriptions-item v-if="detailItemData.scriptContent" label="脚本内容" :span="2">
           <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">{{ detailItemData.scriptContent }}</pre>
         </a-descriptions-item>
+
+        <!-- PromQL 相关字段 -->
+        <template v-if="detailItemData.executionType === 'promql'">
+          <a-descriptions-item v-if="detailItemData.promql" label="执行命令" :span="2">
+            <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap;">{{ detailItemData.promql }}</pre>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="detailItemData.metricValue !== undefined" label="指标值">
+            <span style="font-weight: bold; color: #165dff;">{{ detailItemData.metricValue }}</span>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="detailItemData.metricLabels" label="指标标签" :span="2">
+            <a-space wrap>
+              <a-tag v-for="(value, key) in parseJSON(detailItemData.metricLabels)" :key="key" color="arcoblue" size="small">
+                {{ key }}={{ value }}
+              </a-tag>
+            </a-space>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="detailItemData.promqlResult" label="查询结果" :span="2">
+            <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{{ formatJSON(detailItemData.promqlResult) }}</pre>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="detailItemData.assertionPass !== undefined" label="断言通过">
+            <a-tag :color="detailItemData.assertionPass ? 'green' : 'red'">
+              {{ detailItemData.assertionPass ? '是' : '否' }}
+            </a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="detailItemData.assertionRule" label="断言规则" :span="2">
+            <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap;">{{ formatJSON(detailItemData.assertionRule) }}</pre>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="detailItemData.failureReason" label="失败原因" :span="2">
+            <a-alert type="error" :message="detailItemData.failureReason" />
+          </a-descriptions-item>
+        </template>
+
         <a-descriptions-item v-if="detailItemData.assertionType" label="断言类型">{{ detailItemData.assertionType }}</a-descriptions-item>
         <a-descriptions-item v-if="detailItemData.assertionValue" label="断言表达式" :span="2">
           <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace; white-space: pre-wrap;">{{ detailItemData.assertionValue }}</pre>
@@ -384,6 +416,14 @@ const formatJSON = (str: string) => {
     return JSON.stringify(JSON.parse(str), null, 2)
   } catch {
     return str
+  }
+}
+
+const parseJSON = (str: string) => {
+  try {
+    return JSON.parse(str)
+  } catch {
+    return {}
   }
 }
 

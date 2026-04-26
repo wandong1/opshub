@@ -65,6 +65,12 @@
               </a-space>
             </template>
           </a-table-column>
+          <a-table-column title="Exporter端口" data-index="exporterPort" :width="130" align="center">
+            <template #cell="{ record }">
+              <span v-if="record.exporterPort">{{ record.exporterPort }}</span>
+              <span v-else style="color: var(--color-text-3)">-</span>
+            </template>
+          </a-table-column>
           <a-table-column title="描述" data-index="description" :min-width="200" />
           <a-table-column title="状态" data-index="status" :width="100" align="center">
             <template #cell="{ record }">
@@ -96,6 +102,10 @@
           <a-input v-model="form.matchProcesses" placeholder="多个进程名用逗号分隔，如: kube-apiserver,kube-scheduler" />
           <template #extra>Agent注册时会执行 ps 命令获取进程列表，与此处配置的进程名匹配</template>
         </a-form-item>
+        <a-form-item label="Exporter端口" field="exporterPort">
+          <a-input-number v-model="form.exporterPort" placeholder="如: 9100, 9104" :min="0" :max="65535" style="width: 100%;" />
+          <template #extra>监控 Exporter 暴露的端口号，用于自动发现和采集指标</template>
+        </a-form-item>
         <a-form-item label="描述" field="description">
           <a-textarea v-model="form.description" placeholder="标签描述" :max-length="500" />
         </a-form-item>
@@ -120,7 +130,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
-const form = reactive({ id: 0, name: '', matchProcesses: '', description: '', status: 1 })
+const form = reactive({ id: 0, name: '', matchProcesses: '', exporterPort: 0, description: '', status: 1 })
 const rules = {
   name: [{ required: true, message: '请输入标签名称' }],
   matchProcesses: [{ required: true, message: '请输入匹配进程' }]
@@ -142,13 +152,13 @@ const handleReset = () => { searchForm.keyword = ''; handleSearch() }
 
 const handleAdd = () => {
   isEdit.value = false
-  Object.assign(form, { id: 0, name: '', matchProcesses: '', description: '', status: 1 })
+  Object.assign(form, { id: 0, name: '', matchProcesses: '', exporterPort: 0, description: '', status: 1 })
   dialogVisible.value = true
 }
 
 const handleEdit = (record: any) => {
   isEdit.value = true
-  Object.assign(form, { id: record.id, name: record.name, matchProcesses: record.matchProcesses, description: record.description, status: record.status })
+  Object.assign(form, { id: record.id, name: record.name, matchProcesses: record.matchProcesses, exporterPort: record.exporterPort || 0, description: record.description, status: record.status })
   dialogVisible.value = true
 }
 
@@ -156,7 +166,7 @@ const handleSubmit = async () => {
   const valid = await formRef.value?.validate()
   if (valid) return
   try {
-    const data = { name: form.name, matchProcesses: form.matchProcesses, description: form.description, status: form.status }
+    const data = { name: form.name, matchProcesses: form.matchProcesses, exporterPort: form.exporterPort, description: form.description, status: form.status }
     if (isEdit.value) {
       await updateServiceLabel(form.id, data)
       Message.success('更新成功')

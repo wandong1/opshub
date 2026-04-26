@@ -4,7 +4,10 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-top">
-          <a-button class="back-btn" @click="handleBack" :icon="ArrowLeft">返回列表</a-button>
+          <a-button class="back-btn" @click="handleBack">
+            <template #icon><icon-arrow-left /></template>
+            返回列表
+          </a-button>
         </div>
         <div class="cluster-name-section">
           <h1 class="cluster-title">

@@ -152,22 +152,32 @@
           </div>
         </a-form-item>
 
-        <a-form-item label="Prometheus地址" field="prometheusUrl">
-          <a-input v-model="formData.prometheusUrl" placeholder="http://prometheus:9090" />
+        <a-form-item label="关联数据源" field="datasourceId">
+          <a-select
+            v-model="formData.datasourceId"
+            placeholder="请选择数据源（用于 PromQL 巡检）"
+            :loading="datasourceLoading"
+            allow-search
+            allow-clear
+          >
+            <a-option v-for="ds in datasourceList" :key="ds.id" :value="ds.id">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span>{{ ds.name }}</span>
+                <a-space size="small">
+                  <a-tag :color="ds.type === 'prometheus' ? 'blue' : 'green'" size="small">
+                    {{ ds.type }}
+                  </a-tag>
+                  <a-tag v-if="ds.access_mode === 'agent'" color="orange" size="small">
+                    Agent
+                  </a-tag>
+                </a-space>
+              </div>
+            </a-option>
+          </a-select>
+          <div style="margin-top: 4px; font-size: 12px; color: #86909c;">
+            从告警管理 - 数据源管理中选择已配置的 Prometheus/VictoriaMetrics 数据源
+          </div>
         </a-form-item>
-
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="Prometheus用户名" field="prometheusUsername">
-              <a-input v-model="formData.prometheusUsername" placeholder="可选" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="Prometheus密码" field="prometheusPassword">
-              <a-input-password v-model="formData.prometheusPassword" placeholder="可选" />
-            </a-form-item>
-          </a-col>
-        </a-row>
       </a-form>
     </a-modal>
   </div>
@@ -183,6 +193,7 @@ import {
   updateInspectionGroup,
   deleteInspectionGroup
 } from '@/api/inspectionManagement'
+import { getDataSources } from '@/api/alert'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -191,6 +202,10 @@ const modalVisible = ref(false)
 const modalTitle = ref('新增巡检组')
 const formRef = ref()
 const editingId = ref<number | null>(null)
+
+// 数据源列表
+const datasourceList = ref<any[]>([])
+const datasourceLoading = ref(false)
 
 // 标签输入
 const labelList = ref<string[]>([])
@@ -216,9 +231,7 @@ const formData = reactive({
   description: '',
   status: 'enabled',
   executionMode: 'auto',
-  prometheusUrl: '',
-  prometheusUsername: '',
-  prometheusPassword: '',
+  datasourceId: undefined,
   sort: 0
 })
 
@@ -327,7 +340,7 @@ const handleAdd = () => {
   modalTitle.value = '新增巡检组'
   Object.assign(formData, {
     name: '', description: '', status: 'enabled',
-    executionMode: 'auto', prometheusUrl: '', prometheusUsername: '', prometheusPassword: '', sort: 0
+    executionMode: 'auto', datasourceId: undefined, sort: 0
   })
   labelList.value = []
   modalVisible.value = true
@@ -341,9 +354,7 @@ const handleEdit = (record: any) => {
     description: record.description || '',
     status: record.status || 'enabled',
     executionMode: record.executionMode || 'auto',
-    prometheusUrl: record.prometheusUrl || '',
-    prometheusUsername: record.prometheusUsername || '',
-    prometheusPassword: '',
+    datasourceId: record.datasourceId || undefined,
     sort: record.sort || 0
   })
   labelList.value = parseLabels(record.labels)
@@ -397,8 +408,22 @@ const handleCancel = () => {
   labelList.value = []
 }
 
+// 加载数据源列表
+const loadDataSources = async () => {
+  datasourceLoading.value = true
+  try {
+    const res = await getDataSources() as any
+    datasourceList.value = res?.data || []
+  } catch {
+    Message.error('加载数据源失败')
+  } finally {
+    datasourceLoading.value = false
+  }
+}
+
 onMounted(() => {
   fetchData()
+  loadDataSources()
 })
 </script>
 

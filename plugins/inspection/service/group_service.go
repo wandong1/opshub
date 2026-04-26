@@ -21,15 +21,13 @@ func NewGroupService(groupRepo repository.GroupRepository) *GroupService {
 
 func (s *GroupService) Create(ctx context.Context, req *dto.GroupCreateRequest) error {
 	group := &model.InspectionGroup{
-		Name:               req.Name,
-		Description:        req.Description,
-		Status:             req.Status,
-		Sort:               req.Sort,
-		PrometheusURL:      req.PrometheusURL,
-		PrometheusUsername: req.PrometheusUsername,
-		PrometheusPassword: req.PrometheusPassword,
-		ExecutionMode:      req.ExecutionMode,
-		GroupIDs:           req.GroupIDs,
+		Name:          req.Name,
+		Description:   req.Description,
+		Status:        req.Status,
+		Sort:          req.Sort,
+		DataSourceID:  req.DataSourceID,
+		ExecutionMode: req.ExecutionMode,
+		GroupIDs:      req.GroupIDs,
 	}
 
 	if group.Status == "" {
@@ -58,13 +56,7 @@ func (s *GroupService) Update(ctx context.Context, id uint, req *dto.GroupUpdate
 		group.Status = req.Status
 	}
 	group.Sort = req.Sort
-	if req.PrometheusURL != "" {
-		group.PrometheusURL = req.PrometheusURL
-	}
-	group.PrometheusUsername = req.PrometheusUsername
-	if req.PrometheusPassword != "" {
-		group.PrometheusPassword = req.PrometheusPassword
-	}
+	group.DataSourceID = req.DataSourceID
 	if req.ExecutionMode != "" {
 		group.ExecutionMode = req.ExecutionMode
 	}
@@ -118,17 +110,16 @@ func (s *GroupService) GetAll(ctx context.Context) ([]*dto.GroupResponse, error)
 
 func (s *GroupService) toResponse(group *model.InspectionGroup) *dto.GroupResponse {
 	return &dto.GroupResponse{
-		ID:                 group.ID,
-		Name:               group.Name,
-		Description:        group.Description,
-		Status:             group.Status,
-		Sort:               group.Sort,
-		PrometheusURL:      group.PrometheusURL,
-		PrometheusUsername: group.PrometheusUsername,
-		ExecutionMode:      group.ExecutionMode,
-		GroupIDs:           group.GroupIDs,
-		CreatedAt:          group.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:          group.UpdatedAt.Format(time.RFC3339),
+		ID:            group.ID,
+		Name:          group.Name,
+		Description:   group.Description,
+		Status:        group.Status,
+		Sort:          group.Sort,
+		DataSourceID:  group.DataSourceID,
+		ExecutionMode: group.ExecutionMode,
+		GroupIDs:      group.GroupIDs,
+		CreatedAt:     group.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:     group.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

@@ -56,3 +56,19 @@ func (r *DataSourceRepo) GetByProxyToken(ctx context.Context, proxyToken string)
 	}
 	return &ds, nil
 }
+
+// ListByAssetGroupIDs 根据业务分组ID列表查询数据源
+func (r *DataSourceRepo) ListByAssetGroupIDs(ctx context.Context, assetGroupIDs []uint) ([]*biz.AlertDataSource, error) {
+	if len(assetGroupIDs) == 0 {
+		return r.List(ctx)
+	}
+
+	var list []*biz.AlertDataSource
+	err := r.db.WithContext(ctx).
+		Joins("INNER JOIN alert_datasource_group_relations ON alert_datasource_group_relations.data_source_id = alert_datasources.id").
+		Where("alert_datasource_group_relations.asset_group_id IN ?", assetGroupIDs).
+		Group("alert_datasources.id").
+		Order("alert_datasources.id asc").
+		Find(&list).Error
+	return list, err
+}

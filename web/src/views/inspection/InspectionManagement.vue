@@ -203,22 +203,23 @@
           </a-select>
         </a-form-item>
 
-        <a-form-item label="Prometheus地址" field="prometheusUrl">
-          <a-input v-model="formData.prometheusUrl" placeholder="http://prometheus:9090（可选）" />
+        <a-form-item label="数据源" field="dataSourceId">
+          <a-select
+            v-model="formData.dataSourceId"
+            placeholder="请选择数据源（用于 PromQL 巡检）"
+            allow-clear
+            :loading="dataSourcesLoading"
+          >
+            <a-option v-for="ds in dataSources" :key="ds.id" :value="ds.id">
+              {{ ds.name }} ({{ ds.type }})
+            </a-option>
+          </a-select>
+          <template #extra>
+            <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+              选择数据源后，巡检项可使用 PromQL 查询指标数据
+            </span>
+          </template>
         </a-form-item>
-
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="用户名" field="prometheusUsername">
-              <a-input v-model="formData.prometheusUsername" placeholder="可选" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="密码" field="prometheusPassword">
-              <a-input-password v-model="formData.prometheusPassword" placeholder="可选" />
-            </a-form-item>
-          </a-col>
-        </a-row>
 
         <a-form-item label="状态" field="status">
           <a-radio-group v-model="formData.status">
@@ -605,25 +606,46 @@
                     <a-row :gutter="8">
                       <a-col :span="10">
                         <a-select v-model="item.assertionType" placeholder="选择断言类型" allow-clear>
-                          <a-option value="gt">大于 (&gt;)</a-option>
-                          <a-option value="gte">大于等于 (&gt;=)</a-option>
-                          <a-option value="lt">小于 (&lt;)</a-option>
-                          <a-option value="lte">小于等于 (&lt;=)</a-option>
-                          <a-option value="eq">等于 (==)</a-option>
-                          <a-option value="contains">包含</a-option>
-                          <a-option value="not_contains">不包含</a-option>
-                          <a-option value="regex">正则匹配</a-option>
-                          <a-option value="not_regex">反正则匹配</a-option>
+                          <!-- PromQL 类型只显示数值比较 -->
+                          <template v-if="item.executionType === 'promql'">
+                            <a-option value="gt">大于 (&gt;)</a-option>
+                            <a-option value="gte">大于等于 (&gt;=)</a-option>
+                            <a-option value="lt">小于 (&lt;)</a-option>
+                            <a-option value="lte">小于等于 (&lt;=)</a-option>
+                            <a-option value="eq">等于 (==)</a-option>
+                            <a-option value="neq">不等于 (!=)</a-option>
+                          </template>
+                          <!-- 命令和脚本类型显示所有断言 -->
+                          <template v-else>
+                            <a-option value="gt">大于 (&gt;)</a-option>
+                            <a-option value="gte">大于等于 (&gt;=)</a-option>
+                            <a-option value="lt">小于 (&lt;)</a-option>
+                            <a-option value="lte">小于等于 (&lt;=)</a-option>
+                            <a-option value="eq">等于 (==)</a-option>
+                            <a-option value="contains">包含</a-option>
+                            <a-option value="not_contains">不包含</a-option>
+                            <a-option value="regex">正则匹配</a-option>
+                            <a-option value="not_regex">反正则匹配</a-option>
+                          </template>
                         </a-select>
                       </a-col>
                       <a-col :span="14">
-                        <a-input v-model="item.assertionValue" placeholder="断言值" :disabled="!item.assertionType" />
+                        <a-input
+                          v-model="item.assertionValue"
+                          :placeholder="item.executionType === 'promql' ? '断言值（数值）' : '断言值'"
+                          :disabled="!item.assertionType"
+                        />
                       </a-col>
                     </a-row>
+                    <template #extra>
+                      <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                        {{ item.executionType === 'promql' ? 'PromQL 查询结果将自动提取指标值进行数值比较' : '对执行结果进行断言验证' }}
+                      </span>
+                    </template>
                   </a-form-item>
 
-                  <!-- 变量提取 -->
-                  <a-form-item label="变量提取" :label-col-flex="'100px'">
+                  <!-- 变量提取（PromQL 不需要） -->
+                  <a-form-item v-if="item.executionType !== 'promql'" label="变量提取" :label-col-flex="'100px'">
                     <a-row :gutter="8">
                       <a-col :span="10">
                         <a-input v-model="item.variableName" placeholder="变量名（如：token）" />
@@ -862,6 +884,7 @@ import {
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
 import { getVariableList } from '@/api/networkProbe'
+import { getDataSources } from '@/api/alert'
 import VariableInput from '@/components/VariableInput.vue'
 
 const loading = ref(false)
@@ -870,6 +893,10 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
 const activeItemIndex = ref(-1)
+
+// 数据源相关
+const dataSources = ref<any[]>([])
+const dataSourcesLoading = ref(false)
 const itemDragIndex = ref(-1)
 const assetGroups = ref<any[]>([])
 const availableHosts = ref<any[]>([])
@@ -920,9 +947,7 @@ const formData = reactive({
   executionMode: 'auto',
   executionStrategy: 'concurrent',
   concurrency: 50,
-  prometheusUrl: '',
-  prometheusUsername: '',
-  prometheusPassword: '',
+  dataSourceId: undefined as number | undefined,
   sort: 0,
   groupIds: [] as number[],
   customVariables: '{}' // 自定义变量（JSON 字符串）
@@ -1029,9 +1054,7 @@ const handleCreate = async () => {
     executionMode: 'auto',
     executionStrategy: 'concurrent',
     concurrency: 50,
-    prometheusUrl: '',
-    prometheusUsername: '',
-    prometheusPassword: '',
+    dataSourceId: undefined,
     sort: 0,
     groupIds: [],
     customVariables: '{}'
@@ -1407,9 +1430,7 @@ const handleTestRunItem = async (itemIndex: number) => {
         executionMode: formData.executionMode,
         executionStrategy: formData.executionStrategy,
         concurrency: formData.concurrency || 50,
-        prometheusUrl: formData.prometheusUrl,
-        prometheusUsername: formData.prometheusUsername,
-        prometheusPassword: formData.prometheusPassword,
+        dataSourceId: formData.dataSourceId || 0,
         groupIds: JSON.stringify(formData.groupIds)
       }
       const res = await createInspectionGroup(groupData)
@@ -1520,9 +1541,7 @@ const handleSubmit = async () => {
       executionMode: formData.executionMode,
       executionStrategy: formData.executionStrategy,
       concurrency: formData.concurrency || 50,
-      prometheusUrl: formData.prometheusUrl,
-      prometheusUsername: formData.prometheusUsername,
-      prometheusPassword: formData.prometheusPassword,
+      dataSourceId: formData.dataSourceId || 0,
       groupIds: JSON.stringify(formData.groupIds),
       customVariables: JSON.stringify(customVarsObj),
       labels: JSON.stringify(labelList.value)
@@ -1599,6 +1618,45 @@ const loadAssetGroups = async () => {
     assetGroups.value = flattenGroups(res)
   } catch (error: any) {
     Message.error(error.message || '加载资产分组失败')
+  }
+}
+
+// 加载数据源列表（根据选中的业务分组过滤）
+const loadDataSources = async () => {
+  dataSourcesLoading.value = true
+  try {
+    // 如果选择了业务分组，则只加载这些分组关联的数据源
+    if (formData.groupIds && formData.groupIds.length > 0) {
+      // 为每个业务分组查询数据源，然后合并去重
+      const allDataSources: any[] = []
+      const dsIdSet = new Set<number>()
+
+      for (const groupId of formData.groupIds) {
+        const res = await getDataSources()
+        const groupDataSources = Array.isArray(res) ? res : (res.data || [])
+
+        // 过滤出包含当前业务分组的数据源
+        groupDataSources.forEach((ds: any) => {
+          if (ds.asset_group_ids && ds.asset_group_ids.includes(groupId)) {
+            if (!dsIdSet.has(ds.id)) {
+              dsIdSet.add(ds.id)
+              allDataSources.push(ds)
+            }
+          }
+        })
+      }
+
+      dataSources.value = allDataSources
+    } else {
+      // 未选择业务分组时，加载所有数据源
+      const res = await getDataSources()
+      dataSources.value = Array.isArray(res) ? res : (res.data || [])
+    }
+  } catch (error: any) {
+    console.error('加载数据源失败:', error)
+    Message.error(error.message || '加载数据源失败')
+  } finally {
+    dataSourcesLoading.value = false
   }
 }
 
@@ -2061,10 +2119,18 @@ watch(customVariablesList, () => {
   loadVariableOptions()
 }, { deep: true })
 
-// 监听对话框打开，加载变量选项
+// 监听业务分组变化，重新加载数据源
+watch(() => formData.groupIds, (newGroupIds) => {
+  if (dialogVisible.value && newGroupIds && newGroupIds.length > 0) {
+    loadDataSources()
+  }
+}, { deep: true })
+
+// 监听对话框打开，加载变量选项和数据源
 watch(dialogVisible, (visible) => {
   if (visible) {
     loadVariableOptions()
+    loadDataSources()
   }
 })
 

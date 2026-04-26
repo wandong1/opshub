@@ -54,6 +54,10 @@ type InspectionTask struct {
 	// JSON 数组：[{"group_id": 10, "business_group_ids": [5, 6]}]
 	GroupBusinessGroupOverrides string `gorm:"type:text" json:"group_business_group_overrides"`
 
+	// 巡检组数据源覆盖（任务级数据源覆盖功能）
+	// JSON 数组：[{"group_id": 10, "datasource_id": 3}]
+	GroupDataSourceOverrides string `gorm:"type:text" json:"group_datasource_overrides"`
+
 	// 执行记录
 	LastRunAt     *time.Time `json:"last_run_at"`
 	LastRunStatus string     `gorm:"size:20" json:"last_run_status"` // success/failed

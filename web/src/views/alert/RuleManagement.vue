@@ -189,9 +189,28 @@
         </a-row>
         <a-form-item label="描述"><a-textarea v-model="form.description" :auto-size="{minRows:2}" /></a-form-item>
         <a-form-item label="数据源" required>
-          <a-select v-model="formDsIds" multiple allow-clear placeholder="选择一个或多个数据源（多选）">
-            <a-option v-for="ds in dataSources" :key="ds.id" :value="ds.id!">{{ ds.name }} ({{ ds.type }})</a-option>
-          </a-select>
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <a-select
+              v-model="formDsIds"
+              multiple
+              allow-clear
+              allow-search
+              :max-tag-count="3"
+              placeholder="选择一个或多个数据源（支持搜索）"
+              style="flex:1"
+              @search="dsSearchKeyword = $event"
+              popup-container="body"
+            >
+              <a-option v-for="ds in dataSources" :key="ds.id" :value="ds.id!">
+                {{ ds.name }} ({{ ds.type }})
+              </a-option>
+            </a-select>
+            <a-button @click="selectAllDataSources">全选</a-button>
+            <a-button @click="selectFilteredDataSources" v-if="dsSearchKeyword">选择搜索结果</a-button>
+          </div>
+          <div v-if="formDsIds.length > 0" style="margin-top:8px;font-size:12px;color:var(--ops-text-secondary)">
+            已选 {{ formDsIds.length }} 个数据源
+          </div>
         </a-form-item>
         <!-- PromQL + 临时测试 -->
         <a-form-item label="PromQL 表达式" required>
@@ -348,6 +367,8 @@ const annotationTitle = ref('')
 const annotationDesc = ref('')
 // 多选数据源（number[]）
 const formDsIds = ref<number[]>([])
+// 数据源搜索关键词（用于"选择搜索结果"按钮）
+const dsSearchKeyword = ref('')
 // Ad-hoc 测试
 const adhocLoading = ref(false)
 const adhocResult = ref<any>(null)
@@ -618,6 +639,35 @@ const doImport = async ({ file }: any) => {
   } catch { Message.error('导入失败') }
 }
 
+// 数据源过滤函数
+const filterDataSource = (inputValue: string, option: any) => {
+  dsSearchKeyword.value = inputValue
+  const ds = dataSources.value.find(d => d.id === option.value)
+  if (!ds) return false
+  const searchText = inputValue.toLowerCase()
+  return ds.name.toLowerCase().includes(searchText) || ds.type.toLowerCase().includes(searchText)
+}
+
+// 全选所有数据源
+const selectAllDataSources = () => {
+  formDsIds.value = dataSources.value.map(ds => ds.id!).filter(id => id !== undefined)
+  Message.success(`已选择全部 ${formDsIds.value.length} 个数据源`)
+}
+
+// 选择搜索结果中的数据源
+const selectFilteredDataSources = () => {
+  if (!dsSearchKeyword.value) return
+  const keyword = dsSearchKeyword.value.toLowerCase()
+  const filtered = dataSources.value.filter(ds =>
+    ds.name.toLowerCase().includes(keyword) || ds.type.toLowerCase().includes(keyword)
+  )
+  const filteredIds = filtered.map(ds => ds.id!).filter(id => id !== undefined)
+  // 合并到已选列表（去重）
+  const newIds = filteredIds.filter(id => !formDsIds.value.includes(id))
+  formDsIds.value = [...formDsIds.value, ...newIds]
+  Message.success(`已添加 ${newIds.length} 个数据源（共 ${formDsIds.value.length} 个）`)
+}
+
 onMounted(async () => {
   const [treeRes, dsRes, allRgRes] = await Promise.all([getGroupTree(), getDataSources(), getRuleGroups()])
   const rawTree = (treeRes as any) || []
@@ -656,4 +706,11 @@ onMounted(async () => {
 .adhoc-item:last-child { border-bottom: none; }
 .adhoc-val { font-size: 15px; font-weight: 700; color: #f53f3f; min-width: 80px; }
 .adhoc-labels { font-size: 11px; color: var(--ops-text-tertiary); font-family: monospace; word-break: break-all; }
+</style>
+
+<style>
+/* 修复数据源下拉选项显示省略号的问题 */
+.arco-select-dropdown {
+  min-width: 400px !important;
+}
 </style>

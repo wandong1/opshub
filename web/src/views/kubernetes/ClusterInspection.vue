@@ -683,6 +683,7 @@ const tableColumns = [
 
 import { ref, onMounted, computed, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { IconLineChart } from '@arco-design/web-vue/es/icon'
 import { getClusterList, type Cluster } from '@/api/kubernetes'
 import {
   startInspection,

@@ -33,7 +33,8 @@ type InspectionItem struct {
 	ScriptFile    string `gorm:"size:200" json:"script_file"`
 
 	// PromQL 查询
-	PromQLQuery string `gorm:"type:text" json:"promql_query"`
+	PromQLQuery     string `gorm:"type:text" json:"promql_query"`
+	PromQLQueryType string `gorm:"size:20;default:'instant'" json:"promql_query_type"` // instant/range
 
 	// 主机匹配
 	HostMatchType string `gorm:"size:20;default:'tag'" json:"host_match_type"` // tag/id

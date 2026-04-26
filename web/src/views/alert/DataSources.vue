@@ -3,7 +3,22 @@
     <a-card :bordered="false">
       <template #title>数据源管理</template>
       <template #extra>
-        <a-button type="primary" @click="openCreate"><template #icon><icon-plus /></template>新增数据源</a-button>
+        <a-space>
+          <!-- 业务分组筛选 -->
+          <a-select
+            v-model="filterAssetGroupId"
+            placeholder="按业务分组筛选"
+            allow-clear
+            style="width: 200px"
+            @change="load"
+          >
+            <a-option :value="0">全部分组</a-option>
+            <a-option v-for="group in flatAssetGroups" :key="group.id" :value="group.id">
+              {{ group.label }}
+            </a-option>
+          </a-select>
+          <a-button type="primary" @click="openCreate"><template #icon><icon-plus /></template>新增数据源</a-button>
+        </a-space>
       </template>
       <a-table :data="list" :loading="loading" row-key="id">
         <template #columns>
@@ -11,6 +26,19 @@
           <a-table-column title="类型" data-index="type">
             <template #cell="{ record }"><a-tag :color="typeColor(record.type)">{{ typeLabel(record.type) }}</a-tag></template>
           </a-table-column>
+
+          <!-- 新增：业务分组列 -->
+          <a-table-column title="业务分组">
+            <template #cell="{ record }">
+              <a-space v-if="record.asset_groups && record.asset_groups.length > 0" wrap>
+                <a-tag v-for="group in record.asset_groups" :key="group.id" color="blue">
+                  {{ group.name }}
+                </a-tag>
+              </a-space>
+              <span v-else style="color: var(--ops-text-tertiary)">未绑定</span>
+            </template>
+          </a-table-column>
+
           <a-table-column title="地址">
             <template #cell="{ record }">{{ record.url }}</template>
           </a-table-column>
@@ -45,6 +73,23 @@
             <a-option value="influxdb">InfluxDB</a-option>
           </a-select>
         </a-form-item>
+
+        <!-- 新增：业务分组选择 -->
+        <a-form-item label="业务分组">
+          <a-select
+            v-model="form.asset_group_ids"
+            placeholder="请选择业务分组（可多选）"
+            multiple
+            allow-clear
+            :max-tag-count="3"
+          >
+            <a-option v-for="group in flatAssetGroups" :key="group.id" :value="group.id">
+              {{ group.label }}
+            </a-option>
+          </a-select>
+          <span class="help-text">可选，用于按业务分组筛选数据源</span>
+        </a-form-item>
+
         <a-form-item label="接入方式" required>
           <a-select v-model="form.access_mode" :disabled="!!form.id" placeholder="请选择接入方式">
             <a-option value="direct">直连</a-option>
@@ -136,8 +181,39 @@ const onlineAgents = ref<any[]>([])
 const selectedAgentHostId = ref<number>()
 const newAgentPriority = ref<number>(0)
 
+// 新增：业务分组相关
+const flatAssetGroups = ref<any[]>([])
+const filterAssetGroupId = ref<number>(0)
+
 const typeLabel = (t: string) => ({ prometheus: 'Prometheus', victoriametrics: 'VictoriaMetrics', influxdb: 'InfluxDB' }[t] || t)
 const typeColor = (t: string) => ({ prometheus: 'orange', victoriametrics: 'purple', influxdb: 'blue' }[t] || 'gray')
+
+// 加载业务分组列表
+const loadAssetGroups = async () => {
+  try {
+    // request 拦截器已经返回了 res.data，所以这里直接使用 res
+    const tree = await request.get('/api/v1/asset-groups/tree')
+
+    console.log('业务分组树数据:', tree) // 调试日志
+
+    // 扁平化树结构（用于下拉选择）
+    const flatten = (nodes: any[], prefix = ''): any[] => {
+      const result: any[] = []
+      nodes.forEach(node => {
+        const label = prefix ? `${prefix} / ${node.name}` : node.name
+        result.push({ id: node.id, label, name: node.name })
+        if (node.children && node.children.length > 0) {
+          result.push(...flatten(node.children, label))
+        }
+      })
+      return result
+    }
+    flatAssetGroups.value = flatten(tree || [])
+    console.log('扁平化后的分组:', flatAssetGroups.value) // 调试日志
+  } catch (err) {
+    console.error('加载业务分组失败:', err)
+  }
+}
 
 const openCreate = async () => {
   form.value = {
@@ -149,11 +225,13 @@ const openCreate = async () => {
     password: '',
     token: '',
     description: '',
+    asset_group_ids: [], // 新增
   }
   agentRelations.value = []
   selectedAgentHostId.value = undefined
   newAgentPriority.value = 0
   await loadHosts()
+  await loadAssetGroups() // 加载业务分组
   modalVisible.value = true
 }
 
@@ -217,10 +295,14 @@ const syncAgentRelations = async () => {
   }
 }
 const openEdit = async (row: AlertDataSource) => {
-  form.value = { ...row }
+  form.value = {
+    ...row,
+    asset_group_ids: row.asset_group_ids || [] // 确保有默认值
+  }
   selectedAgentHostId.value = undefined
   newAgentPriority.value = 0
   await loadHosts()
+  await loadAssetGroups() // 加载业务分组
 
   // 加载已关联的 Agent 主机
   if (row.access_mode === 'agent') {
@@ -266,7 +348,14 @@ const load = async () => {
   loading.value = true
   try {
     await loadHosts()
-    const res = await getDataSources()
+    await loadAssetGroups() // 加载业务分组
+
+    const params: any = {}
+    if (filterAssetGroupId.value && filterAssetGroupId.value > 0) {
+      params.asset_group_id = filterAssetGroupId.value
+    }
+
+    const res = await request.get('/api/v1/alert/datasources', { params })
     list.value = res?.data || res || []
   }
   finally { loading.value = false }
@@ -311,6 +400,7 @@ const saveDatasource = async () => {
       token: form.value.token || '',
       description: form.value.description || '',
       status: form.value.status || 1,
+      asset_group_ids: form.value.asset_group_ids || [], // 新增
     }
 
     // 保存或更新数据源

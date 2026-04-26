@@ -28,9 +28,7 @@ func (s *GroupService) Create(ctx context.Context, req *GroupCreateRequest) (uin
 		Description:       req.Description,
 		Status:            req.Status,
 		Sort:              req.Sort,
-		PrometheusURL:     req.PrometheusURL,
-		PrometheusUsername: req.PrometheusUsername,
-		PrometheusPassword: req.PrometheusPassword,
+		DataSourceID:      req.DataSourceID,
 		ExecutionMode:     req.ExecutionMode,
 		ExecutionStrategy: req.ExecutionStrategy,
 		Concurrency:       req.Concurrency,
@@ -72,11 +70,7 @@ func (s *GroupService) Update(ctx context.Context, id uint, req *GroupUpdateRequ
 		group.Status = req.Status
 	}
 	group.Sort = req.Sort
-	group.PrometheusURL = req.PrometheusURL
-	group.PrometheusUsername = req.PrometheusUsername
-	if req.PrometheusPassword != "" {
-		group.PrometheusPassword = req.PrometheusPassword
-	}
+	group.DataSourceID = req.DataSourceID
 	if req.ExecutionMode != "" {
 		group.ExecutionMode = req.ExecutionMode
 	}
@@ -162,8 +156,7 @@ func (s *GroupService) toResponse(group *inspectionmgmtdata.InspectionGroup) *Gr
 		Description:       group.Description,
 		Status:            group.Status,
 		Sort:              group.Sort,
-		PrometheusURL:     group.PrometheusURL,
-		PrometheusUsername: group.PrometheusUsername,
+		DataSourceID:      group.DataSourceID,
 		ExecutionMode:     group.ExecutionMode,
 		ExecutionStrategy: group.ExecutionStrategy,
 		Concurrency:       group.Concurrency,
@@ -184,8 +177,7 @@ func (s *GroupService) toResponseWithCount(group *inspectionmgmtdata.InspectionG
 		Description:       group.Description,
 		Status:            group.Status,
 		Sort:              group.Sort,
-		PrometheusURL:     group.PrometheusURL,
-		PrometheusUsername: group.PrometheusUsername,
+		DataSourceID:      group.DataSourceID,
 		ExecutionMode:     group.ExecutionMode,
 		ExecutionStrategy: group.ExecutionStrategy,
 		Concurrency:       group.Concurrency,
@@ -271,8 +263,7 @@ func (s *GroupService) buildExportData(group *inspectionmgmtdata.InspectionGroup
 		Name:              group.Name,
 		Description:       group.Description,
 		Status:            group.Status,
-		PrometheusURL:     group.PrometheusURL,
-		PrometheusUsername: group.PrometheusUsername,
+		DataSourceID:      group.DataSourceID,
 		ExecutionMode:     group.ExecutionMode,
 		ExecutionStrategy: group.ExecutionStrategy,
 		Concurrency:       group.Concurrency,
@@ -420,8 +411,7 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 		Name:              exportData.Name,
 		Description:       exportData.Description,
 		Status:            exportData.Status,
-		PrometheusURL:     exportData.PrometheusURL,
-		PrometheusUsername: exportData.PrometheusUsername,
+		DataSourceID:      exportData.DataSourceID,
 		ExecutionMode:     exportData.ExecutionMode,
 		ExecutionStrategy: exportData.ExecutionStrategy,
 		Concurrency:       exportData.Concurrency,

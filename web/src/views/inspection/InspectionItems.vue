@@ -119,27 +119,109 @@
           <a-textarea v-model="formData.scriptContent" placeholder="请输入脚本内容" :rows="6" />
         </a-form-item>
 
-        <a-form-item v-if="formData.executionType === 'promql'" label="PromQL查询" field="promqlQuery">
-          <a-textarea v-model="formData.promqlQuery" placeholder="请输入PromQL查询语句" :rows="3" />
-        </a-form-item>
+        <!-- PromQL 配置区域 -->
+        <template v-if="formData.executionType === 'promql'">
+          <a-form-item label="查询类型" field="promqlQueryType">
+            <a-radio-group v-model="formData.promqlQueryType">
+              <a-radio value="instant">瞬时查询（推荐）</a-radio>
+              <a-radio value="range">范围查询</a-radio>
+            </a-radio-group>
+          </a-form-item>
 
-        <a-form-item label="断言类型" field="assertionType">
-          <a-select v-model="formData.assertionType" placeholder="请选择断言类型" allow-clear>
-            <a-option value="gt">大于</a-option>
-            <a-option value="gte">大于等于</a-option>
-            <a-option value="lt">小于</a-option>
-            <a-option value="lte">小于等于</a-option>
-            <a-option value="eq">等于</a-option>
-            <a-option value="contains">包含</a-option>
-            <a-option value="not_contains">不包含</a-option>
-            <a-option value="regex">正则匹配</a-option>
-            <a-option value="not_regex">反正则匹配</a-option>
-          </a-select>
-        </a-form-item>
+          <a-form-item label="PromQL 语句" field="promqlQuery">
+            <a-textarea
+              v-model="formData.promqlQuery"
+              placeholder="支持预置变量：{{.Instance}}, {{.IP}}, {{.Hostname}}, {{.Labels.xxx}}, {{.ServiceLabels.xxx}}"
+              :rows="4"
+            />
+            <div style="margin-top: 4px; font-size: 12px; color: #86909c;">
+              示例：node_cpu_seconds_total{instance="{{.Instance}}", mode="idle"}
+            </div>
+          </a-form-item>
 
-        <a-form-item v-if="formData.assertionType" label="断言值" field="assertionValue">
-          <a-input v-model="formData.assertionValue" placeholder="请输入断言值" />
-        </a-form-item>
+          <a-form-item label="断言类型" field="assertionType">
+            <a-select v-model="formData.assertionType" placeholder="请选择断言类型" @change="handleAssertionTypeChange">
+              <a-option value="promql_threshold">阈值判断</a-option>
+              <a-option value="promql_range">区间判断</a-option>
+              <a-option value="promql_exists">存在性判断</a-option>
+            </a-select>
+          </a-form-item>
+
+          <!-- 阈值判断配置 -->
+          <template v-if="formData.assertionType === 'promql_threshold'">
+            <a-form-item label="阈值规则">
+              <a-space>
+                <a-select v-model="assertionConfig.operator" style="width: 120px" placeholder="操作符">
+                  <a-option value=">">大于 ></a-option>
+                  <a-option value=">=">大于等于 >=</a-option>
+                  <a-option value="<">小于 <</a-option>
+                  <a-option value="<=">小于等于 <=</a-option>
+                  <a-option value="==">等于 ==</a-option>
+                  <a-option value="!=">不等于 !=</a-option>
+                </a-select>
+                <a-input-number v-model="assertionConfig.value" placeholder="阈值" style="width: 150px" />
+                <a-input v-model="assertionConfig.unit" placeholder="单位（可选）" style="width: 100px" />
+              </a-space>
+            </a-form-item>
+            <a-form-item label="失败提示">
+              <a-input v-model="assertionConfig.message" placeholder="如：CPU 使用率超过 80%" />
+            </a-form-item>
+          </template>
+
+          <!-- 区间判断配置 -->
+          <template v-if="formData.assertionType === 'promql_range'">
+            <a-form-item label="区间范围">
+              <a-space>
+                <a-input-number v-model="assertionConfig.min" placeholder="最小值" style="width: 150px" />
+                <span>~</span>
+                <a-input-number v-model="assertionConfig.max" placeholder="最大值" style="width: 150px" />
+              </a-space>
+            </a-form-item>
+            <a-form-item label="判断逻辑">
+              <a-radio-group v-model="assertionConfig.invert">
+                <a-radio :value="false">在区间内正常</a-radio>
+                <a-radio :value="true">在区间外正常</a-radio>
+              </a-radio-group>
+            </a-form-item>
+            <a-form-item label="失败提示">
+              <a-input v-model="assertionConfig.message" placeholder="如：CPU 使用率应在 20%-80% 之间" />
+            </a-form-item>
+          </template>
+
+          <!-- 存在性判断配置 -->
+          <template v-if="formData.assertionType === 'promql_exists'">
+            <a-form-item label="期望结果">
+              <a-radio-group v-model="assertionConfig.expect">
+                <a-radio :value="true">有数据（指标存在）</a-radio>
+                <a-radio :value="false">无数据（指标不存在）</a-radio>
+              </a-radio-group>
+            </a-form-item>
+            <a-form-item label="失败提示">
+              <a-input v-model="assertionConfig.message" placeholder="如：服务应在线" />
+            </a-form-item>
+          </template>
+        </template>
+
+        <!-- 命令/脚本断言配置 -->
+        <template v-if="formData.executionType !== 'promql'">
+          <a-form-item label="断言类型" field="assertionType">
+            <a-select v-model="formData.assertionType" placeholder="请选择断言类型" allow-clear>
+              <a-option value="gt">大于</a-option>
+              <a-option value="gte">大于等于</a-option>
+              <a-option value="lt">小于</a-option>
+              <a-option value="lte">小于等于</a-option>
+              <a-option value="eq">等于</a-option>
+              <a-option value="contains">包含</a-option>
+              <a-option value="not_contains">不包含</a-option>
+              <a-option value="regex">正则匹配</a-option>
+              <a-option value="not_regex">反正则匹配</a-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item v-if="formData.assertionType" label="断言值" field="assertionValue">
+            <a-input v-model="formData.assertionValue" placeholder="请输入断言值" />
+          </a-form-item>
+        </template>
 
         <a-form-item label="描述" field="description">
           <a-textarea v-model="formData.description" placeholder="请输入描述" :rows="2" />
@@ -197,10 +279,27 @@ const formData = reactive({
   scriptType: 'shell',
   scriptContent: '',
   promqlQuery: '',
+  promqlQueryType: 'instant',
   assertionType: '',
   assertionValue: '',
   timeout: 60,
   status: 'enabled'
+})
+
+// PromQL 断言配置
+const assertionConfig = reactive({
+  // 阈值判断
+  operator: '>',
+  value: 0,
+  unit: '',
+  // 区间判断
+  min: 0,
+  max: 100,
+  invert: false,
+  // 存在性判断
+  expect: true,
+  // 通用
+  message: ''
 })
 
 const formRules = {
@@ -287,10 +386,22 @@ const handleAdd = () => {
     scriptType: 'shell',
     scriptContent: '',
     promqlQuery: '',
+    promqlQueryType: 'instant',
     assertionType: '',
     assertionValue: '',
     timeout: 60,
     status: 'enabled'
+  })
+  // 重置断言配置
+  Object.assign(assertionConfig, {
+    operator: '>',
+    value: 0,
+    unit: '',
+    min: 0,
+    max: 100,
+    invert: false,
+    expect: true,
+    message: ''
   })
   modalVisible.value = true
 }
@@ -298,7 +409,32 @@ const handleAdd = () => {
 const handleEdit = (record: any) => {
   modalTitle.value = '编辑巡检项'
   Object.assign(formData, record)
+
+  // 解析断言配置
+  if (record.assertionValue && record.executionType === 'promql') {
+    try {
+      const config = JSON.parse(record.assertionValue)
+      Object.assign(assertionConfig, config)
+    } catch {
+      // 解析失败，使用默认值
+    }
+  }
+
   modalVisible.value = true
+}
+
+// 断言类型切换时重置配置
+const handleAssertionTypeChange = () => {
+  Object.assign(assertionConfig, {
+    operator: '>',
+    value: 0,
+    unit: '',
+    min: 0,
+    max: 100,
+    invert: false,
+    expect: true,
+    message: ''
+  })
 }
 
 const handleDelete = async (record: any) => {
@@ -314,6 +450,28 @@ const handleTestRun = async () => {
 const handleSubmit = async () => {
   const valid = await formRef.value?.validate()
   if (!valid) {
+    // 如果是 PromQL 类型，需要将断言配置序列化为 JSON
+    if (formData.executionType === 'promql' && formData.assertionType) {
+      const config: any = { type: formData.assertionType }
+
+      if (formData.assertionType === 'promql_threshold') {
+        config.operator = assertionConfig.operator
+        config.value = assertionConfig.value
+        config.unit = assertionConfig.unit
+        config.message = assertionConfig.message
+      } else if (formData.assertionType === 'promql_range') {
+        config.min = assertionConfig.min
+        config.max = assertionConfig.max
+        config.invert = assertionConfig.invert
+        config.message = assertionConfig.message
+      } else if (formData.assertionType === 'promql_exists') {
+        config.expect = assertionConfig.expect
+        config.message = assertionConfig.message
+      }
+
+      formData.assertionValue = JSON.stringify(config)
+    }
+
     // TODO: 调用创建/更新API
     Message.info('提交功能待实现')
     modalVisible.value = false
@@ -323,6 +481,17 @@ const handleSubmit = async () => {
 const handleCancel = () => {
   modalVisible.value = false
   formRef.value?.resetFields()
+  // 重置断言配置
+  Object.assign(assertionConfig, {
+    operator: '>',
+    value: 0,
+    unit: '',
+    min: 0,
+    max: 100,
+    invert: false,
+    expect: true,
+    message: ''
+  })
 }
 
 onMounted(() => {

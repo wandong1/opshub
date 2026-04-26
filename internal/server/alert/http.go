@@ -5,34 +5,41 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	alertbiz "github.com/ydcloud-dy/opshub/internal/biz/alert"
-	alertdata "github.com/ydcloud-dy/opshub/internal/data/alert"
-	alertsvc "github.com/ydcloud-dy/opshub/internal/service/alert"
 	agentserver "github.com/ydcloud-dy/opshub/internal/server/agent"
+	alertbiz "github.com/ydcloud-dy/opshub/internal/biz/alert"
+	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	alertdata "github.com/ydcloud-dy/opshub/internal/data/alert"
+	assetdata "github.com/ydcloud-dy/opshub/internal/data/asset"
+	alertsvc "github.com/ydcloud-dy/opshub/internal/service/alert"
 )
 
 // HTTPServer 告警管理 HTTP 服务
 type HTTPServer struct {
-	dsRepo                *alertdata.DataSourceRepo
-	dsAgentRelationRepo   alertbiz.DataSourceAgentRelationRepo
-	ruleGroupRepo         *alertdata.RuleGroupRepo
-	ruleRepo              *alertdata.RuleRepo
-	eventRepo             *alertdata.EventRepo
-	channelRepo           *alertdata.ChannelRepo
-	subRepo               *alertdata.SubscriptionRepo
-	subRuleRepo           *alertdata.SubscriptionRuleRepo
-	subChannelRepo        *alertdata.SubscriptionChannelRepo
-	subUserRepo           *alertdata.SubscriptionUserRepo
-	silenceRuleRepo       *alertdata.SilenceRuleRepo
-	notifySvc             *alertsvc.NotifyService
-	evalEngine            *alertsvc.EvalEngine
-	agentHub              *agentserver.AgentHub
+	db                      *gorm.DB
+	dsRepo                  *alertdata.DataSourceRepo
+	dsAgentRelationRepo     alertbiz.DataSourceAgentRelationRepo
+	dsGroupRelationRepo     *alertdata.DataSourceGroupRelationRepo
+	assetGroupRepo          assetbiz.AssetGroupRepo
+	ruleGroupRepo           *alertdata.RuleGroupRepo
+	ruleRepo                *alertdata.RuleRepo
+	eventRepo               *alertdata.EventRepo
+	channelRepo             *alertdata.ChannelRepo
+	subRepo                 *alertdata.SubscriptionRepo
+	subRuleRepo             *alertdata.SubscriptionRuleRepo
+	subChannelRepo          *alertdata.SubscriptionChannelRepo
+	subUserRepo             *alertdata.SubscriptionUserRepo
+	silenceRuleRepo         *alertdata.SilenceRuleRepo
+	notifySvc               *alertsvc.NotifyService
+	evalEngine              *alertsvc.EvalEngine
+	agentHub                *agentserver.AgentHub
 }
 
 // NewAlertServices 工厂函数，组装所有依赖
 func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 	dsRepo := alertdata.NewDataSourceRepo(db)
 	dsAgentRelationRepo := alertdata.NewDataSourceAgentRelationRepo(db)
+	dsGroupRelationRepo := alertdata.NewDataSourceGroupRelationRepo(db)
+	assetGroupRepo := assetdata.NewAssetGroupRepo(db)
 	ruleGroupRepo := alertdata.NewRuleGroupRepo(db)
 	ruleRepo := alertdata.NewRuleRepo(db)
 	eventRepo := alertdata.NewEventRepo(db)
@@ -46,8 +53,11 @@ func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 	evalEngine := alertsvc.NewEvalEngine(db, rdb)
 
 	return &HTTPServer{
+		db:                  db,
 		dsRepo:              dsRepo,
 		dsAgentRelationRepo: dsAgentRelationRepo,
+		dsGroupRelationRepo: dsGroupRelationRepo,
+		assetGroupRepo:      assetGroupRepo,
 		ruleGroupRepo:       ruleGroupRepo,
 		ruleRepo:            ruleRepo,
 		eventRepo:           eventRepo,

@@ -49,6 +49,27 @@
       </div>
     </div>
 
+    <!-- 操作指南 -->
+    <a-alert
+      v-if="selectedClusterId"
+      type="info"
+      :closable="false"
+      style="margin-bottom: 12px;"
+    >
+      <template #icon><icon-info-circle /></template>
+      <div>
+        <strong>访问控制说明：</strong>
+        <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+          <li><strong>ServiceAccounts</strong>：K8s 服务账号，用于 Pod 访问 API Server</li>
+          <li><strong>Roles</strong>：命名空间级别的角色，定义对命名空间内资源的权限</li>
+          <li><strong>RoleBindings</strong>：将 Role 绑定到用户或 ServiceAccount</li>
+          <li><strong>ClusterRoles</strong>：集群级别的角色，定义对集群资源的权限</li>
+          <li><strong>ClusterRoleBindings</strong>：将 ClusterRole 绑定到用户或 ServiceAccount</li>
+          <li>平台用户授权请前往"集群管理"页面，点击"用户授权"按钮进行操作</li>
+        </ul>
+      </div>
+    </a-alert>
+
     <!-- 操作栏 -->
     <div class="action-bar" v-if="selectedClusterId">
       <div class="search-section">

@@ -17,6 +17,13 @@ export interface AlertDataSource {
   description?: string
   status?: number
   created_at?: string
+  // 业务分组相关
+  asset_group_ids?: number[]
+  asset_groups?: Array<{
+    id: number
+    name: string
+    code: string
+  }>
 }
 
 export interface DataSourceAgentRelation {
@@ -28,6 +35,8 @@ export interface DataSourceAgentRelation {
 }
 
 export const getDataSources = () => request.get('/api/v1/alert/datasources')
+export const getDataSourceList = (params?: { page?: number; pageSize?: number }) =>
+  request.get('/api/v1/alert/datasources', { params })
 export const createDataSource = (data: Partial<AlertDataSource>) => request.post('/api/v1/alert/datasources', data)
 export const getDataSource = (id: number) => request.get(`/api/v1/alert/datasources/${id}`)
 export const updateDataSource = (id: number, data: Partial<AlertDataSource>) => request.put(`/api/v1/alert/datasources/${id}`, data)

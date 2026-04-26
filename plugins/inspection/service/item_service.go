@@ -7,6 +7,7 @@ import (
 	"time"
 
 	assetbiz "github.com/ydcloud-dy/opshub/internal/biz/asset"
+	alertdata "github.com/ydcloud-dy/opshub/internal/data/alert"
 	"github.com/ydcloud-dy/opshub/plugins/inspection/dto"
 	"github.com/ydcloud-dy/opshub/plugins/inspection/executor"
 	"github.com/ydcloud-dy/opshub/plugins/inspection/model"
@@ -14,14 +15,15 @@ import (
 )
 
 type ItemService struct {
-	itemRepo    repository.ItemRepository
-	groupRepo   repository.GroupRepository
-	recordRepo  repository.RecordRepository
-	hostRepo    assetbiz.HostRepo
-	cmdExecutor *executor.CommandExecutor
-	validator   *executor.AssertionValidator
-	extractor   *executor.VariableExtractor
-	replacer    *executor.VariableReplacer
+	itemRepo        repository.ItemRepository
+	groupRepo       repository.GroupRepository
+	recordRepo      repository.RecordRepository
+	hostRepo        assetbiz.HostRepo
+	cmdExecutor     *executor.CommandExecutor
+	promqlExecutor  *executor.PromQLExecutor
+	validator       *executor.AssertionValidator
+	extractor       *executor.VariableExtractor
+	replacer        *executor.VariableReplacer
 }
 
 func NewItemService(
@@ -30,16 +32,18 @@ func NewItemService(
 	recordRepo repository.RecordRepository,
 	hostRepo assetbiz.HostRepo,
 	cmdExecutor *executor.CommandExecutor,
+	datasourceRepo *alertdata.DataSourceRepo,
 ) *ItemService {
 	return &ItemService{
-		itemRepo:    itemRepo,
-		groupRepo:   groupRepo,
-		recordRepo:  recordRepo,
-		hostRepo:    hostRepo,
-		cmdExecutor: cmdExecutor,
-		validator:   &executor.AssertionValidator{},
-		extractor:   &executor.VariableExtractor{},
-		replacer:    &executor.VariableReplacer{},
+		itemRepo:       itemRepo,
+		groupRepo:      groupRepo,
+		recordRepo:     recordRepo,
+		hostRepo:       hostRepo,
+		cmdExecutor:    cmdExecutor,
+		promqlExecutor: executor.NewPromQLExecutor(datasourceRepo, 50), // 并发数50
+		validator:      &executor.AssertionValidator{},
+		extractor:      &executor.VariableExtractor{},
+		replacer:       &executor.VariableReplacer{},
 	}
 }
 
@@ -57,6 +61,7 @@ func (s *ItemService) Create(ctx context.Context, req *dto.ItemCreateRequest) er
 		ScriptContent:     req.ScriptContent,
 		ScriptFile:        req.ScriptFile,
 		PromQLQuery:       req.PromQLQuery,
+		PromQLQueryType:   req.PromQLQueryType,
 		HostMatchType:     req.HostMatchType,
 		HostTags:          req.HostTags,
 		HostIDs:           req.HostIDs,
@@ -75,6 +80,9 @@ func (s *ItemService) Create(ctx context.Context, req *dto.ItemCreateRequest) er
 	}
 	if item.Timeout == 0 {
 		item.Timeout = 60
+	}
+	if item.PromQLQueryType == "" {
+		item.PromQLQueryType = "instant"
 	}
 
 	return s.itemRepo.Create(ctx, item)
@@ -110,6 +118,7 @@ func (s *ItemService) Update(ctx context.Context, id uint, req *dto.ItemUpdateRe
 	item.ScriptContent = req.ScriptContent
 	item.ScriptFile = req.ScriptFile
 	item.PromQLQuery = req.PromQLQuery
+	item.PromQLQueryType = req.PromQLQueryType
 	item.HostMatchType = req.HostMatchType
 	item.HostTags = req.HostTags
 	item.HostIDs = req.HostIDs
@@ -190,6 +199,13 @@ func (s *ItemService) executeItem(ctx context.Context, item *model.InspectionIte
 		HostName: host.Name,
 	}
 
+	// 判断执行类型
+	if item.ExecutionType == "promql" {
+		// PromQL 执行
+		return s.executePromQL(ctx, item, group, host)
+	}
+
+	// 原有的命令/脚本执行逻辑
 	// 替换变量
 	command := s.replacer.Replace(item.Command, variables)
 
@@ -217,6 +233,66 @@ func (s *ItemService) executeItem(ctx context.Context, item *model.InspectionIte
 	result.AssertionDetails = map[string]interface{}{
 		"pass":    assertionResult.Pass,
 		"message": assertionResult.Message,
+	}
+
+	return result
+}
+
+// executePromQL 执行 PromQL 巡检
+func (s *ItemService) executePromQL(ctx context.Context, item *model.InspectionItem, group *model.InspectionGroup, host *assetbiz.Host) *dto.TestRunResponse {
+	result := &dto.TestRunResponse{
+		ItemID:   item.ID,
+		ItemName: item.Name,
+		HostID:   host.ID,
+		HostName: host.Name,
+	}
+
+	// 检查数据源配置
+	if group.DataSourceID == 0 {
+		result.Status = "failed"
+		result.ErrorMessage = "巡检组未配置数据源"
+		result.AssertionResult = "skip"
+		return result
+	}
+
+	// 执行 PromQL 查询
+	promqlResult := s.promqlExecutor.Execute(ctx, item.PromQLQuery, host, group.DataSourceID, item.PromQLQueryType)
+	result.Duration = promqlResult.Duration
+
+	if promqlResult.Status != "success" {
+		result.Status = "failed"
+		result.ErrorMessage = promqlResult.ErrorMessage
+		result.Output = promqlResult.PromQLResult
+		result.AssertionResult = "skip"
+		return result
+	}
+
+	result.Status = "success"
+	result.Output = promqlResult.PromQLResult
+
+	// 执行断言校验
+	if item.AssertionType != "" {
+		assertionResult := s.validator.Validate(item.AssertionType, item.AssertionValue, promqlResult.PromQLResult)
+		if assertionResult.Pass {
+			result.AssertionResult = "pass"
+		} else {
+			result.AssertionResult = "fail"
+		}
+		result.AssertionDetails = map[string]interface{}{
+			"pass":         assertionResult.Pass,
+			"message":      assertionResult.Message,
+			"metric_value": promqlResult.MetricValue,
+			"metric_labels": promqlResult.MetricLabels,
+			"promql":       promqlResult.PromQL,
+		}
+	} else {
+		result.AssertionResult = "skip"
+		result.AssertionDetails = map[string]interface{}{
+			"message":       "无断言规则",
+			"metric_value":  promqlResult.MetricValue,
+			"metric_labels": promqlResult.MetricLabels,
+			"promql":        promqlResult.PromQL,
+		}
 	}
 
 	return result
@@ -350,6 +426,7 @@ func (s *ItemService) toResponse(item *model.InspectionItem) *dto.ItemResponse {
 		ScriptContent:     item.ScriptContent,
 		ScriptFile:        item.ScriptFile,
 		PromQLQuery:       item.PromQLQuery,
+		PromQLQueryType:   item.PromQLQueryType,
 		HostMatchType:     item.HostMatchType,
 		HostTags:          item.HostTags,
 		HostIDs:           item.HostIDs,

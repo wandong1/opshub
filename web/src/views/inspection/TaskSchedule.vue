@@ -296,6 +296,26 @@
             </a-form>
           </a-card>
 
+          <!-- 数据源覆盖配置 -->
+          <a-card title="数据源配置" :bordered="false" style="margin-bottom: 16px;">
+            <a-form layout="inline">
+              <a-form-item label="原始数据源">
+                <a-tag v-if="group.datasource_id">
+                  {{ getDataSourceName(group.datasource_id) }}
+                </a-tag>
+                <span v-else style="color: var(--ops-text-tertiary);">未配置</span>
+              </a-form-item>
+
+              <a-form-item label="覆盖为">
+                <a-select v-model="groupDataSourceOverrides[group.id]" allow-search placeholder="不覆盖" allow-clear style="width: 300px;">
+                  <a-option v-for="ds in dataSourceOptions" :key="ds.id" :value="ds.id">
+                    {{ ds.name }} <span style="margin-left: 8px; color: var(--ops-text-tertiary); font-size: 12px;">({{ ds.type }})</span>
+                  </a-option>
+                </a-select>
+              </a-form-item>
+            </a-form>
+          </a-card>
+
           <!-- 断言覆盖配置 -->
           <a-card title="断言覆盖配置" :bordered="false">
             <a-button type="primary" size="small" style="margin-bottom: 12px;" @click="loadItemsForGroup(group.id)">
@@ -460,6 +480,19 @@
                           </a-descriptions-item>
                           <a-descriptions-item v-if="record.script_content" label="脚本内容">
                             <pre class="code-block">{{ record.script_content }}</pre>
+                          </a-descriptions-item>
+                          <!-- PromQL 相关字段 -->
+                          <a-descriptions-item v-if="record.execution_type === 'promql' && record.promql" label="执行命令">
+                            <pre class="code-block-inline">{{ record.promql }}</pre>
+                          </a-descriptions-item>
+                          <a-descriptions-item v-if="record.execution_type === 'promql' && record.metricValue !== undefined" label="指标值">
+                            {{ record.metricValue }}
+                          </a-descriptions-item>
+                          <a-descriptions-item v-if="record.execution_type === 'promql' && record.metricLabels" label="指标标签">
+                            <pre class="code-block-inline">{{ record.metricLabels }}</pre>
+                          </a-descriptions-item>
+                          <a-descriptions-item v-if="record.execution_type === 'promql' && record.promqlResult" label="查询结果">
+                            <pre class="code-block">{{ record.promqlResult }}</pre>
                           </a-descriptions-item>
                           <a-descriptions-item v-if="record.assertion_type" label="断言类型">
                             {{ record.assertion_type }}
@@ -673,7 +706,14 @@ import { getInspectionTasks, createInspectionTask, updateInspectionTask, deleteI
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
 import { getAgentStatuses } from '@/api/agent'
+import { getDataSources } from '@/api/alert'
 import { useRouter } from 'vue-router'
+
+// 数据源覆盖类型定义
+interface GroupDataSourceOverride {
+  group_id: number
+  datasource_id: number
+}
 
 const router = useRouter()
 
@@ -689,6 +729,7 @@ const groupOptions = ref<any[]>([])
 const inspectionGroupOptions = ref<any[]>([])
 const inspectionItemOptions = ref<any[]>([])
 const agentHostOptions = ref<any[]>([])
+const dataSourceOptions = ref<any[]>([])
 
 // 巡检组配置状态
 const groupConfigModalVisible = ref(false)
@@ -703,6 +744,9 @@ const currentGroupName = ref('')
 
 // 业务分组覆盖状态
 const groupBusinessGroupOverrides = ref<Record<number, number[]>>({})
+
+// 数据源覆盖状态
+const groupDataSourceOverrides = ref<Record<number, number>>({})
 
 // 需求四：自定义变量键值对列表
 const customVariablesList = ref<Array<{ key: string; value: string }>>([])
@@ -846,7 +890,8 @@ const loadData = async () => {
         customVariables: task.custom_variables || '',
         // 覆盖配置字段
         itemAssertionOverrides: task.item_assertion_overrides || '',
-        groupBusinessGroupOverrides: task.group_business_group_overrides || ''
+        groupBusinessGroupOverrides: task.group_business_group_overrides || '',
+        groupDataSourceOverrides: task.group_datasource_overrides || ''
       }
 
       // 解析配置ID
@@ -899,6 +944,11 @@ const loadOptions = async () => {
   } catch {}
   try {
     inspectionGroupOptions.value = await getAllInspectionGroups()
+  } catch {}
+  // 加载数据源列表
+  try {
+    const dsRes = await getDataSources()
+    dataSourceOptions.value = dsRes.data || dsRes || []
   } catch {}
   // 加载 Agent 在线主机（用于执行方式=agent 时选择主机）
   try {
@@ -994,6 +1044,13 @@ const getBusinessGroupNames = (groupIds: number[]) => {
   return names.join(', ')
 }
 
+// 获取数据源名称
+const getDataSourceName = (datasourceId: number) => {
+  if (!datasourceId) return '未配置'
+  const ds = dataSourceOptions.value.find((d: any) => d.id === datasourceId)
+  return ds?.name || `ID:${datasourceId}`
+}
+
 // 保存断言覆盖配置
 const handleSaveAssertionOverrides = () => {
   assertionOverrideModalVisible.value = false
@@ -1021,7 +1078,11 @@ const getConfigCount = () => {
     const ids = groupBusinessGroupOverrides.value[Number(k)]
     return Array.isArray(ids) && ids.length > 0
   }).length
-  return assertionCount + businessGroupCount
+  const dataSourceCount = Object.keys(groupDataSourceOverrides.value).filter(k => {
+    const dsId = groupDataSourceOverrides.value[Number(k)]
+    return dsId && dsId > 0
+  }).length
+  return assertionCount + businessGroupCount + dataSourceCount
 }
 
 // 断言类型标签映射
@@ -1073,6 +1134,7 @@ const handleCreate = async () => {
   customVariablesList.value = []
   assertionOverrides.value = {}
   groupBusinessGroupOverrides.value = {}
+  groupDataSourceOverrides.value = {}
   selectedCategory.value = 'network'
   await loadOptions()
   dialogVisible.value = true
@@ -1123,6 +1185,19 @@ const handleEdit = async (row: any) => {
       }
     } catch (e) {
       console.error('解析业务分组覆盖失败:', e)
+    }
+  }
+
+  // 解析数据源覆盖
+  groupDataSourceOverrides.value = {}
+  if (row.groupDataSourceOverrides) {
+    try {
+      const overrides = JSON.parse(row.groupDataSourceOverrides)
+      for (const o of overrides) {
+        groupDataSourceOverrides.value[o.group_id] = o.datasource_id || 0
+      }
+    } catch (e) {
+      console.error('解析数据源覆盖失败:', e)
     }
   }
 
@@ -1183,6 +1258,19 @@ const handleCopy = async (row: any) => {
       }
     } catch (e) {
       console.error('解析业务分组覆盖失败:', e)
+    }
+  }
+
+  // 复制数据源覆盖
+  groupDataSourceOverrides.value = {}
+  if (row.groupDataSourceOverrides) {
+    try {
+      const overrides = JSON.parse(row.groupDataSourceOverrides)
+      for (const o of overrides) {
+        groupDataSourceOverrides.value[o.group_id] = o.datasource_id || 0
+      }
+    } catch (e) {
+      console.error('解析数据源覆盖失败:', e)
     }
   }
 
@@ -1261,8 +1349,20 @@ const handleSubmit = async () => {
       }
     }
 
+    // 构建数据源覆盖数组
+    const dataSourceOverridesArray: GroupDataSourceOverride[] = []
+    for (const [groupIdStr, datasourceId] of Object.entries(groupDataSourceOverrides.value)) {
+      if (datasourceId && datasourceId > 0) {
+        dataSourceOverridesArray.push({
+          group_id: Number(groupIdStr),
+          datasource_id: datasourceId
+        })
+      }
+    }
+
     requestData.item_assertion_overrides = assertionOverridesArray.length > 0 ? JSON.stringify(assertionOverridesArray) : ''
     requestData.group_business_group_overrides = businessGroupOverridesArray.length > 0 ? JSON.stringify(businessGroupOverridesArray) : ''
+    requestData.group_datasource_overrides = dataSourceOverridesArray.length > 0 ? JSON.stringify(dataSourceOverridesArray) : ''
 
     if (isEdit.value) {
       await updateInspectionTask(formData.id, requestData)

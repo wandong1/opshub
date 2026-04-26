@@ -30,10 +30,34 @@ type AlertDataSource struct {
 	ProxyToken     string         `gorm:"size:100;index:idx_proxy_token,type:BTREE" json:"proxy_token"` // UUID，唯一标识（仅Agent模式）
 	ProxyURL       string         `gorm:"size:500" json:"proxy_url"`                   // 自动生成: /api/v1/alert/proxy/datasource/{token}
 	ProxyEnabled   bool           `gorm:"default:false" json:"proxy_enabled"`
+
+	// 业务分组关联（不存储在数据库，用于返回）
+	AssetGroupIDs  []uint         `gorm:"-" json:"asset_group_ids,omitempty"`
+	AssetGroups    []AssetGroupInfo `gorm:"-" json:"asset_groups,omitempty"`
 }
 
 func (AlertDataSource) TableName() string {
 	return "alert_datasources"
+}
+
+// AssetGroupInfo 业务分组信息（用于前端展示）
+type AssetGroupInfo struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+	Code string `json:"code"`
+}
+
+// DataSourceGroupRelation 数据源业务分组关联
+type DataSourceGroupRelation struct {
+	ID           uint      `gorm:"primarykey" json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	DataSourceID uint      `gorm:"not null;index:idx_data_source_id;uniqueIndex:idx_ds_group" json:"data_source_id"`
+	AssetGroupID uint      `gorm:"not null;index:idx_asset_group_id;uniqueIndex:idx_ds_group" json:"asset_group_id"`
+}
+
+func (DataSourceGroupRelation) TableName() string {
+	return "alert_datasource_group_relations"
 }
 
 // CreateDataSourceRequest 创建数据源的请求体
@@ -51,6 +75,9 @@ type CreateDataSourceRequest struct {
 	Token       string `json:"token" binding:"omitempty,max=500"`
 	Description string `json:"description" binding:"omitempty,max=500"`
 	Status      int    `json:"status" binding:"omitempty,oneof=0 1"`
+
+	// 业务分组ID列表
+	AssetGroupIDs []uint `json:"asset_group_ids" binding:"omitempty"`
 }
 
 // UpdateDataSourceRequest 更新数据源的请求体
@@ -67,4 +94,7 @@ type UpdateDataSourceRequest struct {
 	Token       string `json:"token" binding:"omitempty,max=500"`
 	Description string `json:"description" binding:"omitempty,max=500"`
 	Status      int    `json:"status" binding:"omitempty,oneof=0 1"`
+
+	// 业务分组ID列表（使用指针类型区分"未提供"和"空数组"）
+	AssetGroupIDs *[]uint `json:"asset_group_ids" binding:"omitempty"`
 }

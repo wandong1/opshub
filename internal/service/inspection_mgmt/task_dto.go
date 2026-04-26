@@ -20,6 +20,7 @@ type TaskCreateRequest struct {
 	// 任务级覆盖功能
 	ItemAssertionOverrides      string `json:"item_assertion_overrides"`       // 巡检项断言覆盖（JSON 数组）
 	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"` // 巡检组业务分组覆盖（JSON 数组）
+	GroupDataSourceOverrides    string `json:"group_datasource_overrides"`     // 巡检组数据源覆盖（JSON 数组）
 }
 
 // TaskUpdateRequest 更新定时任务请求
@@ -42,6 +43,7 @@ type TaskUpdateRequest struct {
 	// 任务级覆盖功能
 	ItemAssertionOverrides      string `json:"item_assertion_overrides"`
 	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"`
+	GroupDataSourceOverrides    string `json:"group_datasource_overrides"` // 巡检组数据源覆盖（JSON 数组）
 }
 
 // TaskListRequest 定时任务列表请求
@@ -74,6 +76,7 @@ type TaskResponse struct {
 	// 任务级覆盖功能
 	ItemAssertionOverrides      string `json:"item_assertion_overrides"`
 	GroupBusinessGroupOverrides string `json:"group_business_group_overrides"`
+	GroupDataSourceOverrides    string `json:"group_datasource_overrides"` // 巡检组数据源覆盖（JSON 数组）
 	LastRunAt       string `json:"last_run_at"`
 	LastRunStatus   string `json:"last_run_status"`
 	NextRunAt       string `json:"next_run_at"`
