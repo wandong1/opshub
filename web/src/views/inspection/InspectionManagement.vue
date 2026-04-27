@@ -1130,7 +1130,7 @@ const handleEdit = async (record: any) => {
 
   // 加载该巡检组的巡检项列表
   try {
-    const res = await getInspectionItems({ groupId: record.id })
+    const res = await getInspectionItems({ groupId: record.id, page: 1, pageSize: 1000 })
     console.log('加载巡检项列表:', res)
 
     inspectionItems.value = res.list.map((item: any, index: number) => {
@@ -1376,7 +1376,7 @@ const handleTestRun = async (record: any) => {
 
   try {
     // 获取该巡检组的所有巡检项
-    const itemsRes = await getInspectionItems({ groupId: record.id })
+    const itemsRes = await getInspectionItems({ groupId: record.id, page: 1, pageSize: 1000 })
     if (!itemsRes.list || itemsRes.list.length === 0) {
       Message.warning('该巡检组没有巡检项')
       testRunning.value = false
@@ -1892,7 +1892,7 @@ const handleCopy = async (record: InspectionGroup) => {
 
   // 加载该巡检组的巡检项列表并复制
   try {
-    const res = await getInspectionItems({ groupId: record.id })
+    const res = await getInspectionItems({ groupId: record.id, page: 1, pageSize: 1000 })
 
     inspectionItems.value = res.list.map((item: any, index: number) => {
       // 解析 hostTags
