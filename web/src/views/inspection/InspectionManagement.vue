@@ -363,7 +363,7 @@
                 <!-- 主机匹配配置（拨测类型不需要） -->
                 <template v-if="item.executionType !== 'probe'">
                   <a-form-item label="主机匹配方式" :label-col-flex="'100px'">
-                    <a-radio-group v-model="item.hostMatchType" @change="loadHostsForItem(item)">
+                    <a-radio-group v-model="item.hostMatchType" @change="handleHostMatchTypeChange(item)">
                       <a-radio value="all">匹配所有主机</a-radio>
                       <a-radio value="tag">按标签匹配</a-radio>
                       <a-radio value="name">按主机名匹配</a-radio>
@@ -1664,6 +1664,16 @@ const loadDataSources = async () => {
   } finally {
     dataSourcesLoading.value = false
   }
+}
+
+// 主机匹配方式变更处理
+const handleHostMatchTypeChange = (item: any) => {
+  // 切换匹配方式时，清空所有匹配相关字段
+  item.hostTags = []
+  item.hostIds = []
+
+  // 加载主机列表（原有逻辑）
+  loadHostsForItem(item)
 }
 
 // 加载主机列表（根据选中的业务分组）
