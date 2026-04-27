@@ -364,11 +364,17 @@
                 <template v-if="item.executionType !== 'probe'">
                   <a-form-item label="主机匹配方式" :label-col-flex="'100px'">
                     <a-radio-group v-model="item.hostMatchType" @change="loadHostsForItem(item)">
+                      <a-radio value="all">匹配所有主机</a-radio>
                       <a-radio value="tag">按标签匹配</a-radio>
                       <a-radio value="name">按主机名匹配</a-radio>
                       <a-radio value="id">按主机ID匹配</a-radio>
                     </a-radio-group>
                   </a-form-item>
+
+                <!-- 匹配所有主机提示 -->
+                <a-alert v-if="item.hostMatchType === 'all'" type="info" style="margin-bottom: 16px;">
+                  将匹配巡检组关联的所有业务分组下的所有主机
+                </a-alert>
 
                 <a-form-item v-if="item.hostMatchType === 'tag'" label="主机标签" :label-col-flex="'100px'">
                   <a-select

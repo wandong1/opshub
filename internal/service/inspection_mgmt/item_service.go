@@ -664,6 +664,11 @@ func (s *ItemService) matchHosts(ctx context.Context, item *inspectionmgmtdata.I
 		allHosts = append(allHosts, hosts...)
 	}
 
+	// 匹配所有主机
+	if item.HostMatchType == "all" {
+		return allHosts, nil
+	}
+
 	// 根据匹配类型过滤主机
 	if item.HostMatchType == "id" && item.HostIDs != "" {
 		var hostIDs []uint
