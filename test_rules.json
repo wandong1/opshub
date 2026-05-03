@@ -1,0 +1,32 @@
+[
+  {
+    "name": "测试规则-CPU使用率过高",
+    "description": "当CPU使用率超过80%时触发告警",
+    "assetGroupId": 1,
+    "ruleGroupId": 1,
+    "dataSourceIds": "[1]",
+    "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100) > 80",
+    "evalInterval": 60,
+    "duration": "5m",
+    "severity": "warning",
+    "labels": "{\"team\":\"ops\"}",
+    "annotations": "{\"title\":\"CPU使用率过高\",\"description\":\"实例 {{ $labels.instance }} CPU使用率为 {{ $value }}%\"}",
+    "enabled": false,
+    "notifyOnResolve": true
+  },
+  {
+    "name": "测试规则-内存使用率过高",
+    "description": "当内存使用率超过90%时触发告警",
+    "assetGroupId": 1,
+    "ruleGroupId": 1,
+    "dataSourceIds": "[1]",
+    "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90",
+    "evalInterval": 60,
+    "duration": "5m",
+    "severity": "critical",
+    "labels": "{\"team\":\"ops\"}",
+    "annotations": "{\"title\":\"内存使用率过高\",\"description\":\"实例 {{ $labels.instance }} 内存使用率为 {{ $value }}%\"}",
+    "enabled": false,
+    "notifyOnResolve": true
+  }
+]

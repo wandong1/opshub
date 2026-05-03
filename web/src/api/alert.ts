@@ -67,6 +67,12 @@ export const updateRuleGroup = (id: number, data: Partial<AlertRuleGroup>) => re
 export const deleteRuleGroup = (id: number) => request.delete(`/api/v1/alert/rule-groups/${id}`)
 
 // ==================== 告警规则 ====================
+export interface ThresholdCondition {
+  operator: '>' | '>=' | '<' | '<=' | '==' | '!='
+  value: number
+  logic: 'AND' | 'OR'
+}
+
 export interface AlertRule {
   id?: number
   name: string
@@ -75,7 +81,9 @@ export interface AlertRule {
   ruleGroupId?: number
   dataSourceId?: number        // 单数据源（兼容旧数据）
   dataSourceIds?: string       // JSON数组字符串 "[1,2,3]"
-  expr: string
+  expr: string                 // 旧格式（兼容）
+  queryExpr?: string           // 查询表达式（新格式）
+  conditions?: string          // 阈值条件 JSON（新格式）
   evalInterval?: number // 秒，默认15
   duration?: string    // e.g. "5m"
   severity?: string    // critical | warning | info
@@ -116,7 +124,8 @@ export const adhocTestRule = (data: { dataSourceIds: number[], expr: string }) =
 export const importRules = (file: File) => {
   const form = new FormData()
   form.append('file', file)
-  return request.post('/api/v1/alert/rules/import', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  // 不要手动设置 Content-Type，让浏览器自动设置 boundary
+  return request.post('/api/v1/alert/rules/import', form)
 }
 
 // ==================== 告警事件 ====================

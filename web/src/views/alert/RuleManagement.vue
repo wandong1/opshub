@@ -212,28 +212,96 @@
             已选 {{ formDsIds.length }} 个数据源
           </div>
         </a-form-item>
-        <!-- PromQL + 临时测试 -->
-        <a-form-item label="PromQL 表达式" required>
-          <a-textarea v-model="form.expr" :auto-size="{minRows:3}"
-            placeholder="e.g. up == 0" style="font-family:monospace" />
+        <!-- 查询表达式 + 阈值条件（新格式） -->
+        <a-form-item label="查询表达式" required>
+          <a-textarea v-model="form.queryExpr" :auto-size="{minRows:3}"
+            placeholder="100 - avg(irate(node_cpu_seconds_total{mode='idle'}[5m])) * 100"
+            style="font-family:monospace" />
+          <div style="font-size:12px;color:var(--ops-text-secondary);margin-top:4px">
+            纯查询表达式，不包含阈值判断（如 > 80）
+          </div>
         </a-form-item>
+
+        <a-form-item label="阈值条件" required>
+          <div class="conditions-container">
+            <div v-for="(cond, index) in formConditions" :key="index" class="condition-row">
+              <div class="condition-inputs">
+                <span class="condition-label">值</span>
+                <a-select v-model="cond.operator" style="width:90px">
+                  <a-option value=">">大于 ></a-option>
+                  <a-option value=">=">大于等于 ≥</a-option>
+                  <a-option value="<">小于 <</a-option>
+                  <a-option value="<=">小于等于 ≤</a-option>
+                  <a-option value="==">等于 =</a-option>
+                  <a-option value="!=">不等于 ≠</a-option>
+                </a-select>
+
+                <a-input-number v-model="cond.value" style="width:140px" placeholder="阈值" :precision="2" />
+
+                <a-select
+                  v-if="index < formConditions.length - 1"
+                  v-model="cond.logic"
+                  style="width:70px"
+                >
+                  <a-option value="AND">且</a-option>
+                  <a-option value="OR">或</a-option>
+                </a-select>
+                <span v-else style="width:70px"></span>
+              </div>
+
+              <a-button
+                size="small"
+                type="text"
+                status="danger"
+                @click="removeCondition(index)"
+                v-if="formConditions.length > 1"
+              >
+                <template #icon><icon-delete /></template>
+              </a-button>
+            </div>
+          </div>
+
+          <a-button size="small" type="outline" @click="addCondition" style="margin-top:12px">
+            <template #icon><icon-plus /></template>
+            添加条件
+          </a-button>
+
+          <div style="font-size:12px;color:var(--ops-text-secondary);margin-top:12px;padding:8px;background:#f7f8fa;border-radius:4px">
+            <div><icon-info-circle /> 示例说明：</div>
+            <div style="margin-top:4px">• 单条件：值 > 80</div>
+            <div>• 区间告警：值 > 60 <b>且</b> 值 < 80</div>
+            <div>• 排除告警：值 > 80 <b>或</b> 值 < 20</div>
+          </div>
+        </a-form-item>
+
         <div style="margin-bottom:12px">
           <a-button type="outline" :loading="adhocLoading" @click="doAdhocTest">
             <template #icon><icon-play-arrow /></template>
-            测试 PromQL
+            测试规则
           </a-button>
-          <span style="margin-left:8px;color:var(--ops-text-tertiary);font-size:12px">立即执行一次查询，查看返回值（方便设置阈值）</span>
+          <span style="margin-left:8px;color:var(--ops-text-tertiary);font-size:12px">立即执行查询并评估阈值条件</span>
         </div>
         <div v-if="adhocResult !== null" class="adhoc-result-box">
           <div v-if="adhocResult.results && adhocResult.results.length > 0">
-            <div class="adhoc-firing"><icon-exclamation-circle-fill style="color:#f53f3f" /> 命中 {{ adhocResult.results.length }} 个时间序列</div>
+            <div class="adhoc-firing">
+              <icon-exclamation-circle-fill :style="{color: adhocResult.firing ? '#f53f3f' : '#00b42a'}" />
+              {{ adhocResult.firing ? `当前命中告警条件，共 ${adhocResult.firingCount} 个时间序列` : `查询到 ${adhocResult.results.length} 个时间序列，均未触发告警` }}
+            </div>
             <div v-for="(r, i) in adhocResult.results" :key="i" class="adhoc-item">
-              <span class="adhoc-val">{{ r.Value?.toFixed(4) }}</span>
+              <span class="adhoc-val" :style="{color: r.Firing ? '#f53f3f' : '#86909c'}">{{ r.Value?.toFixed(4) }}</span>
+              <span v-if="r.Firing" class="adhoc-status firing">触发</span>
+              <span v-else class="adhoc-status normal">正常</span>
               <span class="adhoc-labels">{{ JSON.stringify(r.Labels) }}</span>
             </div>
           </div>
           <a-empty v-else description="无匹配数据" :image-size="40" />
         </div>
+
+        <!-- 旧格式兼容提示 -->
+        <a-alert v-if="!form.queryExpr && form.expr" type="warning" style="margin-bottom:16px" closable>
+          此规则使用旧格式，建议迁移到新格式以支持恢复值显示。
+        </a-alert>
+
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item label="采集频率(秒)">
@@ -251,9 +319,15 @@
         </a-row>
         <a-form-item label="告警标题模板">
           <a-input v-model="annotationTitle" placeholder="告警: {{.RuleName}}" />
+          <div style="font-size:12px;color:var(--ops-text-secondary);margin-top:4px">
+            可用变量: .RuleName .Severity .SeverityLabel .Value .FiredAt .instance .job .datasource .asset_group 及 Labels 中的其他字段（使用时需加上双花括号和点号）
+          </div>
         </a-form-item>
         <a-form-item label="告警内容模板">
           <a-textarea v-model="annotationDesc" :auto-size="{minRows:2}" placeholder="当前值: {{.Value}}" />
+          <div style="font-size:12px;color:var(--ops-text-secondary);margin-top:4px">
+            可用变量: .RuleName .Severity .SeverityLabel .Value .FiredAt .Description .LabelsDetail .instance .job .datasource .asset_group 及 Labels 中的其他字段（使用时需加上双花括号和点号）
+          </div>
         </a-form-item>
         <a-form-item label="启用">
           <a-switch v-model="form.enabled" />
@@ -273,9 +347,13 @@
     <a-modal v-model:visible="testVisible" title="规则测试结果" :footer="false" width="560px">
       <div v-if="testResult === null" style="text-align:center;padding:24px"><a-spin /></div>
       <div v-else-if="testResult.results && testResult.results.length > 0">
-        <a-alert type="error" style="margin-bottom:12px">当前命中告警条件，共 {{ testResult.results.length }} 个时间序列</a-alert>
+        <a-alert :type="testResult.firing ? 'error' : 'success'" style="margin-bottom:12px">
+          {{ testResult.firing ? `当前命中告警条件，共 ${testResult.firingCount || testResult.results.length} 个时间序列` : `查询到 ${testResult.results.length} 个时间序列，均未触发告警` }}
+        </a-alert>
         <div v-for="(r, i) in testResult.results" :key="i" class="adhoc-item">
-          <span class="adhoc-val">{{ r.Value?.toFixed(4) }}</span>
+          <span class="adhoc-val" :style="{color: r.Firing ? '#f53f3f' : '#86909c'}">{{ r.Value?.toFixed(4) }}</span>
+          <span v-if="r.Firing" class="adhoc-status firing">触发</span>
+          <span v-else class="adhoc-status normal">正常</span>
           <span class="adhoc-labels">{{ JSON.stringify(r.Labels) }}</span>
         </div>
       </div>
@@ -369,9 +447,22 @@ const annotationDesc = ref('')
 const formDsIds = ref<number[]>([])
 // 数据源搜索关键词（用于"选择搜索结果"按钮）
 const dsSearchKeyword = ref('')
+// 阈值条件（新格式）
+const formConditions = ref<Array<{ operator: string; value: number; logic: string }>>([
+  { operator: '>', value: 80, logic: 'AND' }
+])
 // Ad-hoc 测试
 const adhocLoading = ref(false)
 const adhocResult = ref<any>(null)
+
+// 条件管理方法
+const addCondition = () => {
+  formConditions.value.push({ operator: '>', value: 0, logic: 'AND' })
+}
+
+const removeCondition = (index: number) => {
+  formConditions.value.splice(index, 1)
+}
 
 // helpers
 const sevColor = (s: string) => ({ critical: 'red', major: 'orangered', minor: 'orange', warning: 'blue', info: 'arcoblue' }[s] || 'gray')
@@ -518,6 +609,7 @@ const onFormGroupChange = (val: number) => {
 const openCreate = () => {
   form.value = { severity: 'warning', evalInterval: 15, notifyOnResolve: true, enabled: true, assetGroupId: selectedAssetGroupId.value }
   formDsIds.value = []
+  formConditions.value = [{ operator: '>', value: 80, logic: 'AND' }]
   annotationTitle.value = ''
   annotationDesc.value = ''
   adhocResult.value = null
@@ -535,6 +627,16 @@ const openEdit = (row: AlertRule) => {
   } else {
     formDsIds.value = []
   }
+  // 恢复阈值条件
+  if (row.conditions) {
+    try {
+      formConditions.value = JSON.parse(row.conditions)
+    } catch {
+      formConditions.value = [{ operator: '>', value: 80, logic: 'AND' }]
+    }
+  } else {
+    formConditions.value = [{ operator: '>', value: 80, logic: 'AND' }]
+  }
   try {
     const ann = JSON.parse(row.annotations || '{}')
     annotationTitle.value = ann.title || ''
@@ -550,6 +652,12 @@ const save = async () => {
   // 保存多选数据源
   form.value.dataSourceIds = JSON.stringify(formDsIds.value)
   form.value.dataSourceId = formDsIds.value[0] || 0
+  // 保存阈值条件
+  form.value.conditions = JSON.stringify(formConditions.value)
+  // 确保 expr 字段有值（兼容后端验证）
+  if (!form.value.expr) {
+    form.value.expr = form.value.queryExpr || ''
+  }
   if (form.value.evalInterval && form.value.evalInterval < 15) form.value.evalInterval = 15
   try {
     if (form.value.id) { await updateRule(form.value.id, form.value) }
@@ -588,20 +696,99 @@ const doToggle = async (row: AlertRule) => {
 }
 
 const doTest = async (row: AlertRule) => {
-  testResult.value = null; testVisible.value = true
-  try { testResult.value = await testRule(row.id!) as any }
-  catch { Message.error('测试失败') }
+  testResult.value = null
+  testVisible.value = true
+  try {
+    const res = await testRule(row.id!) as any
+
+    // 解析规则的阈值条件
+    let conditions = []
+    if (row.conditions) {
+      try {
+        conditions = JSON.parse(row.conditions)
+      } catch {}
+    }
+
+    // 如果有新格式的条件，重新评估
+    if (conditions.length > 0 && res.results && res.results.length > 0) {
+      let firingCount = 0
+      res.results.forEach((r: any) => {
+        r.Firing = evaluateConditions(r.Value, conditions)
+        if (r.Firing) firingCount++
+      })
+      res.firing = firingCount > 0
+      res.firingCount = firingCount
+    } else {
+      // 旧格式，使用后端返回的 firing 字段
+      res.firing = res.firing || false
+      if (res.results) {
+        res.results.forEach((r: any) => {
+          r.Firing = res.firing
+        })
+      }
+    }
+
+    testResult.value = res
+  } catch {
+    Message.error('测试失败')
+  }
 }
 
 const doAdhocTest = async () => {
   if (!formDsIds.value.length) { Message.warning('请先选择数据源'); return }
-  if (!form.value.expr?.trim()) { Message.warning('请输入 PromQL 表达式'); return }
+  const expr = form.value.queryExpr || form.value.expr
+  if (!expr?.trim()) { Message.warning('请输入查询表达式'); return }
   adhocLoading.value = true
   adhocResult.value = null
   try {
-    adhocResult.value = await adhocTestRule({ dataSourceIds: formDsIds.value, expr: form.value.expr }) as any
+    const res = await adhocTestRule({ dataSourceIds: formDsIds.value, expr }) as any
+
+    // 评估阈值条件
+    if (res.results && res.results.length > 0) {
+      let firingCount = 0
+      res.results.forEach((r: any) => {
+        r.Firing = evaluateConditions(r.Value, formConditions.value)
+        if (r.Firing) firingCount++
+      })
+      res.firing = firingCount > 0
+      res.firingCount = firingCount
+    }
+
+    adhocResult.value = res
   } catch { Message.error('查询失败') }
   finally { adhocLoading.value = false }
+}
+
+// 前端评估条件
+const evaluateConditions = (value: number, conditions: Array<{ operator: string; value: number; logic: string }>) => {
+  if (!conditions || conditions.length === 0) return false
+
+  let result = evaluateSingleCondition(value, conditions[0])
+
+  for (let i = 1; i < conditions.length; i++) {
+    const prevLogic = conditions[i - 1].logic
+    const currentResult = evaluateSingleCondition(value, conditions[i])
+
+    if (prevLogic === 'OR') {
+      result = result || currentResult
+    } else {
+      result = result && currentResult
+    }
+  }
+
+  return result
+}
+
+const evaluateSingleCondition = (value: number, cond: { operator: string; value: number }) => {
+  switch (cond.operator) {
+    case '>': return value > cond.value
+    case '>=': return value >= cond.value
+    case '<': return value < cond.value
+    case '<=': return value <= cond.value
+    case '==': return value === cond.value
+    case '!=': return value !== cond.value
+    default: return false
+  }
 }
 
 const doClone = (row: AlertRule) => {
@@ -612,6 +799,16 @@ const doClone = (row: AlertRule) => {
     formDsIds.value = [row.dataSourceId]
   } else {
     formDsIds.value = []
+  }
+  // 恢复阈值条件
+  if (row.conditions) {
+    try {
+      formConditions.value = JSON.parse(row.conditions)
+    } catch {
+      formConditions.value = [{ operator: '>', value: 80, logic: 'AND' }]
+    }
+  } else {
+    formConditions.value = [{ operator: '>', value: 80, logic: 'AND' }]
   }
   try {
     const ann = JSON.parse(row.annotations || '{}')
@@ -632,11 +829,32 @@ const doExport = async (fmt: string) => {
   URL.revokeObjectURL(url)
 }
 
-const doImport = async ({ file }: any) => {
+const doImport = async (options: any) => {
   try {
-    const res = await importRules(file.file) as any
-    Message.success(`导入成功 ${res?.imported || 0} 条`); load()
-  } catch { Message.error('导入失败') }
+    // Arco Design Upload 的 custom-request 参数结构
+    const file = options.fileItem?.file || options.file
+    if (!file) {
+      Message.error('未选择文件')
+      return
+    }
+
+    console.log('开始导入规则文件:', file.name, file.type, file.size)
+    const res = await importRules(file) as any
+    const imported = res?.imported || 0
+    const updated = res?.updated || 0
+    const failed = res?.failed || []
+
+    if (failed.length > 0) {
+      Message.warning(`导入完成：新增 ${imported} 条，更新 ${updated} 条，失败 ${failed.length} 条。失败原因：${failed.join('; ')}`)
+    } else {
+      Message.success(`导入成功：新增 ${imported} 条，更新 ${updated} 条`)
+    }
+    load()
+  } catch (err: any) {
+    console.error('导入失败', err)
+    const errorMsg = err?.response?.data?.message || err?.message || '未知错误'
+    Message.error(`导入失败: ${errorMsg}`)
+  }
 }
 
 // 数据源过滤函数
@@ -683,6 +901,37 @@ onMounted(async () => {
 <style scoped>
 .rule-page { display: block; height: 100%; background: var(--ops-content-bg); }
 .rule-content { padding: 20px; overflow: auto; }
+.conditions-container {
+  background: #f7f8fa;
+  border: 1px solid var(--ops-border-color);
+  border-radius: 6px;
+  padding: 12px;
+}
+.condition-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.condition-row:last-child {
+  margin-bottom: 0;
+}
+.condition-inputs {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #e5e6eb;
+}
+.condition-label {
+  font-size: 13px;
+  color: var(--ops-text-secondary);
+  font-weight: 500;
+  min-width: 24px;
+}
 .batch-bar {
   display: flex; align-items: center; gap: 12px;
   background: #e8f3ff; border: 1px solid #bedaff; border-radius: 6px;
@@ -702,10 +951,24 @@ onMounted(async () => {
   max-height: 240px; overflow-y: auto;
 }
 .adhoc-firing { color: #f53f3f; font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-.adhoc-item { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-bottom: 1px solid #e5e6eb; }
+.adhoc-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #e5e6eb; }
 .adhoc-item:last-child { border-bottom: none; }
-.adhoc-val { font-size: 15px; font-weight: 700; color: #f53f3f; min-width: 80px; }
-.adhoc-labels { font-size: 11px; color: var(--ops-text-tertiary); font-family: monospace; word-break: break-all; }
+.adhoc-val { font-size: 15px; font-weight: 700; min-width: 80px; }
+.adhoc-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.adhoc-status.firing {
+  background: #ffece8;
+  color: #f53f3f;
+}
+.adhoc-status.normal {
+  background: #e8ffea;
+  color: #00b42a;
+}
+.adhoc-labels { font-size: 11px; color: var(--ops-text-tertiary); font-family: monospace; word-break: break-all; flex: 1; }
 </style>
 
 <style>
