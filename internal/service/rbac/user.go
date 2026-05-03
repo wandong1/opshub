@@ -30,6 +30,7 @@ import (
 	"github.com/ydcloud-dy/opshub/internal/biz/audit"
 	"github.com/ydcloud-dy/opshub/internal/biz/rbac"
 	"github.com/ydcloud-dy/opshub/internal/biz/system"
+	"github.com/ydcloud-dy/opshub/pkg/crypto"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 	"go.uber.org/zap"
@@ -67,11 +68,12 @@ func (s *UserService) SetConfigUseCase(configUseCase *system.ConfigUseCase) {
 
 // LoginRequest 登录请求
 type LoginRequest struct {
-	Username    string `json:"username" binding:"required"`
-	Password    string `json:"password" binding:"required"`
-	CaptchaId   string `json:"captchaId"`
-	CaptchaId2  string `json:"captchaId2"` // 兼容前端可能的字段名
-	CaptchaCode string `json:"captchaCode"`
+	Username          string `json:"username" binding:"required"`
+	Password          string `json:"password"`           // 明文密码（向后兼容）
+	EncryptedPassword string `json:"encryptedPassword"` // RSA 加密后的密码（推荐）
+	CaptchaId         string `json:"captchaId"`
+	CaptchaId2        string `json:"captchaId2"` // 兼容前端可能的字段名
+	CaptchaCode       string `json:"captchaCode"`
 }
 
 // LoginResponse 登录响应
@@ -165,7 +167,28 @@ func (s *UserService) Login(c *gin.Context) {
 		}
 	}
 
-	user, err := s.userUseCase.ValidatePassword(c.Request.Context(), req.Username, req.Password)
+	// 处理密码：优先使用加密密码，否则使用明文密码（向后兼容）
+	password := req.Password
+	if req.EncryptedPassword != "" {
+		// 使用 RSA 解密密码
+		rsaManager := crypto.GetRSAManager()
+		decryptedPassword, err := rsaManager.DecryptPassword(req.EncryptedPassword)
+		if err != nil {
+			appLogger.Error("密码解密失败", zap.String("username", req.Username), zap.Error(err))
+			s.recordLoginLog(req.Username, "web", "failed", clientIP, userAgent, "密码解密失败", 0)
+			response.ErrorCode(c, http.StatusBadRequest, "密码格式错误")
+			return
+		}
+		password = decryptedPassword
+		appLogger.Info("使用 RSA 加密密码登录", zap.String("username", req.Username))
+	} else if password == "" {
+		// 两个密码字段都为空
+		s.recordLoginLog(req.Username, "web", "failed", clientIP, userAgent, "密码为空", 0)
+		response.ErrorCode(c, http.StatusBadRequest, "请输入密码")
+		return
+	}
+
+	user, err := s.userUseCase.ValidatePassword(c.Request.Context(), req.Username, password)
 	if err != nil {
 		appLogger.Error("登录失败", zap.String("username", req.Username), zap.Error(err))
 		// 记录登录日志 - 用户名或密码错误

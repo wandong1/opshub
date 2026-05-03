@@ -2,7 +2,8 @@ import request from '@/utils/request'
 
 export interface LoginParams {
   username: string
-  password: string
+  password?: string
+  encryptedPassword?: string
   captchaId?: string
   captchaCode?: string
 }
@@ -18,6 +19,11 @@ export interface RegisterParams {
 export interface LoginResponse {
   token: string
   user: any
+}
+
+// 获取 RSA 公钥
+export const getRsaPublicKey = () => {
+  return request.get<any, { publicKey: string }>('/api/v1/public/rsa-public-key')
 }
 
 // 登录

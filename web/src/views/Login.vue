@@ -92,6 +92,8 @@ import { useUserStore } from '@/stores/user'
 import { useSystemStore } from '@/stores/system'
 import request from '@/utils/request'
 import { getPublicConfig } from '@/api/system'
+import { getRsaPublicKey } from '@/api/auth'
+import JSEncrypt from 'jsencrypt'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -101,6 +103,7 @@ const loading = ref(false)
 const captchaImage = ref('')
 const captchaId = ref('')
 const captchaEnabled = ref(true)
+const rsaPublicKey = ref('')
 
 const loginForm = reactive({
   username: '',
@@ -132,6 +135,15 @@ const loadPublicConfig = async () => {
   }
 }
 
+const loadRsaPublicKey = async () => {
+  try {
+    const res = await getRsaPublicKey()
+    rsaPublicKey.value = res.publicKey
+  } catch (error) {
+    console.error('获取 RSA 公钥失败:', error)
+  }
+}
+
 const refreshCaptcha = async () => {
   if (!captchaEnabled.value) return
   try {
@@ -145,6 +157,23 @@ const refreshCaptcha = async () => {
   }
 }
 
+const encryptPassword = (password: string): string | null => {
+  if (!rsaPublicKey.value) {
+    console.error('RSA 公钥未加载')
+    return null
+  }
+
+  try {
+    const encrypt = new JSEncrypt()
+    encrypt.setPublicKey(rsaPublicKey.value)
+    const encrypted = encrypt.encrypt(password)
+    return encrypted || null
+  } catch (error) {
+    console.error('密码加密失败:', error)
+    return null
+  }
+}
+
 const handleLogin = async () => {
   if (!formRef.value) return
   const errors = await formRef.value.validate()
@@ -152,9 +181,17 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
+    // 使用 RSA 加密密码
+    const encryptedPassword = encryptPassword(loginForm.password)
+    if (!encryptedPassword) {
+      Message.error('密码加密失败，请刷新页面重试')
+      loading.value = false
+      return
+    }
+
     await userStore.login({
       username: loginForm.username,
-      password: loginForm.password,
+      encryptedPassword: encryptedPassword,
       captchaId: loginForm.captchaId,
       captchaCode: loginForm.captchaCode,
     })
@@ -191,6 +228,7 @@ onMounted(async () => {
     loginForm.remember = true
   }
   await loadPublicConfig()
+  await loadRsaPublicKey()
   if (captchaEnabled.value) refreshCaptcha()
 })
 </script>

@@ -20,12 +20,16 @@
 package rbac
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	auditbiz "github.com/ydcloud-dy/opshub/internal/biz/audit"
 	rbacbiz "github.com/ydcloud-dy/opshub/internal/biz/rbac"
 	auditdata "github.com/ydcloud-dy/opshub/internal/data/audit"
 	rbacdata "github.com/ydcloud-dy/opshub/internal/data/rbac"
 	rbacService "github.com/ydcloud-dy/opshub/internal/service/rbac"
+	"github.com/ydcloud-dy/opshub/pkg/crypto"
+	"github.com/ydcloud-dy/opshub/pkg/response"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -68,6 +72,7 @@ func (s *HTTPServer) RegisterRoutes(r *gin.Engine) {
 	public := r.Group("/api/v1/public")
 	{
 		public.POST("/login", s.userService.Login)
+		public.GET("/rsa-public-key", s.GetRSAPublicKey)
 	}
 
 	// 验证码路由（无需认证）
@@ -225,4 +230,26 @@ func NewRBACServices(db *gorm.DB, jwtSecret string, redisClient *redis.Client) (
 	}
 
 	return userService, roleService, departmentService, menuService, positionService, captchaService, assetPermissionService, authMiddleware
+}
+
+// GetRSAPublicKey 获取 RSA 公钥
+// @Summary 获取 RSA 公钥
+// @Description 获取用于加密登录密码的 RSA 公钥
+// @Tags 认证管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.Response{data=string} "获取成功"
+// @Failure 500 {object} response.Response "获取失败"
+// @Router /api/v1/public/rsa-public-key [get]
+func (s *HTTPServer) GetRSAPublicKey(c *gin.Context) {
+	rsaManager := crypto.GetRSAManager()
+	publicKey, err := rsaManager.GetPublicKeyPEM()
+	if err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, "获取公钥失败")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"publicKey": publicKey,
+	})
 }
