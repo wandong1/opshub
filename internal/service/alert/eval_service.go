@@ -12,6 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
+	"github.com/ydcloud-dy/opshub/pkg/promtemplate"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -45,12 +46,17 @@ type EvalEngine struct {
 	subRuleRepo     *alertdata.SubscriptionRuleRepo
 	subChannelRepo  *alertdata.SubscriptionChannelRepo
 	subUserRepo     *alertdata.SubscriptionUserRepo
+	subLogRepo      *alertdata.SubscriptionLogRepo
 	channelRepo     *alertdata.ChannelRepo
 	silenceRuleRepo *alertdata.SilenceRuleRepo
 	notifySvc       *NotifyService
 	evalCache       *EvalCache       // 评估时间缓存
 	ruleCache       *RuleCache       // 规则列表缓存
 	silenceCache    *SilenceRuleCache // 屏蔽规则缓存
+	dedupService    *DedupService    // 去重服务
+	groupService    *GroupService    // 分组服务
+	inhibitService  *InhibitService  // 抑制服务
+	promTplAdapter  *promtemplate.Adapter // Prometheus 模板适配器
 }
 // NewEvalEngine 创建评估引擎
 func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
@@ -61,6 +67,7 @@ func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
 	subRuleRepo := alertdata.NewSubscriptionRuleRepo(db)
 	subChannelRepo := alertdata.NewSubscriptionChannelRepo(db)
 	subUserRepo := alertdata.NewSubscriptionUserRepo(db)
+	subLogRepo := alertdata.NewSubscriptionLogRepo(db)
 	channelRepo := alertdata.NewChannelRepo(db)
 	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
 	notifySvc := NewNotifyService(channelRepo)
@@ -74,6 +81,11 @@ func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
 	// 创建屏蔽规则缓存管理器
 	silenceCache := NewSilenceRuleCache(rdb, silenceRuleRepo)
 
+	// 创建治理服务
+	dedupService := NewDedupService(db)
+	groupService := NewGroupService(db, notifySvc)
+	inhibitService := NewInhibitService(db)
+
 	return &EvalEngine{
 		db:              db,
 		rdb:             rdb,
@@ -84,12 +96,17 @@ func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
 		subRuleRepo:     subRuleRepo,
 		subChannelRepo:  subChannelRepo,
 		subUserRepo:     subUserRepo,
+		subLogRepo:      subLogRepo,
 		channelRepo:     channelRepo,
 		silenceRuleRepo: silenceRuleRepo,
 		notifySvc:       notifySvc,
 		evalCache:       evalCache,
 		ruleCache:       ruleCache,
 		silenceCache:    silenceCache,
+		dedupService:    dedupService,
+		groupService:    groupService,
+		inhibitService:  inhibitService,
+		promTplAdapter:  promtemplate.NewAdapter(),
 	}
 }
 
@@ -216,6 +233,13 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 
 	var queryErr bool
 	var results []QueryResult
+
+	// 确定查询表达式：优先使用新格式（query_expr）
+	queryExpr := rule.QueryExpr
+	if queryExpr == "" {
+		queryExpr = rule.Expr
+	}
+
 	for _, dsID := range dsIDs {
 		ds, err := e.dsRepo.GetByID(ctx, dsID)
 		if err != nil {
@@ -223,11 +247,42 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 			queryErr = true
 			continue
 		}
-		r, err := QueryDataSource(ds, rule.Expr)
+		r, err := QueryDataSource(ds, queryExpr)
 		if err != nil {
 			appLogger.Warn("查询数据源失败", zap.Uint("ruleID", rule.ID), zap.Error(err))
 			queryErr = true
 			continue
+		}
+
+		// 查询数据源关联的业务分组
+		var groupNames []string
+		e.db.Table("alert_datasource_group_relations AS r").
+			Select("g.name").
+			Joins("LEFT JOIN asset_group AS g ON r.asset_group_id = g.id").
+			Where("r.data_source_id = ?", dsID).
+			Pluck("name", &groupNames)
+
+		// 确定业务分组标签值
+		var dsAssetGroup string
+		if len(groupNames) == 0 {
+			dsAssetGroup = ""
+		} else if len(groupNames) == 1 {
+			dsAssetGroup = groupNames[0]
+		} else {
+			dsAssetGroup = "公共"
+		}
+
+		// 为每个结果添加数据源标签，用于区分不同数据源的告警
+		for i := range r {
+			if r[i].Labels == nil {
+				r[i].Labels = make(map[string]string)
+			}
+			r[i].Labels["datasource_id"] = fmt.Sprintf("%d", dsID)
+			r[i].Labels["datasource"] = ds.Name
+			r[i].Labels["datasource_type"] = ds.Type
+			if dsAssetGroup != "" {
+				r[i].Labels["ds_asset_group"] = dsAssetGroup
+			}
 		}
 		results = append(results, r...)
 	}
@@ -236,15 +291,31 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 		return
 	}
 
+	// 确定使用新规则还是旧规则
+	useNewRule := rule.QueryExpr != "" && rule.Conditions != ""
+
 	// 收集本次命中的所有 fingerprints（同时保留 metric 标签和值）
 	type hitInfo struct {
 		Value  float64
 		Labels map[string]string
 	}
 	hitFingerprints := make(map[string]hitInfo)
+	resolveFingerprints := make(map[string]float64)
+
 	for _, res := range results {
 		fp := calcFingerprint(rule.ID, res.Labels)
-		hitFingerprints[fp] = hitInfo{Value: res.Value, Labels: res.Labels}
+
+		if useNewRule {
+			// 新规则：使用条件评估
+			if EvaluateConditions(res.Value, rule.Conditions) {
+				hitFingerprints[fp] = hitInfo{Value: res.Value, Labels: res.Labels}
+			} else {
+				resolveFingerprints[fp] = res.Value
+			}
+		} else {
+			// 旧规则：expr 已包含阈值判断，结果非空即触发
+			hitFingerprints[fp] = hitInfo{Value: res.Value, Labels: res.Labels}
+		}
 	}
 
 	// 处理命中的
@@ -252,8 +323,14 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 		e.handleFiring(ctx, rule, fp, info.Value, info.Labels)
 	}
 
-	// 处理恢复：从 Redis 中找到该规则下所有 firing 但本次未命中的
-	// Bug 7 修复：使用 SCAN 代替 KEYS，避免阻塞 Redis
+	// 处理恢复：需要检查两个来源
+	// 1. Redis 中的状态（正常情况）
+	// 2. 数据库中的 firing 告警（Redis 状态丢失的情况）
+
+	// 收集所有需要检查恢复的指纹
+	needCheckFingerprints := make(map[string]bool)
+
+	// 来源1：从 Redis 中找到该规则下所有 firing 但本次未命中的
 	pattern := fmt.Sprintf("%s%d:*", redisAlertStatePrefix, rule.ID)
 	var cursor uint64
 	var allKeys []string
@@ -270,11 +347,28 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 			break
 		}
 	}
-
 	for _, key := range allKeys {
 		fp := strings.TrimPrefix(key, redisAlertStatePrefix+fmt.Sprintf("%d:", rule.ID))
+		needCheckFingerprints[fp] = true
+	}
+
+	// 来源2：从数据库中查询该规则的所有 firing 告警
+	dbFiringEvents, err := e.eventRepo.ListFiringByRuleID(ctx, rule.ID)
+	if err == nil {
+		for _, event := range dbFiringEvents {
+			needCheckFingerprints[event.Fingerprint] = true
+		}
+	}
+
+	// 处理所有需要恢复的指纹
+	for fp := range needCheckFingerprints {
 		if _, hit := hitFingerprints[fp]; !hit {
-			e.handleResolved(ctx, rule, fp)
+			// 检查是否有恢复值
+			if resolveVal, ok := resolveFingerprints[fp]; ok {
+				e.handleResolvedWithValue(ctx, rule, fp, resolveVal)
+			} else {
+				e.handleResolvedWithValue(ctx, rule, fp, 0)
+			}
 		}
 	}
 }
@@ -339,6 +433,12 @@ func (e *EvalEngine) handleFiring(ctx context.Context, rule *biz.AlertRule, fing
 			state.FiredAt = now
 		}
 		e.createFiringEvent(ctx, rule, fingerprint, value, state.FiredAt, metricLabels)
+	} else {
+		// 已存在，更新 value 字段
+		existing.Value = value
+		if err := e.eventRepo.Update(ctx, existing); err != nil {
+			appLogger.Warn("更新告警值失败", zap.Uint("eventID", existing.ID), zap.Error(err))
+		}
 	}
 
 	data, _ := json.Marshal(state)
@@ -363,7 +463,93 @@ func mergeLabels(ruleLabelsJSON string, metricLabels map[string]string) string {
 	return string(b)
 }
 
+// renderAnnotations 渲染 Annotations 模板（支持 Prometheus 和 Go template 语法）
+func (e *EvalEngine) renderAnnotations(annotationsJSON string, rule *biz.AlertRule, value float64, firedAt time.Time, labels map[string]string) string {
+	if annotationsJSON == "" || annotationsJSON == "{}" {
+		return annotationsJSON
+	}
+
+	// 解析 annotations JSON
+	var annotations map[string]string
+	if err := json.Unmarshal([]byte(annotationsJSON), &annotations); err != nil {
+		return annotationsJSON
+	}
+
+	// 构建模板数据（兼容 Prometheus 和 Go template 语法）
+	data := map[string]interface{}{
+		"RuleName":      rule.Name,
+		"Severity":      rule.Severity,
+		"SeverityLabel": severityLabel(rule.Severity),
+		"Value":         value,
+		"FiredAt":       firedAt.Format("2006-01-02 15:04:05"),
+	}
+
+	// 添加 Labels 中的字段（支持 {{.instance}}、{{.job}} 等）
+	for k, v := range labels {
+		data[k] = v
+	}
+
+	// 渲染每个 annotation 字段
+	rendered := make(map[string]string)
+	for k, v := range annotations {
+		// 使用 Prometheus 模板适配器渲染（自动转换 $labels.xxx 和 $value）
+		result, err := e.promTplAdapter.Render(v, data)
+		if err != nil {
+			appLogger.Warn("模板渲染失败，使用原始值",
+				zap.String("key", k),
+				zap.String("template", v),
+				zap.Error(err))
+			rendered[k] = v
+		} else {
+			rendered[k] = result
+		}
+	}
+
+	result, _ := json.Marshal(rendered)
+	return string(result)
+}
+
 func (e *EvalEngine) createFiringEvent(ctx context.Context, rule *biz.AlertRule, fingerprint string, value float64, firedAt time.Time, metricLabels map[string]string) {
+	appLogger.Info("创建告警事件", zap.Uint("ruleID", rule.ID), zap.String("fingerprint", fingerprint), zap.Float64("value", value))
+
+	// 补充标签：severity、ruleName、datasource、assetGroup
+	enrichedLabels := make(map[string]string)
+
+	// 1. 先合并规则标签和指标标签
+	if rule.Labels != "" && rule.Labels != "{}" {
+		var ruleLabels map[string]string
+		if err := json.Unmarshal([]byte(rule.Labels), &ruleLabels); err == nil {
+			for k, v := range ruleLabels {
+				enrichedLabels[k] = v
+			}
+		}
+	}
+	for k, v := range metricLabels {
+		enrichedLabels[k] = v
+	}
+
+	// 2. 补充预设标签（如果不存在）
+	if _, exists := enrichedLabels["severity"]; !exists {
+		enrichedLabels["severity"] = rule.Severity
+	}
+	if _, exists := enrichedLabels["ruleName"]; !exists {
+		enrichedLabels["ruleName"] = rule.Name
+	}
+
+	// 3. 补充业务分组标签
+	if rule.AssetGroupID > 0 {
+		var groupName string
+		e.db.Table("asset_group").Select("name").Where("id = ?", rule.AssetGroupID).Scan(&groupName)
+		if groupName != "" {
+			enrichedLabels["asset_group"] = groupName
+		}
+	}
+
+	labelsJSON, _ := json.Marshal(enrichedLabels)
+
+	// 渲染 Annotations 模板
+	renderedAnnotations := e.renderAnnotations(rule.Annotations, rule, value, firedAt, enrichedLabels)
+
 	event := &biz.AlertEvent{
 		AlertRuleID:  rule.ID,
 		RuleName:     rule.Name,
@@ -371,8 +557,8 @@ func (e *EvalEngine) createFiringEvent(ctx context.Context, rule *biz.AlertRule,
 		Fingerprint:  fingerprint,
 		Severity:     rule.Severity,
 		Status:       "firing",
-		Labels:       mergeLabels(rule.Labels, metricLabels), // metric 标签 + 自定义标签合并
-		Annotations:  rule.Annotations,
+		Labels:       string(labelsJSON),
+		Annotations:  renderedAnnotations,
 		Value:        value,
 		FiredAt:      firedAt,
 	}
@@ -409,24 +595,21 @@ func (e *EvalEngine) createFiringEvent(ctx context.Context, rule *biz.AlertRule,
 	}
 }
 
-func (e *EvalEngine) handleResolved(ctx context.Context, rule *biz.AlertRule, fingerprint string) {
+func (e *EvalEngine) handleResolvedWithValue(ctx context.Context, rule *biz.AlertRule, fingerprint string, resolveValue float64) {
 	redisKey := fmt.Sprintf("%s%d:%s", redisAlertStatePrefix, rule.ID, fingerprint)
 
-	var state alertState
-	val, err := e.rdb.Get(ctx, redisKey).Result()
-	if err != nil {
-		return
-	}
-	_ = json.Unmarshal([]byte(val), &state)
+	appLogger.Info("处理告警恢复", zap.Uint("ruleID", rule.ID), zap.String("fingerprint", fingerprint), zap.Float64("resolveValue", resolveValue))
 
-	// 先查询活跃事件（Bug 4 修复：先查询数据库，成功后再删除 Redis）
+	// 查询数据库中的活跃事件
 	event, err := e.eventRepo.GetFiringByFingerprint(ctx, fingerprint)
 	if err != nil || event == nil {
+		appLogger.Debug("未找到firing事件", zap.String("fingerprint", fingerprint), zap.Error(err))
+		// 数据库中没有 firing 事件，清理 Redis（如果存在）
+		e.rdb.Del(ctx, redisKey)
 		return
 	}
 
 	now := time.Now()
-	resolveVal := state.Value
 	event.Status = "resolved"
 	// 若人工介入过则标记为 manual_then_auto，否则 auto
 	if event.ManualHandled {
@@ -435,7 +618,8 @@ func (e *EvalEngine) handleResolved(ctx context.Context, rule *biz.AlertRule, fi
 		event.ResolveType = "auto"
 	}
 	event.ResolvedAt = &now
-	event.ResolveValue = &resolveVal
+	event.ResolveValue = &resolveValue
+
 	if err := e.eventRepo.Update(ctx, event); err != nil {
 		appLogger.Error("更新告警恢复状态失败", zap.Error(err))
 		return // 更新失败，保留 Redis 状态
@@ -443,6 +627,8 @@ func (e *EvalEngine) handleResolved(ctx context.Context, rule *biz.AlertRule, fi
 
 	// 更新成功后才删除 Redis key
 	e.rdb.Del(ctx, redisKey)
+
+	appLogger.Info("准备发送恢复通知", zap.Uint("ruleID", rule.ID), zap.Bool("notifyOnResolve", rule.NotifyOnResolve))
 
 	// Bug 8 修复：异步发送通知，避免阻塞
 	if rule.NotifyOnResolve {
@@ -478,42 +664,125 @@ func (e *EvalEngine) sendNotifications(ctx context.Context, rule *biz.AlertRule,
 	// 查找关联该规则的所有启用订阅（包括 rule_id=0 的全部规则订阅）
 	subRules, err := e.subRuleRepo.ListByRuleID(ctx, rule.ID)
 	if err != nil || len(subRules) == 0 {
+		appLogger.Debug("未找到订阅规则", zap.Uint("ruleID", rule.ID), zap.Error(err))
 		return
 	}
 
-	now := time.Now()
+	appLogger.Info("开始发送告警通知", zap.Uint("ruleID", rule.ID), zap.Uint("eventID", event.ID), zap.Int("subRuleCount", len(subRules)))
 
-	// Bug 1 修复：在循环外部检查一次屏蔽状态，避免重复查询
+	now := time.Now()
 	isSilenced := e.shouldSilence(ctx, event)
 
 	for _, sr := range subRules {
+		matchResult := make(map[string]interface{})
+		denoiseResult := make(map[string]interface{})
+		notifyResult := make(map[string]interface{})
+		matched := true
+
+		appLogger.Debug("处理订阅规则", zap.Uint("subscriptionID", sr.SubscriptionID), zap.Uint("ruleID", sr.RuleID))
+
 		// 检查生效时间
-		if !isInTimeRanges(sr.TimeRanges, now) {
+		timeMatched := isInTimeRanges(sr.TimeRanges, now)
+		matchResult["timeRange"] = timeMatched
+		if !timeMatched {
+			appLogger.Debug("订阅规则不在生效时间内", zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
 			continue
 		}
+
 		// 检查订阅是否启用
 		sub, err := e.subRepo.GetByID(ctx, sr.SubscriptionID)
-		if err != nil || !sub.Enabled {
+		enabledMatched := (err == nil && sub.Enabled)
+		matchResult["enabled"] = enabledMatched
+		if !enabledMatched {
+			appLogger.Debug("订阅未启用", zap.Uint("subscriptionID", sr.SubscriptionID), zap.Error(err))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
 			continue
 		}
-		// 检查屏蔽状态（已在循环外部检查）
+
+		// 检查屏蔽状态
+		silenceMatched := !isSilenced
+		matchResult["silence"] = silenceMatched
 		if isSilenced {
+			appLogger.Debug("告警已屏蔽", zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
 			continue
 		}
-		// 检查告警级别过滤（空=全部级别）
+
+		// 检查告警级别过滤
+		severityMatched := true
 		if sevList := parseSeverityList(sr.Severities); len(sevList) > 0 {
-			matched := false
+			severityMatched = false
 			for _, s := range sevList {
 				if s == event.Severity {
-					matched = true
+					severityMatched = true
 					break
 				}
 			}
-			if !matched {
-				continue
-			}
 		}
-		// 确定通道：优先使用规则行配置的通道，否则回退到订阅全局通道
+		matchResult["severity"] = severityMatched
+		if !severityMatched {
+			appLogger.Debug("告警级别不匹配", zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
+			continue
+		}
+
+		// 检查数据源过滤
+		dsMatched := MatchSubscriptionDataSource(event.Labels, sr.DataSourceIDs)
+		matchResult["dataSource"] = dsMatched
+		if !dsMatched {
+			appLogger.Debug("数据源不匹配", zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
+			continue
+		}
+
+		// 检查标签匹配器
+		labelMatched := MatchSubscriptionLabels(event.Labels, sr.LabelMatchers)
+		matchResult["labelMatchers"] = labelMatched
+		if !labelMatched {
+			appLogger.Debug("标签不匹配", zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
+			continue
+		}
+
+		// 检查去重
+		shouldDedup, _ := e.dedupService.ShouldDeduplicate(ctx, event, sr.SubscriptionID)
+		denoiseResult["deduplicated"] = shouldDedup
+		if shouldDedup {
+			appLogger.Info("告警已去重", zap.Uint("eventID", event.ID), zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
+			continue
+		}
+
+		// 检查抑制
+		inhibited, reason, _ := e.inhibitService.ShouldInhibit(ctx, event, sr.SubscriptionID)
+		denoiseResult["inhibited"] = inhibited
+		if inhibited {
+			denoiseResult["inhibitReason"] = reason
+			appLogger.Info("告警被抑制", zap.Uint("eventID", event.ID), zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
+			continue
+		}
+
+		// 检查分组
+		grouped, _ := e.groupService.AddToGroup(ctx, event, sr.SubscriptionID)
+		denoiseResult["grouped"] = grouped
+		if grouped {
+			appLogger.Info("告警已加入分组", zap.Uint("eventID", event.ID), zap.Uint("subscriptionID", sr.SubscriptionID))
+			matched = false
+			e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
+			continue
+		}
+
+		// 确定通道
 		var channelIDs []uint
 		if perRuleCh := parseUintList(sr.ChannelIDs); len(perRuleCh) > 0 {
 			channelIDs = perRuleCh
@@ -523,33 +792,77 @@ func (e *EvalEngine) sendNotifications(ctx context.Context, rule *biz.AlertRule,
 				channelIDs = append(channelIDs, sc.ChannelID)
 			}
 		}
-		// 确定接收用户手机号：优先使用规则行配置的用户，否则回退到订阅全局用户
+
+		// 确定接收用户
 		var phones []string
+		var userIDs []uint
 		if perRuleUsers := parseUintList(sr.UserIDs); len(perRuleUsers) > 0 {
+			userIDs = perRuleUsers
 			phones = e.getUserPhonesByIDs(ctx, perRuleUsers)
 		} else {
 			phones = e.getSubUserPhones(ctx, sr.SubscriptionID)
 		}
+
+		// 发送通知
 		channels, _ := e.channelRepo.ListByIDs(ctx, channelIDs)
+		var channelResults []map[string]interface{}
 		for _, ch := range channels {
 			if !ch.Enabled {
 				continue
 			}
+			channelResults = append(channelResults, map[string]interface{}{
+				"id":     ch.ID,
+				"name":   ch.Name,
+				"type":   ch.Type,
+				"status": "sent",
+			})
 			go e.notifySvc.Send(ctx, ch, event, isResolve, phones)
 		}
+
+		notifyResult["channels"] = channelResults
+		notifyResult["users"] = userIDs
+
+		// 记录指纹（用于去重）
+		e.dedupService.RecordFingerprint(ctx, event, sr.SubscriptionID)
+
+		// 保存日志
+		e.saveSubscriptionLog(ctx, sr.SubscriptionID, event.ID, rule.ID, matched, matchResult, denoiseResult, notifyResult)
+	}
+}
+
+// saveSubscriptionLog 保存订阅执行日志
+func (e *EvalEngine) saveSubscriptionLog(ctx context.Context, subscriptionID, eventID, ruleID uint, matched bool, matchResult, denoiseResult, notifyResult map[string]interface{}) {
+	matchJSON, _ := json.Marshal(matchResult)
+	denoiseJSON, _ := json.Marshal(denoiseResult)
+	notifyJSON, _ := json.Marshal(notifyResult)
+
+	log := &biz.AlertSubscriptionLog{
+		SubscriptionID: subscriptionID,
+		EventID:        eventID,
+		RuleID:         ruleID,
+		Matched:        matched,
+		MatchResult:    string(matchJSON),
+		DenoiseResult:  string(denoiseJSON),
+		NotifyResult:   string(notifyJSON),
+	}
+
+	if err := e.subLogRepo.Create(ctx, log); err != nil {
+		appLogger.Error("保存订阅日志失败", zap.Error(err))
 	}
 }
 
 // getUserPhonesByIDs 通过用户 ID 列表直接查手机号（支持 ID=0 表示 @all）
 func (e *EvalEngine) getUserPhonesByIDs(ctx context.Context, userIDs []uint) []string {
+	// 检查是否包含 ID=0（@all）
 	for _, uid := range userIDs {
 		if uid == 0 {
 			return []string{} // 空=@all
 		}
 	}
+	// 查询指定用户的手机号
 	type phoneRow struct{ Phone string }
 	var rows []phoneRow
-	e.db.WithContext(ctx).Table("sys_users").Select("phone").Where("id IN ? AND phone != ''", userIDs).Scan(&rows)
+	e.db.WithContext(ctx).Table("sys_user").Select("phone").Where("id IN ? AND phone != ''", userIDs).Scan(&rows)
 	var phones []string
 	for _, r := range rows {
 		if r.Phone != "" {
@@ -580,7 +893,7 @@ func (e *EvalEngine) getSubUserPhones(ctx context.Context, subscriptionID uint) 
 		Phone string
 	}
 	var rows []phoneRow
-	e.db.WithContext(ctx).Table("sys_users").Select("phone").Where("id IN ? AND phone != ''", userIDs).Scan(&rows)
+	e.db.WithContext(ctx).Table("sys_user").Select("phone").Where("id IN ? AND phone != ''", userIDs).Scan(&rows)
 	var phones []string
 	for _, r := range rows {
 		if r.Phone != "" {
@@ -793,4 +1106,21 @@ func (e *EvalEngine) GetSilenceCache() *SilenceRuleCache {
 	return e.silenceCache
 }
 
+// ClearRuleStates 清理指定规则的所有 Redis 状态
+func (e *EvalEngine) ClearRuleStates(ctx context.Context, ruleID uint) {
+	// 使用 SCAN 命令查找该规则的所有状态 key
+	pattern := fmt.Sprintf("%s%d:*", redisAlertStatePrefix, ruleID)
+	iter := e.rdb.Scan(ctx, 0, pattern, 0).Iterator()
+
+	keys := []string{}
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	// 批量删除
+	if len(keys) > 0 {
+		e.rdb.Del(ctx, keys...)
+		appLogger.Info("清理规则 Redis 状态", zap.Uint("ruleID", ruleID), zap.Int("count", len(keys)))
+	}
+}
 
