@@ -26,10 +26,11 @@
               <span v-else>—</span>
             </template>
           </a-table-column>
-          <a-table-column title="操作" :width="160">
+          <a-table-column title="操作" :width="220">
             <template #cell="{ record }">
               <a-space>
                 <a-link @click="doTest(record)">测试</a-link>
+                <a-link @click="openCopy(record)">复制</a-link>
                 <a-link @click="openEdit(record)">编辑</a-link>
                 <a-popconfirm content="确认删除？" @ok="remove(record.id)">
                   <a-link status="danger">删除</a-link>
@@ -99,6 +100,9 @@
         </a-form-item>
         <a-form-item label="恢复通知模板">
           <a-textarea v-model="form.resolveTemplate" :auto-size="{minRows:4}" style="font-family:monospace;font-size:12px" />
+          <div style="margin-top:4px;color:var(--ops-text-secondary);font-size:12px">
+            💡 提示：恢复通知应使用 <code v-text="'{{if .ResolveValue}}{{.ResolveValue}}{{else}}{{.Value}}{{end}}'"></code> 显示恢复时的实际值
+          </div>
         </a-form-item>
         <a-form-item label="启用">
           <a-switch v-model="form.enabled" />
@@ -128,9 +132,9 @@ const defaultAlertTpl = (type: string) => {
   return `【SreHub告警】规则: {{.RuleName}} | 级别: {{.SeverityLabel}} | 值: {{.Value}} | 时间: {{.FiredAt}}`
 }
 const defaultResolveTpl = (type = '') => {
-  if (type === 'wechat_work') return `## ✅ SreHub 恢复通知\n> **规则**: {{.RuleName}}\n> **级别**: {{.SeverityLabel}}\n> **当前值**: {{.Value}}\n> **恢复时间**: {{.ResolvedAt}}\n> **触发时间**: {{.FiredAt}}\n\n**标签详情**:\n{{.LabelsDetail}}\n\n**注解详情**:\n{{.AnnotationsDetail}}`
-  if (type === 'dingtalk') return `## ✅ SreHub 恢复通知\n- **规则**: {{.RuleName}}\n- **级别**: {{.SeverityLabel}}\n- **当前值**: {{.Value}}\n- **恢复时间**: {{.ResolvedAt}}\n- **触发时间**: {{.FiredAt}}\n\n**标签详情**:\n{{.LabelsDetail}}\n\n**注解详情**:\n{{.AnnotationsDetail}}`
-  return `【SreHub恢复】规则: {{.RuleName}} | 级别: {{.SeverityLabel}} | 值: {{.Value}} | 恢复时间: {{.ResolvedAt}}`
+  if (type === 'wechat_work') return `## ✅ SreHub 恢复通知\n> **规则**: {{.RuleName}}\n> **级别**: {{.SeverityLabel}}\n> **当前值**: {{if .ResolveValue}}{{.ResolveValue}}{{else}}{{.Value}}{{end}}\n> **恢复时间**: {{.ResolvedAt}}\n> **触发时间**: {{.FiredAt}}\n\n**标签详情**:\n{{.LabelsDetail}}\n\n**注解详情**:\n{{.AnnotationsDetail}}`
+  if (type === 'dingtalk') return `## ✅ SreHub 恢复通知\n- **规则**: {{.RuleName}}\n- **级别**: {{.SeverityLabel}}\n- **当前值**: {{if .ResolveValue}}{{.ResolveValue}}{{else}}{{.Value}}{{end}}\n- **恢复时间**: {{.ResolvedAt}}\n- **触发时间**: {{.FiredAt}}\n\n**标签详情**:\n{{.LabelsDetail}}\n\n**注解详情**:\n{{.AnnotationsDetail}}`
+  return `【SreHub恢复】规则: {{.RuleName}} | 级别: {{.SeverityLabel}} | 值: {{if .ResolveValue}}{{.ResolveValue}}{{else}}{{.Value}}{{end}} | 恢复时间: {{.ResolvedAt}}`
 }
 
 const load = async () => {
@@ -155,6 +159,17 @@ const openCreate = () => {
 
 const openEdit = (row: AlertNotifyChannel) => {
   form.value = { ...row }
+  try { Object.assign(cfg, JSON.parse(row.config || '{}')) } catch {}
+  modalVisible.value = true
+}
+
+const openCopy = (row: AlertNotifyChannel) => {
+  // 复制所有配置，但移除 ID（作为新增处理）
+  form.value = {
+    ...row,
+    id: undefined,
+    name: row.name + '副本'
+  }
   try { Object.assign(cfg, JSON.parse(row.config || '{}')) } catch {}
   modalVisible.value = true
 }

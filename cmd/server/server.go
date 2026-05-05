@@ -267,6 +267,14 @@ func autoMigrate(db *gorm.DB) error {
 		&alertbiz.AlertSubscriptionChannel{},
 		&alertbiz.AlertSubscriptionUser{},
 		&alertbiz.AlertSilenceRule{},
+		// 告警治理表
+		&alertbiz.AlertDedupRule{},
+		&alertbiz.AlertFingerprint{},
+		&alertbiz.AlertGroupRule{},
+		&alertbiz.AlertGroupCache{},
+		&alertbiz.AlertInhibitRule{},
+		// 告警订阅日志表
+		&alertbiz.AlertSubscriptionLog{},
 	); err != nil {
 		return err
 	}

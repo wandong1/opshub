@@ -135,3 +135,34 @@ func (r *SubscriptionUserRepo) ListBySubscription(ctx context.Context, subscript
 	var list []*biz.AlertSubscriptionUser
 	return list, r.db.WithContext(ctx).Where("subscription_id = ?", subscriptionID).Find(&list).Error
 }
+
+// --- SubscriptionLog ---
+
+type SubscriptionLogRepo struct{ db *gorm.DB }
+
+func NewSubscriptionLogRepo(db *gorm.DB) *SubscriptionLogRepo {
+	return &SubscriptionLogRepo{db: db}
+}
+
+func (r *SubscriptionLogRepo) Create(ctx context.Context, log *biz.AlertSubscriptionLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *SubscriptionLogRepo) List(ctx context.Context, subscriptionID uint, page, pageSize int) ([]*biz.AlertSubscriptionLog, int64, error) {
+	var list []*biz.AlertSubscriptionLog
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&biz.AlertSubscriptionLog{})
+	if subscriptionID > 0 {
+		q = q.Where("subscription_id = ?", subscriptionID)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := q.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&list).Error
+	return list, total, err
+}
+

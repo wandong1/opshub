@@ -852,11 +852,12 @@ func (e *EvalEngine) saveSubscriptionLog(ctx context.Context, subscriptionID, ev
 }
 
 // getUserPhonesByIDs 通过用户 ID 列表直接查手机号（支持 ID=0 表示 @all）
+// 返回 nil 表示 @all，返回空切片表示不 @任何人，返回非空切片表示 @指定用户
 func (e *EvalEngine) getUserPhonesByIDs(ctx context.Context, userIDs []uint) []string {
 	// 检查是否包含 ID=0（@all）
 	for _, uid := range userIDs {
 		if uid == 0 {
-			return []string{} // 空=@all
+			return nil // nil=@all
 		}
 	}
 	// 查询指定用户的手机号
@@ -872,16 +873,17 @@ func (e *EvalEngine) getUserPhonesByIDs(ctx context.Context, userIDs []uint) []s
 	return phones
 }
 
-// getSubUserPhones 获取订阅的接收用户手机号列表；userID=0 表示所有人，返回空切片（调用方处理为@all）
+// getSubUserPhones 获取订阅的接收用户手机号列表
+// 返回 nil 表示 @all，返回空切片表示不 @任何人，返回非空切片表示 @指定用户
 func (e *EvalEngine) getSubUserPhones(ctx context.Context, subscriptionID uint) []string {
 	subUsers, err := e.subUserRepo.ListBySubscription(ctx, subscriptionID)
 	if err != nil || len(subUsers) == 0 {
-		return []string{}
+		return []string{} // 空切片=不@任何人
 	}
 	// 检查是否有 userID=0（所有人）
 	for _, su := range subUsers {
 		if su.UserID == 0 {
-			return []string{} // 空=@all
+			return nil // nil=@all
 		}
 	}
 	// 批量查手机号

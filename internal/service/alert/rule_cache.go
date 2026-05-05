@@ -172,6 +172,9 @@ func (c *RuleCache) loadFromMySQL(ctx context.Context) ([]*biz.AlertRule, error)
 	}
 
 	appLogger.Info("从 MySQL 加载规则列表", zap.Int("count", len(rules)))
+	for _, r := range rules {
+		appLogger.Debug("加载规则", zap.Uint("id", r.ID), zap.String("name", r.Name), zap.Bool("enabled", r.Enabled))
+	}
 
 	// 写入 Redis 缓存
 	if err := c.saveToRedis(ctx, rules); err != nil {

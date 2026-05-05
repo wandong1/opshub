@@ -137,6 +137,14 @@ func (r *RuleRepo) GetByID(ctx context.Context, id uint) (*biz.AlertRule, error)
 	return &rule, nil
 }
 
+func (r *RuleRepo) GetByName(ctx context.Context, name string) (*biz.AlertRule, error) {
+	var rule biz.AlertRule
+	if err := r.db.WithContext(ctx).Where("name = ?", name).First(&rule).Error; err != nil {
+		return nil, err
+	}
+	return &rule, nil
+}
+
 func (r *RuleRepo) List(ctx context.Context, page, pageSize int, assetGroupID, ruleGroupID uint, keyword string, enabled *bool) ([]*biz.AlertRule, int64, error) {
 	var list []*biz.AlertRule
 	var total int64

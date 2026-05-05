@@ -1,0 +1,77 @@
+# Node Exporter 主机监控告警规则
+# 适用于 Prometheus/VictoriaMetrics 数据源
+
+- name: 主机-CPU使用率过高
+  description: 当主机 CPU 使用率持续超过 80% 时触发告警
+  assetgroupid: 1
+  rulegroupid: 1
+  datasourceids: "[1]"
+  queryexpr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+  conditions: '[{"logic": "AND", "value": 80, "operator": ">"}]'
+  evalinterval: 60
+  duration: 0s
+  severity: warning
+  labels: '{"team":"ops","category":"host","metric":"cpu"}'
+  annotations: '{"title":"主机 CPU 使用率过高","description":"主机 {{ $labels.instance }} CPU 使用率为 {{ $value | printf \"%.2f\" }}%"}'
+  enabled: false
+  notifyonresolve: true
+
+- name: 主机-内存使用率过高
+  description: 当主机内存使用率超过 85% 时触发告警
+  assetgroupid: 1
+  rulegroupid: 1
+  datasourceids: "[1]"
+  queryexpr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+  conditions: '[{"logic": "AND", "value": 85, "operator": ">"}]'
+  evalinterval: 60
+  duration: 0s
+  severity: critical
+  labels: '{"team":"ops","category":"host","metric":"memory"}'
+  annotations: '{"title":"主机内存使用率过高","description":"主机 {{ $labels.instance }} 内存使用率为 {{ $value | printf \"%.2f\" }}%，可用内存不足"}'
+  enabled: false
+  notifyonresolve: true
+
+- name: 主机-磁盘使用率过高
+  description: 当主机磁盘使用率超过 85% 时触发告警
+  assetgroupid: 1
+  rulegroupid: 1
+  datasourceids: "[1]"
+  queryexpr: (node_filesystem_size_bytes{fstype=~"ext4|xfs"} - node_filesystem_free_bytes{fstype=~"ext4|xfs"}) / node_filesystem_size_bytes{fstype=~"ext4|xfs"} * 100
+  conditions: '[{"logic": "AND", "value": 85, "operator": ">"}]'
+  evalinterval: 300
+  duration: 0s
+  severity: warning
+  labels: '{"team":"ops","category":"host","metric":"disk"}'
+  annotations: '{"title":"主机磁盘使用率过高","description":"主机 {{ $labels.instance }} 挂载点 {{ $labels.mountpoint }} 磁盘使用率为 {{ $value | printf \"%.2f\" }}%"}'
+  enabled: false
+  notifyonresolve: true
+
+- name: 主机-磁盘IO等待时间过高
+  description: 当主机磁盘 IO 等待时间超过 20% 时触发告警
+  assetgroupid: 1
+  rulegroupid: 1
+  datasourceids: "[1]"
+  queryexpr: avg by (instance) (irate(node_cpu_seconds_total{mode="iowait"}[5m])) * 100
+  conditions: '[{"logic": "AND", "value": 20, "operator": ">"}]'
+  evalinterval: 60
+  duration: 0s
+  severity: warning
+  labels: '{"team":"ops","category":"host","metric":"iowait"}'
+  annotations: '{"title":"主机磁盘IO等待时间过高","description":"主机 {{ $labels.instance }} IO 等待时间为 {{ $value | printf \"%.2f\" }}%，可能存在磁盘性能瓶颈"}'
+  enabled: false
+  notifyonresolve: true
+
+- name: 主机-网络流量异常
+  description: 当主机网络接收流量超过 100MB/s 时触发告警
+  assetgroupid: 1
+  rulegroupid: 1
+  datasourceids: "[1]"
+  queryexpr: sum by (instance) (irate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*"}[5m])) / 1024 / 1024
+  conditions: '[{"logic": "AND", "value": 100, "operator": ">"}]'
+  evalinterval: 60
+  duration: 0s
+  severity: info
+  labels: '{"team":"ops","category":"host","metric":"network"}'
+  annotations: '{"title":"主机网络流量异常","description":"主机 {{ $labels.instance }} 网络接收流量为 {{ $value | printf \"%.2f\" }} MB/s，请关注是否存在异常流量"}'
+  enabled: false
+  notifyonresolve: true

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"text/template"
@@ -47,14 +46,24 @@ type notifyTplData struct {
 }
 
 // Send 发送通知（firing 或 resolved）
-// phones: 接收用户手机号列表，用于 @ 用户；空切片=不@，nil时传[]string{}
+// phones: 接收用户手机号列表，nil=@all，空切片=不@任何人，非空切片=@指定用户
 func (s *NotifyService) Send(ctx context.Context, ch *biz.AlertNotifyChannel, event *biz.AlertEvent, isResolve bool, phones []string) {
+	appLogger.Info("发送通知",
+		zap.String("channel", ch.Name),
+		zap.Bool("isResolve", isResolve),
+		zap.Int("alertTemplateLen", len(ch.AlertTemplate)),
+		zap.Int("resolveTemplateLen", len(ch.ResolveTemplate)))
+
 	tplStr := ch.AlertTemplate
 	if isResolve {
 		tplStr = ch.ResolveTemplate
+		appLogger.Info("使用恢复模板", zap.String("template", tplStr))
+	} else {
+		appLogger.Info("使用告警模板", zap.String("template", tplStr))
 	}
 	if tplStr == "" {
 		tplStr = defaultTemplate(ch.Type, isResolve)
+		appLogger.Info("使用默认模板", zap.String("template", tplStr))
 	}
 
 	msg := renderTemplate(tplStr, event, phones)
@@ -62,7 +71,7 @@ func (s *NotifyService) Send(ctx context.Context, ch *biz.AlertNotifyChannel, ev
 	var err error
 	switch ch.Type {
 	case "wechat_work":
-		err = sendWechatWork(ch.Config, msg, phones)
+		err = sendWechatWork(ch.Config, msg, phones, isResolve)
 	case "dingtalk":
 		err = sendDingTalk(ch.Config, msg, phones)
 	case "sms":
@@ -127,10 +136,11 @@ func renderTemplate(tplStr string, event *biz.AlertEvent, phones []string) strin
 		}
 	}
 	// 构建 @提及字符串
+	// 修复：phones 为 nil 时才 @all，空切片表示不 @任何人
 	mentions := ""
-	if len(phones) == 0 {
+	if phones == nil {
 		mentions = "@all"
-	} else {
+	} else if len(phones) > 0 {
 		var sb strings.Builder
 		for _, p := range phones {
 			sb.WriteString("@")
@@ -139,24 +149,47 @@ func renderTemplate(tplStr string, event *biz.AlertEvent, phones []string) strin
 		}
 		mentions = strings.TrimSpace(sb.String())
 	}
-	data := notifyTplData{
-		RuleName:          event.RuleName,
-		Severity:          event.Severity,
-		SeverityLabel:     severityLabel(event.Severity),
-		Value:             event.Value,
-		ResolveValue:      event.ResolveValue,
-		FiredAt:           event.FiredAt.Format("2006-01-02 15:04:05"),
-		Labels:            event.Labels,
-		Annotations:       event.Annotations,
-		LabelsDetail:      formatKVDetail(event.Labels),
-		AnnotationsDetail: formatKVDetail(event.Annotations),
-		Title:             annTitle,
-		Description:       annDesc,
-		Mentions:          mentions,
+
+	// 解析 Labels 为 map，支持模板中直接引用标签字段
+	labelsMap := make(map[string]string)
+	if event.Labels != "" {
+		json.Unmarshal([]byte(event.Labels), &labelsMap)
+	}
+
+	// 格式化数值：保留两位小数
+	valueFormatted := fmt.Sprintf("%.2f", event.Value)
+	var resolveValueFormatted string
+	if event.ResolveValue != nil {
+		resolveValueFormatted = fmt.Sprintf("%.2f", *event.ResolveValue)
+	}
+
+	// 构建模板数据（使用 map 支持动态字段）
+	data := map[string]interface{}{
+		"RuleName":          event.RuleName,
+		"Severity":          event.Severity,
+		"SeverityLabel":     severityLabel(event.Severity),
+		"Value":             valueFormatted,           // 格式化后的字符串
+		"ValueRaw":          event.Value,              // 原始数值（兼容需要数值计算的场景）
+		"ResolveValue":      resolveValueFormatted,    // 格式化后的字符串
+		"ResolveValueRaw":   event.ResolveValue,       // 原始数值
+		"FiredAt":           event.FiredAt.Format("2006-01-02 15:04:05"),
+		"Labels":            event.Labels,
+		"Annotations":       event.Annotations,
+		"LabelsDetail":      formatKVDetail(event.Labels),
+		"AnnotationsDetail": formatKVDetail(event.Annotations),
+		"Title":             annTitle,
+		"Description":       annDesc,
+		"Mentions":          mentions,
 	}
 	if event.ResolvedAt != nil {
-		data.ResolvedAt = event.ResolvedAt.Format("2006-01-02 15:04:05")
+		data["ResolvedAt"] = event.ResolvedAt.Format("2006-01-02 15:04:05")
 	}
+
+	// 将 Labels 中的字段添加到模板数据中，支持 {{.instance}}、{{.job}} 等
+	for k, v := range labelsMap {
+		data[k] = v
+	}
+
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, data); err != nil {
 		return tplStr
@@ -188,12 +221,7 @@ func renderTemplate(tplStr string, event *biz.AlertEvent, phones []string) strin
 // 	return postJSON(cfg.WebhookURL, payload)
 // }
 
-// sendWechatWork 企业微信机器人推送：先text@人，再markdown发告警
-// configJSON: 机器人配置json（包含webhookUrl）
-// msg: markdown格式的告警内容
-// phones: 需要@的手机号列表，空则@所有人
-func sendWechatWork(configJSON, msg string, phones []string) error {
-	// 1. 解析配置获取Webhook地址
+func sendWechatWork(configJSON, msg string, phones []string, isResolve bool) error {
 	var cfg struct {
 		WebhookURL string `json:"webhookUrl"`
 	}
@@ -201,38 +229,36 @@ func sendWechatWork(configJSON, msg string, phones []string) error {
 		return err
 	}
 
-	// ===================== 第一步：构造并发送 text 类型消息（@人） =====================
-	// 处理@列表：空则@all，否则@指定手机号
+	// 修复：phones 为 nil 时才 @all，空切片表示不 @任何人
 	var mentionList []string
-	if len(phones) == 0 {
+	if phones == nil {
 		mentionList = []string{"@all"}
 	} else {
 		mentionList = phones
 	}
-	log.Printf("phones %#v", phones)
 
-	// 构造text消息体（严格遵循企业微信API格式）
+	noticeText := "告警通知，请相关人员及时处理！"
+	if isResolve {
+		noticeText = "告警已恢复，请知悉！"
+	}
+
 	textPayload := map[string]interface{}{
 		"msgtype": "text",
 		"text": map[string]interface{}{
-			"content":               "告警通知，请相关人员及时处理！", // text提示语
-			"mentioned_mobile_list": mentionList,       // @手机号列表
+			"content":               noticeText,
+			"mentioned_mobile_list": mentionList,
 		},
 	}
 
-	// 发送text@人消息
 	if err := postJSON(cfg.WebhookURL, textPayload); err != nil {
 		return err
 	}
 
-	// ===================== 第二步：构造并发送 markdown 类型消息（告警内容） =====================
-	// 构造markdown消息体
 	markdownPayload := map[string]interface{}{
 		"msgtype":  "markdown",
 		"markdown": map[string]string{"content": msg},
 	}
 
-	// 发送markdown告警消息
 	return postJSON(cfg.WebhookURL, markdownPayload)
 }
 
@@ -244,11 +270,14 @@ func sendDingTalk(configJSON, msg string, phones []string) error {
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
 		return err
 	}
+	// 修复：phones 为 nil 时才 @all，空切片表示不 @任何人
 	var atObj map[string]interface{}
-	if len(phones) == 0 {
+	if phones == nil {
 		atObj = map[string]interface{}{"isAtAll": true}
-	} else {
+	} else if len(phones) > 0 {
 		atObj = map[string]interface{}{"atMobiles": phones, "isAtAll": false}
+	} else {
+		atObj = map[string]interface{}{"isAtAll": false}
 	}
 	payload := map[string]interface{}{
 		"msgtype": "markdown",
@@ -320,7 +349,7 @@ func defaultTemplate(channelType string, isResolve bool) string {
 ## ✅ SreHub 恢复通知
 > **规则**: {{.RuleName}}
 > **级别**: {{.SeverityLabel}}
-> **当前值**: {{.Value}}
+> **恢复值**: {{if .ResolveValue}}{{.ResolveValue}}{{else}}{{.Value}}{{end}}
 > **恢复时间**: {{.ResolvedAt}}
 > **触发时间**: {{.FiredAt}}
 
@@ -335,7 +364,7 @@ func defaultTemplate(channelType string, isResolve bool) string {
 ## ✅ SreHub 恢复通知
 - **规则**: {{.RuleName}}
 - **级别**: {{.SeverityLabel}}
-- **当前值**: {{.Value}}
+- **恢复值**: {{if .ResolveValue}}{{.ResolveValue}}{{else}}{{.Value}}{{end}}
 - **恢复时间**: {{.ResolvedAt}}
 - **触发时间**: {{.FiredAt}}
 
@@ -346,7 +375,7 @@ func defaultTemplate(channelType string, isResolve bool) string {
 {{.AnnotationsDetail}}
 `)
 		default:
-			return strings.TrimSpace(`【SreHub恢复】规则: {{.RuleName}} | 级别: {{.SeverityLabel}} | 值: {{.Value}} | 恢复时间: {{.ResolvedAt}}`)
+			return strings.TrimSpace(`【SreHub恢复】规则: {{.RuleName}} | 级别: {{.SeverityLabel}} | 值: {{if .ResolveValue}}{{.ResolveValue}}{{else}}{{.Value}}{{end}} | 恢复时间: {{.ResolvedAt}}`)
 		}
 	}
 	switch channelType {

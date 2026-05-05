@@ -28,6 +28,7 @@ type HTTPServer struct {
 	subRuleRepo             *alertdata.SubscriptionRuleRepo
 	subChannelRepo          *alertdata.SubscriptionChannelRepo
 	subUserRepo             *alertdata.SubscriptionUserRepo
+	subLogRepo              *alertdata.SubscriptionLogRepo
 	silenceRuleRepo         *alertdata.SilenceRuleRepo
 	notifySvc               *alertsvc.NotifyService
 	evalEngine              *alertsvc.EvalEngine
@@ -48,6 +49,7 @@ func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 	subRuleRepo := alertdata.NewSubscriptionRuleRepo(db)
 	subChannelRepo := alertdata.NewSubscriptionChannelRepo(db)
 	subUserRepo := alertdata.NewSubscriptionUserRepo(db)
+	subLogRepo := alertdata.NewSubscriptionLogRepo(db)
 	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
 	notifySvc := alertsvc.NewNotifyService(channelRepo)
 	evalEngine := alertsvc.NewEvalEngine(db, rdb)
@@ -66,6 +68,7 @@ func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 		subRuleRepo:         subRuleRepo,
 		subChannelRepo:      subChannelRepo,
 		subUserRepo:         subUserRepo,
+		subLogRepo:          subLogRepo,
 		silenceRuleRepo:     silenceRuleRepo,
 		notifySvc:           notifySvc,
 		evalEngine:          evalEngine,
@@ -163,6 +166,8 @@ func (s *HTTPServer) RegisterRoutes(rg *gin.RouterGroup) {
 		subs.GET("/:id", s.getSubscription)
 		subs.PUT("/:id", s.updateSubscription)
 		subs.DELETE("/:id", s.deleteSubscription)
+		subs.POST("/:id/test", s.testSubscription)
+		subs.GET("/:id/logs", s.getSubscriptionLogs)
 	}
 
 	// 屏蔽规则
@@ -174,6 +179,39 @@ func (s *HTTPServer) RegisterRoutes(rg *gin.RouterGroup) {
 		silenceRules.PUT("/:id", s.updateSilenceRule)
 		silenceRules.DELETE("/:id", s.deleteSilenceRule)
 		silenceRules.PUT("/:id/toggle", s.toggleSilenceRule)
+	}
+
+	// 去重规则
+	dedupHandler := NewDedupHandler(s.db)
+	dedupRules := alert.Group("/dedup-rules")
+	{
+		dedupRules.GET("", dedupHandler.List)
+		dedupRules.POST("", dedupHandler.Create)
+		dedupRules.GET("/:id", dedupHandler.Get)
+		dedupRules.PUT("/:id", dedupHandler.Update)
+		dedupRules.DELETE("/:id", dedupHandler.Delete)
+	}
+
+	// 分组规则
+	groupHandler := NewGroupHandler(s.db)
+	groupRules := alert.Group("/group-rules")
+	{
+		groupRules.GET("", groupHandler.List)
+		groupRules.POST("", groupHandler.Create)
+		groupRules.GET("/:id", groupHandler.Get)
+		groupRules.PUT("/:id", groupHandler.Update)
+		groupRules.DELETE("/:id", groupHandler.Delete)
+	}
+
+	// 抑制规则
+	inhibitHandler := NewInhibitHandler(s.db)
+	inhibitRules := alert.Group("/inhibit-rules")
+	{
+		inhibitRules.GET("", inhibitHandler.List)
+		inhibitRules.POST("", inhibitHandler.Create)
+		inhibitRules.GET("/:id", inhibitHandler.Get)
+		inhibitRules.PUT("/:id", inhibitHandler.Update)
+		inhibitRules.DELETE("/:id", inhibitHandler.Delete)
 	}
 }
 

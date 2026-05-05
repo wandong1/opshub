@@ -314,3 +314,28 @@ func (r *EventRepo) ResolveActiveByRuleID(ctx context.Context, ruleID uint) erro
 		Where("alert_rule_id = ? AND status = 'firing'", ruleID).
 		Updates(updates).Error
 }
+
+// ListByIDs 根据ID列表查询告警事件
+func (r *EventRepo) ListByIDs(ctx context.Context, ids []uint) ([]*biz.AlertEvent, error) {
+	var events []*biz.AlertEvent
+	err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&events).Error
+	return events, err
+}
+
+// ListFiringByAssetGroup 查询指定业务分组下的所有firing状态告警
+func (r *EventRepo) ListFiringByAssetGroup(ctx context.Context, assetGroupID uint) ([]*biz.AlertEvent, error) {
+	var events []*biz.AlertEvent
+	err := r.db.WithContext(ctx).
+		Where("asset_group_id = ? AND status = 'firing'", assetGroupID).
+		Find(&events).Error
+	return events, err
+}
+
+// ListFiringByRuleID 查询指定规则的所有firing状态告警
+func (r *EventRepo) ListFiringByRuleID(ctx context.Context, ruleID uint) ([]*biz.AlertEvent, error) {
+	var events []*biz.AlertEvent
+	err := r.db.WithContext(ctx).
+		Where("alert_rule_id = ? AND status = 'firing'", ruleID).
+		Find(&events).Error
+	return events, err
+}

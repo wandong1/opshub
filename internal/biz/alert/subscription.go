@@ -38,6 +38,10 @@ type AlertSubscriptionRule struct {
 	ChannelIDs string `gorm:"type:text" json:"channelIds"`
 	// 该时间段关联的接收用户 ID 列表，JSON格式：[1,2,3]，0=@all
 	UserIDs string `gorm:"type:text" json:"userIds"`
+	// 数据源ID列表，JSON格式：[1,2,3]，空=所有数据源
+	DataSourceIDs string `gorm:"type:text" json:"dataSourceIds"`
+	// 标签匹配器，JSON格式：[{"key":"instance","op":"=~","value":".*prod.*"}]
+	LabelMatchers string `gorm:"type:text" json:"labelMatchers"`
 }
 
 func (AlertSubscriptionRule) TableName() string {

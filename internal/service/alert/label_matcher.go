@@ -3,6 +3,8 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -87,3 +89,99 @@ func matchWildcard(value, pattern string) bool {
 }
 
 var _ context.Context // 避免未使用导入错误
+
+// LabelMatcher 标签匹配器（用于订阅规则）
+type LabelMatcher struct {
+	Key   string `json:"key"`
+	Op    string `json:"op"` // =, !=, =~, !~
+	Value string `json:"value"`
+}
+
+// MatchSubscriptionLabels 检查告警标签是否匹配订阅规则的标签匹配器
+func MatchSubscriptionLabels(eventLabelsJSON string, matchersJSON string) bool {
+	if matchersJSON == "" {
+		return true
+	}
+
+	var matchers []LabelMatcher
+	if err := json.Unmarshal([]byte(matchersJSON), &matchers); err != nil {
+		return true
+	}
+
+	if len(matchers) == 0 {
+		return true
+	}
+
+	labels := parseLabels(eventLabelsJSON)
+
+	for _, m := range matchers {
+		labelValue, exists := labels[m.Key]
+
+		switch m.Op {
+		case "=":
+			if !exists || labelValue != m.Value {
+				return false
+			}
+		case "!=":
+			if exists && labelValue == m.Value {
+				return false
+			}
+		case "=~":
+			if !exists {
+				return false
+			}
+			matched, err := regexp.MatchString(m.Value, labelValue)
+			if err != nil || !matched {
+				return false
+			}
+		case "!~":
+			if !exists {
+				continue
+			}
+			matched, err := regexp.MatchString(m.Value, labelValue)
+			if err != nil || matched {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
+// MatchSubscriptionDataSource 检查告警数据源是否匹配订阅规则
+func MatchSubscriptionDataSource(eventLabelsJSON string, dataSourceIDsJSON string) bool {
+	if dataSourceIDsJSON == "" {
+		return true
+	}
+
+	var dsIDs []uint
+	if err := json.Unmarshal([]byte(dataSourceIDsJSON), &dsIDs); err != nil {
+		return true
+	}
+
+	if len(dsIDs) == 0 {
+		return true
+	}
+
+	labels := parseLabels(eventLabelsJSON)
+	dsIDStr, exists := labels["datasource_id"]
+	if !exists {
+		return false
+	}
+
+	eventDSID, err := strconv.ParseUint(dsIDStr, 10, 32)
+	if err != nil {
+		return false
+	}
+
+	for _, id := range dsIDs {
+		if id == uint(eventDSID) {
+			return true
+		}
+	}
+
+	return false
+}
+

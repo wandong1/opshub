@@ -44,13 +44,13 @@
     <!-- 主内容区域：左侧分组树 + 右侧主机列表 -->
     <div class="main-content">
       <!-- 左侧分组树 - 终端视图时隐藏 -->
-      <div class="left-panel" v-show="activeView === 'hosts'">
+      <div class="left-panel" v-show="activeView === 'hosts'" :class="{ 'panel-collapsed': isLeftPanelCollapsed }">
         <div class="panel-header">
-          <div class="panel-title">
+          <div class="panel-title" v-show="!isLeftPanelCollapsed">
             <icon-apps class="panel-icon" />
             <span>资产分组</span>
           </div>
-          <div class="panel-actions">
+          <div class="panel-actions" v-show="!isLeftPanelCollapsed">
             <a-tooltip content="新增分组" position="top">
               <a-button shape="circle" size="small" @click="handleAddGroup">
                 <icon-plus />
@@ -71,6 +71,7 @@
             size="small"
             class="group-search"
             @input="filterGroupTree"
+            v-show="!isLeftPanelCollapsed"
           >
             <template #prefix>
               <icon-search />
@@ -115,6 +116,14 @@
             </a-spin>
             <a-empty v-if="filteredGroupTree.length === 0 && !groupLoading" description="暂无分组" />
           </div>
+        </div>
+        <div class="panel-footer">
+          <a-tooltip :content="isLeftPanelCollapsed ? '展开侧边栏' : '收起侧边栏'" position="right">
+            <a-button shape="circle" size="small" @click="toggleLeftPanel" class="collapse-btn">
+              <icon-left v-if="!isLeftPanelCollapsed" />
+              <icon-right v-else />
+            </a-button>
+          </a-tooltip>
         </div>
       </div>
 
@@ -221,6 +230,16 @@
                   </div>
                 </template>
               </a-table-column>
+
+              <a-table-column title="业务分组" :width="140">
+                <template #cell="{ record }">
+                  <div class="group-cell">
+                    <icon-folder style="color: #409eff; font-size: 14px;" />
+                    <span class="group-name">{{ record.groupName || '未分组' }}</span>
+                  </div>
+                </template>
+              </a-table-column>
+
               <a-table-column title="状态" :width="70" align="center">
                 <template #cell="{ record }">
                   <div class="status-cell">
@@ -681,7 +700,7 @@
     <a-modal
       v-model:visible="showHostDetailDialog"
       title=""
-      :width="960"
+      :width="1100"
       unmount-on-close
       class="host-detail-dialog"
       @close="handleCloseHostDetail"
@@ -758,10 +777,10 @@
             </div>
           </div>
 
-          <!-- 平铺信息区 -->
+          <!-- 基本信息 -->
           <div class="detail-info-section">
             <div class="detail-section-title">基本信息</div>
-            <div class="detail-info-grid-3col">
+            <div class="detail-info-grid-4col">
               <div class="detail-info-item">
                 <div class="detail-info-label">SSH用户</div>
                 <div class="detail-info-value">{{ hostDetail.sshUser || '-' }}</div>
@@ -769,6 +788,22 @@
               <div class="detail-info-item">
                 <div class="detail-info-label">所属分组</div>
                 <div class="detail-info-value">{{ hostDetail.groupName || '未分组' }}</div>
+              </div>
+              <div class="detail-info-item">
+                <div class="detail-info-label">连接方式</div>
+                <div class="detail-info-value">
+                  <a-tag v-if="hostDetail.connectionMode === 'agent' && hostDetail.agentStatus === 'online'" color="green" size="small">
+                    <icon-cloud /> Agent
+                  </a-tag>
+                  <a-tag v-else-if="hostDetail.connectionMode === 'agent'" color="orange" size="small">
+                    <icon-cloud /> Agent离线
+                  </a-tag>
+                  <a-tag v-else color="gray" size="small">SSH</a-tag>
+                </div>
+              </div>
+              <div class="detail-info-item">
+                <div class="detail-info-label">Exporter端口</div>
+                <div class="detail-info-value">{{ hostDetail.exporterPort || 9100 }}</div>
               </div>
               <div class="detail-info-item">
                 <div class="detail-info-label">最后连接</div>
@@ -791,9 +826,10 @@
             </div>
           </div>
 
+          <!-- 系统信息 -->
           <div class="detail-info-section">
             <div class="detail-section-title">系统信息</div>
-            <div class="detail-info-grid-3col">
+            <div class="detail-info-grid-4col">
               <div class="detail-info-item detail-info-item-span2">
                 <div class="detail-info-label">操作系统</div>
                 <div class="detail-info-value">{{ hostDetail.os || '-' }}</div>
@@ -802,24 +838,35 @@
                 <div class="detail-info-label">系统架构</div>
                 <div class="detail-info-value">{{ hostDetail.arch || '-' }}</div>
               </div>
-              <div class="detail-info-item detail-info-item-span2">
-                <div class="detail-info-label">内核版本</div>
-                <div class="detail-info-value">{{ hostDetail.kernel || '-' }}</div>
-              </div>
               <div class="detail-info-item">
                 <div class="detail-info-label">主机名</div>
                 <div class="detail-info-value">{{ hostDetail.hostname || '-' }}</div>
               </div>
               <div class="detail-info-item detail-info-item-span3">
+                <div class="detail-info-label">内核版本</div>
+                <div class="detail-info-value">{{ hostDetail.kernel || '-' }}</div>
+              </div>
+              <div class="detail-info-item">
                 <div class="detail-info-label">运行时间</div>
                 <div class="detail-info-value">{{ hostDetail.uptime || '-' }}</div>
               </div>
             </div>
           </div>
 
+          <!-- 服务标签端口配置 -->
+          <div class="detail-info-section" v-if="hostDetail.labelPortOverrides && Object.keys(JSON.parse(hostDetail.labelPortOverrides || '{}')).length > 0">
+            <div class="detail-section-title">服务标签端口配置</div>
+            <div class="detail-label-ports">
+              <div v-for="(port, label) in JSON.parse(hostDetail.labelPortOverrides || '{}')" :key="label" class="detail-label-port-item">
+                <span class="label-port-name">{{ label }}</span>
+                <span class="label-port-value">{{ port }}</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 标签 -->
           <div class="detail-info-section" v-if="hostDetail.tags && hostDetail.tags.length > 0">
-            <div class="detail-section-title">标签</div>
+            <div class="detail-section-title">主机标签</div>
             <div class="detail-tags-row">
               <a-tag v-for="(tag, index) in hostDetail.tags" :key="index" size="medium" color="arcoblue">{{ tag }}</a-tag>
             </div>
@@ -1336,12 +1383,16 @@ import {
   IconComputer,
   IconCodeBlock,
   IconLeft,
+  IconRight,
   IconInfoCircle,
   IconLock,
   IconBarChart,
   IconStorage,
   IconCommon,
-  IconDownload
+  IconDownload,
+  IconCloudDownload,
+  IconSync,
+  IconPoweroff
 } from '@arco-design/web-vue/es/icon'
 import HostFileBrowser from './components/HostFileBrowser.vue'
 import {
@@ -1455,6 +1506,7 @@ const filteredGroupTree = ref<any[]>([])
 const groupSearchKeyword = ref('')
 const selectedGroup = ref<any>(null)
 const isExpandAll = ref(false)
+const isLeftPanelCollapsed = ref(false)
 
 // 主机列表数据
 const hostList = ref([])
@@ -1639,6 +1691,11 @@ const toggleExpandAll = () => {
       groupTreeRef.value.expandAll(false)
     }
   }
+}
+
+// 切换左侧面板折叠状态
+const toggleLeftPanel = () => {
+  isLeftPanelCollapsed.value = !isLeftPanelCollapsed.value
 }
 
 // 获取所有节点key
@@ -2981,6 +3038,29 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition: width 0.3s ease, min-width 0.3s ease;
+}
+
+.left-panel.panel-collapsed {
+  width: 48px;
+  min-width: 48px;
+}
+
+.left-panel.panel-collapsed .panel-body {
+  display: none;
+}
+
+.left-panel.panel-collapsed .panel-header {
+  justify-content: center;
+  padding: 16px 8px;
+}
+
+.left-panel.panel-collapsed .panel-title {
+  display: none;
+}
+
+.left-panel.panel-collapsed .panel-actions {
+  display: none;
 }
 
 .panel-header {
@@ -3008,6 +3088,31 @@ onMounted(async () => {
 .panel-actions {
   display: flex;
   gap: 8px;
+}
+
+.panel-footer {
+  padding: 12px;
+  border-top: 1px solid var(--ops-border-color);
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.left-panel.panel-collapsed .panel-footer {
+  justify-content: center;
+  padding: 12px 8px;
+}
+
+.collapse-btn {
+  background: #f5f7fa !important;
+  color: #86909c !important;
+  border-color: #e5e6eb !important;
+}
+
+.collapse-btn:hover {
+  background: #e8eaed !important;
+  color: #4e5969 !important;
+  border-color: #c9cdd4 !important;
 }
 
 .panel-body {
@@ -3376,6 +3481,22 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+/* 业务分组单元格样式 */
+.group-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.group-name {
+  font-size: 13px;
+  color: #606266;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 标签单元格样式 */
 .tags-cell {
   display: flex;
@@ -3692,7 +3813,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0;
+  padding: 8px 0;
+  min-height: 80px;
 }
 
 .detail-header-left {
@@ -3700,16 +3822,17 @@ onMounted(async () => {
   align-items: center;
   gap: 20px;
   flex: 1;
+  padding: 4px 0;
 }
 
 .host-avatar-lg {
-  width: 56px;
-  height: 56px;
+  width: 40px;
+  height: 40px;
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: 24px;
   flex-shrink: 0;
 }
 
@@ -3733,10 +3856,10 @@ onMounted(async () => {
 }
 
 .detail-hostname {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--ops-text-primary);
-  margin-bottom: 6px;
+  margin-bottom: 3px;
 }
 
 .detail-hostmeta {
@@ -3856,6 +3979,13 @@ onMounted(async () => {
   gap: 12px;
 }
 
+/* 4列网格布局 */
+.detail-info-grid-4col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
 /* 2列网格布局（保留） */
 .detail-info-grid {
   display: grid;
@@ -3890,6 +4020,46 @@ onMounted(async () => {
 
 .detail-info-item-span3 {
   grid-column: span 3;
+}
+
+.detail-info-item-span4 {
+  grid-column: span 4;
+}
+
+/* 服务标签端口配置样式 */
+.detail-label-ports {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.detail-label-port-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--ops-bg-secondary, #f7f8fa);
+  border: 1px solid var(--ops-border-color, #e5e6eb);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.detail-label-port-item:hover {
+  border-color: var(--ops-primary, #165dff);
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.1);
+}
+
+.label-port-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ops-text-primary, #1d2129);
+}
+
+.label-port-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ops-primary, #165dff);
+  font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .detail-info-label {

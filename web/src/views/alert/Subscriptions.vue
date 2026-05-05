@@ -37,23 +37,25 @@
     <!-- 编辑弹窗 -->
     <a-modal v-model:visible="modalVisible" :title="form.id?'编辑订阅':'新增订阅'"
       @ok="save" @cancel="modalVisible=false" width="1000px" :mask-closable="false">
-      <a-form :model="form" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="12"><a-form-item label="订阅名称" required><a-input v-model="form.name" /></a-form-item></a-col>
-          <a-col :span="12">
-            <a-form-item label="业务分组">
-              <a-select v-model="form.assetGroupId" allow-clear placeholder="不限">
-                <a-option v-for="g in flatGroups" :key="g.id" :value="g.id">{{ g.name }}</a-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-row :gutter="16">
-          <a-col :span="16"><a-form-item label="描述"><a-input v-model="form.description" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="启用"><a-switch v-model="form.enabled" /></a-form-item></a-col>
-        </a-row>
+      <a-tabs default-active-key="basic">
+        <a-tab-pane key="basic" title="基本配置">
+          <a-form :model="form" layout="vertical">
+            <a-row :gutter="16">
+              <a-col :span="12"><a-form-item label="订阅名称" required><a-input v-model="form.name" /></a-form-item></a-col>
+              <a-col :span="12">
+                <a-form-item label="业务分组">
+                  <a-select v-model="form.assetGroupId" allow-clear placeholder="不限">
+                    <a-option v-for="g in flatGroups" :key="g.id" :value="g.id">{{ g.name }}</a-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="16">
+              <a-col :span="16"><a-form-item label="描述"><a-input v-model="form.description" /></a-form-item></a-col>
+              <a-col :span="8"><a-form-item label="启用"><a-switch v-model="form.enabled" /></a-form-item></a-col>
+            </a-row>
 
-        <a-divider orientation="left">推送规则配置</a-divider>
+            <a-divider orientation="left">推送规则配置</a-divider>
         <div style="margin-bottom:8px;color:var(--ops-text-secondary);font-size:12px">
           每行为一条推送规则：选择触发规则、告警级别、生效时间，并独立配置该规则的通知通道和接收用户。留空规则 = 全部规则，留空级别 = 全部级别。
         </div>
@@ -95,6 +97,35 @@
                 </div>
               </a-col>
             </a-row>
+            <!-- 数据源过滤 -->
+            <div style="margin-top:8px">
+              <div style="font-size:12px;color:var(--ops-text-secondary);margin-bottom:4px">数据源过滤（留空=全部数据源）</div>
+              <a-select v-model="group.dataSourceIds" multiple :max-tag-count="4"
+                placeholder="选择数据源（可多选，留空=全部数据源）"
+                allow-search allow-clear style="width:100%">
+                <a-option v-for="ds in allDataSources" :key="ds.id" :value="ds.id">{{ ds.name }}</a-option>
+              </a-select>
+            </div>
+            <!-- 标签匹配器 -->
+            <div style="margin-top:8px">
+              <div style="font-size:12px;color:var(--ops-text-secondary);margin-bottom:4px">标签匹配器（留空=不过滤）</div>
+              <div v-for="(matcher, mIdx) in group.labelMatchers" :key="mIdx" style="display:flex;gap:6px;margin-bottom:6px">
+                <a-input v-model="matcher.key" placeholder="标签名" style="width:150px" />
+                <a-select v-model="matcher.op" style="width:80px">
+                  <a-option value="=">=</a-option>
+                  <a-option value="!=">!=</a-option>
+                  <a-option value="=~">=~</a-option>
+                  <a-option value="!~">!~</a-option>
+                </a-select>
+                <a-input v-model="matcher.value" placeholder="值（=~ 和 !~ 支持正则）" style="flex:1" />
+                <a-button size="small" status="danger" @click="group.labelMatchers.splice(mIdx, 1)">
+                  <template #icon><icon-delete /></template>
+                </a-button>
+              </div>
+              <a-button size="small" type="outline" @click="group.labelMatchers.push({ key: '', op: '=', value: '' })">
+                <template #icon><icon-plus /></template>添加匹配器
+              </a-button>
+            </div>
             <!-- 告警级别 -->
             <div style="margin-top:8px">
               <div style="font-size:12px;color:var(--ops-text-secondary);margin-bottom:4px">告警级别（留空=全部级别）</div>
@@ -132,7 +163,22 @@
           </div>
         </div>
       </a-form>
-    </a-modal>
+    </a-tab-pane>
+
+    <a-tab-pane key="governance" title="治理规则">
+      <GovernanceConfig
+        v-if="form.id"
+        :key="`gov-${form.id}-${JSON.stringify(governanceData)}`"
+        :subscription-id="form.id"
+        :dedup-data="governanceData.dedup"
+        :group-data="governanceData.group"
+        :inhibit-data="governanceData.inhibit"
+        @update="onGovernanceUpdate"
+      />
+      <a-alert v-else type="info" style="margin:20px 0">请先保存订阅后再配置治理规则</a-alert>
+    </a-tab-pane>
+  </a-tabs>
+</a-modal>
 
     <!-- 生效时间配置弹窗 -->
     <a-modal v-model:visible="timeConfigVisible" title="配置生效时间" @ok="applyTimeConfig" @cancel="timeConfigVisible=false" width="580px">
@@ -164,11 +210,14 @@ import { ref, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
   getSubscriptions, createSubscription, updateSubscription, deleteSubscription, getSubscription,
-  getRules, getChannels,
+  getRules, getChannels, getDataSources,
   type AlertSubscription, type TimeRange
 } from '@/api/alert'
 import { getGroupTree } from '@/api/assetGroup'
 import { getUserList } from '@/api/user'
+import { getDedupRules, getGroupRules, getInhibitRules, createDedupRule, updateDedupRule, createGroupRule, updateGroupRule, createInhibitRule, updateInhibitRule, deleteDedupRule, deleteGroupRule, deleteInhibitRule } from '@/api/alert-governance'
+import type { DedupRule, GroupRule, InhibitRule } from '@/api/alert-governance'
+import GovernanceConfig from './components/GovernanceConfig.vue'
 
 const weekdays = [
   { v: 1, l: '周一' }, { v: 2, l: '周二' }, { v: 3, l: '周三' },
@@ -181,6 +230,8 @@ interface RuleGroup {
   channelIds: number[]
   userIds: number[]
   timeRanges: TimeRange[]
+  dataSourceIds: number[]
+  labelMatchers: Array<{ key: string; op: string; value: string }>
 }
 
 const list = ref<any[]>([])
@@ -192,9 +243,32 @@ const flatGroups = ref<any[]>([])
 const allRules = ref<any[]>([])
 const allChannels = ref<any[]>([])
 const allUsers = ref<any[]>([])
+const allDataSources = ref<any[]>([])
 const timeConfigVisible = ref(false)
+const governanceLoaded = ref(false)
 let editingGroupIdx = -1
 const editingTimeRanges = ref<TimeRange[]>([])
+
+// 治理规则数据
+const governanceData = ref<{
+  dedup: DedupRule | null
+  group: GroupRule | null
+  inhibit: InhibitRule | null
+}>({
+  dedup: null,
+  group: null,
+  inhibit: null
+})
+
+const pendingGovernanceData = ref<{
+  dedup: DedupRule | null
+  group: GroupRule | null
+  inhibit: InhibitRule | null
+}>({
+  dedup: null,
+  group: null,
+  inhibit: null
+})
 
 const sevColor = (s: string) => ({ critical: 'red', major: 'orangered', minor: 'orange', warning: 'arcoblue' } as any)[s] || 'gray'
 const sevLabel = (s: string) => ({ critical: '紧急P1', major: '严重P2', minor: '一般P3', warning: '提示P4' } as any)[s] || s
@@ -213,6 +287,12 @@ const parseNumList = (v: any): number[] => {
 }
 
 const parseStrList = (v: any): string[] => {
+  if (!v) return []
+  if (Array.isArray(v)) return v
+  try { const p = JSON.parse(v); return Array.isArray(p) ? p : [] } catch { return [] }
+}
+
+const parseLabelMatchers = (v: any): Array<{ key: string; op: string; value: string }> => {
   if (!v) return []
   if (Array.isArray(v)) return v
   try { const p = JSON.parse(v); return Array.isArray(p) ? p : [] } catch { return [] }
@@ -250,11 +330,22 @@ const quickToggle = async (row: any, v: boolean) => {
   await updateSubscription(row.id, { ...row, enabled: v }).catch(() => {}); load()
 }
 
-const newGroup = (): RuleGroup => ({ ruleIds: [], severities: [], channelIds: [], userIds: [], timeRanges: [] })
+const newGroup = (): RuleGroup => ({
+  ruleIds: [],
+  severities: [],
+  channelIds: [],
+  userIds: [],
+  timeRanges: [],
+  dataSourceIds: [],
+  labelMatchers: []
+})
 
 const openCreate = () => {
   form.value = { enabled: true }
   ruleGroups.value = [newGroup()]
+  governanceLoaded.value = false
+  governanceData.value = { dedup: null, group: null, inhibit: null }
+  pendingGovernanceData.value = { dedup: null, group: null, inhibit: null }
   modalVisible.value = true
 }
 
@@ -270,15 +361,55 @@ const openEdit = async (row: any) => {
         severities: parseStrList(r.severities),
         channelIds: parseNumList(r.channelIds),
         userIds: parseNumList(r.userIds),
-        timeRanges: parseTimeRanges(r.timeRanges)
+        timeRanges: parseTimeRanges(r.timeRanges),
+        dataSourceIds: parseNumList(r.dataSourceIds),
+        labelMatchers: parseLabelMatchers(r.labelMatchers)
       }))
     } else {
       ruleGroups.value = [newGroup()]
     }
+
+    // 加载治理规则
+    loadGovernanceRules(row.id)
   } catch {
     ruleGroups.value = [newGroup()]
   }
   modalVisible.value = true
+}
+
+// 加载治理规则
+const loadGovernanceRules = async (subscriptionId: number) => {
+  governanceLoaded.value = false
+  try {
+    const [dedupRes, groupRes, inhibitRes] = await Promise.all([
+      getDedupRules(subscriptionId),
+      getGroupRules(subscriptionId),
+      getInhibitRules(subscriptionId)
+    ])
+
+    const dedupList = Array.isArray(dedupRes) ? dedupRes : (dedupRes?.data || [])
+    const groupList = Array.isArray(groupRes) ? groupRes : (groupRes?.data || [])
+    const inhibitList = Array.isArray(inhibitRes) ? inhibitRes : (inhibitRes?.data || [])
+
+    governanceData.value = {
+      dedup: dedupList.length > 0 ? dedupList[dedupList.length - 1] : null,
+      group: groupList.length > 0 ? groupList[groupList.length - 1] : null,
+      inhibit: inhibitList.length > 0 ? inhibitList[inhibitList.length - 1] : null
+    }
+
+    // 同步到 pendingGovernanceData，确保不修改也能保存
+    pendingGovernanceData.value = { ...governanceData.value }
+
+    governanceLoaded.value = true
+  } catch (err) {
+    console.error('加载治理规则失败', err)
+    governanceLoaded.value = true
+  }
+}
+
+// 治理规则更新回调
+const onGovernanceUpdate = (data: { dedup: DedupRule | null, group: GroupRule | null, inhibit: InhibitRule | null }) => {
+  pendingGovernanceData.value = data
 }
 
 const save = async () => {
@@ -288,17 +419,94 @@ const save = async () => {
       severities: g.severities,
       channelIds: g.channelIds,
       userIds: g.userIds,
-      timeRanges: g.timeRanges
+      timeRanges: g.timeRanges,
+      dataSourceIds: g.dataSourceIds,
+      labelMatchers: g.labelMatchers
     }
     if (g.ruleIds.length === 0) return [{ ruleId: 0, ...base }]
     return g.ruleIds.map(rid => ({ ruleId: rid, ...base }))
   })
   const payload: any = { ...form.value, rules, channelIds: [], userIds: [] }
   try {
-    if (form.value.id) { await updateSubscription(form.value.id, payload) }
-    else { await createSubscription(payload) }
-    Message.success('保存成功'); modalVisible.value = false; load()
-  } catch { Message.error('保存失败') }
+    let subscriptionId = form.value.id
+    if (form.value.id) {
+      await updateSubscription(form.value.id, payload)
+    } else {
+      const res = await createSubscription(payload)
+      subscriptionId = res?.data?.id || res?.id
+    }
+
+    // 保存治理规则（新增和编辑都需要保存）
+    if (subscriptionId) {
+      await saveGovernanceRules(subscriptionId)
+    }
+
+    Message.success('保存成功')
+    modalVisible.value = false
+    load()
+  } catch (err) {
+    console.error('保存失败', err)
+    Message.error('保存失败')
+  }
+}
+
+// 保存治理规则
+const saveGovernanceRules = async (subscriptionId: number) => {
+  const { dedup, group, inhibit } = pendingGovernanceData.value
+
+  try {
+    // 保存去重规则
+    if (dedup && dedup.enabled) {
+      const payload = { ...dedup, subscriptionId }
+      if (governanceData.value.dedup?.id) {
+        await updateDedupRule(governanceData.value.dedup.id, payload)
+      } else {
+        const res = await createDedupRule(payload)
+        // 更新 governanceData，避免下次重复创建
+        if (res?.data?.id || res?.id) {
+          governanceData.value.dedup = { ...payload, id: res?.data?.id || res?.id } as DedupRule
+        }
+      }
+    } else if (governanceData.value.dedup?.id) {
+      await deleteDedupRule(governanceData.value.dedup.id)
+      governanceData.value.dedup = null
+    }
+
+    // 保存分组规则
+    if (group && group.enabled) {
+      const payload = { ...group, subscriptionId }
+      if (governanceData.value.group?.id) {
+        await updateGroupRule(governanceData.value.group.id, payload)
+      } else {
+        const res = await createGroupRule(payload)
+        if (res?.data?.id || res?.id) {
+          governanceData.value.group = { ...payload, id: res?.data?.id || res?.id } as GroupRule
+        }
+      }
+    } else if (governanceData.value.group?.id) {
+      await deleteGroupRule(governanceData.value.group.id)
+      governanceData.value.group = null
+    }
+
+    // 保存抑制规则
+    if (inhibit && inhibit.enabled) {
+      const payload = { ...inhibit, subscriptionId }
+      if (governanceData.value.inhibit?.id) {
+        await updateInhibitRule(governanceData.value.inhibit.id, payload)
+      } else {
+        const res = await createInhibitRule(payload)
+        if (res?.data?.id || res?.id) {
+          governanceData.value.inhibit = { ...payload, id: res?.data?.id || res?.id } as InhibitRule
+        }
+      }
+    } else if (governanceData.value.inhibit?.id) {
+      await deleteInhibitRule(governanceData.value.inhibit.id)
+      governanceData.value.inhibit = null
+    }
+  } catch (err) {
+    console.error('保存治理规则失败', err)
+    throw err
+  }
 }
 
 const addRuleGroup = () => ruleGroups.value.push(newGroup())
@@ -323,8 +531,8 @@ const addTimeRange = () => editingTimeRanges.value.push({ weekdays: [1,2,3,4,5],
 const setWorkdays = () => { editingTimeRanges.value = [{ weekdays: [1,2,3,4,5], start: '09:00', end: '18:00' }] }
 
 onMounted(async () => {
-  const [treeRes, rulesRes, chRes, usersRes] = await Promise.all([
-    getGroupTree(), getRules({ page: 1, pageSize: 1000 }), getChannels(), getUserList({ page: 1, pageSize: 1000 })
+  const [treeRes, rulesRes, chRes, usersRes, dsRes] = await Promise.all([
+    getGroupTree(), getRules({ page: 1, pageSize: 1000 }), getChannels(), getUserList({ page: 1, pageSize: 1000 }), getDataSources()
   ])
   flatGroups.value = flattenGroups(treeRes?.data || treeRes || [])
   const rulesData = rulesRes?.data || rulesRes || {}
@@ -332,6 +540,7 @@ onMounted(async () => {
   allChannels.value = chRes?.data || chRes || []
   const usersData = usersRes?.data || usersRes || {}
   allUsers.value = (usersData.list || usersData.data || (Array.isArray(usersData) ? usersData : [])) as any[]
+  allDataSources.value = dsRes?.data || dsRes || []
   load()
 })
 </script>
