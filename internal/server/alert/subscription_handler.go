@@ -52,11 +52,25 @@ func (s *HTTPServer) listSubscriptions(c *gin.Context) {
 	var vos []subscriptionVO
 	for _, sub := range list {
 		rules, _ := s.subRuleRepo.ListBySubscription(c.Request.Context(), sub.ID)
-		channels, _ := s.subChannelRepo.ListBySubscription(c.Request.Context(), sub.ID)
+
+		// 统计所有推送规则中配置的唯一通道数
+		channelSet := make(map[uint]bool)
+		for _, rule := range rules {
+			// 解析 channel_ids JSON 数组
+			if rule.ChannelIDs != "" && rule.ChannelIDs != "[]" && rule.ChannelIDs != "null" {
+				var channelIDs []uint
+				if err := json.Unmarshal([]byte(rule.ChannelIDs), &channelIDs); err == nil {
+					for _, chID := range channelIDs {
+						channelSet[chID] = true
+					}
+				}
+			}
+		}
+
 		vos = append(vos, subscriptionVO{
 			AlertSubscription: *sub,
 			RuleCount:         len(rules),
-			ChannelCount:      len(channels),
+			ChannelCount:      len(channelSet),
 		})
 	}
 	response.Success(c, vos)
