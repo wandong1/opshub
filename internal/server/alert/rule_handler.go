@@ -7,9 +7,11 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	biz "github.com/ydcloud-dy/opshub/internal/biz/alert"
+	"github.com/ydcloud-dy/opshub/pkg/logger"
 	"github.com/ydcloud-dy/opshub/pkg/response"
 )
 
@@ -176,23 +178,32 @@ func (s *HTTPServer) updateRule(c *gin.Context) {
 func (s *HTTPServer) deleteRule(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 
-	// 先将该规则的所有告警中的告警标记为已恢复（与禁用规则逻辑相同）
+	// 1. 先将该规则的所有活跃告警标记为已恢复
 	if err := s.eventRepo.ResolveActiveByRuleID(c.Request.Context(), uint(id)); err != nil {
-		// 记录错误但不影响后续操作
 		c.Error(err)
 	}
 
-	// 删除规则
+	// 2. 清理 Redis 中该规则的所有告警状态
+	if s.evalEngine != nil {
+		s.evalEngine.ClearRuleStates(c.Request.Context(), uint(id))
+	}
+
+	// 3. 发布规则重载事件（先发布，让评估引擎停止评估该规则）
+	if s.evalEngine != nil {
+		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			c.Error(err)
+		}
+	}
+
+	// 4. 删除规则
 	if err := s.ruleRepo.Delete(c.Request.Context(), uint(id)); err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
 
-	// 发布规则重载事件
-	if s.evalEngine != nil {
-		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
-			c.Error(err)
-		}
+	// 5. 再次清理可能在删除过程中新产生的告警（防止竞态）
+	if err := s.eventRepo.ResolveActiveByRuleID(c.Request.Context(), uint(id)); err != nil {
+		c.Error(err)
 	}
 
 	response.Success(c, nil)
@@ -206,11 +217,16 @@ func (s *HTTPServer) toggleRule(c *gin.Context) {
 		return
 	}
 
-	// 如果是禁用规则，将该规则的所有告警中的告警标记为已恢复
+	// 如果是禁用规则，将该规则的所有活跃告警标记为已恢复
 	if rule.Enabled {
+		// 1. 将数据库中的告警标记为已恢复
 		if err := s.eventRepo.ResolveActiveByRuleID(c.Request.Context(), uint(id)); err != nil {
-			// 记录错误但不影响规则禁用操作
 			c.Error(err)
+		}
+
+		// 2. 清理 Redis 中该规则的所有告警状态
+		if s.evalEngine != nil {
+			s.evalEngine.ClearRuleStates(c.Request.Context(), uint(id))
 		}
 	}
 
@@ -268,48 +284,112 @@ func (s *HTTPServer) cloneRule(c *gin.Context) {
 func (s *HTTPServer) importRules(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
+		logger.Error("获取上传文件失败", zap.Error(err))
 		response.ErrorCode(c, http.StatusBadRequest, "请上传文件")
 		return
 	}
+
+	logger.Info("开始导入规则", zap.String("filename", file.Filename), zap.Int64("size", file.Size))
+
 	f, err := file.Open()
 	if err != nil {
+		logger.Error("打开文件失败", zap.Error(err))
 		response.ErrorCode(c, http.StatusInternalServerError, "文件读取失败")
 		return
 	}
 	defer f.Close()
 
 	buf := make([]byte, file.Size)
-	f.Read(buf)
+	if _, err := f.Read(buf); err != nil {
+		logger.Error("读取文件内容失败", zap.Error(err))
+		response.ErrorCode(c, http.StatusInternalServerError, "文件读取失败: "+err.Error())
+		return
+	}
+
+	logger.Debug("文件内容", zap.String("content", string(buf[:min(len(buf), 500)])))
 
 	var rules []biz.AlertRule
+	var parseErr error
 	// 尝试 JSON，失败则 YAML
 	if err := json.Unmarshal(buf, &rules); err != nil {
+		parseErr = err
+		logger.Debug("JSON解析失败，尝试YAML", zap.Error(err))
 		if err2 := yaml.Unmarshal(buf, &rules); err2 != nil {
-			response.ErrorCode(c, http.StatusBadRequest, "文件格式错误，支持 JSON 和 YAML")
+			logger.Error("YAML解析也失败", zap.Error(err2))
+			response.ErrorCode(c, http.StatusBadRequest, fmt.Sprintf("文件格式错误，支持 JSON 和 YAML。JSON解析错误: %v, YAML解析错误: %v", parseErr, err2))
 			return
 		}
+		logger.Info("YAML解析成功", zap.Int("规则数量", len(rules)))
+	} else {
+		logger.Info("JSON解析成功", zap.Int("规则数量", len(rules)))
+	}
+
+	if len(rules) == 0 {
+		logger.Warn("文件中没有有效的规则")
+		response.ErrorCode(c, http.StatusBadRequest, "文件中没有有效的规则")
+		return
 	}
 
 	success := 0
+	updated := 0
+	var failedRules []string
+
 	for i := range rules {
+		logger.Debug("处理规则", zap.String("name", rules[i].Name), zap.String("expr", rules[i].Expr))
+
 		rules[i].ID = 0
 		rules[i].Enabled = false
 		if rules[i].EvalInterval <= 0 {
 			rules[i].EvalInterval = 15
 		}
-		if err := s.ruleRepo.Create(c.Request.Context(), &rules[i]); err == nil {
-			success++
+
+		// 检查是否存在同名规则
+		existingRule, err := s.ruleRepo.GetByName(c.Request.Context(), rules[i].Name)
+		if err == nil && existingRule != nil {
+			// 存在同名规则，更新
+			logger.Info("发现同名规则，执行更新", zap.String("name", rules[i].Name), zap.Uint("id", existingRule.ID))
+			rules[i].ID = existingRule.ID
+			if err := s.ruleRepo.Update(c.Request.Context(), &rules[i]); err != nil {
+				logger.Error("更新规则失败", zap.String("name", rules[i].Name), zap.Error(err))
+				failedRules = append(failedRules, fmt.Sprintf("%s: 更新失败 - %v", rules[i].Name, err))
+			} else {
+				updated++
+			}
+		} else {
+			// 不存在，创建新规则
+			logger.Info("创建新规则", zap.String("name", rules[i].Name))
+			if err := s.ruleRepo.Create(c.Request.Context(), &rules[i]); err != nil {
+				logger.Error("创建规则失败", zap.String("name", rules[i].Name), zap.Error(err))
+				failedRules = append(failedRules, fmt.Sprintf("%s: 创建失败 - %v", rules[i].Name, err))
+			} else {
+				success++
+			}
 		}
 	}
 
 	// 发布规则重载事件
-	if s.evalEngine != nil && success > 0 {
+	if s.evalEngine != nil && (success > 0 || updated > 0) {
 		if err := s.evalEngine.GetRuleCache().PublishReloadEvent(c.Request.Context()); err != nil {
+			logger.Error("发布规则重载事件失败", zap.Error(err))
 			c.Error(err)
 		}
 	}
 
-	response.Success(c, gin.H{"imported": success, "total": len(rules)})
+	logger.Info("导入完成", zap.Int("新增", success), zap.Int("更新", updated), zap.Int("失败", len(failedRules)))
+
+	result := gin.H{"imported": success, "updated": updated, "total": len(rules)}
+	if len(failedRules) > 0 {
+		result["failed"] = failedRules
+	}
+
+	response.Success(c, result)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (s *HTTPServer) exportRules(c *gin.Context) {

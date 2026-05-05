@@ -96,8 +96,8 @@
             </a-table-column>
             <a-table-column title="PromQL" :ellipsis="true" :width="220">
               <template #cell="{ record }">
-                <a-tooltip :content="record.expr">
-                  <code class="expr-code">{{ record.expr }}</code>
+                <a-tooltip :content="record.queryExpr || record.expr">
+                  <code class="expr-code">{{ record.queryExpr || record.expr }}</code>
                 </a-tooltip>
               </template>
             </a-table-column>
