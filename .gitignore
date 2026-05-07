@@ -49,3 +49,8 @@ web/public/uploads/*
 
 # SQLite database
 data/*.db
+
+# Third party data
+third_party_data/
+ragflow/
+kuboard-log/
