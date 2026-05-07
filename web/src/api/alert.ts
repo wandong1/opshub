@@ -276,4 +276,6 @@ export const createSubscription = (data: Partial<AlertSubscription>) => request.
 export const getSubscription = (id: number) => request.get(`/api/v1/alert/subscriptions/${id}`)
 export const updateSubscription = (id: number, data: Partial<AlertSubscription>) =>
   request.put(`/api/v1/alert/subscriptions/${id}`, data)
+export const toggleSubscription = (id: number, enabled: boolean) =>
+  request.patch(`/api/v1/alert/subscriptions/${id}/toggle`, { enabled })
 export const deleteSubscription = (id: number) => request.delete(`/api/v1/alert/subscriptions/${id}`)

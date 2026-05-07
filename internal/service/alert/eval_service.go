@@ -70,7 +70,7 @@ func NewEvalEngine(db *gorm.DB, rdb *redis.Client) *EvalEngine {
 	subLogRepo := alertdata.NewSubscriptionLogRepo(db)
 	channelRepo := alertdata.NewChannelRepo(db)
 	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
-	notifySvc := NewNotifyService(channelRepo)
+	notifySvc := NewNotifyService(channelRepo, db)
 
 	// 创建评估时间缓存管理器
 	evalCache := NewEvalCache(rdb, db, cache.NewLuaScripts())
@@ -816,7 +816,7 @@ func (e *EvalEngine) sendNotifications(ctx context.Context, rule *biz.AlertRule,
 				"type":   ch.Type,
 				"status": "sent",
 			})
-			go e.notifySvc.Send(ctx, ch, event, isResolve, phones)
+			go e.notifySvc.Send(ctx, ch, event, isResolve, phones, userIDs)
 		}
 
 		notifyResult["channels"] = channelResults

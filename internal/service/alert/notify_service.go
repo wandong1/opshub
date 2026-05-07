@@ -3,16 +3,20 @@ package alert
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/smtp"
 	"strings"
 	"text/template"
 	"time"
 
 	appLogger "github.com/ydcloud-dy/opshub/pkg/logger"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	biz "github.com/ydcloud-dy/opshub/internal/biz/alert"
 	alertdata "github.com/ydcloud-dy/opshub/internal/data/alert"
@@ -21,10 +25,14 @@ import (
 // NotifyService 告警通知服务
 type NotifyService struct {
 	channelRepo *alertdata.ChannelRepo
+	db          *gorm.DB
 }
 
-func NewNotifyService(channelRepo *alertdata.ChannelRepo) *NotifyService {
-	return &NotifyService{channelRepo: channelRepo}
+func NewNotifyService(channelRepo *alertdata.ChannelRepo, db *gorm.DB) *NotifyService {
+	return &NotifyService{
+		channelRepo: channelRepo,
+		db:          db,
+	}
 }
 
 // notifyTplData 模板渲染数据
@@ -47,12 +55,14 @@ type notifyTplData struct {
 
 // Send 发送通知（firing 或 resolved）
 // phones: 接收用户手机号列表，nil=@all，空切片=不@任何人，非空切片=@指定用户
-func (s *NotifyService) Send(ctx context.Context, ch *biz.AlertNotifyChannel, event *biz.AlertEvent, isResolve bool, phones []string) {
+// userIDs: 接收用户ID列表，用于邮件通道直接查询邮箱
+func (s *NotifyService) Send(ctx context.Context, ch *biz.AlertNotifyChannel, event *biz.AlertEvent, isResolve bool, phones []string, userIDs []uint) {
 	appLogger.Info("发送通知",
 		zap.String("channel", ch.Name),
 		zap.Bool("isResolve", isResolve),
 		zap.Int("alertTemplateLen", len(ch.AlertTemplate)),
-		zap.Int("resolveTemplateLen", len(ch.ResolveTemplate)))
+		zap.Int("resolveTemplateLen", len(ch.ResolveTemplate)),
+		zap.Uints("userIDs", userIDs))
 
 	tplStr := ch.AlertTemplate
 	if isResolve {
@@ -70,6 +80,8 @@ func (s *NotifyService) Send(ctx context.Context, ch *biz.AlertNotifyChannel, ev
 
 	var err error
 	switch ch.Type {
+	case "email":
+		err = s.sendEmail(ctx, ch.Config, msg, userIDs)
 	case "wechat_work":
 		err = sendWechatWork(ch.Config, msg, phones, isResolve)
 	case "dingtalk":
@@ -260,6 +272,218 @@ func sendWechatWork(configJSON, msg string, phones []string, isResolve bool) err
 	}
 
 	return postJSON(cfg.WebhookURL, markdownPayload)
+}
+
+// sendEmail 发送邮件通知
+func (s *NotifyService) sendEmail(ctx context.Context, configJSON, msg string, userIDs []uint) error {
+	var cfg struct {
+		SMTPHost     string `json:"smtpHost"`
+		SMTPPort     int    `json:"smtpPort"`
+		SMTPUser     string `json:"smtpUser"`
+		SMTPPassword string `json:"smtpPassword"`
+		FromEmail    string `json:"fromEmail"`
+		FromName     string `json:"fromName"`
+	}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		appLogger.Error("解析邮件配置失败", zap.Error(err))
+		return err
+	}
+
+	// 邮件发送必须指定接收用户，不支持 @all
+	// userIDs == nil 或包含 0 表示 @all（IM 工具），但邮件不支持，直接跳过
+	if userIDs == nil || len(userIDs) == 0 {
+		appLogger.Info("邮件通道未指定接收用户，跳过发送")
+		return nil
+	}
+
+	// 检查是否包含 userID=0（@all）
+	for _, uid := range userIDs {
+		if uid == 0 {
+			appLogger.Info("邮件通道不支持 @all，跳过发送")
+			return nil
+		}
+	}
+
+	appLogger.Info("准备发送邮件",
+		zap.String("smtpHost", cfg.SMTPHost),
+		zap.Int("smtpPort", cfg.SMTPPort),
+		zap.Uints("userIDs", userIDs))
+
+	// 直接通过用户ID查询邮箱地址
+	type userRow struct {
+		Email    string
+		RealName string
+	}
+	var users []userRow
+	if err := s.db.WithContext(ctx).Table("sys_user").
+		Select("email, real_name").
+		Where("id IN ? AND email != ''", userIDs).
+		Scan(&users).Error; err != nil {
+		appLogger.Error("查询用户邮箱失败", zap.Error(err))
+		return err
+	}
+
+	if len(users) == 0 {
+		appLogger.Warn("未找到有效的用户邮箱", zap.Uints("userIDs", userIDs))
+		return fmt.Errorf("未找到有效的用户邮箱")
+	}
+
+	var emails []string
+	for _, u := range users {
+		if u.Email != "" {
+			emails = append(emails, u.Email)
+		}
+	}
+
+	appLogger.Info("找到接收邮箱", zap.Strings("emails", emails), zap.Int("count", len(emails)))
+
+	// 构建邮件主题
+	subject := "SreHub 告警通知"
+	if strings.Contains(msg, "恢复") || strings.Contains(msg, "✅") {
+		subject = "SreHub 恢复通知"
+	}
+
+	// 构建邮件头
+	from := fmt.Sprintf("%s <%s>", cfg.FromName, cfg.FromEmail)
+	headers := make(map[string]string)
+	headers["From"] = from
+	headers["To"] = strings.Join(emails, ", ")
+	headers["Subject"] = subject
+	headers["MIME-Version"] = "1.0"
+	headers["Content-Type"] = "text/html; charset=UTF-8"
+
+	// 构建邮件内容
+	var mailContent string
+	for k, v := range headers {
+		mailContent += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	mailContent += "\r\n" + msg
+
+	// 发送邮件
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	var err error
+	if cfg.SMTPPort == 465 {
+		// 端口 465 使用直接 TLS 连接
+		err = sendEmailWithTLS(addr, cfg.SMTPHost, cfg.SMTPUser, cfg.SMTPPassword, cfg.FromEmail, emails, []byte(mailContent))
+	} else {
+		// 端口 25/587 使用 STARTTLS
+		err = sendEmailWithSTARTTLS(addr, cfg.SMTPHost, cfg.SMTPUser, cfg.SMTPPassword, cfg.FromEmail, emails, []byte(mailContent))
+	}
+
+	if err != nil {
+		appLogger.Error("邮件发送失败",
+			zap.String("smtpHost", cfg.SMTPHost),
+			zap.Int("smtpPort", cfg.SMTPPort),
+			zap.Strings("emails", emails),
+			zap.Error(err))
+		return err
+	}
+
+	appLogger.Info("邮件发送成功", zap.Strings("emails", emails), zap.Int("count", len(emails)))
+	return nil
+}
+
+// sendEmailWithTLS 使用直接 TLS 连接发送邮件（端口 465）
+func sendEmailWithTLS(addr, host, user, password, from string, to []string, msg []byte) error {
+	tlsConfig := &tls.Config{
+		ServerName:         host,
+		InsecureSkipVerify: false,
+	}
+
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("TLS 连接失败: %w", err)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("创建 SMTP 客户端失败: %w", err)
+	}
+	defer client.Close()
+
+	auth := smtp.PlainAuth("", user, password, host)
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP 认证失败: %w", err)
+	}
+
+	if err = client.Mail(from); err != nil {
+		return fmt.Errorf("设置发件人失败: %w", err)
+	}
+
+	for _, addr := range to {
+		if err = client.Rcpt(addr); err != nil {
+			return fmt.Errorf("设置收件人失败: %w", err)
+		}
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("获取数据写入器失败: %w", err)
+	}
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("写入邮件内容失败: %w", err)
+	}
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("关闭数据写入器失败: %w", err)
+	}
+
+	return client.Quit()
+}
+
+// sendEmailWithSTARTTLS 使用 STARTTLS 发送邮件（端口 25/587）
+func sendEmailWithSTARTTLS(addr, host, user, password, from string, to []string, msg []byte) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("TCP 连接失败: %w", err)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("创建 SMTP 客户端失败: %w", err)
+	}
+	defer client.Close()
+
+	tlsConfig := &tls.Config{
+		ServerName:         host,
+		InsecureSkipVerify: false,
+	}
+	if err = client.StartTLS(tlsConfig); err != nil {
+		return fmt.Errorf("STARTTLS 升级失败: %w", err)
+	}
+
+	auth := smtp.PlainAuth("", user, password, host)
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP 认证失败: %w", err)
+	}
+
+	if err = client.Mail(from); err != nil {
+		return fmt.Errorf("设置发件人失败: %w", err)
+	}
+
+	for _, addr := range to {
+		if err = client.Rcpt(addr); err != nil {
+			return fmt.Errorf("设置收件人失败: %w", err)
+		}
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("获取数据写入器失败: %w", err)
+	}
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("写入邮件内容失败: %w", err)
+	}
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("关闭数据写入器失败: %w", err)
+	}
+
+	return client.Quit()
 }
 
 func sendDingTalk(configJSON, msg string, phones []string) error {

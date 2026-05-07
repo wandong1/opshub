@@ -84,7 +84,7 @@ func (s *HTTPServer) testChannel(c *gin.Context) {
 		Value:    99.9,
 		Labels:   `{"env":"test"}`,
 	}
-	s.notifySvc.Send(c.Request.Context(), ch, testEvent, false, []string{})
+	s.notifySvc.Send(c.Request.Context(), ch, testEvent, false, []string{}, []uint{})
 	response.Success(c, gin.H{"message": "测试通知已发送"})
 }
 

@@ -188,7 +188,9 @@ func (s *GroupService) sendGroupCache(ctx context.Context, cacheID uint) {
 	}
 
 	var phones []string
+	var userIDs []uint
 	if perRuleUsers := parseUintList(sr.UserIDs); len(perRuleUsers) > 0 {
+		userIDs = perRuleUsers
 		phones = getUserPhones(ctx, s.db, perRuleUsers)
 	} else {
 		phones = getSubPhones(ctx, s.db, s.subUserRepo, cache.SubscriptionID)
@@ -203,7 +205,7 @@ func (s *GroupService) sendGroupCache(ctx context.Context, cacheID uint) {
 			if !ch.Enabled {
 				continue
 			}
-			go s.notifySvc.Send(ctx, ch, event, isResolve, phones)
+			go s.notifySvc.Send(ctx, ch, event, isResolve, phones, userIDs)
 		}
 	}
 
@@ -220,7 +222,7 @@ func getUserPhones(ctx context.Context, db *gorm.DB, userIDs []uint) []string {
 	}
 	type phoneRow struct{ Phone string }
 	var rows []phoneRow
-	db.WithContext(ctx).Table("sys_users").Select("phone").Where("id IN ? AND phone != ''", userIDs).Scan(&rows)
+	db.WithContext(ctx).Table("sys_user").Select("phone").Where("id IN ? AND phone != ''", userIDs).Scan(&rows)
 	var phones []string
 	for _, r := range rows {
 		if r.Phone != "" {

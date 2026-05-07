@@ -209,7 +209,7 @@
 import { ref, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
-  getSubscriptions, createSubscription, updateSubscription, deleteSubscription, getSubscription,
+  getSubscriptions, createSubscription, updateSubscription, toggleSubscription, deleteSubscription, getSubscription,
   getRules, getChannels, getDataSources,
   type AlertSubscription, type TimeRange
 } from '@/api/alert'
@@ -327,7 +327,13 @@ const remove = async (id: number) => {
 }
 
 const quickToggle = async (row: any, v: boolean) => {
-  await updateSubscription(row.id, { ...row, enabled: v }).catch(() => {}); load()
+  try {
+    await toggleSubscription(row.id, v)
+    Message.success(v ? '已启用' : '已禁用')
+    load()
+  } catch (error) {
+    Message.error('操作失败')
+  }
 }
 
 const newGroup = (): RuleGroup => ({

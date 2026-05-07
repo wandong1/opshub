@@ -51,7 +51,7 @@ func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 	subUserRepo := alertdata.NewSubscriptionUserRepo(db)
 	subLogRepo := alertdata.NewSubscriptionLogRepo(db)
 	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
-	notifySvc := alertsvc.NewNotifyService(channelRepo)
+	notifySvc := alertsvc.NewNotifyService(channelRepo, db)
 	evalEngine := alertsvc.NewEvalEngine(db, rdb)
 
 	return &HTTPServer{
@@ -166,6 +166,7 @@ func (s *HTTPServer) RegisterRoutes(rg *gin.RouterGroup) {
 		subs.GET("/:id", s.getSubscription)
 		subs.PUT("/:id", s.updateSubscription)
 		subs.DELETE("/:id", s.deleteSubscription)
+		subs.PATCH("/:id/toggle", s.toggleSubscription)
 		subs.POST("/:id/test", s.testSubscription)
 		subs.GET("/:id/logs", s.getSubscriptionLogs)
 	}

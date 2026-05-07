@@ -150,6 +150,36 @@ func (s *HTTPServer) deleteSubscription(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// toggleSubscription 切换订阅启用状态（只更新 enabled 字段）
+func (s *HTTPServer) toggleSubscription(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	// 解析请求体
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// 查询订阅
+	sub, err := s.subRepo.GetByID(c.Request.Context(), uint(id))
+	if err != nil {
+		response.ErrorCode(c, http.StatusNotFound, "订阅任务不存在")
+		return
+	}
+
+	// 只更新 enabled 字段
+	sub.Enabled = req.Enabled
+	if err := s.subRepo.Update(c.Request.Context(), sub); err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, "更新失败")
+		return
+	}
+
+	response.Success(c, sub)
+}
+
 func rawJSONStr(raw json.RawMessage, fallback string) string {
 	if len(raw) == 0 {
 		return fallback
@@ -185,6 +215,47 @@ func (s *HTTPServer) saveSubRelations(c *gin.Context, subID uint, rules []subscr
 func (s *HTTPServer) validateSubscriptionRequest(c *gin.Context, req *subscriptionRequest) error {
 	ctx := c.Request.Context()
 
+	// 如果订阅已禁用，跳过通道校验（允许用户关闭订阅）
+	// 但仍然校验数据源和标签匹配器的语法
+	if !req.Enabled {
+		// 校验数据源 ID 有效性
+		for _, rule := range req.Rules {
+			var dsIDs []uint
+			if err := json.Unmarshal(rule.DataSourceIDs, &dsIDs); err == nil && len(dsIDs) > 0 {
+				for _, dsID := range dsIDs {
+					if _, err := s.dsRepo.GetByID(ctx, dsID); err != nil {
+						return fmt.Errorf("数据源 ID %d 无效", dsID)
+					}
+				}
+			}
+		}
+
+		// 校验标签匹配器语法
+		for _, rule := range req.Rules {
+			var matchers []map[string]string
+			if err := json.Unmarshal(rule.LabelMatchers, &matchers); err == nil {
+				for _, m := range matchers {
+					op, ok := m["op"]
+					if !ok {
+						return fmt.Errorf("标签匹配器缺少 op 字段")
+					}
+					if op != "=" && op != "!=" && op != "=~" && op != "!~" {
+						return fmt.Errorf("标签匹配器操作符无效: %s", op)
+					}
+					// 校验正则表达式语法
+					if (op == "=~" || op == "!~") && m["value"] != "" {
+						if _, err := regexp.Compile(m["value"]); err != nil {
+							return fmt.Errorf("标签匹配器正则表达式无效: %s", m["value"])
+						}
+					}
+				}
+			}
+		}
+
+		return nil // 禁用的订阅不校验通道
+	}
+
+	// 以下是启用订阅的校验逻辑
 	// 1. 校验至少有一个通道（rule-level 或 subscription-level）
 	hasChannel := len(req.ChannelIDs) > 0
 	if !hasChannel {
