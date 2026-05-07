@@ -157,6 +157,20 @@
               <a-option label="离线" :value="0" />
               <a-option label="未知" :value="-1" />
             </a-select>
+
+            <a-select
+              v-model="searchForm.tags"
+              placeholder="服务标签"
+              multiple
+              allow-clear
+              allow-search
+              class="filter-input"
+              @change="handleSearch"
+            >
+              <a-option v-for="label in serviceLabelOptions" :key="label" :value="label">
+                {{ label }}
+              </a-option>
+            </a-select>
           </div>
           <div class="filter-actions">
             <a-button
@@ -1519,7 +1533,8 @@ const serviceLabelOptions = ref<string[]>([])
 // 搜索表单
 const searchForm = reactive({
   keyword: '',
-  status: undefined as number | undefined
+  status: undefined as number | undefined,
+  tags: [] as string[]
 })
 
 // 主机分页
@@ -1821,6 +1836,9 @@ const loadHostList = async () => {
     }
     if (searchForm.status !== undefined) {
       params.status = searchForm.status
+    }
+    if (searchForm.tags && searchForm.tags.length > 0) {
+      params.tags = searchForm.tags.join(',')
     }
     if (selectedGroup.value && selectedGroup.value.id) {
       params.groupId = selectedGroup.value.id
@@ -2142,6 +2160,7 @@ const handleSearch = () => {
 const handleReset = () => {
   searchForm.keyword = ''
   searchForm.status = undefined
+  searchForm.tags = []
   clearGroupSelection()
 }
 
@@ -3213,7 +3232,7 @@ onMounted(async () => {
 }
 
 .filter-input {
-  width: 220px;
+  width: 520px;
 }
 
 .filter-actions {

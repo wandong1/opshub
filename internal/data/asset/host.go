@@ -99,7 +99,7 @@ func (r *hostRepo) GetByID(ctx context.Context, id uint) (*asset.Host, error) {
 }
 
 // List 列表查询
-func (r *hostRepo) List(ctx context.Context, page, pageSize int, keyword string, groupIDs []uint, accessibleHostIDs []uint) ([]*asset.Host, int64, error) {
+func (r *hostRepo) List(ctx context.Context, page, pageSize int, keyword string, groupIDs []uint, status *int, tags []string, accessibleHostIDs []uint) ([]*asset.Host, int64, error) {
 	var hosts []*asset.Host
 	var total int64
 
@@ -112,6 +112,20 @@ func (r *hostRepo) List(ctx context.Context, page, pageSize int, keyword string,
 	// 添加分组ID筛选（支持多个分组ID）
 	if len(groupIDs) > 0 {
 		query = query.Where("group_id IN ?", groupIDs)
+	}
+
+	// 添加状态筛选
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+
+	// 添加标签筛选（多选，AND 逻辑：主机必须包含所有选中的标签）
+	if len(tags) > 0 {
+		for _, tag := range tags {
+			if tag != "" {
+				query = query.Where("tags LIKE ?", "%"+tag+"%")
+			}
+		}
 	}
 
 	// 添加可访问主机ID筛选

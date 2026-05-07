@@ -242,6 +242,7 @@
             <a-radio value="8h">8小时</a-radio>
             <a-radio value="24h">24小时</a-radio>
             <a-radio value="168h">1周</a-radio>
+            <a-radio value="876000h">永久</a-radio>
           </a-radio-group>
         </a-form-item>
 
@@ -304,6 +305,7 @@
             <a-radio value="12h">12小时</a-radio>
             <a-radio value="24h">1天</a-radio>
             <a-radio value="168h">1周</a-radio>
+            <a-radio value="876000h">永久</a-radio>
           </a-radio-group>
         </a-form-item>
 

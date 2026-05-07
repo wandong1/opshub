@@ -146,7 +146,7 @@ func (uc *HostUseCase) GetByID(ctx context.Context, id uint) (*HostInfoVO, error
 }
 
 // List 分页查询主机列表
-func (uc *HostUseCase) List(ctx context.Context, page, pageSize int, keyword string, groupID *uint, accessibleHostIDs []uint) ([]*HostInfoVO, int64, error) {
+func (uc *HostUseCase) List(ctx context.Context, page, pageSize int, keyword string, groupID *uint, status *int, tags []string, accessibleHostIDs []uint) ([]*HostInfoVO, int64, error) {
 	// 如果指定了分组ID，获取所有子孙分组ID
 	var groupIDs []uint
 	if groupID != nil && *groupID > 0 {
@@ -158,7 +158,7 @@ func (uc *HostUseCase) List(ctx context.Context, page, pageSize int, keyword str
 		}
 	}
 
-	hosts, total, err := uc.hostRepo.List(ctx, page, pageSize, keyword, groupIDs, accessibleHostIDs)
+	hosts, total, err := uc.hostRepo.List(ctx, page, pageSize, keyword, groupIDs, status, tags, accessibleHostIDs)
 	if err != nil {
 		return nil, 0, err
 	}
