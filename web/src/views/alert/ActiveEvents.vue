@@ -569,10 +569,27 @@ const doSilence = async () => {
     if (singleSilenceType.value === 'fixed') {
       data.duration = silenceDuration.value
     } else {
+      // 将时间对象转换为 HH:mm 格式的字符串
+      const formatTime = (time: any): string => {
+        if (typeof time === 'string') return time
+        if (!time) return '00:00'
+        // 如果是 Date 对象
+        if (time instanceof Date) {
+          const h = String(time.getHours()).padStart(2, '0')
+          const m = String(time.getMinutes()).padStart(2, '0')
+          return `${h}:${m}`
+        }
+        // 如果是 dayjs 对象
+        if (time.format) {
+          return time.format('HH:mm')
+        }
+        return '00:00'
+      }
+
       data.timeRanges = JSON.stringify([{
         weekdays: singleSilenceWeekdays.value,
-        start: singleSilenceStart.value,
-        end: singleSilenceEnd.value
+        start: formatTime(singleSilenceStart.value),
+        end: formatTime(singleSilenceEnd.value)
       }])
     }
 
@@ -626,10 +643,27 @@ const doBatchSilence = async () => {
     if (batchSilenceType.value === 'fixed') {
       data.duration = batchSilenceDuration.value
     } else {
+      // 将时间对象转换为 HH:mm 格式的字符串
+      const formatTime = (time: any): string => {
+        if (typeof time === 'string') return time
+        if (!time) return '00:00'
+        // 如果是 Date 对象
+        if (time instanceof Date) {
+          const h = String(time.getHours()).padStart(2, '0')
+          const m = String(time.getMinutes()).padStart(2, '0')
+          return `${h}:${m}`
+        }
+        // 如果是 dayjs 对象
+        if (time.format) {
+          return time.format('HH:mm')
+        }
+        return '00:00'
+      }
+
       data.timeRanges = JSON.stringify([{
         weekdays: batchSilenceWeekdays.value,
-        start: batchSilenceStart.value,
-        end: batchSilenceEnd.value
+        start: formatTime(batchSilenceStart.value),
+        end: formatTime(batchSilenceEnd.value)
       }])
     }
 
