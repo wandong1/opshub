@@ -494,3 +494,127 @@ func (r *cloudAccountRepo) GetAll(ctx context.Context) ([]*asset.CloudAccount, e
 	}
 	return accounts, nil
 }
+
+// GetStatistics 获取主机统计信息（支持筛选条件）
+func (r *hostRepo) GetStatistics(ctx context.Context, keyword string, groupIDs []uint, status *int, tags []string) (*asset.HostStatistics, error) {
+	stats := &asset.HostStatistics{
+		TypeStats:       make(map[string]int64),
+		ArchStats:       make(map[string]int64),
+		ConnectionStats: make(map[string]int64),
+	}
+
+	// 构建基础查询函数，每次调用返回新的查询对象
+	buildBaseQuery := func() *gorm.DB {
+		query := r.db.WithContext(ctx).Model(&asset.Host{})
+		if keyword != "" {
+			query = query.Where("name LIKE ? OR ip LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		}
+		if len(groupIDs) > 0 {
+			query = query.Where("group_id IN ?", groupIDs)
+		}
+		if status != nil {
+			query = query.Where("status = ?", *status)
+		}
+		if len(tags) > 0 {
+			for _, tag := range tags {
+				if tag != "" {
+					query = query.Where("tags LIKE ?", "%"+tag+"%")
+				}
+			}
+		}
+		return query
+	}
+
+	// 总数统计
+	buildBaseQuery().Count(&stats.TotalCount)
+
+	// 状态统计
+	buildBaseQuery().Where("status = ?", 1).Count(&stats.OnlineCount)
+	buildBaseQuery().Where("status = ?", 0).Count(&stats.OfflineCount)
+
+	// SSH和Agent数量统计
+	buildBaseQuery().Where("connection_mode = ?", "ssh").Count(&stats.SSHCount)
+	buildBaseQuery().Where("connection_mode = ?", "agent").Count(&stats.AgentCount)
+	buildBaseQuery().Where("connection_mode = ? AND agent_status = ?", "agent", "online").Count(&stats.AgentOnlineCount)
+	buildBaseQuery().Where("connection_mode = ? AND agent_status = ?", "agent", "offline").Count(&stats.AgentOfflineCount)
+
+	// 类型统计
+	var typeResults []struct {
+		Type  string
+		Count int64
+	}
+	buildBaseQuery().Select("type, COUNT(*) as count").Group("type").Scan(&typeResults)
+	for _, result := range typeResults {
+		stats.TypeStats[result.Type] = result.Count
+	}
+
+	// 分组数量
+	r.db.WithContext(ctx).Model(&asset.AssetGroup{}).Count(&stats.GroupCount)
+
+	// 资源统计
+	var resourceStats struct {
+		TotalCPU    *int64
+		TotalMemory *uint64
+	}
+	buildBaseQuery().Select("SUM(cpu_cores) as total_cpu, SUM(memory_total) as total_memory").
+		Scan(&resourceStats)
+	if resourceStats.TotalCPU != nil {
+		stats.CPUTotalCores = *resourceStats.TotalCPU
+	}
+	if resourceStats.TotalMemory != nil {
+		stats.MemoryTotal = *resourceStats.TotalMemory
+	}
+
+	// 架构统计
+	var archResults []struct {
+		Arch  string
+		Count int64
+	}
+	buildBaseQuery().Where("arch != ''").
+		Select("arch, COUNT(*) as count").Group("arch").Scan(&archResults)
+	for _, result := range archResults {
+		stats.ArchStats[result.Arch] = result.Count
+	}
+
+	// 连接方式统计
+	var connResults []struct {
+		Mode  string
+		Count int64
+	}
+	buildBaseQuery().Select("connection_mode, COUNT(*) as count").Group("connection_mode").Scan(&connResults)
+	for _, result := range connResults {
+		stats.ConnectionStats[result.Mode] = result.Count
+	}
+
+	// Agent统计
+	buildBaseQuery().Where("agent_status = ?", "online").Count(&stats.AgentStats.OnlineCount)
+	buildBaseQuery().Where("agent_status = ?", "offline").Count(&stats.AgentStats.OfflineCount)
+
+	// GPU统计
+	var gpuSum struct {
+		TotalGPUs   *int64
+		TotalMemory *uint64
+	}
+	buildBaseQuery().Select("SUM(gpu_count) as total_gpus, SUM(gpu_memory_total) as total_memory").Scan(&gpuSum)
+	if gpuSum.TotalGPUs != nil {
+		stats.GPUStats.TotalGPUs = *gpuSum.TotalGPUs
+	}
+	if gpuSum.TotalMemory != nil {
+		stats.GPUStats.TotalMemory = *gpuSum.TotalMemory
+	}
+	buildBaseQuery().Where("gpu_count > 0").Count(&stats.GPUStats.HostsWithGPU)
+
+	// GPU型号统计
+	var gpuModelResults []struct {
+		Model string
+		Count int64
+	}
+	buildBaseQuery().Where("gpu_model != ''").
+		Select("gpu_model, SUM(gpu_count) as count").Group("gpu_model").Scan(&gpuModelResults)
+	stats.GPUStats.ModelStats = make(map[string]int64)
+	for _, result := range gpuModelResults {
+		stats.GPUStats.ModelStats[result.Model] = result.Count
+	}
+
+	return stats, nil
+}

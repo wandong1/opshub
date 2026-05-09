@@ -33,6 +33,7 @@ func (s *HTTPServer) listHistoryEvents(c *gin.Context) {
 	status := c.Query("status")
 	resolveType := c.Query("resolveType")
 	keyword := c.Query("keyword")
+	labelFilter := c.Query("labelFilter")
 
 	var startTime, endTime *time.Time
 	if v := c.Query("startTime"); v != "" {
@@ -48,7 +49,7 @@ func (s *HTTPServer) listHistoryEvents(c *gin.Context) {
 		}
 	}
 
-	list, total, err := s.eventRepo.ListHistory(c.Request.Context(), page, pageSize, uint(assetGroupID), severity, status, resolveType, keyword, startTime, endTime)
+	list, total, err := s.eventRepo.ListHistory(c.Request.Context(), page, pageSize, uint(assetGroupID), severity, status, resolveType, keyword, labelFilter, startTime, endTime)
 	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "查询失败")
 		return
@@ -117,7 +118,8 @@ func (s *HTTPServer) handleEvent(c *gin.Context) {
 }
 
 func (s *HTTPServer) getEventStats(c *gin.Context) {
-	stats, err := s.eventRepo.GetStats(c.Request.Context())
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+	stats, err := s.eventRepo.GetStats(c.Request.Context(), days)
 	if err != nil {
 		response.ErrorCode(c, http.StatusInternalServerError, "查询失败")
 		return

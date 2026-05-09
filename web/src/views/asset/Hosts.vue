@@ -41,6 +41,120 @@
       </div>
     </div>
 
+    <!-- 资产统计模块 - 单行炫酷展示 -->
+    <div class="stats-section" v-if="statistics && activeView === 'hosts'">
+      <a-row :gutter="16" class="stats-row">
+        <!-- 主机总览 -->
+        <a-col :span="6">
+          <div class="stat-card-modern">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+              <icon-desktop :size="32" />
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">主机总数</div>
+              <div class="stat-value">{{ statistics.totalCount }}</div>
+              <div class="stat-detail-inline">
+                <span class="badge-text">
+                  <span class="text-success">{{ statistics.onlineCount }}</span>
+                  <span class="text-divider">/</span>
+                  <span class="text-danger">{{ statistics.offlineCount }}</span>
+                  <span class="text-label">在线/离线</span>
+                </span>
+              </div>
+              <div class="stat-detail-inline">
+                <span class="badge-text">
+                  <span class="text-info">{{ statistics.sshCount }}</span>
+                  <span class="text-divider">/</span>
+                  <span class="text-primary">{{ statistics.agentCount }}</span>
+                  <span class="text-label">SSH/Agent</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </a-col>
+
+        <!-- CPU资源 -->
+        <a-col :span="6">
+          <div class="stat-card-modern">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+              <icon-code-block :size="32" />
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">CPU总核数</div>
+              <div class="stat-value">{{ statistics.cpuTotalCores }}</div>
+              <div class="stat-detail-inline">
+                <span class="badge-text" v-if="statistics.archStats.aarch64">
+                  <span class="text-info">{{ statistics.archStats.aarch64 }}</span>
+                  <span class="text-label">台 aarch64</span>
+                </span>
+              </div>
+              <div class="stat-detail-inline">
+                <span class="badge-text" v-if="statistics.archStats.x86_64">
+                  <span class="text-info">{{ statistics.archStats.x86_64 }}</span>
+                  <span class="text-label">台 x86_64</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </a-col>
+
+        <!-- 内存资源 -->
+        <a-col :span="6">
+          <div class="stat-card-modern">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+              <icon-storage :size="32" />
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">内存总容量</div>
+              <div class="stat-value">{{ formatBytes(statistics.memoryTotal) }}</div>
+              <div class="stat-detail-inline">
+                <span class="badge-text">
+                  <span class="text-warning">{{ statistics.groupCount }}</span>
+                  <span class="text-label">个业务分组</span>
+                </span>
+              </div>
+              <div class="stat-detail-inline">
+                <span class="badge-text" v-if="statistics.agentCount > 0">
+                  <span class="text-success">{{ statistics.agentOnlineCount }}</span>
+                  <span class="text-divider">/</span>
+                  <span class="text-danger">{{ statistics.agentOfflineCount }}</span>
+                  <span class="text-label">Agent在线/离线</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </a-col>
+
+        <!-- GPU资源 -->
+        <a-col :span="6">
+          <div class="stat-card-modern">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+              <icon-thunderbolt :size="32" />
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">GPU设备</div>
+              <div class="stat-value">{{ statistics.gpuStats.totalGpus }}</div>
+              <div class="stat-detail-inline">
+                <span class="badge-text" v-if="statistics.gpuStats.totalGpus > 0">
+                  <span class="text-purple">{{ statistics.gpuStats.hostsWithGpu }}</span>
+                  <span class="text-label">台主机</span>
+                </span>
+                <span class="badge-text" v-else>
+                  <span class="text-label" style="color: #c9cdd4;">暂无GPU设备</span>
+                </span>
+              </div>
+              <div class="stat-detail-inline">
+                <span class="badge-text" v-if="statistics.gpuStats.totalGpus > 0 && statistics.gpuStats.totalMemory > 0">
+                  <span class="text-purple">{{ formatBytes(statistics.gpuStats.totalMemory) }}</span>
+                  <span class="text-label">显存</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </a-col>
+      </a-row>
+    </div>
+
     <!-- 主内容区域：左侧分组树 + 右侧主机列表 -->
     <div class="main-content">
       <!-- 左侧分组树 - 终端视图时隐藏 -->
@@ -315,6 +429,22 @@
                         :color="getUsageColor(record.diskUsage)"
                         size="small"
                       />
+                    </div>
+                    <span v-else class="text-muted">-</span>
+                  </div>
+                </template>
+              </a-table-column>
+
+              <a-table-column title="GPU" :width="120" align="center">
+                <template #cell="{ record }">
+                  <div class="gpu-cell">
+                    <div v-if="record.gpuCount > 0" class="gpu-info">
+                      <div class="gpu-count">
+                        <icon-thunderbolt style="color: #722ed1; font-size: 14px;" />
+                        <span class="gpu-text">{{ record.gpuCount }}卡</span>
+                      </div>
+                      <div class="gpu-model" v-if="record.gpuModel">{{ record.gpuModel }}</div>
+                      <div class="gpu-memory" v-if="record.gpuMemoryTotal">{{ formatBytesCompact(record.gpuMemoryTotal) }}</div>
                     </div>
                     <span v-else class="text-muted">-</span>
                   </div>
@@ -1345,7 +1475,7 @@
     <!-- 生成Agent安装包对话框 -->
     <a-modal v-model:visible="showInstallPackageDialog" title="生成Agent安装包" :width="520" :footer="false" @cancel="installPackageResult = null">
       <a-space direction="vertical" fill style="width: 100%;">
-        <a-form layout="vertical">
+        <a-form layout="vertical" :model="{ serverAddr: installPackageServerAddr }">
           <a-form-item label="服务端地址" help="Agent连接的服务端IP或域名">
             <a-input v-model="installPackageServerAddr" placeholder="如: 192.168.1.100" />
           </a-form-item>
@@ -1406,7 +1536,8 @@ import {
   IconDownload,
   IconCloudDownload,
   IconSync,
-  IconPoweroff
+  IconPoweroff,
+  IconThunderbolt
 } from '@arco-design/web-vue/es/icon'
 import HostFileBrowser from './components/HostFileBrowser.vue'
 import {
@@ -1433,7 +1564,8 @@ import {
   batchCollectHostInfo,
   downloadExcelTemplate,
   importFromExcel,
-  batchDeleteHosts
+  batchDeleteHosts,
+  getHostStatistics
 } from '@/api/host'
 import type { CloudInstanceVO, CloudRegionVO } from '@/api/host'
 import { deployAgent, batchDeployAgent, getAgentStatuses, updateAgent, uninstallAgent, generateInstallPackage } from '@/api/agent'
@@ -1466,6 +1598,9 @@ const loadingCloudHosts = ref(false)
 const credentialSubmitting = ref(false)
 const cloudAccountSubmitting = ref(false)
 const groupSubmitting = ref(false)
+
+// 统计数据
+const statistics = ref<any>(null)
 
 // 视图状态
 const activeView = ref('hosts') // 'hosts' | 'terminal'
@@ -1739,6 +1874,7 @@ const handleGroupSelect = (selectedKeys: (string | number)[], data: { node?: any
   } else {
     hostPagination.page = 1
     loadHostList()
+    loadStatistics()
   }
 }
 
@@ -1750,6 +1886,7 @@ const handleGroupClick = (data: any) => {
   } else {
     hostPagination.page = 1
     loadHostList()
+    loadStatistics()
   }
 }
 
@@ -1758,6 +1895,7 @@ const clearGroupSelection = () => {
   selectedGroup.value = null
   hostPagination.page = 1
   loadHostList()
+  loadStatistics()
 }
 
 // 获取分组路径
@@ -2154,6 +2292,7 @@ const handleOpenTerminal = () => {
 const handleSearch = () => {
   hostPagination.page = 1
   loadHostList()
+  loadStatistics()
 }
 
 // 重置
@@ -2162,6 +2301,7 @@ const handleReset = () => {
   searchForm.status = undefined
   searchForm.tags = []
   clearGroupSelection()
+  loadStatistics()
 }
 
 // 导入命令处理
@@ -2972,8 +3112,33 @@ onMounted(async () => {
   loadCredentialList()
   loadServiceLabels()
   loadCloudAccountList()
+  loadStatistics()
   startAgentStatusPolling()
 })
+
+// 加载统计数据
+const loadStatistics = async () => {
+  try {
+    const params: any = {}
+    if (searchForm.keyword) {
+      params.keyword = searchForm.keyword
+    }
+    if (selectedGroup.value && selectedGroup.value.id) {
+      params.groupId = selectedGroup.value.id
+    }
+    if (searchForm.status !== undefined) {
+      params.status = searchForm.status
+    }
+    if (searchForm.tags && searchForm.tags.length > 0) {
+      params.tags = searchForm.tags.join(',')
+    }
+
+    const res = await getHostStatistics(params)
+    statistics.value = res
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
+  }
+}
 </script>
 
 <style scoped>
@@ -3038,6 +3203,187 @@ onMounted(async () => {
 
 .import-dropdown {
   display: inline-block;
+}
+
+/* 统计模块 - 现代炫酷风格 */
+.stats-section {
+  margin-bottom: 16px;
+}
+
+.stats-section .stats-row {
+  margin-bottom: 0;
+}
+
+.stat-card-modern {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  min-height: 120px;
+}
+
+.stat-card-modern::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.stat-card-modern:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.stat-card-modern:hover::before {
+  opacity: 1;
+}
+
+.stat-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 32px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #86909c;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1d2129;
+  line-height: 1;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-detail-inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 24px;
+  align-items: center;
+}
+
+.badge-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.text-success {
+  color: #00b42a;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.text-danger {
+  color: #f53f3f;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.text-info {
+  color: #165dff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.text-warning {
+  color: #ff7d00;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.text-primary {
+  color: #722ed1;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.text-purple {
+  color: #722ed1;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.text-divider {
+  color: #86909c;
+  font-weight: 400;
+  margin: 0 2px;
+}
+
+.text-label {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 2px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.badge.success {
+  background: rgba(0, 180, 42, 0.1);
+  color: #00b42a;
+}
+
+.badge.danger {
+  background: rgba(245, 63, 63, 0.1);
+  color: #f53f3f;
+}
+
+.badge.info {
+  background: rgba(22, 93, 255, 0.1);
+  color: #165dff;
+}
+
+.badge.warning {
+  background: rgba(255, 125, 0, 0.1);
+  color: #ff7d00;
+}
+
+.badge.purple {
+  background: rgba(114, 46, 209, 0.1);
+  color: #722ed1;
 }
 
 /* 主内容区域 */
@@ -3531,6 +3877,51 @@ onMounted(async () => {
 
 .tags-cell .tag-more {
   font-size: 11px;
+}
+
+/* GPU单元格样式 */
+.gpu-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+
+.gpu-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0 4px;
+}
+
+.gpu-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}
+
+.gpu-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #722ed1;
+}
+
+.gpu-model {
+  font-size: 11px;
+  color: #86909c;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gpu-memory {
+  font-size: 11px;
+  color: #4e5969;
+  text-align: center;
+  font-weight: 500;
 }
 
 /* 主机名点击样式 */

@@ -172,7 +172,7 @@ export const silenceEvent = (id: number, data: { duration: string; reason?: stri
   request.post(`/api/v1/alert/events/${id}/silence`, data)
 export const handleEvent = (id: number, data: { note: string; userId?: number }) =>
   request.post(`/api/v1/alert/events/${id}/handle`, data)
-export const getEventStats = () => request.get('/api/v1/alert/events/stats')
+export const getEventStats = (days = 7) => request.get('/api/v1/alert/events/stats', { params: { days } })
 export const getEventTrend = (days = 30) => request.get('/api/v1/alert/events/trend', { params: { days } })
 
 // 批量屏蔽

@@ -39,6 +39,8 @@ type SystemInfo struct {
 	Disk     []DiskInfo  `json:"disk"`     // 磁盘信息
 	Uptime   string      `json:"uptime"`   // 运行时间
 	Hostname string      `json:"hostname"` // 主机名
+	GPU      []GPUInfo   `json:"gpu"`      // GPU信息
+	NPU      []NPUInfo   `json:"npu"`      // NPU信息
 }
 
 // CPUInfo CPU信息
@@ -81,6 +83,22 @@ type DiskInfo struct {
 	Used       uint64  `json:"used"`       // 已用(字节)
 	Free       uint64  `json:"free"`       // 空闲(字节)
 	Usage      float64 `json:"usage"`      // 使用率百分比
+}
+
+// GPUInfo GPU信息
+type GPUInfo struct {
+	Index       int     `json:"index"`       // GPU索引
+	Name        string  `json:"name"`        // GPU名称/型号
+	MemoryTotal uint64  `json:"memoryTotal"` // 显存总量(字节)
+	MemoryUsed  uint64  `json:"memoryUsed"`  // 已用显存(字节)
+	Usage       float64 `json:"usage"`       // GPU使用率
+}
+
+// NPUInfo NPU信息
+type NPUInfo struct {
+	Index int    `json:"index"` // NPU索引
+	Name  string `json:"name"`  // NPU名称/型号
+	Usage float64 `json:"usage"` // NPU使用率
 }
 
 // CommandExecutor 命令执行器接口，SSH和Agent都可以实现
@@ -391,4 +409,78 @@ func (s *SystemInfo) ToJSON() (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// CollectGPU 采集GPU信息（支持NVIDIA）
+func (c *Collector) CollectGPU() ([]GPUInfo, error) {
+	// 检查nvidia-smi是否存在
+	_, err := c.executor.Execute("which nvidia-smi")
+	if err != nil {
+		return nil, fmt.Errorf("nvidia-smi未安装")
+	}
+
+	// 查询GPU信息
+	cmd := "nvidia-smi --query-gpu=index,name,memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits"
+	output, err := c.executor.Execute(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("执行nvidia-smi失败: %w", err)
+	}
+
+	var gpus []GPUInfo
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+		if len(fields) < 5 {
+			continue
+		}
+
+		gpu := GPUInfo{}
+		gpu.Index, _ = strconv.Atoi(strings.TrimSpace(fields[0]))
+		gpu.Name = strings.TrimSpace(fields[1])
+
+		memTotal, _ := strconv.ParseFloat(strings.TrimSpace(fields[2]), 64)
+		gpu.MemoryTotal = uint64(memTotal * 1024 * 1024) // MiB to bytes
+
+		memUsed, _ := strconv.ParseFloat(strings.TrimSpace(fields[3]), 64)
+		gpu.MemoryUsed = uint64(memUsed * 1024 * 1024)
+
+		gpu.Usage, _ = strconv.ParseFloat(strings.TrimSpace(fields[4]), 64)
+
+		gpus = append(gpus, gpu)
+	}
+
+	return gpus, nil
+}
+
+// CollectNPU 采集NPU信息（支持华为昇腾）
+func (c *Collector) CollectNPU() ([]NPUInfo, error) {
+	// 检查npu-smi是否存在
+	_, err := c.executor.Execute("which npu-smi")
+	if err != nil {
+		return nil, fmt.Errorf("npu-smi未安装")
+	}
+
+	// 查询NPU信息
+	cmd := "npu-smi info -t board -i 0-7 2>/dev/null | grep 'NPU' | awk '{print $2,$4}'"
+	output, err := c.executor.Execute(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("执行npu-smi失败: %w", err)
+	}
+
+	var npus []NPUInfo
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for i, line := range lines {
+		if line == "" {
+			continue
+		}
+		npus = append(npus, NPUInfo{
+			Index: i,
+			Name:  strings.TrimSpace(line),
+		})
+	}
+
+	return npus, nil
 }

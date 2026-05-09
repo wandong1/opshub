@@ -37,7 +37,7 @@
           <a-input v-model="keyword" placeholder="搜索" allow-clear style="width:160px" />
         </a-form-item>
         <a-form-item label="标签搜索">
-          <a-input v-model="labelFilter" placeholder="如: job=prome*" allow-clear style="width:160px">
+          <a-input v-model="labelFilter" placeholder="如: job=prometheus" allow-clear style="width:260px">
             <template #prefix><icon-tags /></template>
           </a-input>
         </a-form-item>
@@ -111,16 +111,16 @@
             </template>
           </a-table-column>
           <!-- 标签摘要 -->
-          <a-table-column title="标签" :width="180">
+          <a-table-column title="标签" :width="480">
             <template #cell="{ record }">
               <div class="label-tags">
                 <template v-if="parseLabels(record.labels).length">
-                  <a-tag v-for="(kv,i) in parseLabels(record.labels).slice(0,3)" :key="i"
+                  <a-tag v-for="(kv,i) in parseLabels(record.labels).slice(0,9)" :key="i"
                     size="small" color="arcoblue" style="margin:1px 2px;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">
                     {{ kv.k }}={{ kv.v }}
                   </a-tag>
-                  <a-tag v-if="parseLabels(record.labels).length > 3" size="small" color="gray">
-                    +{{ parseLabels(record.labels).length - 3 }}
+                  <a-tag v-if="parseLabels(record.labels).length > 9" size="small" color="gray">
+                    +{{ parseLabels(record.labels).length - 9 }}
                   </a-tag>
                 </template>
                 <span v-else style="color:#c9cdd4">—</span>
@@ -140,7 +140,7 @@
             </template>
           </a-table-column>
           <!-- 持续时长 -->
-          <a-table-column title="持续" :width="90">
+          <a-table-column title="持续" :width="120">
             <template #cell="{ record }">
               <span class="duration-cell">{{ calcDuration(record.firedAt, record.resolvedAt) }}</span>
             </template>

@@ -147,16 +147,16 @@
             </template>
           </a-table-column>
           <!-- 标签摘要 -->
-          <a-table-column title="标签" :width="180">
+          <a-table-column title="标签" :width="480">
             <template #cell="{ record }">
               <div class="label-tags">
                 <template v-if="parseLabels(record.labels).length">
-                  <a-tag v-for="(kv,i) in parseLabels(record.labels).slice(0,3)" :key="i"
+                  <a-tag v-for="(kv,i) in parseLabels(record.labels).slice(0,9)" :key="i"
                     size="small" color="arcoblue" style="margin:1px 2px;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">
                     {{ kv.k }}={{ kv.v }}
                   </a-tag>
-                  <a-tag v-if="parseLabels(record.labels).length > 3" size="small" color="gray">
-                    +{{ parseLabels(record.labels).length - 3 }}
+                  <a-tag v-if="parseLabels(record.labels).length > 9" size="small" color="gray">
+                    +{{ parseLabels(record.labels).length - 9 }}
                   </a-tag>
                 </template>
                 <span v-else style="color:#c9cdd4">—</span>
@@ -170,13 +170,13 @@
             </template>
           </a-table-column>
           <!-- 触发时间 -->
-          <a-table-column title="触发时间" :width="158">
+          <a-table-column title="触发时间" :width="168">
             <template #cell="{ record }">
               <span style="font-size:12px;color:var(--ops-text-secondary)">{{ fmtTime(record.firedAt) }}</span>
             </template>
           </a-table-column>
           <!-- 持续时长 -->
-          <a-table-column title="持续" :width="90">
+          <a-table-column title="持续" :width="120">
             <template #cell="{ record }">
               <span class="duration-cell">{{ duration(record.firedAt) }}</span>
             </template>
@@ -470,7 +470,7 @@ const load = async () => {
 const reloadCharts = () => { initCharts() }
 
 const initCharts = async () => {
-  const [statsRes, trendRes] = await Promise.all([getEventStats(), getEventTrend(chartDays.value)])
+  const [statsRes, trendRes] = await Promise.all([getEventStats(chartDays.value), getEventTrend(chartDays.value)])
   const stats = (statsRes as any) || {}
   const trend: any[] = Array.isArray(trendRes) ? trendRes as any[] : []
 

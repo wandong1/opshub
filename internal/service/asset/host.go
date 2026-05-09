@@ -1079,3 +1079,53 @@ func (s *HostService) DeleteHostFile(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "文件删除成功", nil)
 }
+
+// GetHostStatistics 获取主机统计信息
+// @Summary 获取主机统计信息
+// @Description 获取主机资产统计数据，包括数量、类型、资源等，支持筛选条件
+// @Tags 资产管理-主机
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param keyword query string false "关键词搜索"
+// @Param groupId query int false "分组ID"
+// @Param status query int false "主机状态"
+// @Param tags query string false "标签（逗号分隔）"
+// @Success 200 {object} response.Response{data=asset.HostStatistics} "获取成功"
+// @Router /api/v1/hosts/statistics [get]
+func (s *HostService) GetHostStatistics(c *gin.Context) {
+	// 获取筛选参数
+	keyword := c.Query("keyword")
+	groupIDStr := c.Query("groupId")
+	statusStr := c.Query("status")
+	tagsStr := c.Query("tags")
+
+	var groupIDs []uint
+	if groupIDStr != "" {
+		groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
+		if err == nil {
+			groupIDs = append(groupIDs, uint(groupID))
+		}
+	}
+
+	var status *int
+	if statusStr != "" {
+		s, err := strconv.Atoi(statusStr)
+		if err == nil {
+			status = &s
+		}
+	}
+
+	var tags []string
+	if tagsStr != "" {
+		tags = strings.Split(tagsStr, ",")
+	}
+
+	stats, err := s.hostUseCase.GetStatistics(c.Request.Context(), keyword, groupIDs, status, tags)
+	if err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, "获取统计信息失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, stats)
+}

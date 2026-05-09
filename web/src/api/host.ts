@@ -143,3 +143,13 @@ export const downloadHostFile = (hostId: number, path: string) => {
 export const deleteHostFile = (hostId: number, path: string) => {
   return request.delete(`/api/v1/hosts/${hostId}/files`, { data: { path } })
 }
+
+// 获取主机统计信息
+export const getHostStatistics = (params?: {
+  keyword?: string
+  groupId?: number
+  status?: number
+  tags?: string
+}) => {
+  return request.get('/api/v1/hosts/statistics', { params })
+}

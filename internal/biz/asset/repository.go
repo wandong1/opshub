@@ -45,6 +45,7 @@ type HostRepo interface {
 	GetByCloudInstanceID(ctx context.Context, instanceID string) (*Host, error)
 	CountByCredentialID(ctx context.Context, credentialID uint) (int64, error)
 	GetAll(ctx context.Context) ([]*Host, error)
+	GetStatistics(ctx context.Context, keyword string, groupIDs []uint, status *int, tags []string) (*HostStatistics, error)
 }
 
 type CredentialRepo interface {

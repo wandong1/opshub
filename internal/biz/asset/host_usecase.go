@@ -352,6 +352,31 @@ func (uc *HostUseCase) CollectHostInfo(ctx context.Context, hostID uint) error {
 		host.CPUInfo = cpuJSON
 	}
 
+	// 采集GPU信息（可选，失败不影响整体）
+	gpus, err := c.CollectGPU()
+	if err == nil && len(gpus) > 0 {
+		host.GPUCount = len(gpus)
+		host.GPUModel = gpus[0].Name
+		var totalMem uint64
+		for _, gpu := range gpus {
+			totalMem += gpu.MemoryTotal
+		}
+		host.GPUMemoryTotal = totalMem
+		if gpuJSON, err := json.Marshal(gpus); err == nil {
+			host.GPUInfo = string(gpuJSON)
+		}
+	}
+
+	// 采集NPU信息（可选，失败不影响整体）
+	npus, err := c.CollectNPU()
+	if err == nil && len(npus) > 0 {
+		host.NPUCount = len(npus)
+		host.NPUModel = npus[0].Name
+		if npuJSON, err := json.Marshal(npus); err == nil {
+			host.NPUInfo = string(npuJSON)
+		}
+	}
+
 	return uc.hostRepo.Update(ctx, host)
 }
 
@@ -1699,4 +1724,9 @@ func (uc *HostUseCase) DeleteFile(ctx context.Context, hostID uint, remotePath s
 	}
 
 	return nil
+}
+
+// GetStatistics 获取主机统计信息（支持筛选条件）
+func (uc *HostUseCase) GetStatistics(ctx context.Context, keyword string, groupIDs []uint, status *int, tags []string) (*HostStatistics, error) {
+	return uc.hostRepo.GetStatistics(ctx, keyword, groupIDs, status, tags)
 }

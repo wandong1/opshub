@@ -67,6 +67,14 @@ type Host struct {
 	ExporterPort     int           `gorm:"type:int;default:9100;comment:Exporter端口" json:"exporterPort"`
 	// 服务标签端口覆盖配置（JSON格式：{"mysqld": 9104, "redis": 9121}）
 	LabelPortOverrides string      `gorm:"type:text;comment:服务标签端口覆盖配置JSON" json:"labelPortOverrides"`
+	// GPU/NPU 相关字段
+	GPUInfo          string        `gorm:"column:gpu_info;type:text;comment:GPU信息JSON" json:"-"`
+	GPUCount         int           `gorm:"column:gpu_count;type:int;default:0;comment:GPU数量" json:"gpuCount"`
+	GPUModel         string        `gorm:"column:gpu_model;type:varchar(200);comment:GPU型号" json:"gpuModel"`
+	GPUMemoryTotal   uint64        `gorm:"column:gpu_memory_total;type:bigint;default:0;comment:GPU显存总量(字节)" json:"gpuMemoryTotal"`
+	NPUInfo          string        `gorm:"column:npu_info;type:text;comment:NPU信息JSON" json:"-"`
+	NPUCount         int           `gorm:"column:npu_count;type:int;default:0;comment:NPU数量" json:"npuCount"`
+	NPUModel         string        `gorm:"column:npu_model;type:varchar(200);comment:NPU型号" json:"npuModel"`
 }
 
 // HostRequest 主机请求
@@ -131,6 +139,12 @@ type HostInfoVO struct {
 	ConnectionMode   string  `json:"connectionMode"`
 	ExporterPort     int     `json:"exporterPort"`
 	LabelPortOverrides string `json:"labelPortOverrides"`
+	// GPU/NPU 相关
+	GPUCount         int     `json:"gpuCount"`
+	GPUModel         string  `json:"gpuModel"`
+	GPUMemoryTotal   uint64  `json:"gpuMemoryTotal"`
+	NPUCount         int     `json:"npuCount"`
+	NPUModel         string  `json:"npuModel"`
 }
 
 // HostListVO 主机列表VO（用于分组下的主机列表）
@@ -289,4 +303,37 @@ type CloudInstanceVO struct {
 type CloudRegionVO struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
+}
+
+// HostStatistics 主机统计信息
+type HostStatistics struct {
+	TotalCount       int64              `json:"totalCount"`
+	OnlineCount      int64              `json:"onlineCount"`
+	OfflineCount     int64              `json:"offlineCount"`
+	SSHCount         int64              `json:"sshCount"`
+	AgentCount       int64              `json:"agentCount"`
+	AgentOnlineCount int64              `json:"agentOnlineCount"`
+	AgentOfflineCount int64             `json:"agentOfflineCount"`
+	TypeStats        map[string]int64   `json:"typeStats"`
+	GroupCount       int64              `json:"groupCount"`
+	CPUTotalCores    int64              `json:"cpuTotalCores"`
+	MemoryTotal      uint64             `json:"memoryTotal"`
+	ArchStats        map[string]int64   `json:"archStats"`
+	ConnectionStats  map[string]int64   `json:"connectionStats"`
+	AgentStats       AgentStatistics    `json:"agentStats"`
+	GPUStats         GPUStatistics      `json:"gpuStats"`
+}
+
+// AgentStatistics Agent统计
+type AgentStatistics struct {
+	OnlineCount  int64 `json:"onlineCount"`
+	OfflineCount int64 `json:"offlineCount"`
+}
+
+// GPUStatistics GPU统计
+type GPUStatistics struct {
+	TotalGPUs    int64            `json:"totalGpus"`
+	HostsWithGPU int64            `json:"hostsWithGpu"`
+	ModelStats   map[string]int64 `json:"modelStats"`
+	TotalMemory  uint64           `json:"totalMemory"`
 }

@@ -89,6 +89,7 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 	hosts := r.Group("/hosts")
 	{
 		hosts.GET("", s.hostService.ListHosts)
+		hosts.GET("/statistics", s.hostService.GetHostStatistics)
 		hosts.GET("/template/download", s.hostService.DownloadExcelTemplate)
 		hosts.POST("/import", s.hostService.ImportFromExcel)
 		hosts.POST("/batch-collect", s.hostService.BatchCollectHostInfo)

@@ -154,7 +154,7 @@ func (r *EventRepo) ListActive(ctx context.Context, page, pageSize int, assetGro
 	return list, total, err
 }
 
-func (r *EventRepo) ListHistory(ctx context.Context, page, pageSize int, assetGroupID uint, severity, status, resolveType, keyword string, startTime, endTime *time.Time) ([]*biz.AlertEvent, int64, error) {
+func (r *EventRepo) ListHistory(ctx context.Context, page, pageSize int, assetGroupID uint, severity, status, resolveType, keyword, labelFilter string, startTime, endTime *time.Time) ([]*biz.AlertEvent, int64, error) {
 	var list []*biz.AlertEvent
 	var total int64
 	q := r.db.WithContext(ctx).Model(&biz.AlertEvent{})
@@ -172,6 +172,9 @@ func (r *EventRepo) ListHistory(ctx context.Context, page, pageSize int, assetGr
 	}
 	if keyword != "" {
 		q = q.Where("rule_name LIKE ?", "%"+keyword+"%")
+	}
+	if labelFilter != "" {
+		q = r.applyLabelFilter(q, labelFilter)
 	}
 	if startTime != nil {
 		q = q.Where("fired_at >= ?", *startTime)
@@ -192,9 +195,11 @@ func (r *EventRepo) ListHistory(ctx context.Context, page, pageSize int, assetGr
 
 // TrendData 趋势数据点
 type TrendData struct {
-	Date        string `json:"date"`
-	FiringCount int64  `json:"firingCount"`
-	ResolvedCount int64 `json:"resolvedCount"`
+	Date                string `json:"date"`
+	FiringCount         int64  `json:"firingCount"`
+	ResolvedCount       int64  `json:"resolvedCount"`
+	AutoResolvedCount   int64  `json:"autoResolvedCount"`
+	ManualResolvedCount int64  `json:"manualResolvedCount"`
 }
 
 func (r *EventRepo) GetTrend(ctx context.Context, days int) ([]*TrendData, error) {
@@ -203,7 +208,9 @@ func (r *EventRepo) GetTrend(ctx context.Context, days int) ([]*TrendData, error
 		SELECT
 			DATE_FORMAT(fired_at, '%Y-%m-%d') as date,
 			COUNT(*) as firing_count,
-			SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count
+			SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count,
+			SUM(CASE WHEN status = 'resolved' AND resolve_type = 'auto' THEN 1 ELSE 0 END) as auto_resolved_count,
+			SUM(CASE WHEN status = 'resolved' AND (resolve_type = 'manual' OR resolve_type = 'manual_then_auto') THEN 1 ELSE 0 END) as manual_resolved_count
 		FROM alert_events
 		WHERE fired_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
 		GROUP BY DATE_FORMAT(fired_at, '%Y-%m-%d')
@@ -224,16 +231,24 @@ type StatsData struct {
 	FiringCount         int64 `json:"firingCount"`
 }
 
-func (r *EventRepo) GetStats(ctx context.Context) (*StatsData, error) {
+func (r *EventRepo) GetStats(ctx context.Context, days int) (*StatsData, error) {
 	var stats StatsData
-	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'firing' AND severity = 'critical'").Count(&stats.CriticalCount)
-	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'firing' AND severity = 'major'").Count(&stats.MajorCount)
-	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'firing' AND severity = 'minor'").Count(&stats.MinorCount)
-	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'firing' AND severity = 'warning'").Count(&stats.WarningCount)
-	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'firing' AND severity = 'info'").Count(&stats.InfoCount)
-	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'resolved' AND resolve_type = 'auto'").Count(&stats.AutoResolvedCount)
-	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'resolved' AND resolve_type = 'manual'").Count(&stats.ManualResolvedCount)
+	timeFilter := fmt.Sprintf("fired_at >= DATE_SUB(NOW(), INTERVAL %d DAY)", days)
+
+	// 统计时间范围内的告警级别分布（包括已恢复的）
+	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where(timeFilter + " AND severity = 'critical'").Count(&stats.CriticalCount)
+	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where(timeFilter + " AND severity = 'major'").Count(&stats.MajorCount)
+	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where(timeFilter + " AND severity = 'minor'").Count(&stats.MinorCount)
+	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where(timeFilter + " AND severity = 'warning'").Count(&stats.WarningCount)
+	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where(timeFilter + " AND severity = 'info'").Count(&stats.InfoCount)
+
+	// 统计时间范围内的恢复方式分布
+	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where(timeFilter + " AND status = 'resolved' AND resolve_type = 'auto'").Count(&stats.AutoResolvedCount)
+	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where(timeFilter + " AND status = 'resolved' AND (resolve_type = 'manual' OR resolve_type = 'manual_then_auto')").Count(&stats.ManualResolvedCount)
+
+	// 统计当前 firing 状态的告警数量
 	r.db.WithContext(ctx).Model(&biz.AlertEvent{}).Where("status = 'firing'").Count(&stats.FiringCount)
+
 	return &stats, nil
 }
 
@@ -284,18 +299,18 @@ func (r *EventRepo) applyLabelFilter(q *gorm.DB, filter string) *gorm.DB {
 	if strings.HasSuffix(pattern, "*") {
 		// 前缀匹配：job=prome*
 		prefix := strings.TrimSuffix(pattern, "*")
-		q = q.Where("JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, prefix+"%")
+		q = q.Where("labels IS NOT NULL AND labels != '' AND JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, prefix+"%")
 	} else if strings.HasPrefix(pattern, "*") {
 		// 后缀匹配：instance=*:9090
 		suffix := strings.TrimPrefix(pattern, "*")
-		q = q.Where("JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, "%"+suffix)
+		q = q.Where("labels IS NOT NULL AND labels != '' AND JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, "%"+suffix)
 	} else if strings.Contains(pattern, "*") {
 		// 包含匹配：instance=*:90*
 		pattern = strings.ReplaceAll(pattern, "*", "%")
-		q = q.Where("JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, pattern)
+		q = q.Where("labels IS NOT NULL AND labels != '' AND JSON_EXTRACT(labels, ?) LIKE ?", jsonPath, pattern)
 	} else {
 		// 精确匹配
-		q = q.Where("JSON_EXTRACT(labels, ?) = ?", jsonPath, pattern)
+		q = q.Where("labels IS NOT NULL AND labels != '' AND JSON_EXTRACT(labels, ?) = ?", jsonPath, pattern)
 	}
 
 	return q
