@@ -43,7 +43,7 @@ class TestPlugin implements Plugin {
   getRoutes(): PluginRouteConfig[] {
     return [
       {
-        path: '/test/home',
+        path: 'test/home',
         name: 'TestHome',
         component: TestHome,
         meta: { title: '测试首页' }

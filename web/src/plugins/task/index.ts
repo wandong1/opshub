@@ -79,36 +79,34 @@ class TaskPlugin implements Plugin {
   getRoutes(): PluginRouteConfig[] {
     return [
       {
-        path: '/task',
+        path: 'task',
         name: 'Task',
         component: () => import('@/views/task/Index.vue'),
         meta: { title: '任务中心' },
-        children: [
-          {
-            path: 'execute',
-            name: 'TaskExecute',
-            component: () => import('@/views/task/Execute.vue'),
-            meta: { title: '执行任务' },
-          },
-          {
-            path: 'templates',
-            name: 'TaskTemplates',
-            component: () => import('@/views/task/Templates.vue'),
-            meta: { title: '模板管理' },
-          },
-          {
-            path: 'file-distribution',
-            name: 'TaskFileDistribution',
-            component: () => import('@/views/task/FileDistribution.vue'),
-            meta: { title: '文件分发' },
-          },
-          {
-            path: 'execution-history',
-            name: 'TaskExecutionHistory',
-            component: () => import('@/views/task/ExecutionHistory.vue'),
-            meta: { title: '执行记录' },
-          },
-        ],
+      },
+      {
+        path: 'task/execute',
+        name: 'TaskExecute',
+        component: () => import('@/views/task/Execute.vue'),
+        meta: { title: '执行任务' },
+      },
+      {
+        path: 'task/templates',
+        name: 'TaskTemplates',
+        component: () => import('@/views/task/Templates.vue'),
+        meta: { title: '模板管理' },
+      },
+      {
+        path: 'task/file-distribution',
+        name: 'TaskFileDistribution',
+        component: () => import('@/views/task/FileDistribution.vue'),
+        meta: { title: '文件分发' },
+      },
+      {
+        path: 'task/execution-history',
+        name: 'TaskExecutionHistory',
+        component: () => import('@/views/task/ExecutionHistory.vue'),
+        meta: { title: '执行记录' },
       },
     ]
   }

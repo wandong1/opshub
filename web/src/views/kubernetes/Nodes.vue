@@ -386,7 +386,7 @@
                   <span>Shell</span>
                 </a-doption>
                 <a-doption value="monitor">
-                  <icon-line-chart />
+                  <icon-dashboard />
                   <span>监控</span>
                 </a-doption>
                 <a-doption value="yaml">
@@ -943,7 +943,7 @@ const tableColumns = [
 import { ref, onMounted, computed, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconLineChart } from '@arco-design/web-vue/es/icon'
+// IconLineChart 不存在于 Arco Design，使用 IconBarChart 替代
 import axios from 'axios'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'

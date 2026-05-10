@@ -82,32 +82,32 @@ class SSLCertPlugin implements Plugin {
   getRoutes(): PluginRouteConfig[] {
     return [
       {
-        path: '/ssl-cert',
+        path: 'ssl-cert',
         name: 'SSLCert',
         component: () => import('./components/CertificateList.vue'),
         redirect: '/ssl-cert/certificates',
         meta: { title: 'SSL证书' },
       },
       {
-        path: '/ssl-cert/certificates',
+        path: 'ssl-cert/certificates',
         name: 'CertificateList',
         component: () => import('./components/CertificateList.vue'),
         meta: { title: '证书管理' },
       },
       {
-        path: '/ssl-cert/dns-providers',
+        path: 'ssl-cert/dns-providers',
         name: 'DNSProviderList',
         component: () => import('./components/DNSProviderList.vue'),
         meta: { title: 'DNS验证配置' },
       },
       {
-        path: '/ssl-cert/deploy-configs',
+        path: 'ssl-cert/deploy-configs',
         name: 'DeployConfigList',
         component: () => import('./components/DeployConfigList.vue'),
         meta: { title: '部署配置' },
       },
       {
-        path: '/ssl-cert/tasks',
+        path: 'ssl-cert/tasks',
         name: 'TaskList',
         component: () => import('./components/TaskList.vue'),
         meta: { title: '任务记录' },

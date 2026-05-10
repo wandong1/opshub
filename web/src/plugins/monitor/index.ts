@@ -86,32 +86,32 @@ class MonitorPlugin implements Plugin {
   getRoutes(): PluginRouteConfig[] {
     return [
       {
-        path: '/monitor',
+        path: 'monitor',
         name: 'Monitor',
         component: () => import('./components/DomainMonitor.vue'),
         redirect: '/monitor/domain',
         meta: { title: '监控中心' },
       },
       {
-        path: '/monitor/domain',
+        path: 'monitor/domain',
         name: 'DomainMonitor',
         component: () => import('./components/DomainMonitor.vue'),
         meta: { title: '域名监控' },
       },
       {
-        path: '/monitor/alert-channels',
+        path: 'monitor/alert-channels',
         name: 'AlertChannels',
         component: () => import('./components/AlertChannels.vue'),
         meta: { title: '告警通道' },
       },
       {
-        path: '/monitor/alert-receivers',
+        path: 'monitor/alert-receivers',
         name: 'AlertReceivers',
         component: () => import('./components/AlertReceivers.vue'),
         meta: { title: '告警接收人' },
       },
       {
-        path: '/monitor/alert-logs',
+        path: 'monitor/alert-logs',
         name: 'AlertLogs',
         component: () => import('./components/AlertLogs.vue'),
         meta: { title: '告警日志' },

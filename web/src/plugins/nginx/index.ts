@@ -90,38 +90,38 @@ class NginxPlugin implements Plugin {
   getRoutes(): PluginRouteConfig[] {
     return [
       {
-        path: '/nginx',
+        path: 'nginx',
         name: 'Nginx',
         component: () => import('./components/Overview.vue'),
         redirect: '/nginx/overview',
         meta: { title: 'Nginx统计' },
       },
       {
-        path: '/nginx/overview',
+        path: 'nginx/overview',
         name: 'NginxOverview',
         component: () => import('./components/Overview.vue'),
         meta: { title: '概况' },
       },
       {
-        path: '/nginx/top-analysis',
+        path: 'nginx/top-analysis',
         name: 'NginxTopAnalysis',
         component: () => import('./components/TopAnalysis.vue'),
         meta: { title: 'Top分析' },
       },
       {
-        path: '/nginx/daily-report',
+        path: 'nginx/daily-report',
         name: 'NginxDailyReport',
         component: () => import('./components/DailyReport.vue'),
         meta: { title: '数据日报' },
       },
       {
-        path: '/nginx/access-logs',
+        path: 'nginx/access-logs',
         name: 'NginxAccessLogs',
         component: () => import('./components/AccessLogs.vue'),
         meta: { title: '访问明细' },
       },
       {
-        path: '/nginx/config',
+        path: 'nginx/config',
         name: 'NginxConfig',
         component: () => import('./components/Config.vue'),
         meta: { title: '数据源配置' },

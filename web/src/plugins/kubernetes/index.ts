@@ -138,98 +138,90 @@ class KubernetesPlugin implements Plugin {
   getRoutes(): PluginRouteConfig[] {
     return [
       {
-        path: '/kubernetes',
-        name: 'Kubernetes',
-        component: () => import('@/views/kubernetes/Index.vue'),
-        meta: { title: 'Kubernetes管理' },
-        children: [
-          {
-            path: 'clusters',
-            name: 'K8sClusters',
-            component: () => import('@/views/kubernetes/Clusters.vue'),
-            meta: { title: '集群管理' },
-          },
-          {
-            path: 'clusters/:id',
-            name: 'K8sClusterDetail',
-            component: () => import('@/views/kubernetes/ClusterDetail.vue'),
-            meta: { title: '集群详情', activeMenu: '/kubernetes/clusters' },
-          },
-          {
-            path: 'nodes',
-            name: 'K8sNodes',
-            component: () => import('@/views/kubernetes/Nodes.vue'),
-            meta: { title: '节点管理' },
-          },
-          {
-            path: 'clusters/:clusterId/nodes/:nodeName',
-            name: 'K8sNodeDetail',
-            component: () => import('@/views/kubernetes/NodeDetail.vue'),
-            meta: { title: '节点详情', activeMenu: '/kubernetes/nodes' },
-          },
-          {
-            path: 'workloads',
-            name: 'K8sWorkloads',
-            component: () => import('@/views/kubernetes/Workloads.vue'),
-            meta: { title: '工作负载' },
-          },
-          {
-            path: 'namespaces',
-            name: 'K8sNamespaces',
-            component: () => import('@/views/kubernetes/Namespaces.vue'),
-            meta: { title: '命名空间' },
-          },
-          {
-            path: 'roles',
-            name: 'K8sRoles',
-            component: () => import('@/views/kubernetes/Roles.vue'),
-            meta: { title: '角色管理' },
-          },
-          {
-            path: 'network',
-            name: 'K8sNetwork',
-            component: () => import('@/views/kubernetes/Network.vue'),
-            meta: { title: '网络管理' },
-          },
-          {
-            path: 'config',
-            name: 'K8sConfig',
-            component: () => import('@/views/kubernetes/Config.vue'),
-            meta: { title: '配置管理' },
-          },
-          {
-            path: 'storage',
-            name: 'K8sStorage',
-            component: () => import('@/views/kubernetes/Storage.vue'),
-            meta: { title: '存储管理' },
-          },
-          {
-            path: 'access',
-            name: 'K8sAccess',
-            component: () => import('@/views/kubernetes/Access.vue'),
-            meta: { title: '访问控制' },
-          },
-          {
-            path: 'audit',
-            name: 'K8sAudit',
-            component: () => import('@/views/kubernetes/Audit.vue'),
-            meta: { title: '终端审计' },
-          },
-          {
-            path: 'application-diagnosis',
-            name: 'K8sApplicationDiagnosis',
-            component: () => import('@/views/kubernetes/ApplicationDiagnosis.vue'),
-            meta: { title: '应用诊断' },
-          },
-          {
-            path: 'cluster-inspection',
-            name: 'K8sClusterInspection',
-            component: () => import('@/views/kubernetes/ClusterInspection.vue'),
-            meta: { title: '集群巡检' },
-          },
-        ],
-    },
-  ]
+        path: 'kubernetes/clusters',
+        name: 'K8sClusters',
+        component: () => import('@/views/kubernetes/Clusters.vue'),
+        meta: { title: '集群管理' },
+      },
+      {
+        path: 'kubernetes/clusters/:id',
+        name: 'K8sClusterDetail',
+        component: () => import('@/views/kubernetes/ClusterDetail.vue'),
+        meta: { title: '集群详情', activeMenu: '/kubernetes/clusters' },
+      },
+      {
+        path: 'kubernetes/nodes',
+        name: 'K8sNodes',
+        component: () => import('@/views/kubernetes/Nodes.vue'),
+        meta: { title: '节点管理' },
+      },
+      {
+        path: 'kubernetes/clusters/:clusterId/nodes/:nodeName',
+        name: 'K8sNodeDetail',
+        component: () => import('@/views/kubernetes/NodeDetail.vue'),
+        meta: { title: '节点详情', activeMenu: '/kubernetes/nodes' },
+      },
+      {
+        path: 'kubernetes/workloads',
+        name: 'K8sWorkloads',
+        component: () => import('@/views/kubernetes/Workloads.vue'),
+        meta: { title: '工作负载' },
+      },
+      {
+        path: 'kubernetes/namespaces',
+        name: 'K8sNamespaces',
+        component: () => import('@/views/kubernetes/Namespaces.vue'),
+        meta: { title: '命名空间' },
+      },
+      {
+        path: 'kubernetes/roles',
+        name: 'K8sRoles',
+        component: () => import('@/views/kubernetes/Roles.vue'),
+        meta: { title: '角色管理' },
+      },
+      {
+        path: 'kubernetes/network',
+        name: 'K8sNetwork',
+        component: () => import('@/views/kubernetes/Network.vue'),
+        meta: { title: '网络管理' },
+      },
+      {
+        path: 'kubernetes/config',
+        name: 'K8sConfig',
+        component: () => import('@/views/kubernetes/Config.vue'),
+        meta: { title: '配置管理' },
+      },
+      {
+        path: 'kubernetes/storage',
+        name: 'K8sStorage',
+        component: () => import('@/views/kubernetes/Storage.vue'),
+        meta: { title: '存储管理' },
+      },
+      {
+        path: 'kubernetes/access',
+        name: 'K8sAccess',
+        component: () => import('@/views/kubernetes/Access.vue'),
+        meta: { title: '访问控制' },
+      },
+      {
+        path: 'kubernetes/audit',
+        name: 'K8sAudit',
+        component: () => import('@/views/kubernetes/Audit.vue'),
+        meta: { title: '终端审计' },
+      },
+      {
+        path: 'kubernetes/application-diagnosis',
+        name: 'K8sApplicationDiagnosis',
+        component: () => import('@/views/kubernetes/ApplicationDiagnosis.vue'),
+        meta: { title: '应用诊断' },
+      },
+      {
+        path: 'kubernetes/cluster-inspection',
+        name: 'K8sClusterInspection',
+        component: () => import('@/views/kubernetes/ClusterInspection.vue'),
+        meta: { title: '集群巡检' },
+      },
+    ]
   }
 }
 
