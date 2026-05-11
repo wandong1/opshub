@@ -20,6 +20,7 @@ message AgentMessage {
     ProbeResult probe_result = 7;
     HttpProxyResponse http_proxy_response = 8;
     WsSessionResult ws_session_result = 9;
+    StreamProxyChunk stream_proxy_chunk = 10;
   }
 }
 
@@ -39,6 +40,7 @@ message ServerMessage {
     WsSessionOpen ws_session_open = 11;
     WsSessionAction ws_session_action = 12;
     WsSessionClose ws_session_close = 13;
+    StreamProxyRequest stream_proxy_request = 14;
   }
 }
 
@@ -291,4 +293,23 @@ message WsSessionResult {
   int32 status_code = 7; // for open: HTTP upgrade status
   map<string, string> headers = 8; // for open: upgrade response headers
   string response_body = 9; // for receive action
+}
+
+// ========== 流式代理 ==========
+message StreamProxyRequest {
+  string request_id = 1;
+  string method = 2;
+  string url = 3;
+  map<string, string> headers = 4;
+  bytes body = 5;
+  int32 timeout = 6;
+}
+
+message StreamProxyChunk {
+  string request_id = 1;
+  bytes data = 2;
+  bool is_final = 3;
+  string error = 4;
+  int32 status_code = 5;
+  map<string, string> headers = 6;
 }

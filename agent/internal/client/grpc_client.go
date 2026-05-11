@@ -352,6 +352,12 @@ func (c *GRPCClient) handleServerMessage(msg *pb.ServerMessage) {
 			payload.HttpProxyRequest.Method, payload.HttpProxyRequest.Url, payload.HttpProxyRequest.RequestId)
 		go c.handleHttpProxyRequest(payload.HttpProxyRequest)
 
+	case *pb.ServerMessage_StreamProxyRequest:
+		// 处理流式代理请求
+		logger.Info("收到流式代理请求: method=%s, url=%s, requestID=%s",
+			payload.StreamProxyRequest.Method, payload.StreamProxyRequest.Url, payload.StreamProxyRequest.RequestId)
+		go c.handleStreamProxyRequest(payload.StreamProxyRequest)
+
 	case *pb.ServerMessage_WsSessionOpen:
 		// 处理 WebSocket 会话打开请求
 		logger.Info("收到 WebSocket 会话打开请求: sessionID=%s, url=%s",
@@ -471,6 +477,170 @@ func (c *GRPCClient) sendHttpProxyError(requestID string, err error) {
 		},
 	})
 }
+
+// handleStreamProxyRequest 处理流式代理请求（支持SSE）
+func (c *GRPCClient) handleStreamProxyRequest(req *pb.StreamProxyRequest) {
+	// 构建 HTTP 请求
+	httpReq, err := http.NewRequest(req.Method, req.Url, bytes.NewReader(req.Body))
+	if err != nil {
+		c.sendStreamProxyError(req.RequestId, err)
+		return
+	}
+
+	// 设置请求头
+	for key, value := range req.Headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	// 执行 HTTP 请求（流式响应不设置总超时）
+	timeout := time.Duration(req.Timeout) * time.Second
+	if timeout == 0 {
+		timeout = 600 * time.Second // 默认10分钟作为读取超时
+	}
+
+	// 创建支持长连接的HTTP客户端
+	// 注意：不设置Client.Timeout，因为流式响应可能持续很长时间
+	// 只在Transport中设置读写超时
+	client := &http.Client{
+		Timeout: 0, // 不设置总超时，允许长时间流式传输
+		Transport: &http.Transport{
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   100,
+			IdleConnTimeout:       90 * time.Second,
+			ResponseHeaderTimeout: 0,  // 不限制等待响应头的时间，因为模型可能需要很长时间思考
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableCompression:    true, // 禁用压缩，保持原始数据流
+		},
+	}
+
+	// 创建带超时的context，用于控制整个请求
+	// 但这个超时应该很长，主要是防止永久挂起
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	httpReq = httpReq.WithContext(ctx)
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		logger.Error("流式代理请求失败: url=%s, error=%v", req.Url, err)
+		c.sendStreamProxyError(req.RequestId, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 构建响应头
+	headers := make(map[string]string)
+	for key, values := range resp.Header {
+		if len(values) > 0 {
+			headers[key] = values[0]
+		}
+	}
+
+	// 发送首块（包含状态码和响应头）
+	firstChunk := &pb.StreamProxyChunk{
+		RequestId:  req.RequestId,
+		StatusCode: int32(resp.StatusCode),
+		Headers:    headers,
+		Data:       []byte{},
+		IsFinal:    false,
+		Error:      "",
+	}
+
+	if err := c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_StreamProxyChunk{
+			StreamProxyChunk: firstChunk,
+		},
+	}); err != nil {
+		logger.Error("发送首块失败: %v", err)
+		return
+	}
+
+	logger.Info("流式代理请求开始: url=%s, status=%d", req.Url, resp.StatusCode)
+
+	// 流式读取并转发（关键：不缓冲，实时转发）
+	buffer := make([]byte, 4096) // 4KB buffer
+	totalBytes := 0
+	chunkCount := 0
+
+	for {
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			totalBytes += n
+			chunkCount++
+
+			// 复制数据到新的slice，避免buffer被重用
+			data := make([]byte, n)
+			copy(data, buffer[:n])
+
+			// 立即发送数据块
+			chunk := &pb.StreamProxyChunk{
+				RequestId: req.RequestId,
+				Data:      data,
+				IsFinal:   false,
+			}
+
+			if sendErr := c.SendMessage(&pb.AgentMessage{
+				Payload: &pb.AgentMessage_StreamProxyChunk{
+					StreamProxyChunk: chunk,
+				},
+			}); sendErr != nil {
+				logger.Error("发送数据块失败: %v", sendErr)
+				return
+			}
+
+			// 每100个chunk记录一次日志
+			if chunkCount%100 == 0 {
+				logger.Info("流式代理进度: url=%s, chunks=%d, bytes=%d", req.Url, chunkCount, totalBytes)
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			logger.Error("读取响应体失败: url=%s, error=%v", req.Url, err)
+			c.sendStreamProxyError(req.RequestId, err)
+			return
+		}
+	}
+
+	// 发送最后一块（标记结束）
+	finalChunk := &pb.StreamProxyChunk{
+		RequestId: req.RequestId,
+		Data:      []byte{},
+		IsFinal:   true,
+		Error:     "",
+	}
+
+	if err := c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_StreamProxyChunk{
+			StreamProxyChunk: finalChunk,
+		},
+	}); err != nil {
+		logger.Error("发送最后一块失败: %v", err)
+		return
+	}
+
+	logger.Info("流式代理请求完成: url=%s, totalBytes=%d, chunks=%d", req.Url, totalBytes, chunkCount)
+}
+
+// sendStreamProxyError 发送流式代理错误响应
+func (c *GRPCClient) sendStreamProxyError(requestID string, err error) {
+	errorChunk := &pb.StreamProxyChunk{
+		RequestId: requestID,
+		Data:      []byte{},
+		IsFinal:   true,
+		Error:     err.Error(),
+	}
+
+	c.SendMessage(&pb.AgentMessage{
+		Payload: &pb.AgentMessage_StreamProxyChunk{
+			StreamProxyChunk: errorChunk,
+		},
+	})
+}
+
 
 // handleWsSessionOpen 处理 WebSocket 会话打开请求
 func (c *GRPCClient) handleWsSessionOpen(req *pb.WsSessionOpen) {

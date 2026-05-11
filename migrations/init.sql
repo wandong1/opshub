@@ -1835,6 +1835,65 @@ VALUES
   (2, 377);  -- 访问站点按钮
 
 -- ============================================================
+-- 16.6 AI模型代理功能
+-- ============================================================
+
+-- 16.6.1 页面菜单：资产管理(parent_id=15)下新增AI模型代理
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (91, 'AI模型代理', 'asset_ai_model_proxies', 2, 15, '/asset/ai-model-proxies', 'asset/AIModelProxies', 'Robot', 10, 1, 1, '', '', NOW(), NOW());
+
+-- 16.6.2 按钮权限(type=3)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  -- AI模型代理按钮 (parent_id=91)
+  (378, '新增代理', 'ai_model_proxies:create', 3, 91, '', '', '', 1, 1, 1, '/api/v1/ai-model-proxies', 'POST', NOW(), NOW()),
+  (379, '编辑代理', 'ai_model_proxies:update', 3, 91, '', '', '', 2, 1, 1, '/api/v1/ai-model-proxies/:id', 'PUT', NOW(), NOW()),
+  (380, '删除代理', 'ai_model_proxies:delete', 3, 91, '', '', '', 3, 1, 1, '/api/v1/ai-model-proxies/:id', 'DELETE', NOW(), NOW()),
+  (381, '测试连接', 'ai_model_proxies:test', 3, 91, '', '', '', 4, 1, 1, '/api/v1/ai-model-proxies/:id/test', 'GET', NOW(), NOW()),
+  (382, '重新生成Token', 'ai_model_proxies:regenerate_token', 3, 91, '', '', '', 5, 1, 1, '/api/v1/ai-model-proxies/:id/regenerate-token', 'POST', NOW(), NOW());
+
+-- 16.6.3 菜单API关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  -- AI模型代理列表页面需要的API
+  (91, '/api/v1/ai-model-proxies', 'GET', NOW(), NOW()),
+  (91, '/api/v1/ai-model-proxies/:id', 'GET', NOW(), NOW()),
+  (91, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+  (91, '/api/v1/hosts', 'GET', NOW(), NOW()),
+  -- 新增代理按钮关联的API
+  (378, '/api/v1/ai-model-proxies', 'POST', NOW(), NOW()),
+  (378, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+  (378, '/api/v1/hosts', 'GET', NOW(), NOW()),
+  -- 编辑代理按钮关联的API
+  (379, '/api/v1/ai-model-proxies/:id', 'PUT', NOW(), NOW()),
+  (379, '/api/v1/ai-model-proxies/:id', 'GET', NOW(), NOW()),
+  (379, '/api/v1/asset-groups/tree', 'GET', NOW(), NOW()),
+  (379, '/api/v1/hosts', 'GET', NOW(), NOW()),
+  -- 删除代理按钮关联的API
+  (380, '/api/v1/ai-model-proxies/:id', 'DELETE', NOW(), NOW()),
+  -- 测试连接按钮关联的API
+  (381, '/api/v1/ai-model-proxies/:id/test', 'GET', NOW(), NOW()),
+  -- 重新生成Token按钮关联的API
+  (382, '/api/v1/ai-model-proxies/:id/regenerate-token', 'POST', NOW(), NOW()),
+  (382, '/api/v1/ai-model-proxies/:id', 'GET', NOW(), NOW());
+
+-- 16.6.4 为管理员角色(role_id=1)分配AI模型代理菜单和按钮权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 91),   -- AI模型代理菜单
+  (1, 378),  -- 新增代理按钮
+  (1, 379),  -- 编辑代理按钮
+  (1, 380),  -- 删除代理按钮
+  (1, 381),  -- 测试连接按钮
+  (1, 382);  -- 重新生成Token按钮
+
+-- 16.6.5 为普通用户角色(role_id=2)分配基础查看权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (2, 91);   -- AI模型代理菜单（仅查看）
+
+-- ============================================================
 -- 17. 智能巡检功能扩展（巡检管理、执行记录）
 -- ============================================================
 

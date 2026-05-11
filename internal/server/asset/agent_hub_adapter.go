@@ -99,6 +99,38 @@ func (a *AgentHubAdapter) WaitResponse(as AgentStreamInterface, requestID string
 	return result[0].Interface(), nil
 }
 
+func (a *AgentHubAdapter) StreamResponse(as AgentStreamInterface, requestID string, timeout time.Duration) (<-chan interface{}, error) {
+	// 使用反射调用 StreamResponse 方法
+	adapter := as.(*AgentStreamAdapter)
+
+	result := reflect.ValueOf(a.realHub).MethodByName("StreamResponse").Call([]reflect.Value{
+		reflect.ValueOf(adapter.realStream),
+		reflect.ValueOf(requestID),
+		reflect.ValueOf(timeout),
+	})
+
+	if len(result) != 2 {
+		return nil, fmt.Errorf("StreamResponse 返回值数量错误")
+	}
+
+	if !result[1].IsNil() {
+		return nil, result[1].Interface().(error)
+	}
+
+	// 将 <-chan *pb.StreamProxyChunk 转换为 <-chan interface{}
+	chunkChan := result[0].Interface().(<-chan *pb.StreamProxyChunk)
+	interfaceChan := make(chan interface{}, 10)
+
+	go func() {
+		defer close(interfaceChan)
+		for chunk := range chunkChan {
+			interfaceChan <- chunk
+		}
+	}()
+
+	return interfaceChan, nil
+}
+
 // AgentStreamAdapter 适配器，将真实的 AgentStream 适配为接口
 type AgentStreamAdapter struct {
 	realStream interface{}

@@ -20,7 +20,7 @@ type AgentStream struct {
 	DoneCh   chan struct{}
 	mu       sync.Mutex
 	// 请求响应回调
-	pending  map[string]chan any
+	pending  map[string]interface{}
 	pendMu   sync.Mutex
 }
 
@@ -52,7 +52,9 @@ func (s *AgentStream) ResolvePending(requestID string, result any) {
 	}
 	s.pendMu.Unlock()
 	if ok {
-		ch <- result
+		if resultChan, ok := ch.(chan any); ok {
+			resultChan <- result
+		}
 	}
 }
 
@@ -83,7 +85,7 @@ func (h *AgentHub) Register(agentID string, hostID uint, stream pb.AgentHub_Conn
 		Stream:  stream,
 		SendCh:  make(chan *pb.ServerMessage, 64),
 		DoneCh:  make(chan struct{}),
-		pending: make(map[string]chan any),
+		pending: make(map[string]interface{}),
 	}
 
 	h.mu.Lock()
@@ -206,6 +208,53 @@ func (h *AgentHub) WaitResponse(as *AgentStream, requestID string, timeout time.
 		return nil, fmt.Errorf("Agent连接已断开")
 	}
 }
+
+// StreamResponse 返回流式响应的channel（用于SSE）
+// 注意：这里不设置超时，因为流式响应可能持续很长时间
+// 超时应该由HTTP客户端（Agent端）和最终客户端控制
+func (h *AgentHub) StreamResponse(as *AgentStream, requestID string, timeout time.Duration) (<-chan *pb.StreamProxyChunk, error) {
+	chunkChan := make(chan *pb.StreamProxyChunk, 10)
+
+	// 注册pending请求，使用interface{}包装
+	as.pendMu.Lock()
+	as.pending[requestID] = chunkChan
+	as.pendMu.Unlock()
+
+	// 不再设置超时，让请求自然完成或由客户端断开
+	// 如果需要超时，应该在Agent端的HTTP客户端设置
+
+	return chunkChan, nil
+}
+
+// ResolveStreamChunk 处理流式响应的chunk
+func (s *AgentStream) ResolveStreamChunk(chunk *pb.StreamProxyChunk) {
+	s.pendMu.Lock()
+	ch, ok := s.pending[chunk.RequestId]
+	if !ok {
+		s.pendMu.Unlock()
+		return
+	}
+
+	// 如果是最后一块，从pending中删除
+	if chunk.IsFinal {
+		delete(s.pending, chunk.RequestId)
+	}
+	s.pendMu.Unlock()
+
+	// 发送chunk到channel
+	if chunkChan, ok := ch.(chan *pb.StreamProxyChunk); ok {
+		select {
+		case chunkChan <- chunk:
+		default:
+			// channel已满，丢弃
+		}
+		// 如果是最后一块，关闭channel
+		if chunk.IsFinal {
+			close(chunkChan)
+		}
+	}
+}
+
 
 // SendProbeRequest 发送拨测请求到Agent并等待响应
 func (h *AgentHub) SendProbeRequest(hostID uint, req *pb.ProbeRequest) (*pb.ProbeResult, error) {

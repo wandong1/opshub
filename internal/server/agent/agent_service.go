@@ -115,6 +115,11 @@ func (s *AgentService) Connect(stream pb.AgentHub_ConnectServer) error {
 				as.ResolvePending(payload.HttpProxyResponse.RequestId, payload.HttpProxyResponse)
 			}
 
+		case *pb.AgentMessage_StreamProxyChunk:
+			if as != nil {
+				as.ResolveStreamChunk(payload.StreamProxyChunk)
+			}
+
 		case *pb.AgentMessage_WsSessionResult:
 			if as != nil {
 				// WebSocket 会话结果，使用 session_id + action_id 作为 key

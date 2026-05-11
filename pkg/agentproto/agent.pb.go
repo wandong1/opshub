@@ -35,6 +35,7 @@ type AgentMessage struct {
 	//	*AgentMessage_ProbeResult
 	//	*AgentMessage_HttpProxyResponse
 	//	*AgentMessage_WsSessionResult
+	//	*AgentMessage_StreamProxyChunk
 	Payload       isAgentMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -158,6 +159,15 @@ func (x *AgentMessage) GetWsSessionResult() *WsSessionResult {
 	return nil
 }
 
+func (x *AgentMessage) GetStreamProxyChunk() *StreamProxyChunk {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_StreamProxyChunk); ok {
+			return x.StreamProxyChunk
+		}
+	}
+	return nil
+}
+
 type isAgentMessage_Payload interface {
 	isAgentMessage_Payload()
 }
@@ -198,6 +208,10 @@ type AgentMessage_WsSessionResult struct {
 	WsSessionResult *WsSessionResult `protobuf:"bytes,9,opt,name=ws_session_result,json=wsSessionResult,proto3,oneof"`
 }
 
+type AgentMessage_StreamProxyChunk struct {
+	StreamProxyChunk *StreamProxyChunk `protobuf:"bytes,10,opt,name=stream_proxy_chunk,json=streamProxyChunk,proto3,oneof"`
+}
+
 func (*AgentMessage_Register) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Heartbeat) isAgentMessage_Payload() {}
@@ -215,6 +229,8 @@ func (*AgentMessage_ProbeResult) isAgentMessage_Payload() {}
 func (*AgentMessage_HttpProxyResponse) isAgentMessage_Payload() {}
 
 func (*AgentMessage_WsSessionResult) isAgentMessage_Payload() {}
+
+func (*AgentMessage_StreamProxyChunk) isAgentMessage_Payload() {}
 
 // Server → Agent
 type ServerMessage struct {
@@ -234,6 +250,7 @@ type ServerMessage struct {
 	//	*ServerMessage_WsSessionOpen
 	//	*ServerMessage_WsSessionAction
 	//	*ServerMessage_WsSessionClose
+	//	*ServerMessage_StreamProxyRequest
 	Payload       isServerMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -393,6 +410,15 @@ func (x *ServerMessage) GetWsSessionClose() *WsSessionClose {
 	return nil
 }
 
+func (x *ServerMessage) GetStreamProxyRequest() *StreamProxyRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_StreamProxyRequest); ok {
+			return x.StreamProxyRequest
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Payload interface {
 	isServerMessage_Payload()
 }
@@ -449,6 +475,10 @@ type ServerMessage_WsSessionClose struct {
 	WsSessionClose *WsSessionClose `protobuf:"bytes,13,opt,name=ws_session_close,json=wsSessionClose,proto3,oneof"`
 }
 
+type ServerMessage_StreamProxyRequest struct {
+	StreamProxyRequest *StreamProxyRequest `protobuf:"bytes,14,opt,name=stream_proxy_request,json=streamProxyRequest,proto3,oneof"`
+}
+
 func (*ServerMessage_RegisterAck) isServerMessage_Payload() {}
 
 func (*ServerMessage_HeartbeatAck) isServerMessage_Payload() {}
@@ -474,6 +504,8 @@ func (*ServerMessage_WsSessionOpen) isServerMessage_Payload() {}
 func (*ServerMessage_WsSessionAction) isServerMessage_Payload() {}
 
 func (*ServerMessage_WsSessionClose) isServerMessage_Payload() {}
+
+func (*ServerMessage_StreamProxyRequest) isServerMessage_Payload() {}
 
 // ========== 注册 ==========
 type RegisterRequest struct {
@@ -2608,12 +2640,181 @@ func (x *WsSessionResult) GetResponseBody() string {
 	return ""
 }
 
+// ========== 流式代理 ==========
+type StreamProxyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Method        string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
+	Url           string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
+	Headers       map[string]string      `protobuf:"bytes,4,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Body          []byte                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	Timeout       int32                  `protobuf:"varint,6,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamProxyRequest) Reset() {
+	*x = StreamProxyRequest{}
+	mi := &file_api_proto_agent_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamProxyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamProxyRequest) ProtoMessage() {}
+
+func (x *StreamProxyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_agent_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamProxyRequest.ProtoReflect.Descriptor instead.
+func (*StreamProxyRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_agent_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *StreamProxyRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *StreamProxyRequest) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *StreamProxyRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *StreamProxyRequest) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *StreamProxyRequest) GetBody() []byte {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *StreamProxyRequest) GetTimeout() int32 {
+	if x != nil {
+		return x.Timeout
+	}
+	return 0
+}
+
+type StreamProxyChunk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	IsFinal       bool                   `protobuf:"varint,3,opt,name=is_final,json=isFinal,proto3" json:"is_final,omitempty"`
+	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	StatusCode    int32                  `protobuf:"varint,5,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
+	Headers       map[string]string      `protobuf:"bytes,6,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamProxyChunk) Reset() {
+	*x = StreamProxyChunk{}
+	mi := &file_api_proto_agent_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamProxyChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamProxyChunk) ProtoMessage() {}
+
+func (x *StreamProxyChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_agent_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamProxyChunk.ProtoReflect.Descriptor instead.
+func (*StreamProxyChunk) Descriptor() ([]byte, []int) {
+	return file_api_proto_agent_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *StreamProxyChunk) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *StreamProxyChunk) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *StreamProxyChunk) GetIsFinal() bool {
+	if x != nil {
+		return x.IsFinal
+	}
+	return false
+}
+
+func (x *StreamProxyChunk) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *StreamProxyChunk) GetStatusCode() int32 {
+	if x != nil {
+		return x.StatusCode
+	}
+	return 0
+}
+
+func (x *StreamProxyChunk) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
 var File_api_proto_agent_proto protoreflect.FileDescriptor
 
 const file_api_proto_agent_proto_rawDesc = "" +
 	"\n" +
 	"\x15api/proto/agent.proto\x12\n" +
-	"agentproto\"\xda\x04\n" +
+	"agentproto\"\xa8\x05\n" +
 	"\fAgentMessage\x129\n" +
 	"\bregister\x18\x01 \x01(\v2\x1b.agentproto.RegisterRequestH\x00R\bregister\x12<\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1c.agentproto.HeartbeatRequestH\x00R\theartbeat\x12=\n" +
@@ -2626,8 +2827,10 @@ const file_api_proto_agent_proto_rawDesc = "" +
 	"\tfile_list\x18\x06 \x01(\v2\x1a.agentproto.FileListResultH\x00R\bfileList\x12<\n" +
 	"\fprobe_result\x18\a \x01(\v2\x17.agentproto.ProbeResultH\x00R\vprobeResult\x12O\n" +
 	"\x13http_proxy_response\x18\b \x01(\v2\x1d.agentproto.HttpProxyResponseH\x00R\x11httpProxyResponse\x12I\n" +
-	"\x11ws_session_result\x18\t \x01(\v2\x1b.agentproto.WsSessionResultH\x00R\x0fwsSessionResultB\t\n" +
-	"\apayload\"\xf7\x06\n" +
+	"\x11ws_session_result\x18\t \x01(\v2\x1b.agentproto.WsSessionResultH\x00R\x0fwsSessionResult\x12L\n" +
+	"\x12stream_proxy_chunk\x18\n" +
+	" \x01(\v2\x1c.agentproto.StreamProxyChunkH\x00R\x10streamProxyChunkB\t\n" +
+	"\apayload\"\xcb\a\n" +
 	"\rServerMessage\x12A\n" +
 	"\fregister_ack\x18\x01 \x01(\v2\x1c.agentproto.RegisterResponseH\x00R\vregisterAck\x12D\n" +
 	"\rheartbeat_ack\x18\x02 \x01(\v2\x1d.agentproto.HeartbeatResponseH\x00R\fheartbeatAck\x127\n" +
@@ -2646,7 +2849,8 @@ const file_api_proto_agent_proto_rawDesc = "" +
 	" \x01(\v2\x1c.agentproto.HttpProxyRequestH\x00R\x10httpProxyRequest\x12C\n" +
 	"\x0fws_session_open\x18\v \x01(\v2\x19.agentproto.WsSessionOpenH\x00R\rwsSessionOpen\x12I\n" +
 	"\x11ws_session_action\x18\f \x01(\v2\x1b.agentproto.WsSessionActionH\x00R\x0fwsSessionAction\x12F\n" +
-	"\x10ws_session_close\x18\r \x01(\v2\x1a.agentproto.WsSessionCloseH\x00R\x0ewsSessionCloseB\t\n" +
+	"\x10ws_session_close\x18\r \x01(\v2\x1a.agentproto.WsSessionCloseH\x00R\x0ewsSessionClose\x12R\n" +
+	"\x14stream_proxy_request\x18\x0e \x01(\v2\x1e.agentproto.StreamProxyRequestH\x00R\x12streamProxyRequestB\t\n" +
 	"\apayload\"\x98\x01\n" +
 	"\x0fRegisterRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +
@@ -2886,6 +3090,29 @@ const file_api_proto_agent_proto_rawDesc = "" +
 	"\rresponse_body\x18\t \x01(\tR\fresponseBody\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8e\x02\n" +
+	"\x12StreamProxyRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
+	"\x06method\x18\x02 \x01(\tR\x06method\x12\x10\n" +
+	"\x03url\x18\x03 \x01(\tR\x03url\x12E\n" +
+	"\aheaders\x18\x04 \x03(\v2+.agentproto.StreamProxyRequest.HeadersEntryR\aheaders\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\fR\x04body\x12\x18\n" +
+	"\atimeout\x18\x06 \x01(\x05R\atimeout\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x98\x02\n" +
+	"\x10StreamProxyChunk\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x19\n" +
+	"\bis_final\x18\x03 \x01(\bR\aisFinal\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x1f\n" +
+	"\vstatus_code\x18\x05 \x01(\x05R\n" +
+	"statusCode\x12C\n" +
+	"\aheaders\x18\x06 \x03(\v2).agentproto.StreamProxyChunk.HeadersEntryR\aheaders\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012N\n" +
 	"\bAgentHub\x12B\n" +
 	"\aConnect\x12\x18.agentproto.AgentMessage\x1a\x19.agentproto.ServerMessage(\x010\x01B-Z+github.com/ydcloud-dy/opshub/pkg/agentprotob\x06proto3"
@@ -2902,7 +3129,7 @@ func file_api_proto_agent_proto_rawDescGZIP() []byte {
 	return file_api_proto_agent_proto_rawDescData
 }
 
-var file_api_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_api_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_api_proto_agent_proto_goTypes = []any{
 	(*AgentMessage)(nil),         // 0: agentproto.AgentMessage
 	(*ServerMessage)(nil),        // 1: agentproto.ServerMessage
@@ -2931,14 +3158,18 @@ var file_api_proto_agent_proto_goTypes = []any{
 	(*WsSessionAction)(nil),      // 24: agentproto.WsSessionAction
 	(*WsSessionClose)(nil),       // 25: agentproto.WsSessionClose
 	(*WsSessionResult)(nil),      // 26: agentproto.WsSessionResult
-	nil,                          // 27: agentproto.ProbeRequest.HeadersEntry
-	nil,                          // 28: agentproto.ProbeRequest.ParamsEntry
-	nil,                          // 29: agentproto.ProbeResult.ResponseHeadersEntry
-	nil,                          // 30: agentproto.HttpProxyRequest.HeadersEntry
-	nil,                          // 31: agentproto.HttpProxyResponse.HeadersEntry
-	nil,                          // 32: agentproto.WsSessionOpen.HeadersEntry
-	nil,                          // 33: agentproto.WsSessionOpen.ParamsEntry
-	nil,                          // 34: agentproto.WsSessionResult.HeadersEntry
+	(*StreamProxyRequest)(nil),   // 27: agentproto.StreamProxyRequest
+	(*StreamProxyChunk)(nil),     // 28: agentproto.StreamProxyChunk
+	nil,                          // 29: agentproto.ProbeRequest.HeadersEntry
+	nil,                          // 30: agentproto.ProbeRequest.ParamsEntry
+	nil,                          // 31: agentproto.ProbeResult.ResponseHeadersEntry
+	nil,                          // 32: agentproto.HttpProxyRequest.HeadersEntry
+	nil,                          // 33: agentproto.HttpProxyResponse.HeadersEntry
+	nil,                          // 34: agentproto.WsSessionOpen.HeadersEntry
+	nil,                          // 35: agentproto.WsSessionOpen.ParamsEntry
+	nil,                          // 36: agentproto.WsSessionResult.HeadersEntry
+	nil,                          // 37: agentproto.StreamProxyRequest.HeadersEntry
+	nil,                          // 38: agentproto.StreamProxyChunk.HeadersEntry
 }
 var file_api_proto_agent_proto_depIdxs = []int32{
 	2,  // 0: agentproto.AgentMessage.register:type_name -> agentproto.RegisterRequest
@@ -2950,37 +3181,41 @@ var file_api_proto_agent_proto_depIdxs = []int32{
 	19, // 6: agentproto.AgentMessage.probe_result:type_name -> agentproto.ProbeResult
 	22, // 7: agentproto.AgentMessage.http_proxy_response:type_name -> agentproto.HttpProxyResponse
 	26, // 8: agentproto.AgentMessage.ws_session_result:type_name -> agentproto.WsSessionResult
-	3,  // 9: agentproto.ServerMessage.register_ack:type_name -> agentproto.RegisterResponse
-	5,  // 10: agentproto.ServerMessage.heartbeat_ack:type_name -> agentproto.HeartbeatResponse
-	6,  // 11: agentproto.ServerMessage.term_open:type_name -> agentproto.TerminalOpen
-	7,  // 12: agentproto.ServerMessage.term_input:type_name -> agentproto.TerminalInput
-	9,  // 13: agentproto.ServerMessage.term_resize:type_name -> agentproto.TerminalResize
-	10, // 14: agentproto.ServerMessage.term_close:type_name -> agentproto.TerminalClose
-	11, // 15: agentproto.ServerMessage.file_request:type_name -> agentproto.FileRequest
-	15, // 16: agentproto.ServerMessage.cmd_request:type_name -> agentproto.CommandRequest
-	17, // 17: agentproto.ServerMessage.probe_request:type_name -> agentproto.ProbeRequest
-	21, // 18: agentproto.ServerMessage.http_proxy_request:type_name -> agentproto.HttpProxyRequest
-	23, // 19: agentproto.ServerMessage.ws_session_open:type_name -> agentproto.WsSessionOpen
-	24, // 20: agentproto.ServerMessage.ws_session_action:type_name -> agentproto.WsSessionAction
-	25, // 21: agentproto.ServerMessage.ws_session_close:type_name -> agentproto.WsSessionClose
-	14, // 22: agentproto.FileListResult.files:type_name -> agentproto.FileInfo
-	27, // 23: agentproto.ProbeRequest.headers:type_name -> agentproto.ProbeRequest.HeadersEntry
-	28, // 24: agentproto.ProbeRequest.params:type_name -> agentproto.ProbeRequest.ParamsEntry
-	18, // 25: agentproto.ProbeRequest.assertions:type_name -> agentproto.ProbeAssertion
-	29, // 26: agentproto.ProbeResult.response_headers:type_name -> agentproto.ProbeResult.ResponseHeadersEntry
-	20, // 27: agentproto.ProbeResult.assertion_results:type_name -> agentproto.ProbeAssertionResult
-	30, // 28: agentproto.HttpProxyRequest.headers:type_name -> agentproto.HttpProxyRequest.HeadersEntry
-	31, // 29: agentproto.HttpProxyResponse.headers:type_name -> agentproto.HttpProxyResponse.HeadersEntry
-	32, // 30: agentproto.WsSessionOpen.headers:type_name -> agentproto.WsSessionOpen.HeadersEntry
-	33, // 31: agentproto.WsSessionOpen.params:type_name -> agentproto.WsSessionOpen.ParamsEntry
-	34, // 32: agentproto.WsSessionResult.headers:type_name -> agentproto.WsSessionResult.HeadersEntry
-	0,  // 33: agentproto.AgentHub.Connect:input_type -> agentproto.AgentMessage
-	1,  // 34: agentproto.AgentHub.Connect:output_type -> agentproto.ServerMessage
-	34, // [34:35] is the sub-list for method output_type
-	33, // [33:34] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	28, // 9: agentproto.AgentMessage.stream_proxy_chunk:type_name -> agentproto.StreamProxyChunk
+	3,  // 10: agentproto.ServerMessage.register_ack:type_name -> agentproto.RegisterResponse
+	5,  // 11: agentproto.ServerMessage.heartbeat_ack:type_name -> agentproto.HeartbeatResponse
+	6,  // 12: agentproto.ServerMessage.term_open:type_name -> agentproto.TerminalOpen
+	7,  // 13: agentproto.ServerMessage.term_input:type_name -> agentproto.TerminalInput
+	9,  // 14: agentproto.ServerMessage.term_resize:type_name -> agentproto.TerminalResize
+	10, // 15: agentproto.ServerMessage.term_close:type_name -> agentproto.TerminalClose
+	11, // 16: agentproto.ServerMessage.file_request:type_name -> agentproto.FileRequest
+	15, // 17: agentproto.ServerMessage.cmd_request:type_name -> agentproto.CommandRequest
+	17, // 18: agentproto.ServerMessage.probe_request:type_name -> agentproto.ProbeRequest
+	21, // 19: agentproto.ServerMessage.http_proxy_request:type_name -> agentproto.HttpProxyRequest
+	23, // 20: agentproto.ServerMessage.ws_session_open:type_name -> agentproto.WsSessionOpen
+	24, // 21: agentproto.ServerMessage.ws_session_action:type_name -> agentproto.WsSessionAction
+	25, // 22: agentproto.ServerMessage.ws_session_close:type_name -> agentproto.WsSessionClose
+	27, // 23: agentproto.ServerMessage.stream_proxy_request:type_name -> agentproto.StreamProxyRequest
+	14, // 24: agentproto.FileListResult.files:type_name -> agentproto.FileInfo
+	29, // 25: agentproto.ProbeRequest.headers:type_name -> agentproto.ProbeRequest.HeadersEntry
+	30, // 26: agentproto.ProbeRequest.params:type_name -> agentproto.ProbeRequest.ParamsEntry
+	18, // 27: agentproto.ProbeRequest.assertions:type_name -> agentproto.ProbeAssertion
+	31, // 28: agentproto.ProbeResult.response_headers:type_name -> agentproto.ProbeResult.ResponseHeadersEntry
+	20, // 29: agentproto.ProbeResult.assertion_results:type_name -> agentproto.ProbeAssertionResult
+	32, // 30: agentproto.HttpProxyRequest.headers:type_name -> agentproto.HttpProxyRequest.HeadersEntry
+	33, // 31: agentproto.HttpProxyResponse.headers:type_name -> agentproto.HttpProxyResponse.HeadersEntry
+	34, // 32: agentproto.WsSessionOpen.headers:type_name -> agentproto.WsSessionOpen.HeadersEntry
+	35, // 33: agentproto.WsSessionOpen.params:type_name -> agentproto.WsSessionOpen.ParamsEntry
+	36, // 34: agentproto.WsSessionResult.headers:type_name -> agentproto.WsSessionResult.HeadersEntry
+	37, // 35: agentproto.StreamProxyRequest.headers:type_name -> agentproto.StreamProxyRequest.HeadersEntry
+	38, // 36: agentproto.StreamProxyChunk.headers:type_name -> agentproto.StreamProxyChunk.HeadersEntry
+	0,  // 37: agentproto.AgentHub.Connect:input_type -> agentproto.AgentMessage
+	1,  // 38: agentproto.AgentHub.Connect:output_type -> agentproto.ServerMessage
+	38, // [38:39] is the sub-list for method output_type
+	37, // [37:38] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_agent_proto_init() }
@@ -2998,6 +3233,7 @@ func file_api_proto_agent_proto_init() {
 		(*AgentMessage_ProbeResult)(nil),
 		(*AgentMessage_HttpProxyResponse)(nil),
 		(*AgentMessage_WsSessionResult)(nil),
+		(*AgentMessage_StreamProxyChunk)(nil),
 	}
 	file_api_proto_agent_proto_msgTypes[1].OneofWrappers = []any{
 		(*ServerMessage_RegisterAck)(nil),
@@ -3013,6 +3249,7 @@ func file_api_proto_agent_proto_init() {
 		(*ServerMessage_WsSessionOpen)(nil),
 		(*ServerMessage_WsSessionAction)(nil),
 		(*ServerMessage_WsSessionClose)(nil),
+		(*ServerMessage_StreamProxyRequest)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -3020,7 +3257,7 @@ func file_api_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_agent_proto_rawDesc), len(file_api_proto_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   35,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

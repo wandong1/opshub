@@ -30,6 +30,7 @@ type AgentHubInterfaceV2 interface {
 	IsOnline(hostID uint) bool
 	GetByHostID(hostID uint) (AgentStreamInterface, bool)
 	WaitResponse(as AgentStreamInterface, requestID string, timeout time.Duration) (interface{}, error)
+	StreamResponse(as AgentStreamInterface, requestID string, timeout time.Duration) (<-chan interface{}, error)
 }
 
 type AgentStreamInterface interface {

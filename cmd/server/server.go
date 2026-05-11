@@ -254,6 +254,9 @@ func autoMigrate(db *gorm.DB) error {
 		&assetbiz.Website{},
 		&assetbiz.WebsiteGroup{},
 		&assetbiz.WebsiteAgent{},
+		// AI模型代理表
+		&assetbiz.AIModelProxy{},
+		&assetbiz.AIModelProxyAgent{},
 		// 告警管理表
 		&alertbiz.AlertDataSource{},
 		&alertbiz.DataSourceAgentRelation{},

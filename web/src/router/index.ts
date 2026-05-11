@@ -144,6 +144,12 @@ const router = createRouter({
           meta: { title: 'Web站点管理' }
         },
         {
+          path: 'asset/ai-model-proxies',
+          name: 'AssetAIModelProxies',
+          component: () => import('@/views/asset/AIModelProxies.vue'),
+          meta: { title: 'AI模型代理' }
+        },
+        {
           path: 'profile',
           name: 'Profile',
           component: () => import('@/views/Profile.vue'),

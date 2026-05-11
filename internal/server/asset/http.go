@@ -40,6 +40,8 @@ type HTTPServer struct {
 	websiteService              *assetService.WebsiteService
 	websiteProxyHandler         *WebsiteProxyHandler
 	websiteProxyHandlerV2       *WebsiteProxyHandlerV2
+	aiModelProxyService         *assetService.AIModelProxyService
+	aiModelProxyHandler         *AIModelProxyHandler
 	terminalManager             *TerminalManager
 	terminalAuditHandler        *TerminalAuditHandler
 	authMiddleware              *rbacService.AuthMiddleware
@@ -54,6 +56,8 @@ func NewHTTPServer(
 	websiteService *assetService.WebsiteService,
 	websiteProxyHandler *WebsiteProxyHandler,
 	websiteProxyHandlerV2 *WebsiteProxyHandlerV2,
+	aiModelProxyService *assetService.AIModelProxyService,
+	aiModelProxyHandler *AIModelProxyHandler,
 	terminalManager *TerminalManager,
 	db *gorm.DB,
 	authMiddleware *rbacService.AuthMiddleware,
@@ -67,6 +71,8 @@ func NewHTTPServer(
 		websiteService:              websiteService,
 		websiteProxyHandler:         websiteProxyHandler,
 		websiteProxyHandlerV2:       websiteProxyHandlerV2,
+		aiModelProxyService:         aiModelProxyService,
+		aiModelProxyHandler:         aiModelProxyHandler,
 		terminalManager:             terminalManager,
 		terminalAuditHandler:        NewTerminalAuditHandler(db),
 		authMiddleware:              authMiddleware,
@@ -417,6 +423,19 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 		websites.GET("/:id/access", s.websiteProxyHandler.AccessWebsite)
 		// 注意：代理路由已移到公开路由，在 RegisterPublicRoutes 中注册
 	}
+
+	// AI模型代理管理
+	aiModelProxies := r.Group("/ai-model-proxies")
+	{
+		aiModelProxies.GET("", s.aiModelProxyService.ListAIModelProxies)
+		aiModelProxies.GET("/:id", s.aiModelProxyService.GetAIModelProxy)
+		aiModelProxies.POST("", s.aiModelProxyService.CreateAIModelProxy)
+		aiModelProxies.PUT("/:id", s.aiModelProxyService.UpdateAIModelProxy)
+		aiModelProxies.DELETE("/:id", s.aiModelProxyService.DeleteAIModelProxy)
+		aiModelProxies.POST("/:id/regenerate-token", s.aiModelProxyService.RegenerateToken)
+		aiModelProxies.GET("/:id/test", s.aiModelProxyService.TestConnection)
+		// 注意：代理路由已移到公开路由，在 RegisterPublicRoutes 中注册
+	}
 }
 
 // RegisterPublicRoutes 注册公开路由（无需认证）
@@ -430,6 +449,11 @@ func (s *HTTPServer) RegisterPublicRoutes(router *gin.Engine) {
 		router.Any("/api/v1/websites/proxy/t/:token", s.websiteProxyHandler.ProxyRequest)
 		router.Any("/api/v1/websites/proxy/t/:token/*path", s.websiteProxyHandler.ProxyRequest)
 	}
+
+	// AI模型代理路由（无需认证，使用 token 验证）
+	if s.aiModelProxyHandler != nil {
+		router.Any("/api/v1/ai-model-proxy/:token/*path", s.aiModelProxyHandler.ProxyStreamRequest)
+	}
 }
 
 // NewAssetServices 创建asset相关的服务
@@ -440,9 +464,11 @@ func NewAssetServices(db *gorm.DB, rdb *redis.Client) (
 	*rbacService.MiddlewarePermissionService,
 	*assetService.ServiceLabelService,
 	*assetService.WebsiteService,
+	*assetService.AIModelProxyService,
 	*TerminalManager,
 	*assetbiz.HostUseCase,
 	*assetbiz.WebsiteUseCase,
+	*assetbiz.AIModelProxyUseCase,
 	assetbiz.ServiceLabelRepo,
 	assetbiz.HostRepo,
 	assetbiz.CredentialRepo,
@@ -458,6 +484,7 @@ func NewAssetServices(db *gorm.DB, rdb *redis.Client) (
 	mwPermissionRepo := rbacdata.NewMiddlewarePermissionRepo(db)
 	serviceLabelRepo := assetdata.NewServiceLabelRepo(db)
 	websiteRepo := assetdata.NewWebsiteRepo(db)
+	aiModelProxyRepo := assetdata.NewAIModelProxyRepo(db)
 
 	// 初始化UseCase
 	assetGroupUseCase := assetbiz.NewAssetGroupUseCase(assetGroupRepo)
@@ -469,6 +496,7 @@ func NewAssetServices(db *gorm.DB, rdb *redis.Client) (
 	mwPermissionUseCase := rbacbiz.NewMiddlewarePermissionUseCase(mwPermissionRepo)
 	serviceLabelUseCase := assetbiz.NewServiceLabelUseCase(serviceLabelRepo)
 	websiteUseCase := assetbiz.NewWebsiteUseCase(websiteRepo, assetGroupRepo, hostRepo)
+	aiModelProxyUseCase := assetbiz.NewAIModelProxyUseCase(aiModelProxyRepo, assetGroupRepo, hostRepo)
 
 	// 初始化访问管理器（如果 Redis 可用）
 	var accessManager *assetbiz.WebsiteAccessManager
@@ -484,9 +512,10 @@ func NewAssetServices(db *gorm.DB, rdb *redis.Client) (
 	mwPermissionService := rbacService.NewMiddlewarePermissionService(mwPermissionUseCase)
 	serviceLabelService := assetService.NewServiceLabelService(serviceLabelUseCase)
 	websiteService := assetService.NewWebsiteService(websiteUseCase)
+	aiModelProxyService := assetService.NewAIModelProxyService(aiModelProxyUseCase)
 
 	// 初始化TerminalManager
 	terminalManager := NewTerminalManager(hostUseCase, db)
 
-	return assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo, accessManager
+	return assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, aiModelProxyService, terminalManager, hostUseCase, websiteUseCase, aiModelProxyUseCase, serviceLabelRepo, hostRepo, credentialRepo, accessManager
 }

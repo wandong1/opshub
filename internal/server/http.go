@@ -182,11 +182,14 @@ func NewHTTPServer(conf *conf.Config, svc *service.Service, db *gorm.DB, redisCl
 	s.registerRoutes(router, conf.Server.JWTSecret)
 
 	// 创建HTTP服务器
+	// 注意：对于流式响应（SSE），WriteTimeout会导致长时间连接被中断
+	// 因此设置为0（不限制），由应用层控制超时
 	s.server = &http.Server{
 		Addr:         fmt.Sprintf(":%d", conf.Server.HttpPort),
 		Handler:      router,
 		ReadTimeout:  time.Duration(conf.Server.ReadTimeout) * time.Millisecond,
-		WriteTimeout: time.Duration(conf.Server.WriteTimeout) * time.Millisecond,
+		WriteTimeout: 0, // 不限制写入超时，支持流式响应
+		IdleTimeout:  120 * time.Second, // 空闲连接超时
 	}
 
 	return s
@@ -234,7 +237,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	systemHTTPServer := systemserver.NewHTTPServer(configService, apiKeyService)
 
 	// 创建 Asset 服务
-	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, terminalManager, hostUseCase, websiteUseCase, serviceLabelRepo, hostRepo, credentialRepo, accessManager := assetserver.NewAssetServices(s.db, s.redisClient)
+	assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, aiModelProxyService, terminalManager, hostUseCase, websiteUseCase, aiModelProxyUseCase, serviceLabelRepo, hostRepo, credentialRepo, accessManager := assetserver.NewAssetServices(s.db, s.redisClient)
 
 	// 设置Agent命令执行工厂，使主机采集支持Agent方式
 	if s.grpcServer != nil {
@@ -254,6 +257,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	// 创建 WebsiteProxyHandler（使用新版 V2，支持真实的 HTTP 代理）
 	var websiteProxyHandler *assetserver.WebsiteProxyHandler
 	var websiteProxyHandlerV2 *assetserver.WebsiteProxyHandlerV2
+	var aiModelProxyHandler *assetserver.AIModelProxyHandler
 	if s.grpcServer != nil {
 		// 保留旧版（兼容性）
 		websiteProxyHandler = assetserver.NewWebsiteProxyHandler(websiteUseCase, s.grpcServer.Hub())
@@ -270,6 +274,8 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 		if websiteProxyAuditService != nil {
 			websiteProxyHandlerV2.SetAuditService(websiteProxyAuditService)
 		}
+		// 创建 AI 模型代理处理器
+		aiModelProxyHandler = assetserver.NewAIModelProxyHandler(aiModelProxyUseCase, agentHubAdapter)
 	}
 
 	// 设置authMiddleware的assetPermissionRepo
@@ -281,7 +287,7 @@ func (s *HTTPServer) registerRoutes(router *gin.Engine, jwtSecret string) {
 	authMiddleware.SetMiddlewarePermissionRepo(mwPermissionRepo)
 
 	// Asset 路由
-	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, websiteProxyHandler, websiteProxyHandlerV2, terminalManager, s.db, authMiddleware)
+	assetServer := assetserver.NewHTTPServer(assetGroupService, hostService, middlewareService, mwPermissionService, serviceLabelService, websiteService, websiteProxyHandler, websiteProxyHandlerV2, aiModelProxyService, aiModelProxyHandler, terminalManager, s.db, authMiddleware)
 
 	// API v1 - 公开接口(不需要认证)
 	public := router.Group("/api/v1/public")
