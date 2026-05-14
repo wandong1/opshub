@@ -917,6 +917,236 @@ func autoMigrate(db *gorm.DB) error {
 }
 ```
 
+#### 数据模型开发规范（重要）
+
+**核心原则**：所有数据模型变更必须同时维护 AutoMigrate 和 init.sql，确保新部署和现有环境的数据库结构一致。
+
+##### 1. 数据模型定义规范
+
+**GORM 模型必须包含的字段**：
+```go
+type YourModel struct {
+    ID        uint           `gorm:"primarykey" json:"id"`
+    CreatedAt time.Time      `json:"created_at"`
+    UpdatedAt time.Time      `json:"updated_at"`
+    DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+    
+    // 业务字段...
+}
+```
+
+**字段标签规范**：
+- 主键：`gorm:"primarykey"`
+- 字符串：`gorm:"size:100;not null"` （必须指定 size）
+- 索引：`gorm:"index"` 或 `gorm:"uniqueIndex"`
+- 外键：`gorm:"foreignKey:UserID;references:ID"`
+- 默认值：`gorm:"default:1"`
+- JSON 字段：`gorm:"type:json"`
+
+##### 2. AutoMigrate 注册流程
+
+**新增模型时必须在对应位置注册 AutoMigrate**：
+
+**核心系统表**（`cmd/server/server.go`）：
+```go
+func autoMigrate(db *gorm.DB) error {
+    return db.AutoMigrate(
+        // RBAC 系统
+        &rbacdata.User{},
+        &rbacdata.Role{},
+        &rbacdata.Menu{},
+        // 资产管理
+        &assetdata.Host{},
+        &assetdata.HostGroup{},
+        // 新增模型追加到这里
+        &assetdata.YourNewModel{},
+    )
+}
+```
+
+**插件表**（各插件的 `Enable()` 方法）：
+```go
+func (p *Plugin) Enable(db *gorm.DB) error {
+    return db.AutoMigrate(
+        &model.K8sCluster{},
+        &model.K8sTerminalSession{},
+        // 新增插件模型追加到这里
+        &model.YourPluginModel,
+    )
+}
+```
+
+##### 3. init.sql 同步维护规范（关键）
+
+**每次新增或修改表结构时，必须同步更新 `migrations/init.sql` 文件**。
+
+**新增表的 SQL 模板**：
+```sql
+-- ============================================================
+-- N. 功能模块名称
+-- ============================================================
+
+-- 表名注释
+CREATE TABLE IF NOT EXISTS `table_name` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` datetime DEFAULT NULL COMMENT '删除时间',
+  
+  -- 业务字段
+  `name` varchar(100) NOT NULL COMMENT '名称',
+  `status` tinyint DEFAULT 1 COMMENT '状态 1:启用 0:禁用',
+  
+  PRIMARY KEY (`id`),
+  KEY `idx_deleted_at` (`deleted_at`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**字段类型映射（GORM → MySQL）**：
+- `uint` → `bigint unsigned`
+- `string` (size:100) → `varchar(100)`
+- `string` (无 size) → `text`
+- `int` → `int`
+- `bool` → `tinyint(1)`
+- `time.Time` → `datetime`
+- `json` → `json`
+- `gorm.DeletedAt` → `datetime DEFAULT NULL`
+
+##### 4. 菜单与按钮权限数据维护规范
+
+**新增功能模块时，必须在 init.sql 中补充菜单和按钮权限数据**。
+
+**菜单数据结构**：
+- `type=1`：目录（一级菜单）
+- `type=2`：菜单（二级菜单，对应页面）
+- `type=3`：按钮（按钮级权限，对应 `v-permission` 指令）
+
+**新增菜单示例**：
+```sql
+-- 1. 新增页面菜单（type=2）
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (100, '功能名称', 'feature-code', 2, 15, '/asset/feature', 'asset/Feature', 'Icon', 10, 1, 1, '', '', NOW(), NOW());
+
+-- 2. 新增按钮权限（type=3）
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (101, '新增', 'feature:create', 3, 100, '', '', '', 1, 1, 1, '/api/v1/feature', 'POST', NOW(), NOW()),
+  (102, '编辑', 'feature:update', 3, 100, '', '', '', 2, 1, 1, '/api/v1/feature/:id', 'PUT', NOW(), NOW()),
+  (103, '删除', 'feature:delete', 3, 100, '', '', '', 3, 1, 1, '/api/v1/feature/:id', 'DELETE', NOW(), NOW());
+
+-- 3. 菜单API关联（一个按钮可绑定多个API）
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (100, '/api/v1/feature', 'GET', NOW(), NOW()),
+  (100, '/api/v1/feature/:id', 'GET', NOW(), NOW()),
+  (101, '/api/v1/feature', 'POST', NOW(), NOW()),
+  (102, '/api/v1/feature/:id', 'PUT', NOW(), NOW()),
+  (103, '/api/v1/feature/:id', 'DELETE', NOW(), NOW());
+
+-- 4. 为管理员角色分配权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 100), (1, 101), (1, 102), (1, 103);
+```
+
+**按钮权限命名规范**：
+- 格式：`资源:操作`
+- 示例：`hosts:create`、`hosts:update`、`hosts:delete`、`hosts:batch-delete`
+- 前端使用：`<a-button v-permission="'hosts:create'">新增</a-button>`
+
+##### 5. 数据库操作规范
+
+**查询数据库信息时使用 Docker 命令**：
+```bash
+# 进入 MySQL 容器
+docker exec -it opshub-mysql mysql -uroot -p'OpsHub@2026' opshub
+
+# 查询表结构
+DESCRIBE table_name;
+SHOW CREATE TABLE table_name;
+
+# 查询菜单数据
+SELECT id, name, code, type, parent_id FROM sys_menu WHERE type=3 ORDER BY id DESC LIMIT 20;
+
+# 查询按钮权限
+SELECT m.id, m.name, m.code, m.parent_id, p.name as parent_name 
+FROM sys_menu m 
+LEFT JOIN sys_menu p ON m.parent_id = p.id 
+WHERE m.type = 3 
+ORDER BY m.id DESC;
+```
+
+##### 6. 开发流程检查清单
+
+**新增功能涉及数据库变更时，必须完成以下步骤**：
+
+- [ ] 1. 定义 GORM 模型（包含标准字段和标签）
+- [ ] 2. 在对应位置注册 AutoMigrate
+- [ ] 3. 在 `migrations/init.sql` 中添加 CREATE TABLE 语句
+- [ ] 4. 如果是新功能模块，在 init.sql 中添加菜单数据（type=2）
+- [ ] 5. 在 init.sql 中添加按钮权限数据（type=3）
+- [ ] 6. 在 init.sql 中添加菜单API关联（`sys_menu_api` 表）
+- [ ] 7. 为管理员角色分配菜单和按钮权限（`sys_role_menu` 表）
+- [ ] 8. 启动服务验证 AutoMigrate 是否成功
+- [ ] 9. 使用 Docker 命令验证表结构是否正确
+- [ ] 10. 前端验证按钮权限是否生效（`v-permission` 指令）
+
+##### 7. 常见错误与注意事项
+
+**错误 1：只添加 AutoMigrate，忘记更新 init.sql**
+- 后果：新部署环境缺少初始化数据（菜单、权限等）
+- 解决：每次修改模型后立即同步更新 init.sql
+
+**错误 2：字符串字段未指定 size**
+- 后果：GORM 默认创建 `longtext` 类型，影响性能
+- 解决：所有 string 字段必须指定 `gorm:"size:100"`
+
+**错误 3：菜单 ID 冲突**
+- 后果：插入菜单数据时主键冲突
+- 解决：查询当前最大 ID，新增菜单从下一个 ID 开始
+
+**错误 4：按钮权限 code 重复**
+- 后果：前端权限判断失效
+- 解决：确保 `code` 字段全局唯一，格式为 `资源:操作`
+
+**错误 5：忘记为管理员分配新权限**
+- 后果：管理员无法访问新功能
+- 解决：每次新增菜单/按钮后，必须在 `sys_role_menu` 表中为 role_id=1 分配权限
+
+##### 8. 验证方法
+
+**验证 AutoMigrate**：
+```bash
+# 启动服务，观察日志
+./bin/opshub server -c config/config.yaml
+
+# 查看是否有表创建日志
+# 如果有错误，会输出 SQL 错误信息
+```
+
+**验证 init.sql**：
+```bash
+# 进入 MySQL 容器
+docker exec -it opshub-mysql mysql -uroot -p'OpsHub@2026' opshub
+
+# 查询最新菜单
+SELECT id, name, code, type FROM sys_menu ORDER BY id DESC LIMIT 10;
+
+# 查询菜单API关联
+SELECT menu_id, api_path, api_method FROM sys_menu_api ORDER BY menu_id DESC LIMIT 10;
+
+# 查询管理员权限
+SELECT menu_id FROM sys_role_menu WHERE role_id=1 ORDER BY menu_id DESC LIMIT 10;
+```
+
+**验证前端权限**：
+1. 登录管理员账号
+2. 访问新增的页面，检查是否显示
+3. 检查按钮是否根据 `v-permission` 指令显示/隐藏
+4. 使用浏览器开发者工具查看权限 store：`permissionStore.buttonPermissions`
+
 ### 前端开发规范
 
 #### 组件开发规范
@@ -1381,6 +1611,7 @@ tail -f logs/app.log
 # 查看 Docker 容器日志
 docker logs -f opshub-server
 docker logs -f opshub-mysql
+
 ```# CLAUDE.md
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.

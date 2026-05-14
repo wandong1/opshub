@@ -71,6 +71,7 @@ type HTTPServer struct {
 	cacheManager     *cache.CacheManager
 	scheduler        *cache.CacheSyncScheduler
 	evalCancel       context.CancelFunc // 告警评估引擎的 cancel 函数
+	patrolCancel     context.CancelFunc // 告警巡检服务的 cancel 函数
 }
 
 // NewHTTPServer 创建HTTP服务器
@@ -594,6 +595,12 @@ func (s *HTTPServer) Start() error {
 		s.evalCancel = cancel
 		go s.alertServer.GetEvalEngine().Start(evalCtx)
 		appLogger.Info("告警评估引擎已启动")
+
+		// 启动告警巡检服务
+		patrolCtx, patrolCancel := context.WithCancel(context.Background())
+		s.patrolCancel = patrolCancel
+		go s.alertServer.GetPatrolService().Start(patrolCtx)
+		appLogger.Info("告警巡检服务已启动")
 	}
 
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -609,6 +616,12 @@ func (s *HTTPServer) Stop(ctx context.Context) error {
 	if s.evalCancel != nil {
 		s.evalCancel()
 		appLogger.Info("告警评估引擎已停止")
+	}
+
+	// 停止告警巡检服务
+	if s.patrolCancel != nil {
+		s.patrolCancel()
+		appLogger.Info("告警巡检服务已停止")
 	}
 
 	// 停止批量同步 Worker

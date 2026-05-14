@@ -27,6 +27,9 @@
       <a-button type="primary" @click="loadData"><template #icon><icon-search /></template>搜索</a-button>
       <a-button @click="handleReset"><template #icon><icon-refresh /></template>重置</a-button>
       <div style="flex: 1;" />
+      <a-button v-if="selectedIds.length > 0" v-permission="'inspection:probes:delete'" status="danger" @click="handleBatchDelete">
+        <template #icon><icon-delete /></template>批量删除 ({{ selectedIds.length }})
+      </a-button>
       <a-upload v-permission="'inspection:probes:import'" :auto-upload="false" :show-file-list="false" accept=".yaml,.yml,.json" @change="handleImportChange">
         <template #upload-button><a-button><template #icon><icon-upload /></template>导入</a-button></template>
       </a-upload>
@@ -47,7 +50,22 @@
       <div class="stat-card"><div class="stat-value" style="color: #eb2f96;">{{ stats.workflow }}</div><div class="stat-label">流程</div></div>
     </div>
     <!-- 数据表格 -->
-    <a-table :data="tableData" :loading="loading" :bordered="{ cell: true }" stripe :pagination="{ current: pagination.page, pageSize: pagination.pageSize, total: pagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50] }" @page-change="(p: number) => { pagination.page = p; loadData() }" @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadData() }">
+    <a-table
+      :data="tableData"
+      :loading="loading"
+      :bordered="{ cell: true }"
+      stripe
+      row-key="id"
+      :row-selection="{
+        type: 'checkbox',
+        selectedRowKeys: selectedIds,
+        showCheckedAll: true
+      }"
+      @selection-change="handleSelectionChange"
+      :pagination="{ current: pagination.page, pageSize: pagination.pageSize, total: pagination.total, showTotal: true, showPageSize: true, pageSizeOptions: [10, 20, 50] }"
+      @page-change="(p: number) => { pagination.page = p; loadData() }"
+      @page-size-change="(s: number) => { pagination.pageSize = s; pagination.page = 1; loadData() }"
+    >
       <template #columns>
         <a-table-column title="名称" data-index="name" :width="140" />
         <a-table-column title="分类" :width="100" align="center">
@@ -643,8 +661,8 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
-import { IconStorage, IconSearch, IconRefresh, IconPlus, IconUpload, IconDownload, IconQuestionCircle, IconMinus, IconExpand, IconCopy, IconDragDotVertical, IconDown, IconUp } from '@arco-design/web-vue/es/icon'
-import { getProbeList, createProbe, updateProbe, deleteProbe, importProbes, exportProbes, runProbeOnce, testProbe, PROBE_CATEGORIES, CATEGORY_TYPE_MAP, CATEGORY_LABEL_MAP, getVariableList } from '@/api/networkProbe'
+import { IconStorage, IconSearch, IconRefresh, IconPlus, IconUpload, IconDownload, IconQuestionCircle, IconMinus, IconExpand, IconCopy, IconDragDotVertical, IconDown, IconUp, IconDelete } from '@arco-design/web-vue/es/icon'
+import { getProbeList, createProbe, updateProbe, deleteProbe, batchDeleteProbes, importProbes, exportProbes, runProbeOnce, testProbe, PROBE_CATEGORIES, CATEGORY_TYPE_MAP, CATEGORY_LABEL_MAP, getVariableList } from '@/api/networkProbe'
 import { getGroupTree } from '@/api/assetGroup'
 import { getHostList } from '@/api/host'
 import { getAgentStatuses } from '@/api/agent'
@@ -671,6 +689,7 @@ const hostOptions = ref<any[]>([])
 const variableOptions = ref<{ name: string; description?: string }[]>([])
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const searchForm = reactive({ keyword: '', type: '', category: '', status: undefined as number | undefined })
+const selectedIds = ref<number[]>([])
 
 const defaultForm = () => ({
   id: 0, name: '', category: 'network', type: 'ping', target: '', port: 80, groupId: 0, groupIds: '',
@@ -753,6 +772,27 @@ const loadData = async () => {
 const handleReset = () => {
   searchForm.keyword = ''; searchForm.type = ''; searchForm.category = ''; searchForm.status = undefined
   pagination.page = 1; loadData()
+}
+
+const handleSelectionChange = (rowKeys: (string | number)[]) => {
+  selectedIds.value = rowKeys as number[]
+}
+
+const handleBatchDelete = () => {
+  Modal.confirm({
+    title: '确认批量删除',
+    content: `确定要删除选中的 ${selectedIds.value.length} 个拨测配置吗？`,
+    onOk: async () => {
+      try {
+        await batchDeleteProbes(selectedIds.value)
+        Message.success(`成功删除 ${selectedIds.value.length} 个拨测配置`)
+        selectedIds.value = []
+        loadData()
+      } catch (error: any) {
+        Message.error(error.message || '批量删除失败')
+      }
+    }
+  })
 }
 
 const availableTypes = computed(() => CATEGORY_TYPE_MAP[formData.category] || ['ping', 'tcp', 'udp'])

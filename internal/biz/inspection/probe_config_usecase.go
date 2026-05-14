@@ -23,6 +23,15 @@ func (uc *ProbeConfigUseCase) Delete(ctx context.Context, id uint) error {
 	return uc.repo.Delete(ctx, id)
 }
 
+func (uc *ProbeConfigUseCase) BatchDelete(ctx context.Context, ids []uint) error {
+	for _, id := range ids {
+		if err := uc.repo.Delete(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (uc *ProbeConfigUseCase) GetByID(ctx context.Context, id uint) (*ProbeConfig, error) {
 	return uc.repo.GetByID(ctx, id)
 }

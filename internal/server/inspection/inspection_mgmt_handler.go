@@ -30,6 +30,7 @@ func (s *HTTPServer) RegisterInspectionMgmtRoutes(r *gin.RouterGroup) {
 			groups.POST("", s.createInspectionGroup)
 			groups.PUT("/:id", s.updateInspectionGroup)
 			groups.DELETE("/:id", s.deleteInspectionGroup)
+			groups.POST("/batch-delete", s.batchDeleteInspectionGroups)
 			groups.GET("/:id", s.getInspectionGroup)
 			groups.GET("", s.listInspectionGroups)
 			groups.GET("/all", s.getAllInspectionGroups)
@@ -167,6 +168,21 @@ func (s *HTTPServer) deleteInspectionGroup(c *gin.Context) {
 	}
 
 	response.Success(c, nil)
+}
+
+func (s *HTTPServer) batchDeleteInspectionGroups(c *gin.Context) {
+	var req inspection_mgmt.GroupBatchDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := s.inspectionGroupService.BatchDelete(c.Request.Context(), req.IDs); err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{"message": fmt.Sprintf("成功删除 %d 个巡检组", len(req.IDs))})
 }
 
 func (s *HTTPServer) getInspectionGroup(c *gin.Context) {

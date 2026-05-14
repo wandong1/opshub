@@ -874,6 +874,7 @@ import {
   createInspectionGroup,
   updateInspectionGroup,
   deleteInspectionGroup,
+  batchDeleteInspectionGroups,
   getInspectionItems,
   batchSaveInspectionItems,
   testRunInspection,
@@ -1228,8 +1229,7 @@ const handleBatchDelete = () => {
     content: `确定要删除选中的 ${selectedGroupIds.value.length} 个巡检组吗？删除后将同时删除这些组下的所有巡检项。`,
     onOk: async () => {
       try {
-        const deletePromises = selectedGroupIds.value.map(id => deleteInspectionGroup(id))
-        await Promise.all(deletePromises)
+        await batchDeleteInspectionGroups(selectedGroupIds.value)
         Message.success(`成功删除 ${selectedGroupIds.value.length} 个巡检组`)
         selectedGroupIds.value = []
         loadData()

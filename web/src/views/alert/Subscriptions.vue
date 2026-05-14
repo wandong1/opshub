@@ -66,13 +66,17 @@
         </div>
         <div class="rule-group-list">
           <div v-for="(group, idx) in ruleGroups" :key="idx" class="rule-group-item">
-            <!-- 行头：编号 + 时间配置 + 删除 -->
+            <!-- 行头：编号 + 时间配置 + 巡检配置 + 删除 -->
             <div class="rule-group-header">
               <span style="font-weight:500;color:var(--ops-text-secondary);font-size:13px">规则 {{ idx + 1 }}</span>
               <a-space style="margin-left:auto">
                 <a-button size="mini" @click="openTimeConfig(idx)">
                   <template #icon><icon-clock-circle /></template>
                   {{ timeRangeSummary(group.timeRanges) }}
+                </a-button>
+                <a-button size="mini" type="outline" @click="openRulePatrolConfig(idx)">
+                  <template #icon><icon-calendar-clock /></template>
+                  巡检配置
                 </a-button>
                 <a-button size="mini" status="danger" @click="removeRuleGroup(idx)">
                   <template #icon><icon-delete /></template>
@@ -202,11 +206,14 @@
       </div>
       <div v-if="editingTimeRanges.length===0" style="color:var(--ops-text-tertiary)">空 = 全天全周生效</div>
     </a-modal>
+
+    <!-- 推送规则巡检配置弹窗 -->
+    <RulePatrolConfig ref="rulePatrolConfigRef" :rule-id="currentRuleId" @close="() => {}" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
   getSubscriptions, createSubscription, updateSubscription, toggleSubscription, deleteSubscription, getSubscription,
@@ -218,6 +225,7 @@ import { getUserList } from '@/api/user'
 import { getDedupRules, getGroupRules, getInhibitRules, createDedupRule, updateDedupRule, createGroupRule, updateGroupRule, createInhibitRule, updateInhibitRule, deleteDedupRule, deleteGroupRule, deleteInhibitRule } from '@/api/alert-governance'
 import type { DedupRule, GroupRule, InhibitRule } from '@/api/alert-governance'
 import GovernanceConfig from './components/GovernanceConfig.vue'
+import RulePatrolConfig from './components/RulePatrolConfig.vue'
 
 const weekdays = [
   { v: 1, l: '周一' }, { v: 2, l: '周二' }, { v: 3, l: '周三' },
@@ -248,6 +256,10 @@ const timeConfigVisible = ref(false)
 const governanceLoaded = ref(false)
 let editingGroupIdx = -1
 const editingTimeRanges = ref<TimeRange[]>([])
+
+// 巡检配置
+const rulePatrolConfigRef = ref<InstanceType<typeof RulePatrolConfig>>()
+const currentRuleId = ref(0)
 
 // 治理规则数据
 const governanceData = ref<{
@@ -381,6 +393,50 @@ const openEdit = async (row: any) => {
     ruleGroups.value = [newGroup()]
   }
   modalVisible.value = true
+}
+
+// 打开推送规则的巡检配置
+const openRulePatrolConfig = async (idx: number) => {
+  // 必须先保存订阅，确保推送规则有ID
+  if (!form.value.id) {
+    Message.warning('请先保存订阅后再配置巡检')
+    return
+  }
+
+  // 获取该推送规则的ID（需要从已保存的订阅中查询）
+  try {
+    const res = await getSubscription(form.value.id)
+    console.log('getSubscription 原始响应:', res)
+
+    // request 工具已经自动解包，res 就是订阅数据
+    const subscription = res
+    console.log('订阅数据:', subscription)
+
+    // 推送规则列表
+    const flatRules: any[] = subscription.rules || []
+    console.log('查询到的推送规则列表:', flatRules)
+    console.log('当前索引:', idx)
+
+    if (flatRules[idx] && flatRules[idx].id) {
+      const ruleId = flatRules[idx].id
+      console.log('打开巡检配置，ruleId:', ruleId)
+
+      // 先设置 currentRuleId，等待 Vue 更新
+      currentRuleId.value = ruleId
+
+      // 使用 nextTick 确保 props 已经更新
+      await nextTick()
+
+      // 再打开弹窗
+      rulePatrolConfigRef.value?.open()
+    } else {
+      console.error('推送规则不存在或没有ID:', flatRules[idx])
+      Message.warning('推送规则尚未保存，请先点击"确定"保存订阅，然后重新编辑订阅再配置巡检')
+    }
+  } catch (error) {
+    console.error('获取推送规则失败:', error)
+    Message.error('获取推送规则失败')
+  }
 }
 
 // 加载治理规则

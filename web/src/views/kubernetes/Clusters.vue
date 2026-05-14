@@ -551,12 +551,12 @@
           </div>
         </a-tab-pane>
 
-        <!-- 用户凭据 -->
+        <!-- 用户 -->
         <a-tab-pane key="users">
           <template #label>
             <span class="tab-label">
               <icon-user />
-              用户凭据
+              用户
               <a-badge :count="clusterCredentialUsers.length" :offset="[8, -2]" style="margin-left: 4px;" />
             </span>
           </template>
@@ -576,12 +576,12 @@
           </div>
         </a-tab-pane>
 
-        <!-- 角色授权 -->
+        <!-- 角色 -->
         <a-tab-pane key="roles">
           <template #label>
             <span class="tab-label">
               <icon-safe />
-              角色授权
+              角色
             </span>
           </template>
           <div class="tab-description">

@@ -208,6 +208,12 @@ func (e *EvalEngine) evalRule(ctx context.Context, rule *biz.AlertRule) {
 		}
 	}()
 
+	// 检查规则是否启用
+	if !rule.Enabled {
+		appLogger.Debug("规则已禁用，跳过评估", zap.Uint("ruleID", rule.ID), zap.String("ruleName", rule.Name))
+		return
+	}
+
 	// 异步更新评估时间到 Redis（不阻塞评估）
 	_ = e.evalCache.UpdateEvalTime(ctx, rule.ID, time.Now())
 

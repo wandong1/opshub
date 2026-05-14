@@ -2124,4 +2124,107 @@ VALUES
   (1, 427),  -- 编辑订阅
   (1, 428);  -- 删除订阅
 
+-- ============================================================
+-- 19. 告警巡检表
+-- ============================================================
+
+-- 告警订阅规则巡检配置表
+CREATE TABLE IF NOT EXISTS `alert_subscription_rule_patrol` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` datetime DEFAULT NULL,
+
+  -- 关联字段
+  `subscription_rule_id` bigint unsigned NOT NULL COMMENT '订阅规则ID（alert_subscription_rules.id）',
+
+  -- 巡检配置
+  `enabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否启用巡检',
+  `patrol_mode` varchar(20) NOT NULL DEFAULT 'interval' COMMENT '巡检模式：interval(间隔)/fixed(固定时间)',
+  `patrol_interval` int NOT NULL DEFAULT 3600 COMMENT '巡检间隔(秒)，默认1小时，仅interval模式有效',
+  `patrol_times` text COMMENT '固定巡检时间列表 JSON，格式：["09:00","18:00"]，仅fixed模式有效',
+
+  -- 巡检范围
+  `include_resolved` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否包含已恢复的告警（用于统计）',
+  `time_range` int NOT NULL DEFAULT 0 COMMENT '巡检时间范围(秒)，0表示所有未恢复告警，>0表示最近N秒内的告警',
+  `max_alerts_per_report` int NOT NULL DEFAULT 100 COMMENT '单次巡检报告最大告警数',
+
+  -- 推送配置
+  `send_mode` varchar(20) NOT NULL DEFAULT 'always' COMMENT '推送模式：always(总是推送)/only_firing(仅有告警时推送)',
+
+  -- 报告样式
+  `report_style` varchar(20) NOT NULL DEFAULT 'detailed' COMMENT '报告样式：detailed(详细)/summary(摘要)',
+  `group_by` varchar(50) DEFAULT 'severity' COMMENT '分组维度：severity(级别)/ruleName(规则)/assetGroup(业务分组)',
+
+  -- 巡检状态
+  `last_patrol_at` datetime NULL COMMENT '最后巡检时间',
+  `next_patrol_at` datetime NULL COMMENT '下次巡检时间',
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_subscription_rule_id` (`subscription_rule_id`),
+  KEY `idx_enabled` (`enabled`),
+  KEY `idx_next_patrol_at` (`next_patrol_at`),
+  KEY `idx_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='告警订阅规则巡检配置表';
+
+-- 告警巡检报告表
+CREATE TABLE IF NOT EXISTS `alert_patrol_report` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+
+  -- 关联字段
+  `subscription_id` bigint unsigned NOT NULL COMMENT '订阅ID',
+  `subscription_rule_id` bigint unsigned NOT NULL COMMENT '订阅规则ID',
+  `patrol_config_id` bigint unsigned NOT NULL COMMENT '巡检配置ID',
+
+  -- 巡检结果
+  `firing_count` int NOT NULL DEFAULT 0 COMMENT '活跃告警数量',
+  `resolved_count` int NOT NULL DEFAULT 0 COMMENT '已恢复告警数量（如果包含）',
+  `critical_count` int NOT NULL DEFAULT 0 COMMENT 'critical级别告警数',
+  `warning_count` int NOT NULL DEFAULT 0 COMMENT 'warning级别告警数',
+  `info_count` int NOT NULL DEFAULT 0 COMMENT 'info级别告警数',
+
+  -- 告警详情
+  `alert_ids` text COMMENT '告警ID列表 JSON',
+  `alert_summary` text COMMENT '告警摘要 JSON，格式：[{"ruleName":"xxx","count":5,"severity":"critical"}]',
+
+  -- 推送结果
+  `sent` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已推送',
+  `sent_at` datetime NULL COMMENT '推送时间',
+  `channels` text COMMENT '推送通道 JSON',
+  `users` text COMMENT '推送用户 JSON',
+  `send_error` text COMMENT '推送失败原因',
+
+  PRIMARY KEY (`id`),
+  KEY `idx_subscription_id` (`subscription_id`),
+  KEY `idx_subscription_rule_id` (`subscription_rule_id`),
+  KEY `idx_patrol_config_id` (`patrol_config_id`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='告警巡检报告表';
+
+-- 19.1 告警巡检按钮权限 (parent_id=410 告警订阅)
+INSERT INTO `sys_menu` (`id`, `name`, `code`, `type`, `parent_id`, `path`, `component`, `icon`, `sort`, `visible`, `status`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (429, '配置巡检', 'alert:patrol:config', 3, 410, '', '', '', 4, 1, 1, '/api/v1/alert/patrol/rule/:ruleId', 'GET', NOW(), NOW()),
+  (430, '保存巡检配置', 'alert:patrol:save', 3, 410, '', '', '', 5, 1, 1, '/api/v1/alert/patrol/rule', 'POST', NOW(), NOW()),
+  (431, '查看巡检报告', 'alert:patrol:reports', 3, 410, '', '', '', 6, 1, 1, '/api/v1/alert/patrol/rule/:ruleId/reports', 'GET', NOW(), NOW()),
+  (432, '手动执行巡检', 'alert:patrol:execute', 3, 410, '', '', '', 7, 1, 1, '/api/v1/alert/patrol/rule/:ruleId/execute', 'POST', NOW(), NOW());
+
+-- 19.2 巡检相关 API 关联
+INSERT INTO `sys_menu_api` (`menu_id`, `api_path`, `api_method`, `created_at`, `updated_at`)
+VALUES
+  (429, '/api/v1/alert/patrol/rule/:ruleId', 'GET', NOW(), NOW()),
+  (430, '/api/v1/alert/patrol/rule', 'POST', NOW(), NOW()),
+  (430, '/api/v1/alert/patrol/rule/:id', 'PUT', NOW(), NOW()),
+  (431, '/api/v1/alert/patrol/rule/:ruleId/reports', 'GET', NOW(), NOW()),
+  (432, '/api/v1/alert/patrol/rule/:ruleId/execute', 'POST', NOW(), NOW());
+
+-- 19.3 为管理员角色分配巡检权限
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+VALUES
+  (1, 429),  -- 配置巡检
+  (1, 430),  -- 保存巡检配置
+  (1, 431),  -- 查看巡检报告
+  (1, 432);  -- 手动执行巡检
+
 SET FOREIGN_KEY_CHECKS = 1;

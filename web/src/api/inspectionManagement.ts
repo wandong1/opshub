@@ -211,6 +211,17 @@ export function deleteInspectionGroup(id: number) {
 }
 
 /**
+ * 批量删除巡检组
+ */
+export function batchDeleteInspectionGroups(ids: number[]) {
+  return request<{ message: string }>({
+    url: '/api/v1/inspection/groups/batch-delete',
+    method: 'post',
+    data: { ids }
+  })
+}
+
+/**
  * 获取所有巡检组（用于下拉选择）
  */
 export function getAllInspectionGroups() {

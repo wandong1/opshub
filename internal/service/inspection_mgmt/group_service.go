@@ -92,6 +92,16 @@ func (s *GroupService) Delete(ctx context.Context, id uint) error {
 	return s.groupRepo.Delete(ctx, id)
 }
 
+// BatchDelete 批量删除巡检组
+func (s *GroupService) BatchDelete(ctx context.Context, ids []uint) error {
+	for _, id := range ids {
+		if err := s.groupRepo.Delete(ctx, id); err != nil {
+			return fmt.Errorf("删除巡检组 ID=%d 失败: %v", id, err)
+		}
+	}
+	return nil
+}
+
 func (s *GroupService) GetByID(ctx context.Context, id uint) (*GroupResponse, error) {
 	group, err := s.groupRepo.GetByID(ctx, id)
 	if err != nil {

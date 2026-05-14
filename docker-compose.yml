@@ -122,6 +122,7 @@ services:
     restart: always
     ports:
       - "19091:9091"
+    command: --metric.timetolive=300s
     networks:
       - opshub-network
 

@@ -32,6 +32,7 @@ type HTTPServer struct {
 	silenceRuleRepo         *alertdata.SilenceRuleRepo
 	notifySvc               *alertsvc.NotifyService
 	evalEngine              *alertsvc.EvalEngine
+	patrolService           *alertsvc.PatrolService
 	agentHub                *agentserver.AgentHub
 }
 
@@ -53,6 +54,7 @@ func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 	silenceRuleRepo := alertdata.NewSilenceRuleRepo(db)
 	notifySvc := alertsvc.NewNotifyService(channelRepo, db)
 	evalEngine := alertsvc.NewEvalEngine(db, rdb)
+	patrolService := alertsvc.NewPatrolService(db, notifySvc)
 
 	return &HTTPServer{
 		db:                  db,
@@ -72,6 +74,7 @@ func NewAlertServices(db *gorm.DB, rdb *redis.Client) *HTTPServer {
 		silenceRuleRepo:     silenceRuleRepo,
 		notifySvc:           notifySvc,
 		evalEngine:          evalEngine,
+		patrolService:       patrolService,
 	}
 }
 
@@ -83,6 +86,11 @@ func (s *HTTPServer) SetAgentHub(agentHub *agentserver.AgentHub) {
 // GetEvalEngine 返回评估引擎（供 server.go 启动）
 func (s *HTTPServer) GetEvalEngine() *alertsvc.EvalEngine {
 	return s.evalEngine
+}
+
+// GetPatrolService 返回巡检服务（供 server.go 启动）
+func (s *HTTPServer) GetPatrolService() *alertsvc.PatrolService {
+	return s.patrolService
 }
 
 // RegisterRoutes 注册路由
@@ -213,6 +221,16 @@ func (s *HTTPServer) RegisterRoutes(rg *gin.RouterGroup) {
 		inhibitRules.GET("/:id", inhibitHandler.Get)
 		inhibitRules.PUT("/:id", inhibitHandler.Update)
 		inhibitRules.DELETE("/:id", inhibitHandler.Delete)
+	}
+
+	// 告警巡检
+	patrol := alert.Group("/patrol/rule")
+	{
+		patrol.GET("/:ruleId", s.GetPatrolConfig)
+		patrol.POST("", s.SavePatrolConfig)
+		patrol.PUT("/:id", s.SavePatrolConfig)
+		patrol.GET("/:ruleId/reports", s.GetPatrolReports)
+		patrol.POST("/:ruleId/execute", s.ExecutePatrol)
 	}
 }
 

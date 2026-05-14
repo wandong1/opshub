@@ -354,3 +354,37 @@ func (r *EventRepo) ListFiringByRuleID(ctx context.Context, ruleID uint) ([]*biz
 		Find(&events).Error
 	return events, err
 }
+
+// ListAllFiring 查询所有firing状态告警
+func (r *EventRepo) ListAllFiring(ctx context.Context) ([]*biz.AlertEvent, error) {
+	var events []*biz.AlertEvent
+	err := r.db.WithContext(ctx).Where("status = 'firing'").Find(&events).Error
+	return events, err
+}
+
+// ListFiringByRuleIDs 查询指定规则列表的所有firing状态告警
+func (r *EventRepo) ListFiringByRuleIDs(ctx context.Context, ruleIDs []uint) ([]*biz.AlertEvent, error) {
+	var events []*biz.AlertEvent
+	err := r.db.WithContext(ctx).
+		Where("alert_rule_id IN ? AND status = 'firing'", ruleIDs).
+		Find(&events).Error
+	return events, err
+}
+
+// ListResolvedSince 查询指定时间之后已恢复的告警
+func (r *EventRepo) ListResolvedSince(ctx context.Context, since time.Time) ([]*biz.AlertEvent, error) {
+	var events []*biz.AlertEvent
+	err := r.db.WithContext(ctx).
+		Where("status = 'resolved' AND resolved_at >= ?", since).
+		Find(&events).Error
+	return events, err
+}
+
+// ListResolvedByRuleIDsSince 查询指定规则列表在指定时间之后已恢复的告警
+func (r *EventRepo) ListResolvedByRuleIDsSince(ctx context.Context, ruleIDs []uint, since time.Time) ([]*biz.AlertEvent, error) {
+	var events []*biz.AlertEvent
+	err := r.db.WithContext(ctx).
+		Where("alert_rule_id IN ? AND status = 'resolved' AND resolved_at >= ?", ruleIDs, since).
+		Find(&events).Error
+	return events, err
+}

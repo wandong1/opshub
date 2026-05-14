@@ -548,6 +548,29 @@ func sendAIAgent(configJSON, msg string, event *biz.AlertEvent) error {
 	return postJSON(cfg.HookURL, payload)
 }
 
+// sendAIAgentPatrolReport 发送巡检报告到 AI Agent
+func sendAIAgentPatrolReport(configJSON, content string) error {
+	var cfg struct {
+		HookURL string `json:"hookUrl"`
+	}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return err
+	}
+	if cfg.HookURL == "" {
+		return nil
+	}
+	// content 已经是 JSON 格式，直接解析后发送
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &payload); err != nil {
+		// 如果不是 JSON，则包装成简单格式
+		payload = map[string]interface{}{
+			"type":    "patrol_report",
+			"content": content,
+		}
+	}
+	return postJSON(cfg.HookURL, payload)
+}
+
 func postJSON(url string, payload interface{}) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -633,5 +656,43 @@ func defaultTemplate(channelType string, isResolve bool) string {
 `)
 	default:
 		return strings.TrimSpace(`【SreHub告警】规则: {{.RuleName}} | 级别: {{.SeverityLabel}} | 值: {{.Value}} | 时间: {{.FiredAt}}`)
+	}
+}
+
+// SendPatrolReport 发送巡检报告
+func (s *NotifyService) SendPatrolReport(ctx context.Context, ch *biz.AlertNotifyChannel, content string, phones []string, userIDs []uint) {
+	appLogger.Info("发送巡检报告",
+		zap.String("channel", ch.Name),
+		zap.String("type", ch.Type))
+
+	var err error
+	switch ch.Type {
+	case "email":
+		err = s.sendEmail(ctx, ch.Config, content, userIDs)
+	case "wechat_work":
+		err = sendWechatWork(ch.Config, content, phones, false)
+	case "dingtalk":
+		err = sendDingTalk(ch.Config, content, phones)
+	case "sms":
+		err = sendSMS(ch.Config, content, phones)
+	case "phone":
+		err = sendPhone(ch.Config, content, phones)
+	case "ai_agent":
+		if ch.AIHookEnabled {
+			// AI Agent 通道需要构造一个临时的 AlertEvent 对象
+			// 这里简化处理，直接发送 JSON 格式的内容
+			err = sendAIAgentPatrolReport(ch.Config, content)
+		}
+	default:
+		appLogger.Warn("巡检报告不支持该通道类型", zap.String("type", ch.Type))
+		return
+	}
+
+	if err != nil {
+		appLogger.Error("发送巡检报告失败",
+			zap.String("channel", ch.Name),
+			zap.Error(err))
+	} else {
+		appLogger.Info("发送巡检报告成功", zap.String("channel", ch.Name))
 	}
 }

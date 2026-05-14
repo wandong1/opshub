@@ -151,6 +151,7 @@ func (s *HTTPServer) RegisterRoutes(r *gin.RouterGroup) {
 		probes.GET("", s.probeConfigService.List)
 		probes.POST("", s.probeConfigService.Create)
 		probes.POST("/test", s.probeConfigService.TestProbe)
+		probes.POST("/batch-delete", s.probeConfigService.BatchDelete)
 		probes.GET("/:id", s.probeConfigService.Get)
 		probes.PUT("/:id", s.probeConfigService.Update)
 		probes.DELETE("/:id", s.probeConfigService.Delete)

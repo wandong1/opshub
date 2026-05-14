@@ -133,10 +133,18 @@ func (c *RuleCache) InvalidateCache() {
 
 // PublishReloadEvent 发布规则重载事件
 func (c *RuleCache) PublishReloadEvent(ctx context.Context) error {
-	// 先清空本地缓存
+	// 1. 先清空本地缓存
 	c.InvalidateCache()
 
-	// 发布 Pub/Sub 事件
+	// 2. 清空 Redis 缓存
+	if err := c.rdb.Del(ctx, redisRuleCacheKey).Err(); err != nil {
+		appLogger.Warn("清空 Redis 规则缓存失败", zap.Error(err))
+		// 继续执行，不影响后续流程
+	} else {
+		appLogger.Info("已清空 Redis 规则缓存")
+	}
+
+	// 3. 发布 Pub/Sub 事件，通知其他实例清空本地缓存
 	err := c.rdb.Publish(ctx, redisRuleReloadChan, "reload").Err()
 	if err != nil {
 		return fmt.Errorf("发布规则重载事件失败: %w", err)

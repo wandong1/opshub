@@ -102,3 +102,8 @@ type GroupImportRequest struct {
 	Format string `json:"format" binding:"required,oneof=json yaml"` // json 或 yaml
 	Data   string `json:"data" binding:"required"`                   // 导入的数据内容
 }
+
+// GroupBatchDeleteRequest 批量删除巡检组请求
+type GroupBatchDeleteRequest struct {
+	IDs []uint `json:"ids" binding:"required,min=1"` // 要删除的巡检组 ID 列表
+}

@@ -98,6 +98,23 @@ func (s *ProbeConfigService) Delete(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+func (s *ProbeConfigService) BatchDelete(c *gin.Context) {
+	var req struct {
+		IDs []uint `json:"ids" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorCode(c, http.StatusBadRequest, "参数错误: "+err.Error())
+		return
+	}
+
+	if err := s.useCase.BatchDelete(c.Request.Context(), req.IDs); err != nil {
+		response.ErrorCode(c, http.StatusInternalServerError, "批量删除失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{"message": fmt.Sprintf("成功删除 %d 个拨测配置", len(req.IDs))})
+}
+
 func (s *ProbeConfigService) Get(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	config, err := s.useCase.GetByID(c.Request.Context(), uint(id))

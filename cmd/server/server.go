@@ -278,6 +278,9 @@ func autoMigrate(db *gorm.DB) error {
 		&alertbiz.AlertInhibitRule{},
 		// 告警订阅日志表
 		&alertbiz.AlertSubscriptionLog{},
+		// 告警巡检表
+		&alertbiz.AlertSubscriptionRulePatrol{},
+		&alertbiz.AlertPatrolReport{},
 	); err != nil {
 		return err
 	}

@@ -22,6 +22,10 @@ export const deleteProbe = (id: number) => {
   return request.delete(`/api/v1/inspection/probes/${id}`)
 }
 
+export const batchDeleteProbes = (ids: number[]) => {
+  return request.post('/api/v1/inspection/probes/batch-delete', { ids })
+}
+
 export const importProbes = (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
