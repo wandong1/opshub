@@ -554,7 +554,7 @@ func (e *InspectionExecutor) pushMetrics(
 			"task_id":        fmt.Sprintf("%d", task.ID),
 			"task_name":      task.Name,
 			"task_type":      "inspect",
-			"business_group": group.Name,
+			"business_group": record.BusinessGroup,
 			"owner":          task.Owner,
 			"schedule_mode":  scheduleMode,
 		}
@@ -563,7 +563,7 @@ func (e *InspectionExecutor) pushMetrics(
 		allLabels := prometheus.Labels{
 			"task_name":      task.Name,
 			"task_type":      "inspect",
-			"business_group": group.Name,
+			"business_group": record.BusinessGroup,
 			"owner":          task.Owner,
 			"schedule_mode":  scheduleMode,
 			"check_group":    group.Name,

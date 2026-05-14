@@ -120,12 +120,27 @@ func (e *NetworkProbeExecutor) Execute(ctx context.Context, task scheduler.Task)
 				}
 			}
 
+			// 旧表路径：获取业务分组名称（从拨测配置的 GroupIDs）
+			var businessGroupNames []string
+			if cfg.GroupIDs != "" {
+				groupIDStrs := strings.Split(cfg.GroupIDs, ",")
+				for _, idStr := range groupIDStrs {
+					if id, err := strconv.ParseUint(strings.TrimSpace(idStr), 10, 64); err == nil && id > 0 {
+						if e.groupLookup != nil {
+							if bgName := e.groupLookup(ctx, uint(id)); bgName != "" {
+								businessGroupNames = append(businessGroupNames, bgName)
+							}
+						}
+					}
+				}
+			}
+
 			if resolvedCfg.Category == ProbeCategoryApplication {
-				e.executeAndSaveAppProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+				e.executeAndSaveAppProbe(ctx, probeTask, cfg, resolvedCfg, &failCount, businessGroupNames)
 			} else if resolvedCfg.Category == ProbeCategoryWorkflow {
-				e.executeAndSaveWorkflowProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+				e.executeAndSaveWorkflowProbe(ctx, probeTask, cfg, resolvedCfg, &failCount, businessGroupNames)
 			} else {
-				e.executeAndSaveNetworkProbe(ctx, probeTask, cfg, resolvedCfg, &failCount)
+				e.executeAndSaveNetworkProbe(ctx, probeTask, cfg, resolvedCfg, &failCount, businessGroupNames)
 			}
 		}(config)
 	}
@@ -195,7 +210,7 @@ func (e *NetworkProbeExecutor) executeViaAgent(cfg *ProbeConfig) (*probers.Resul
 }
 
 // executeAndSaveNetworkProbe handles network/layer4 probe execution with retry and persistence.
-func (e *NetworkProbeExecutor) executeAndSaveNetworkProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64) {
+func (e *NetworkProbeExecutor) executeAndSaveNetworkProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64, businessGroupNames []string) {
 	result, agentHostID := e.executeProbe(resolvedCfg)
 	retryAttempt := 0
 	for !result.Success && retryAttempt < origCfg.RetryCount {
@@ -231,12 +246,12 @@ func (e *NetworkProbeExecutor) executeAndSaveNetworkProbe(ctx context.Context, p
 		atomic.AddInt64(failCount, 1)
 	}
 	if probeTask.PushgatewayID > 0 {
-		e.pushMetrics(ctx, probeTask, origCfg, result)
+		e.pushMetrics(ctx, probeTask, origCfg, result, businessGroupNames)
 	}
 }
 
 // executeAndSaveAppProbe handles application probe execution with retry and persistence.
-func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64) {
+func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64, businessGroupNames []string) {
 	appResult, agentHostID := e.executeAppProbe(resolvedCfg)
 	retryAttempt := 0
 	for !appResult.Success && retryAttempt < origCfg.RetryCount {
@@ -296,7 +311,7 @@ func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probe
 		atomic.AddInt64(failCount, 1)
 	}
 	if probeTask.PushgatewayID > 0 {
-		e.pushAppMetrics(ctx, probeTask, origCfg, appResult, retryAttempt)
+		e.pushAppMetrics(ctx, probeTask, origCfg, appResult, retryAttempt, businessGroupNames)
 	}
 }
 
@@ -531,7 +546,7 @@ func parseHostIDs(s string) []uint {
 }
 
 // executeAndSaveWorkflowProbe handles workflow probe execution and persistence.
-func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64) {
+func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, probeTask *ProbeTask, origCfg, resolvedCfg *ProbeConfig, failCount *int64, businessGroupNames []string) {
 	// Bug 修复：使用 resolvedCfg 而不是 origCfg，确保任务级覆盖的 AgentHostIDs 生效
 	wfResult := ExecuteWorkflowProbe(ctx, resolvedCfg, e.variableResolver, e.agentFactory, e.teleAIEnabled)
 	detail := ""
@@ -558,7 +573,7 @@ func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, 
 		atomic.AddInt64(failCount, 1)
 	}
 	if probeTask.PushgatewayID > 0 {
-		e.pushWorkflowMetrics(ctx, probeTask, origCfg, wfResult)
+		e.pushWorkflowMetrics(ctx, probeTask, origCfg, wfResult, businessGroupNames)
 	}
 }
 
@@ -1375,7 +1390,7 @@ var timeAfter = func(d int) <-chan struct{} {
 	return ch
 }
 
-func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.Result) {
+func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.Result, businessGroupNames []string) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
 	if err != nil {
 		appLogger.Error("pushMetrics: get pushgateway config failed",
@@ -1392,35 +1407,36 @@ func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask,
 
 	pusher := metrics.NewPusher(pgw.URL, pgw.Username, pgw.Password)
 
-	groupName := ""
-	if e.groupLookup != nil && task.GroupID > 0 {
-		groupName = e.groupLookup(ctx, task.GroupID)
-	}
-	owner := task.TriggerType // TriggerType is reused; Owner comes from InspectionTask, not ProbeTask
-	_ = owner
 	scheduleMode := task.TriggerType
 	if scheduleMode == "" {
 		scheduleMode = "scheduled"
 	}
 
-	// 通用标签（用于 Redis Counter key）
-	baseLabels := map[string]string{
-		"task_id":        fmt.Sprintf("%d", task.ID),
-		"task_name":      task.Name,
-		"task_type":      config.Type,
-		"business_group": groupName,
-		"schedule_mode":  scheduleMode,
+	// 如果没有传入业务分组，使用空字符串（向后兼容）
+	if len(businessGroupNames) == 0 {
+		businessGroupNames = []string{""}
 	}
 
-	// metric label 不含 task_id（已在 grouping 中，避免冲突）
-	allLabels := prometheus.Labels{
-		"task_name":      task.Name,
-		"task_type":      config.Type,
-		"business_group": groupName,
-		"schedule_mode":  scheduleMode,
-		"target":         config.Target,
-		"probe_name":     config.Name,
-	}
+	// 为每个业务分组生成一份指标
+	for _, businessGroupName := range businessGroupNames {
+		// 通用标签（用于 Redis Counter key）
+		baseLabels := map[string]string{
+			"task_id":        fmt.Sprintf("%d", task.ID),
+			"task_name":      task.Name,
+			"task_type":      config.Type,
+			"business_group": businessGroupName,
+			"schedule_mode":  scheduleMode,
+		}
+
+		// metric label 不含 task_id（已在 grouping 中，避免冲突）
+		allLabels := prometheus.Labels{
+			"task_name":      task.Name,
+			"task_type":      config.Type,
+			"business_group": businessGroupName,
+			"schedule_mode":  scheduleMode,
+			"target":         config.Target,
+			"probe_name":     config.Name,
+		}
 
 	// 解析自定义 tags
 	if config.Tags != "" {
@@ -1572,9 +1588,10 @@ func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask,
 			zap.Error(err),
 		)
 	}
+	} // 结束 for businessGroupName 循环
 }
 
-func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.AppResult, retryAttempt int) {
+func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *probers.AppResult, retryAttempt int, businessGroupNames []string) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
 	if err != nil {
 		appLogger.Error("pushAppMetrics: get pushgateway config failed",
@@ -1591,13 +1608,14 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 
 	pusher := metrics.NewPusher(pgw.URL, pgw.Username, pgw.Password)
 
-	groupName := ""
-	if e.groupLookup != nil && task.GroupID > 0 {
-		groupName = e.groupLookup(ctx, task.GroupID)
-	}
 	scheduleMode := task.TriggerType
 	if scheduleMode == "" {
 		scheduleMode = "scheduled"
+	}
+
+	// 如果没有传入业务分组，使用空字符串（向后兼容）
+	if len(businessGroupNames) == 0 {
+		businessGroupNames = []string{""}
 	}
 
 	// 类型扩展标签（HTTP/HTTPS/WebSocket）
@@ -1608,26 +1626,28 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 		httpMethod = config.Method
 	}
 
-	baseLabels := map[string]string{
-		"task_id":        fmt.Sprintf("%d", task.ID),
-		"task_name":      task.Name,
-		"task_type":      config.Type,
-		"business_group": groupName,
-		"schedule_mode":  scheduleMode,
-	}
+	// 为每个业务分组生成一份指标
+	for _, businessGroupName := range businessGroupNames {
+		baseLabels := map[string]string{
+			"task_id":        fmt.Sprintf("%d", task.ID),
+			"task_name":      task.Name,
+			"task_type":      config.Type,
+			"business_group": businessGroupName,
+			"schedule_mode":  scheduleMode,
+		}
 
-	// metric label 不含 task_id（已在 grouping 中，避免冲突）
-	allLabels := prometheus.Labels{
-		"task_name":      task.Name,
-		"task_type":      config.Type,
-		"business_group": groupName,
-		"schedule_mode":  scheduleMode,
-		"target":         config.Target,
-		"probe_name":     config.Name,
-		"http_method":    httpMethod,
-		"http_path":      httpPath,
-		"status_code":    statusCodeStr,
-	}
+		// metric label 不含 task_id（已在 grouping 中，避免冲突）
+		allLabels := prometheus.Labels{
+			"task_name":      task.Name,
+			"task_type":      config.Type,
+			"business_group": businessGroupName,
+			"schedule_mode":  scheduleMode,
+			"target":         config.Target,
+			"probe_name":     config.Name,
+			"http_method":    httpMethod,
+			"http_path":      httpPath,
+			"status_code":    statusCodeStr,
+		}
 	if config.Tags != "" {
 		for _, tag := range strings.Split(config.Tags, ",") {
 			parts := strings.SplitN(strings.TrimSpace(tag), "=", 2)
@@ -1774,9 +1794,10 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 			zap.Error(err),
 		)
 	}
+	} // 结束 for businessGroupName 循环
 }
 
-func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *WorkflowResult) {
+func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *ProbeTask, config *ProbeConfig, result *WorkflowResult, businessGroupNames []string) {
 	pgw, err := e.pgwRepo.GetByID(ctx, task.PushgatewayID)
 	if err != nil {
 		appLogger.Error("pushWorkflowMetrics: get pushgateway config failed",
@@ -1793,32 +1814,35 @@ func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *Pr
 
 	pusher := metrics.NewPusher(pgw.URL, pgw.Username, pgw.Password)
 
-	groupName := ""
-	if e.groupLookup != nil && task.GroupID > 0 {
-		groupName = e.groupLookup(ctx, task.GroupID)
-	}
 	scheduleMode := task.TriggerType
 	if scheduleMode == "" {
 		scheduleMode = "scheduled"
 	}
 
-	baseLabels := map[string]string{
-		"task_id":        fmt.Sprintf("%d", task.ID),
-		"task_name":      task.Name,
-		"task_type":      "probe_flow",
-		"business_group": groupName,
-		"schedule_mode":  scheduleMode,
+	// 如果没有传入业务分组，使用空字符串（向后兼容）
+	if len(businessGroupNames) == 0 {
+		businessGroupNames = []string{""}
 	}
 
-	// metric label 不含 task_id（已在 grouping 中，避免冲突）
-	allLabels := prometheus.Labels{
-		"task_name":      task.Name,
-		"task_type":      "probe_flow",
-		"business_group": groupName,
-		"schedule_mode":  scheduleMode,
-		"probe_name":     config.Name,
-		"flow_id":        fmt.Sprintf("%d", config.ID),
-	}
+	// 为每个业务分组生成一份指标
+	for _, businessGroupName := range businessGroupNames {
+		baseLabels := map[string]string{
+			"task_id":        fmt.Sprintf("%d", task.ID),
+			"task_name":      task.Name,
+			"task_type":      "probe_flow",
+			"business_group": businessGroupName,
+			"schedule_mode":  scheduleMode,
+		}
+
+		// metric label 不含 task_id（已在 grouping 中，避免冲突）
+		allLabels := prometheus.Labels{
+			"task_name":      task.Name,
+			"task_type":      "probe_flow",
+			"business_group": businessGroupName,
+			"schedule_mode":  scheduleMode,
+			"probe_name":     config.Name,
+			"flow_id":        fmt.Sprintf("%d", config.ID),
+		}
 
 	labelNames := make([]string, 0, len(allLabels))
 	labelValues := make([]string, 0, len(allLabels))
@@ -1939,6 +1963,7 @@ func (e *NetworkProbeExecutor) pushWorkflowMetrics(ctx context.Context, task *Pr
 			zap.Error(err),
 		)
 	}
+	} // 结束 for businessGroupName 循环
 }
 
 // BuildProbeRequest 构建 protobuf ProbeRequest（导出供 service 层复用）
@@ -2211,11 +2236,34 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 				}
 			}
 			// 需求一：业务分组覆盖（影响变量作用域）
-			// 拨测任务只支持单个业务分组，如果配置了多个，取第一个
+			// 获取业务分组名称列表（用于指标标签）
+			var businessGroupNames []string
 			if inspectionTask.BusinessGroupIDs != "" {
 				var businessGroupIDs []uint
 				if err := json.Unmarshal([]byte(inspectionTask.BusinessGroupIDs), &businessGroupIDs); err == nil && len(businessGroupIDs) > 0 {
+					// 优先级1：使用任务中配置的业务分组
+					for _, bgID := range businessGroupIDs {
+						if e.groupLookup != nil {
+							if bgName := e.groupLookup(ctx, bgID); bgName != "" {
+								businessGroupNames = append(businessGroupNames, bgName)
+							}
+						}
+					}
+					// 拨测任务只支持单个业务分组，如果配置了多个，取第一个
 					effectiveCfg.GroupID = businessGroupIDs[0]
+				}
+			}
+			// 优先级2：如果任务中没有配置，使用拨测配置中的分组
+			if len(businessGroupNames) == 0 && cfg.GroupIDs != "" {
+				groupIDStrs := strings.Split(cfg.GroupIDs, ",")
+				for _, idStr := range groupIDStrs {
+					if id, err := strconv.ParseUint(strings.TrimSpace(idStr), 10, 64); err == nil && id > 0 {
+						if e.groupLookup != nil {
+							if bgName := e.groupLookup(ctx, uint(id)); bgName != "" {
+								businessGroupNames = append(businessGroupNames, bgName)
+							}
+						}
+					}
 				}
 			}
 			cfgPtr := &effectiveCfg
@@ -2242,11 +2290,11 @@ func (e *NetworkProbeV2Executor) Execute(ctx context.Context, task scheduler.Tas
 			}
 
 			if resolvedCfg.Category == ProbeCategoryApplication {
-				executor.executeAndSaveAppProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount)
+				executor.executeAndSaveAppProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount, businessGroupNames)
 			} else if resolvedCfg.Category == ProbeCategoryWorkflow {
-				executor.executeAndSaveWorkflowProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount)
+				executor.executeAndSaveWorkflowProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount, businessGroupNames)
 			} else {
-				executor.executeAndSaveNetworkProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount)
+				executor.executeAndSaveNetworkProbe(ctx, probeTask, cfgPtr, resolvedCfg, &failCount, businessGroupNames)
 			}
 		}(config)
 	}
