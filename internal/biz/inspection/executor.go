@@ -246,7 +246,7 @@ func (e *NetworkProbeExecutor) executeAndSaveNetworkProbe(ctx context.Context, p
 		atomic.AddInt64(failCount, 1)
 	}
 	if probeTask.PushgatewayID > 0 {
-		e.pushMetrics(ctx, probeTask, origCfg, result, businessGroupNames)
+		e.pushMetrics(ctx, probeTask, resolvedCfg, result, businessGroupNames)
 	}
 }
 
@@ -311,7 +311,7 @@ func (e *NetworkProbeExecutor) executeAndSaveAppProbe(ctx context.Context, probe
 		atomic.AddInt64(failCount, 1)
 	}
 	if probeTask.PushgatewayID > 0 {
-		e.pushAppMetrics(ctx, probeTask, origCfg, appResult, retryAttempt, businessGroupNames)
+		e.pushAppMetrics(ctx, probeTask, resolvedCfg, appResult, retryAttempt, businessGroupNames)
 	}
 }
 
@@ -573,7 +573,7 @@ func (e *NetworkProbeExecutor) executeAndSaveWorkflowProbe(ctx context.Context, 
 		atomic.AddInt64(failCount, 1)
 	}
 	if probeTask.PushgatewayID > 0 {
-		e.pushWorkflowMetrics(ctx, probeTask, origCfg, wfResult, businessGroupNames)
+		e.pushWorkflowMetrics(ctx, probeTask, resolvedCfg, wfResult, businessGroupNames)
 	}
 }
 
@@ -1428,13 +1428,26 @@ func (e *NetworkProbeExecutor) pushMetrics(ctx context.Context, task *ProbeTask,
 			"schedule_mode":  scheduleMode,
 		}
 
+		// 构建正确的 target 值
+		targetValue := config.Target
+		switch config.Type {
+		case "tcp", "udp":
+			// TCP/UDP：拼接 IP:Port
+			if config.Port > 0 {
+				targetValue = fmt.Sprintf("%s:%d", config.Target, config.Port)
+			}
+		case "ping":
+			// Ping：直接使用 Target（已解析变量）
+			targetValue = config.Target
+		}
+
 		// metric label 不含 task_id（已在 grouping 中，避免冲突）
 		allLabels := prometheus.Labels{
 			"task_name":      task.Name,
 			"task_type":      config.Type,
 			"business_group": businessGroupName,
 			"schedule_mode":  scheduleMode,
-			"target":         config.Target,
+			"target":         targetValue,
 			"probe_name":     config.Name,
 		}
 
@@ -1636,13 +1649,20 @@ func (e *NetworkProbeExecutor) pushAppMetrics(ctx context.Context, task *ProbeTa
 			"schedule_mode":  scheduleMode,
 		}
 
+		// 构建正确的 target 值
+		targetValue := config.Target
+		if config.URL != "" {
+			// HTTP/HTTPS/WebSocket：使用完整的 URL（已解析变量）
+			targetValue = config.URL
+		}
+
 		// metric label 不含 task_id（已在 grouping 中，避免冲突）
 		allLabels := prometheus.Labels{
 			"task_name":      task.Name,
 			"task_type":      config.Type,
 			"business_group": businessGroupName,
 			"schedule_mode":  scheduleMode,
-			"target":         config.Target,
+			"target":         targetValue,
 			"probe_name":     config.Name,
 			"http_method":    httpMethod,
 			"http_path":      httpPath,

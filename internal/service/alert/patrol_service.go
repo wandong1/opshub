@@ -105,8 +105,19 @@ func (s *PatrolService) checkAndExecutePatrols(ctx context.Context) {
 
 // shouldExecutePatrol 判断是否需要执行巡检
 func (s *PatrolService) shouldExecutePatrol(patrol *biz.AlertSubscriptionRulePatrol, now time.Time) bool {
-	// 如果 NextPatrolAt 为空，说明是首次执行
+	// 如果 NextPatrolAt 为空，需要初始化下次巡检时间
 	if patrol.NextPatrolAt == nil {
+		// 对于固定时间模式，计算下次巡检时间而不是立即执行
+		if patrol.PatrolMode == "fixed" {
+			nextTime := s.calculateNextFixedTime(patrol.PatrolTimes, now)
+			// 更新数据库中的下次巡检时间
+			if err := s.patrolRepo.UpdateNextPatrolTime(context.Background(), patrol.ID, nextTime); err != nil {
+				appLogger.Error("初始化巡检时间失败", zap.Uint("patrolID", patrol.ID), zap.Error(err))
+			}
+			// 检查是否已经到达该时间点
+			return now.After(nextTime) || now.Equal(nextTime)
+		}
+		// 间隔模式首次执行
 		return true
 	}
 
