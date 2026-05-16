@@ -65,7 +65,7 @@ func (r *VariableResolver) Resolve(ctx context.Context, text string, allowedGrou
 // ResolveConfigWithExtra resolves variable references in a ProbeConfig with extra vars (highest priority).
 // Priority: extraVars > system ProbeVariables (scoped by GroupID) > preset variables > unresolved placeholders kept as-is.
 func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *ProbeConfig, extraVars map[string]string) (*ProbeConfig, error) {
-	texts := []string{cfg.Target, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}
+	texts := []string{cfg.Target, cfg.Port, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}
 	names := ExtractVariableNames(texts...)
 	if len(names) == 0 && len(extraVars) == 0 {
 		return cfg, nil
@@ -111,6 +111,7 @@ func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *Prob
 
 	copy := *cfg
 	copy.Target = replace(cfg.Target)
+	copy.Port = replace(cfg.Port)
 	copy.URL = replace(cfg.URL)
 	copy.Headers = replace(cfg.Headers)
 	copy.Params = replace(cfg.Params)
@@ -121,7 +122,7 @@ func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *Prob
 
 // ResolveConfig resolves variable references in a ProbeConfig, returning a shallow copy.
 func (r *VariableResolver) ResolveConfig(ctx context.Context, cfg *ProbeConfig) (*ProbeConfig, error) {
-	texts := []string{cfg.Target, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}
+	texts := []string{cfg.Target, cfg.Port, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}
 	names := ExtractVariableNames(texts...)
 	if len(names) == 0 {
 		return cfg, nil
@@ -152,6 +153,7 @@ func (r *VariableResolver) ResolveConfig(ctx context.Context, cfg *ProbeConfig) 
 	// Shallow copy
 	resolved := *cfg
 	resolved.Target = replacer(cfg.Target)
+	resolved.Port = replacer(cfg.Port)
 	resolved.URL = replacer(cfg.URL)
 	resolved.Headers = replacer(cfg.Headers)
 	resolved.Params = replacer(cfg.Params)

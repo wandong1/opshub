@@ -338,7 +338,14 @@ func (s *ProbeConfigService) RunOnce(c *gin.Context) {
 			response.ErrorCode(c, http.StatusBadRequest, err.Error())
 			return
 		}
-		result = prober.Probe(resolvedConfig.Target, resolvedConfig.Port, resolvedConfig.Timeout, resolvedConfig.Count, resolvedConfig.PacketSize)
+		// 将 Port 字符串转换为整数
+		port := 0
+		if resolvedConfig.Port != "" {
+			if p, err := strconv.Atoi(resolvedConfig.Port); err == nil {
+				port = p
+			}
+		}
+		result = prober.Probe(resolvedConfig.Target, port, resolvedConfig.Timeout, resolvedConfig.Count, resolvedConfig.PacketSize)
 	}
 
 	// Retry logic
@@ -349,7 +356,14 @@ func (s *ProbeConfigService) RunOnce(c *gin.Context) {
 			result, agentHostID = s.runOnceViaAgent(resolvedConfig)
 		} else {
 			prober, _ := probers.GetProber(resolvedConfig.Type)
-			result = prober.Probe(resolvedConfig.Target, resolvedConfig.Port, resolvedConfig.Timeout, resolvedConfig.Count, resolvedConfig.PacketSize)
+			// 将 Port 字符串转换为整数
+			port := 0
+			if resolvedConfig.Port != "" {
+				if p, err := strconv.Atoi(resolvedConfig.Port); err == nil {
+					port = p
+				}
+			}
+			result = prober.Probe(resolvedConfig.Target, port, resolvedConfig.Timeout, resolvedConfig.Count, resolvedConfig.PacketSize)
 		}
 	}
 
@@ -369,6 +383,9 @@ func (s *ProbeConfigService) RunOnce(c *gin.Context) {
 		"Error":           result.Error,
 		"agentHostId":     agentHostID,
 		"retryAttempt":    retryAttempt,
+		// 新增：解析后的配置信息
+		"ResolvedTarget":  resolvedConfig.Target,
+		"ResolvedPort":    resolvedConfig.Port,
 	})
 }
 
@@ -397,6 +414,8 @@ func (s *ProbeConfigService) runOnceApp(c *gin.Context, resolvedConfig, origConf
 			"ResponseHeaders":   appResult.ResponseHeaders,
 			"agentHostId":       agentHostID,
 			"retryAttempt":      0,
+			// 新增：解析后的配置信息
+			"ResolvedURL":       resolvedConfig.URL,
 		})
 		return
 	}
@@ -432,6 +451,8 @@ func (s *ProbeConfigService) runOnceApp(c *gin.Context, resolvedConfig, origConf
 		"ResponseHeaders":   appResult.ResponseHeaders,
 		"RequestHeaders":    appCfg.Headers,
 		"retryAttempt":      retryAttempt,
+		// 新增：解析后的配置信息
+		"ResolvedURL":       resolvedConfig.URL,
 	})
 }
 
@@ -530,7 +551,14 @@ func (s *ProbeConfigService) runOnceViaAgent(config *biz.ProbeConfig) (*probers.
 	if err != nil {
 		return &probers.Result{Error: err.Error()}, hostID
 	}
-	return prober.Probe(config.Target, config.Port, config.Timeout, config.Count, config.PacketSize), hostID
+	// 将 Port 字符串转换为整数
+	port := 0
+	if config.Port != "" {
+		if p, err := strconv.Atoi(config.Port); err == nil {
+			port = p
+		}
+	}
+	return prober.Probe(config.Target, port, config.Timeout, config.Count, config.PacketSize), hostID
 }
 
 // parseHostIDs parses a comma-separated string of host IDs.
@@ -640,7 +668,14 @@ func (s *ProbeConfigService) TestProbe(c *gin.Context) {
 			response.ErrorCode(c, http.StatusBadRequest, err.Error())
 			return
 		}
-		result = prober.Probe(resolvedConfig.Target, resolvedConfig.Port, resolvedConfig.Timeout, resolvedConfig.Count, resolvedConfig.PacketSize)
+		// 将 Port 字符串转换为整数
+		port := 0
+		if resolvedConfig.Port != "" {
+			if p, err := strconv.Atoi(resolvedConfig.Port); err == nil {
+				port = p
+			}
+		}
+		result = prober.Probe(resolvedConfig.Target, port, resolvedConfig.Timeout, resolvedConfig.Count, resolvedConfig.PacketSize)
 	}
 
 	response.Success(c, gin.H{
@@ -657,5 +692,8 @@ func (s *ProbeConfigService) TestProbe(c *gin.Context) {
 		"UDPWriteTime":    result.UDPWriteTime,
 		"UDPReadTime":     result.UDPReadTime,
 		"Error":           result.Error,
+		// 新增：解析后的配置信息
+		"ResolvedTarget":  resolvedConfig.Target,
+		"ResolvedPort":    resolvedConfig.Port,
 	})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	inspectionbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection"
@@ -72,7 +73,14 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 
 	case "tcp":
 		prober := &probers.TCPProber{}
-		result := prober.Probe(config.Target, config.Port, config.Timeout, 0, 0)
+		// 将 Port 字符串转换为整数
+		port := 0
+		if config.Port != "" {
+			if p, err := strconv.Atoi(config.Port); err == nil {
+				port = p
+			}
+		}
+		result := prober.Probe(config.Target, port, config.Timeout, 0, 0)
 		output = e.formatTCPResult(result)
 		if !result.Success {
 			execErr = fmt.Errorf(result.Error)
@@ -80,7 +88,14 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 
 	case "udp":
 		prober := &probers.UDPProber{}
-		result := prober.Probe(config.Target, config.Port, config.Timeout, 0, 0)
+		// 将 Port 字符串转换为整数
+		port := 0
+		if config.Port != "" {
+			if p, err := strconv.Atoi(config.Port); err == nil {
+				port = p
+			}
+		}
+		result := prober.Probe(config.Target, port, config.Timeout, 0, 0)
 		output = e.formatUDPResult(result)
 		if !result.Success {
 			execErr = fmt.Errorf(result.Error)

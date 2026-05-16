@@ -7,7 +7,7 @@ type ProbeConfigRequest struct {
 	Type         string `json:"type" binding:"required"`
 	Category     string `json:"category"`
 	Target       string `json:"target" binding:"max=255"`
-	Port         int    `json:"port"`
+	Port         string `json:"port"` // 支持变量引用
 	GroupID      uint   `json:"groupId"`
 	GroupIDs     string `json:"groupIds"`
 	Timeout      int    `json:"timeout"`
@@ -165,7 +165,7 @@ type ProbeConfigImportExport struct {
 	Type            string `json:"type" yaml:"type"`
 	Category        string `json:"category" yaml:"category"`
 	Target          string `json:"target" yaml:"target"`
-	Port            int    `json:"port" yaml:"port"`
+	Port            string `json:"port" yaml:"port"` // 支持变量引用
 	Timeout         int    `json:"timeout" yaml:"timeout"`
 	GroupIDs        string `json:"groupIds" yaml:"group_ids"`
 	Count           int    `json:"count" yaml:"count"`

@@ -125,8 +125,12 @@
             <a-option v-for="t in availableTypes" :key="t" :label="t.toUpperCase()" :value="t" />
           </a-select>
         </a-form-item>
-        <a-form-item v-if="formData.category !== 'application' && formData.category !== 'workflow'" label="目标地址" field="target"><a-input v-model="formData.target" placeholder="IP 或域名" /></a-form-item>
-        <a-form-item v-if="formData.type !== 'ping' && formData.category !== 'application' && formData.category !== 'workflow'" label="端口" field="port"><a-input-number v-model="formData.port" :min="1" :max="65535" style="width: 100%;" /></a-form-item>
+        <a-form-item v-if="formData.category !== 'application' && formData.category !== 'workflow'" label="目标地址" field="target">
+          <VariableInput v-model="formData.target" placeholder="IP 或域名（输入 / 插入变量）" :variables="variableOptions" />
+        </a-form-item>
+        <a-form-item v-if="formData.type !== 'ping' && formData.category !== 'application' && formData.category !== 'workflow'" label="端口" field="port">
+          <VariableInput v-model="formData.port" placeholder="端口号或变量（如 {{mysql_port}}）" :variables="variableOptions" />
+        </a-form-item>
         <!-- 应用服务专属字段 -->
         <template v-if="formData.category === 'application'">
           <a-form-item v-if="formData.type !== 'websocket'" label="HTTP方法">
@@ -572,13 +576,13 @@
             <a-descriptions :column="1" bordered size="small">
               <!-- 网络/四层拨测：显示目标地址和端口 -->
               <template v-if="currentRecord.category !== 'application'">
-                <a-descriptions-item label="目标地址">{{ currentRecord.target || '-' }}</a-descriptions-item>
-                <a-descriptions-item v-if="currentRecord.type !== 'ping'" label="端口">{{ currentRecord.port || '-' }}</a-descriptions-item>
+                <a-descriptions-item label="目标地址">{{ runResult.ResolvedTarget || currentRecord.target || '-' }}</a-descriptions-item>
+                <a-descriptions-item v-if="currentRecord.type !== 'ping'" label="端口">{{ runResult.ResolvedPort || currentRecord.port || '-' }}</a-descriptions-item>
                 <a-descriptions-item label="拨测类型">{{ (currentRecord.type || '').toUpperCase() }}</a-descriptions-item>
               </template>
               <!-- 应用服务拨测：显示URL、方法、Headers、Params、Body -->
               <template v-else>
-                <a-descriptions-item label="请求URL">{{ buildDisplayUrl(currentRecord) }}</a-descriptions-item>
+                <a-descriptions-item label="请求URL">{{ runResult.ResolvedURL || buildDisplayUrl(currentRecord) }}</a-descriptions-item>
                 <a-descriptions-item v-if="currentRecord.method" label="请求方法">{{ currentRecord.method }}</a-descriptions-item>
                 <a-descriptions-item v-if="parseJsonSafe(currentRecord.headers)" label="请求Headers">
                   <div v-for="(val, key) in parseJsonSafe(currentRecord.headers)" :key="key" class="kv-row">
@@ -692,7 +696,7 @@ const searchForm = reactive({ keyword: '', type: '', category: '', status: undef
 const selectedIds = ref<number[]>([])
 
 const defaultForm = () => ({
-  id: 0, name: '', category: 'network', type: 'ping', target: '', port: 80, groupId: 0, groupIds: '',
+  id: 0, name: '', category: 'network', type: 'ping', target: '', port: '', groupId: 0, groupIds: '',
   timeout: 5, count: 4, packetSize: 64, description: '', tags: '', status: 1,
   execMode: 'local', agentHostIds: '', retryCount: 0,
   method: 'GET', url: '', headers: '', params: '', body: '', proxyUrl: '', assertions: '', contentType: '',

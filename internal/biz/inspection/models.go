@@ -55,7 +55,7 @@ type ProbeConfig struct {
 	Type        string         `gorm:"type:varchar(20);not null" json:"type"` // ping/tcp/udp
 	Category    string         `gorm:"type:varchar(20);not null;default:'network';index" json:"category"`
 	Target      string         `gorm:"type:varchar(255);not null" json:"target"`
-	Port        int            `gorm:"default:0" json:"port"`
+	Port        string         `gorm:"type:varchar(50);default:''" json:"port"` // 支持变量引用
 	GroupID     uint           `gorm:"index" json:"groupId"`
 	GroupIDs    string         `gorm:"type:varchar(500);default:''" json:"groupIds"` // 逗号分隔多分组ID
 	Timeout     int            `gorm:"default:5" json:"timeout"`
@@ -171,6 +171,11 @@ type ProbeResult struct {
 	AssertionPassCount int     `json:"assertionPassCount"`
 	AssertionFailCount int     `json:"assertionFailCount"`
 	AssertionEvalTime  float64 `json:"assertionEvalTime"`
+
+	// 解析后的配置信息（用于前端显示）
+	ResolvedTarget string `gorm:"type:varchar(255)" json:"resolvedTarget"`
+	ResolvedPort   string `gorm:"type:varchar(50)" json:"resolvedPort"`
+	ResolvedURL    string `gorm:"type:varchar(2000)" json:"resolvedUrl"`
 
 	CreatedAt       time.Time `json:"createdAt"`
 }
