@@ -113,6 +113,7 @@ type TestRunRequest struct {
 type TestRunResponse struct {
 	ItemID           uint                   `json:"itemId"`
 	ItemName         string                 `json:"itemName"`
+	ExecutionType    string                 `json:"executionType"`
 	HostID           uint                   `json:"hostId"`
 	HostName         string                 `json:"hostName"`
 	HostIp           string                 `json:"hostIp"`

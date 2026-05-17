@@ -736,7 +736,12 @@
             <div v-for="(log, index) in testLogs" :key="index" class="log-item">
               <div class="log-header">
                 <a-tag :color="getLogStatusColor(log.status)">{{ log.status }}</a-tag>
-                <span class="log-host">{{ log.hostName }} ({{ log.hostIp }})</span>
+                <span class="log-item-name">{{ log.itemName || '未命名巡检项' }}</span>
+                <a-tag :color="getExecutionTypeColor(log.executionType)" size="small">
+                  {{ getExecutionTypeText(log.executionType) }}
+                </a-tag>
+                <span v-if="log.hostName" class="log-host">{{ log.hostName }} ({{ log.hostIp }})</span>
+                <span v-else class="log-host">网络拨测</span>
                 <a-tag v-if="log.inspectionLevel" :color="getLevelColor(log.inspectionLevel)" size="small">
                   巡检级别: {{ getLevelText(log.inspectionLevel) }}
                 </a-tag>
@@ -745,6 +750,49 @@
                 </a-tag>
                 <span class="log-time">{{ log.duration }}ms</span>
               </div>
+
+              <!-- 可展开的详细信息 -->
+              <div v-if="log.details" class="log-details-toggle" @click="toggleLogDetails(index)">
+                <icon-down v-if="!log.detailsExpanded" :size="14" />
+                <icon-up v-if="log.detailsExpanded" :size="14" />
+                <span>{{ log.detailsExpanded ? '收起详情' : '查看详情' }}</span>
+              </div>
+
+              <div v-if="log.detailsExpanded && log.details" class="log-details">
+                <div v-if="log.details.command" class="detail-item">
+                  <span class="detail-label">执行命令:</span>
+                  <code class="detail-value">{{ log.details.command }}</code>
+                </div>
+                <div v-if="log.details.scriptType" class="detail-item">
+                  <span class="detail-label">脚本类型:</span>
+                  <span class="detail-value">{{ log.details.scriptType }}</span>
+                </div>
+                <div v-if="log.details.scriptArgs" class="detail-item">
+                  <span class="detail-label">脚本参数:</span>
+                  <code class="detail-value">{{ log.details.scriptArgs }}</code>
+                </div>
+                <div v-if="log.details.promqlQuery" class="detail-item">
+                  <span class="detail-label">PromQL 查询:</span>
+                  <code class="detail-value">{{ log.details.promqlQuery }}</code>
+                </div>
+                <div v-if="log.details.probeConfig" class="detail-item">
+                  <span class="detail-label">拨测配置:</span>
+                  <span class="detail-value">{{ log.details.probeConfig }}</span>
+                </div>
+                <div v-if="log.details.timeout" class="detail-item">
+                  <span class="detail-label">超时时间:</span>
+                  <span class="detail-value">{{ log.details.timeout }}s</span>
+                </div>
+                <div v-if="log.details.assertionType" class="detail-item">
+                  <span class="detail-label">断言类型:</span>
+                  <span class="detail-value">{{ getAssertionTypeText(log.details.assertionType) }}</span>
+                </div>
+                <div v-if="log.details.assertionValue" class="detail-item">
+                  <span class="detail-label">断言阈值:</span>
+                  <span class="detail-value">{{ log.details.assertionValue }}</span>
+                </div>
+              </div>
+
               <div class="log-output">
                 <pre>{{ log.output || log.errorMessage }}</pre>
               </div>
@@ -1005,22 +1053,44 @@ const getExecutionModeText = (mode: string) => {
 
 const getExecutionTypeText = (type: string) => {
   const map: Record<string, string> = {
-    command: '命令',
-    script: '脚本',
+    command: '命令执行',
+    script: '脚本执行',
     promql: 'PromQL',
-    probe: '拨测'
+    probe: '网络拨测'
   }
   return map[type] || type
 }
 
 const getExecutionTypeColor = (type: string) => {
   const map: Record<string, string> = {
-    command: 'arcoblue',
-    script: 'green',
-    promql: 'orange',
-    probe: 'purple'
+    command: 'blue',
+    script: 'purple',
+    promql: 'cyan',
+    probe: 'orange'
   }
   return map[type] || 'gray'
+}
+
+const getAssertionTypeText = (type: string) => {
+  const map: Record<string, string> = {
+    eq: '等于',
+    ne: '不等于',
+    gt: '大于',
+    gte: '大于等于',
+    lt: '小于',
+    lte: '小于等于',
+    contains: '包含',
+    not_contains: '不包含',
+    regex: '正则匹配',
+    status_code: '状态码'
+  }
+  return map[type] || type
+}
+
+const toggleLogDetails = (index: number) => {
+  if (testLogs.value[index]) {
+    testLogs.value[index].detailsExpanded = !testLogs.value[index].detailsExpanded
+  }
 }
 
 const loadData = async () => {
@@ -1387,16 +1457,68 @@ const handleTestRun = async (record: any) => {
     const res = await testRunInspection({ groupId: record.id, itemIds })
 
     if (res.success && res.results) {
-      testLogs.value = res.results.map((result: any) => ({
-        status: result.status,
-        hostName: result.hostName,
-        hostIp: result.hostIp || '',
-        output: result.output,
-        errorMessage: result.errorMessage,
-        duration: Math.round(result.duration * 1000),
-        assertionResult: result.assertionResult,
-        assertionDetails: result.assertionDetails
-      }))
+      // 创建巡检项 ID 到巡检项的映射
+      const itemMap = new Map(itemsRes.list.map((item: any) => [item.id, item]))
+
+      testLogs.value = res.results.map((result: any) => {
+        const item = itemMap.get(result.itemId)
+
+        // 构建详细信息
+        const details: any = {}
+        let hasDetails = false
+
+        if (item) {
+          if (item.executionType === 'command' && item.command) {
+            details.command = item.command
+            hasDetails = true
+          } else if (item.executionType === 'script') {
+            if (item.scriptType) {
+              details.scriptType = item.scriptType
+              hasDetails = true
+            }
+            if (item.scriptArgs) {
+              details.scriptArgs = item.scriptArgs
+              hasDetails = true
+            }
+          } else if (item.executionType === 'promql' && item.promqlQuery) {
+            details.promqlQuery = item.promqlQuery
+            hasDetails = true
+          } else if (item.executionType === 'probe') {
+            details.probeConfig = `${item.probeCategory || ''} - ${item.probeType || ''}`
+            hasDetails = true
+          }
+
+          if (item.timeout) {
+            details.timeout = item.timeout
+            hasDetails = true
+          }
+          if (item.assertionType) {
+            details.assertionType = item.assertionType
+            hasDetails = true
+          }
+          if (item.assertionValue) {
+            details.assertionValue = item.assertionValue
+            hasDetails = true
+          }
+        }
+
+        return {
+          status: result.status,
+          itemName: result.itemName || item?.name || '未命名巡检项',
+          executionType: item?.executionType || 'command',
+          hostName: result.hostName,
+          hostIp: result.hostIp || '',
+          output: result.output,
+          errorMessage: result.errorMessage,
+          duration: Math.round(result.duration * 1000),
+          assertionResult: result.assertionResult,
+          assertionDetails: result.assertionDetails,
+          inspectionLevel: result.inspectionLevel || item?.inspectionLevel,
+          riskLevel: result.riskLevel || item?.riskLevel,
+          details: hasDetails ? details : null,
+          detailsExpanded: false
+        }
+      })
       Message.success(`测试执行完成，共执行 ${res.results.length} 条记录`)
     } else {
       Message.warning(res.message || '测试执行失败')
@@ -1463,15 +1585,58 @@ const handleTestRunItem = async (itemIndex: number) => {
     const res = await testRunInspectionWithoutSave({ groupId, items: [itemData] })
 
     if (res.success && res.results) {
+      // 构建详细信息
+      const details: any = {}
+      let hasDetails = false
+
+      if (item.executionType === 'command' && item.command) {
+        details.command = item.command
+        hasDetails = true
+      } else if (item.executionType === 'script') {
+        if (item.scriptType) {
+          details.scriptType = item.scriptType
+          hasDetails = true
+        }
+        if (item.scriptArgs) {
+          details.scriptArgs = item.scriptArgs
+          hasDetails = true
+        }
+      } else if (item.executionType === 'promql' && item.promqlQuery) {
+        details.promqlQuery = item.promqlQuery
+        hasDetails = true
+      } else if (item.executionType === 'probe') {
+        details.probeConfig = `${item.probeCategory || ''} - ${item.probeType || ''}`
+        hasDetails = true
+      }
+
+      if (item.timeout) {
+        details.timeout = item.timeout
+        hasDetails = true
+      }
+      if (item.assertionType) {
+        details.assertionType = item.assertionType
+        hasDetails = true
+      }
+      if (item.assertionValue) {
+        details.assertionValue = item.assertionValue
+        hasDetails = true
+      }
+
       testLogs.value = res.results.map((result: any) => ({
         status: result.status,
+        itemName: result.itemName || item.name || '未命名巡检项',
+        executionType: item.executionType || 'command',
         hostName: result.hostName,
         hostIp: result.hostIp || '',
         output: result.output,
         errorMessage: result.errorMessage,
         duration: Math.round(result.duration * 1000),
         assertionResult: result.assertionResult,
-        assertionDetails: result.assertionDetails
+        assertionDetails: result.assertionDetails,
+        inspectionLevel: result.inspectionLevel || item.inspectionLevel,
+        riskLevel: result.riskLevel || item.riskLevel,
+        details: hasDetails ? details : null,
+        detailsExpanded: false
       }))
       Message.success(`测试执行完成`)
     }
@@ -2324,17 +2489,84 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.log-item-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ops-text-primary);
 }
 
 .log-host {
-  font-weight: 500;
-  color: var(--ops-text-primary);
+  color: var(--ops-text-secondary);
+  font-size: 13px;
 }
 
 .log-time {
   margin-left: auto;
   color: var(--ops-text-tertiary);
   font-size: 12px;
+}
+
+.log-details-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 4px 8px;
+  color: var(--ops-primary);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  width: fit-content;
+}
+
+.log-details-toggle:hover {
+  background-color: rgba(22, 93, 255, 0.1);
+}
+
+.log-details {
+  margin: 8px 0;
+  padding: 12px;
+  background: #fff;
+  border-radius: 4px;
+  border: 1px solid var(--ops-border-color);
+}
+
+.detail-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.detail-item:last-child {
+  margin-bottom: 0;
+}
+
+.detail-label {
+  min-width: 90px;
+  font-weight: 500;
+  color: var(--ops-text-secondary);
+  flex-shrink: 0;
+}
+
+.detail-value {
+  flex: 1;
+  color: var(--ops-text-primary);
+  word-break: break-all;
+}
+
+.detail-value code {
+  padding: 2px 6px;
+  background: #f7f8fa;
+  border-radius: 3px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--ops-primary);
 }
 
 .log-output {

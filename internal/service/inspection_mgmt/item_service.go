@@ -470,6 +470,7 @@ func (s *ItemService) executeItem(
 	result := &TestRunResponse{
 		ItemID:          item.ID,
 		ItemName:        item.Name,
+		ExecutionType:   item.ExecutionType,
 		InspectionLevel: item.InspectionLevel,
 		RiskLevel:       item.RiskLevel,
 	}
