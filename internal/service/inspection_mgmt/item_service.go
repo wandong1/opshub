@@ -629,10 +629,18 @@ func (s *ItemService) executeItem(
 
 	// 断言校验
 	assertionResult := s.validator.Validate(effectiveAssertionType, effectiveAssertionValue, execResult.Output)
-	if assertionResult.Pass {
+	if assertionResult.Skip {
+		// 无断言规则，跳过校验
+		result.AssertionResult = "skip"
+	} else if assertionResult.Pass {
+		// 断言通过
 		result.AssertionResult = "pass"
 	} else {
+		// 断言失败
 		result.AssertionResult = "fail"
+		// 断言失败时，将状态改为 failed，并设置错误信息
+		result.Status = "failed"
+		result.ErrorMessage = fmt.Sprintf("断言失败: %s", assertionResult.Message)
 	}
 	result.AssertionDetails = map[string]interface{}{
 		"pass":    assertionResult.Pass,

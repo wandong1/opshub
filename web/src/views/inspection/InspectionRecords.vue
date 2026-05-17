@@ -140,7 +140,25 @@
         <a-tab-pane key="details" title="执行明细">
           <!-- 筛选条件 -->
           <div style="margin-bottom: 16px;">
-            <a-space>
+            <a-space wrap>
+              <a-input
+                v-model="detailFilter.groupName"
+                placeholder="搜索巡检组名称"
+                allow-clear
+                style="width: 180px;"
+                @input="filterDetailData"
+              >
+                <template #prefix><icon-search /></template>
+              </a-input>
+              <a-input
+                v-model="detailFilter.itemName"
+                placeholder="搜索巡检项名称"
+                allow-clear
+                style="width: 180px;"
+                @input="filterDetailData"
+              >
+                <template #prefix><icon-search /></template>
+              </a-input>
               <a-select v-model="detailFilter.status" placeholder="执行状态" allow-clear style="width: 120px;" @change="filterDetailData">
                 <a-option value="success">成功</a-option>
                 <a-option value="failed">失败</a-option>
@@ -319,6 +337,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconSearch } from '@arco-design/web-vue/es/icon'
 import { useRoute } from 'vue-router'
 import {
   getExecutionRecords,
@@ -385,6 +404,8 @@ const detailColumns = [
 ]
 
 const detailFilter = reactive({
+  groupName: '',
+  itemName: '',
   status: '',
   assertionResult: ''
 })
@@ -394,10 +415,26 @@ const filteredDetailTableData = ref<ExecutionDetail[]>([])
 const filterDetailData = () => {
   let filtered = [...detailTableData.value]
 
+  // 巡检组名称模糊搜索
+  if (detailFilter.groupName) {
+    filtered = filtered.filter(item =>
+      item.groupName?.toLowerCase().includes(detailFilter.groupName.toLowerCase())
+    )
+  }
+
+  // 巡检项名称模糊搜索
+  if (detailFilter.itemName) {
+    filtered = filtered.filter(item =>
+      item.itemName?.toLowerCase().includes(detailFilter.itemName.toLowerCase())
+    )
+  }
+
+  // 执行状态筛选
   if (detailFilter.status) {
     filtered = filtered.filter(item => item.status === detailFilter.status)
   }
 
+  // 断言结果筛选
   if (detailFilter.assertionResult) {
     filtered = filtered.filter(item => item.assertionResult === detailFilter.assertionResult)
   }
@@ -406,6 +443,8 @@ const filterDetailData = () => {
 }
 
 const resetDetailFilter = () => {
+  detailFilter.groupName = ''
+  detailFilter.itemName = ''
   detailFilter.status = ''
   detailFilter.assertionResult = ''
   filteredDetailTableData.value = [...detailTableData.value]

@@ -225,10 +225,18 @@ func (s *ItemService) executeItem(ctx context.Context, item *model.InspectionIte
 
 	// 断言校验
 	assertionResult := s.validator.Validate(item.AssertionType, item.AssertionValue, execResult.Output)
-	if assertionResult.Pass {
+	if assertionResult.Skip {
+		// 无断言规则，跳过校验
+		result.AssertionResult = "skip"
+	} else if assertionResult.Pass {
+		// 断言通过
 		result.AssertionResult = "pass"
 	} else {
+		// 断言失败
 		result.AssertionResult = "fail"
+		// 断言失败时，将状态改为 failed，并设置错误信息
+		result.Status = "failed"
+		result.ErrorMessage = fmt.Sprintf("断言失败: %s", assertionResult.Message)
 	}
 	result.AssertionDetails = map[string]interface{}{
 		"pass":    assertionResult.Pass,
@@ -273,10 +281,18 @@ func (s *ItemService) executePromQL(ctx context.Context, item *model.InspectionI
 	// 执行断言校验
 	if item.AssertionType != "" {
 		assertionResult := s.validator.Validate(item.AssertionType, item.AssertionValue, promqlResult.PromQLResult)
-		if assertionResult.Pass {
+		if assertionResult.Skip {
+			// 无断言规则，跳过校验
+			result.AssertionResult = "skip"
+		} else if assertionResult.Pass {
+			// 断言通过
 			result.AssertionResult = "pass"
 		} else {
+			// 断言失败
 			result.AssertionResult = "fail"
+			// 断言失败时，将状态改为 failed，并设置错误信息
+			result.Status = "failed"
+			result.ErrorMessage = fmt.Sprintf("断言失败: %s", assertionResult.Message)
 		}
 		result.AssertionDetails = map[string]interface{}{
 			"pass":         assertionResult.Pass,

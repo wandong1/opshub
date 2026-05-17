@@ -406,7 +406,56 @@
 
         <!-- 巡检详情 -->
         <template v-if="syncResultData.task_type === 'inspection'">
-          <a-table :data="syncResultData.details || []" :bordered="{ cell: true }" stripe size="small"
+          <!-- 筛选条件 -->
+          <div style="margin-bottom: 16px;">
+            <a-space wrap>
+              <a-input
+                v-model="syncResultFilter.groupName"
+                placeholder="搜索巡检组名称"
+                allow-clear
+                style="width: 180px;"
+                @input="filterSyncResultData"
+              >
+                <template #prefix><icon-search /></template>
+              </a-input>
+              <a-input
+                v-model="syncResultFilter.itemName"
+                placeholder="搜索巡检项名称"
+                allow-clear
+                style="width: 180px;"
+                @input="filterSyncResultData"
+              >
+                <template #prefix><icon-search /></template>
+              </a-input>
+              <a-select
+                v-model="syncResultFilter.status"
+                placeholder="执行状态"
+                allow-clear
+                style="width: 120px;"
+                @change="filterSyncResultData"
+              >
+                <a-option value="success">成功</a-option>
+                <a-option value="failed">失败</a-option>
+              </a-select>
+              <a-select
+                v-model="syncResultFilter.assertionResult"
+                placeholder="断言状态"
+                allow-clear
+                style="width: 120px;"
+                @change="filterSyncResultData"
+              >
+                <a-option value="pass">通过</a-option>
+                <a-option value="fail">失败</a-option>
+                <a-option value="skip">跳过</a-option>
+              </a-select>
+              <a-button @click="resetSyncResultFilter">重置</a-button>
+              <a-tag v-if="filteredSyncResultData.length !== syncResultData.details?.length" color="blue">
+                已筛选 {{ filteredSyncResultData.length }} / {{ syncResultData.details?.length }} 条
+              </a-tag>
+            </a-space>
+          </div>
+
+          <a-table :data="filteredSyncResultData" :bordered="{ cell: true }" stripe size="small"
             :pagination="{ pageSize: 20, showTotal: true }">
             <template #columns>
               <a-table-column title="巡检组" data-index="group_name" :width="120" />
@@ -1407,6 +1456,51 @@ const syncRunning = ref(false)
 const drawerWidth = ref(1260)
 const isResizing = ref(false)
 
+// 立即运行结果筛选
+const syncResultFilter = reactive({
+  groupName: '',
+  itemName: '',
+  status: '',
+  assertionResult: ''
+})
+
+const filteredSyncResultData = ref<any[]>([])
+
+const filterSyncResultData = () => {
+  if (!syncResultData.value?.details) {
+    filteredSyncResultData.value = []
+    return
+  }
+
+  filteredSyncResultData.value = syncResultData.value.details.filter((item: any) => {
+    // 巡检组名称模糊搜索
+    if (syncResultFilter.groupName && !item.group_name?.toLowerCase().includes(syncResultFilter.groupName.toLowerCase())) {
+      return false
+    }
+    // 巡检项名称模糊搜索
+    if (syncResultFilter.itemName && !item.item_name?.toLowerCase().includes(syncResultFilter.itemName.toLowerCase())) {
+      return false
+    }
+    // 执行状态筛选
+    if (syncResultFilter.status && item.status !== syncResultFilter.status) {
+      return false
+    }
+    // 断言状态筛选
+    if (syncResultFilter.assertionResult && item.assertion_result !== syncResultFilter.assertionResult) {
+      return false
+    }
+    return true
+  })
+}
+
+const resetSyncResultFilter = () => {
+  syncResultFilter.groupName = ''
+  syncResultFilter.itemName = ''
+  syncResultFilter.status = ''
+  syncResultFilter.assertionResult = ''
+  filterSyncResultData()
+}
+
 // 抽屉拖动调整大小
 const startResize = (e: MouseEvent) => {
   isResizing.value = true
@@ -1438,6 +1532,9 @@ const handleRun = async (row: any) => {
   try {
     const result = await runInspectionTaskSync(row.id)
     syncResultData.value = result
+    // 初始化筛选数据
+    filteredSyncResultData.value = result.details || []
+    resetSyncResultFilter()
     loadData()
   } catch (e: any) {
     Message.error(e?.response?.data?.message || '执行失败')

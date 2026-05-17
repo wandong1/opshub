@@ -34,12 +34,13 @@ type AssertionValidator struct{}
 type AssertionResult struct {
 	Pass    bool   `json:"pass"`
 	Message string `json:"message"`
+	Skip    bool   `json:"skip"` // 标识是否跳过断言（无断言规则时为 true）
 }
 
 // Validate 执行断言校验
 func (v *AssertionValidator) Validate(assertionType, assertionValue, output string) *AssertionResult {
 	if assertionType == "" {
-		return &AssertionResult{Pass: true, Message: "无断言规则，跳过校验"}
+		return &AssertionResult{Pass: true, Message: "无断言规则，跳过校验", Skip: true}
 	}
 
 	// PromQL 专用断言类型
