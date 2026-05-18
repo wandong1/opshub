@@ -63,6 +63,18 @@ func (r *VariableResolver) Resolve(ctx context.Context, text string, allowedGrou
 }
 
 // ResolveConfigWithExtra resolves variable references in a ProbeConfig with extra vars (highest priority).
+//
+// 变量优先级（从高到低）：
+// 1. extraVars - 外部传入的变量（包含任务调度变量、巡检组变量），最高优先级
+// 2. 系统变量（ProbeVariable 表，按 GroupID 过滤）- 包含拨测配置变量和全局环境变量
+// 3. 系统预置变量（timestamp、random_*、exec_node_ip 等）- 最低优先级
+//
+// 注意：extraVars 由巡检管理侧传入，已经合并了任务调度变量和巡检组变量，
+// 因此在拨测执行时，extraVars 的优先级高于拨测配置变量和全局环境变量。
+//
+// 完整的四级优先级体系：
+// 任务调度变量 > 巡检组变量 > 拨测配置变量 > 全局环境变量 > 预置变量
+//
 // Priority: extraVars > system ProbeVariables (scoped by GroupID) > preset variables > unresolved placeholders kept as-is.
 func (r *VariableResolver) ResolveConfigWithExtra(ctx context.Context, cfg *ProbeConfig, extraVars map[string]string) (*ProbeConfig, error) {
 	texts := []string{cfg.Target, cfg.Port, cfg.URL, cfg.Headers, cfg.Params, cfg.Body, cfg.ProxyURL}

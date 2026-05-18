@@ -606,52 +606,61 @@
                   </a-form-item>
                 </template>
 
-                <!-- 断言配置和变量提取（拨测类型不需要） -->
-                <template v-if="item.executionType !== 'probe'">
-                  <a-form-item label="断言规则" :label-col-flex="'100px'">
-                    <a-row :gutter="8">
-                      <a-col :span="10">
-                        <a-select v-model="item.assertionType" placeholder="选择断言类型" allow-clear>
-                          <!-- PromQL 类型只显示数值比较 -->
-                          <template v-if="item.executionType === 'promql'">
-                            <a-option value="gt">大于 (&gt;)</a-option>
-                            <a-option value="gte">大于等于 (&gt;=)</a-option>
-                            <a-option value="lt">小于 (&lt;)</a-option>
-                            <a-option value="lte">小于等于 (&lt;=)</a-option>
-                            <a-option value="eq">等于 (==)</a-option>
-                            <a-option value="neq">不等于 (!=)</a-option>
-                          </template>
-                          <!-- 命令和脚本类型显示所有断言 -->
-                          <template v-else>
-                            <a-option value="gt">大于 (&gt;)</a-option>
-                            <a-option value="gte">大于等于 (&gt;=)</a-option>
-                            <a-option value="lt">小于 (&lt;)</a-option>
-                            <a-option value="lte">小于等于 (&lt;=)</a-option>
-                            <a-option value="eq">等于 (==)</a-option>
-                            <a-option value="contains">包含</a-option>
-                            <a-option value="not_contains">不包含</a-option>
-                            <a-option value="regex">正则匹配</a-option>
-                            <a-option value="not_regex">反正则匹配</a-option>
-                          </template>
-                        </a-select>
-                      </a-col>
-                      <a-col :span="14">
-                        <a-input
-                          v-model="item.assertionValue"
-                          :placeholder="item.executionType === 'promql' ? '断言值（数值）' : '断言值'"
-                          :disabled="!item.assertionType"
-                        />
-                      </a-col>
-                    </a-row>
-                    <template #extra>
-                      <span style="color: var(--ops-text-tertiary); font-size: 12px;">
-                        {{ item.executionType === 'promql' ? 'PromQL 查询结果将自动提取指标值进行数值比较' : '对执行结果进行断言验证' }}
-                      </span>
-                    </template>
-                  </a-form-item>
+                <!-- 断言配置 -->
+                <a-form-item label="断言规则" :label-col-flex="'100px'">
+                  <a-row :gutter="8">
+                    <a-col :span="10">
+                      <a-select v-model="item.assertionType" placeholder="选择断言类型" allow-clear>
+                        <!-- 拨测类型显示拨测专用断言 -->
+                        <template v-if="item.executionType === 'probe'">
+                          <a-optgroup label="拨测专用">
+                            <a-option value="probe_success">拨测是否成功</a-option>
+                            <a-option value="probe_latency_lt">响应时间小于（毫秒）</a-option>
+                            <a-option value="probe_assertion_all">原始断言全部通过</a-option>
+                            <a-option value="probe_status_code">HTTP状态码等于</a-option>
+                          </a-optgroup>
+                        </template>
+                        <!-- PromQL 类型只显示数值比较 -->
+                        <template v-else-if="item.executionType === 'promql'">
+                          <a-option value="gt">大于 (&gt;)</a-option>
+                          <a-option value="gte">大于等于 (&gt;=)</a-option>
+                          <a-option value="lt">小于 (&lt;)</a-option>
+                          <a-option value="lte">小于等于 (&lt;=)</a-option>
+                          <a-option value="eq">等于 (==)</a-option>
+                          <a-option value="neq">不等于 (!=)</a-option>
+                        </template>
+                        <!-- 命令和脚本类型显示所有断言 -->
+                        <template v-else>
+                          <a-option value="gt">大于 (&gt;)</a-option>
+                          <a-option value="gte">大于等于 (&gt;=)</a-option>
+                          <a-option value="lt">小于 (&lt;)</a-option>
+                          <a-option value="lte">小于等于 (&lt;=)</a-option>
+                          <a-option value="eq">等于 (==)</a-option>
+                          <a-option value="contains">包含</a-option>
+                          <a-option value="not_contains">不包含</a-option>
+                          <a-option value="regex">正则匹配</a-option>
+                          <a-option value="not_regex">反正则匹配</a-option>
+                        </template>
+                      </a-select>
+                    </a-col>
+                    <a-col :span="14">
+                      <a-input
+                        v-model="item.assertionValue"
+                        :placeholder="getAssertionPlaceholder(item.assertionType, item.executionType)"
+                        :disabled="!item.assertionType || isAssertionValueDisabled(item.assertionType)"
+                      />
+                    </a-col>
+                  </a-row>
+                  <template #extra>
+                    <span style="color: var(--ops-text-tertiary); font-size: 12px;">
+                      {{ getAssertionExtraText(item.executionType, item.assertionType) }}
+                    </span>
+                  </template>
+                </a-form-item>
 
-                  <!-- 变量提取（PromQL 不需要） -->
-                  <a-form-item v-if="item.executionType !== 'promql'" label="变量提取" :label-col-flex="'100px'">
+                <!-- 变量提取（PromQL 和拨测类型不需要） -->
+                <template v-if="item.executionType !== 'promql' && item.executionType !== 'probe'">
+                  <a-form-item label="变量提取" :label-col-flex="'100px'">
                     <a-row :gutter="8">
                       <a-col :span="10">
                         <a-input v-model="item.variableName" placeholder="变量名（如：token）" />
@@ -797,8 +806,8 @@
                 <pre>{{ log.output || log.errorMessage }}</pre>
               </div>
               <div v-if="log.assertionResult" class="log-assertion">
-                <a-tag :color="log.assertionResult === 'pass' ? 'green' : 'red'">
-                  断言: {{ log.assertionResult === 'pass' ? '通过' : '失败' }}
+                <a-tag :color="log.assertionResult === 'pass' ? 'green' : log.assertionResult === 'skip' ? 'gray' : 'red'">
+                  断言: {{ log.assertionResult === 'pass' ? '通过' : log.assertionResult === 'skip' ? '跳过' : '失败' }}
                 </a-tag>
                 <span v-if="log.assertionDetails">{{ log.assertionDetails.message }}</span>
               </div>
@@ -1082,10 +1091,64 @@ const getAssertionTypeText = (type: string) => {
     contains: '包含',
     not_contains: '不包含',
     regex: '正则匹配',
-    status_code: '状态码'
+    status_code: '状态码',
+    probe_success: '拨测是否成功',
+    probe_latency_lt: '响应时间小于',
+    probe_assertion_all: '原始断言全部通过',
+    probe_status_code: 'HTTP状态码等于'
   }
   return map[type] || type
 }
+
+// 获取断言值输入框的占位符
+const getAssertionPlaceholder = (assertionType: string, executionType: string) => {
+  if (!assertionType) return '请先选择断言类型'
+
+  // 拨测专用断言类型
+  const probeAssertionPlaceholders: Record<string, string> = {
+    probe_success: '无需填写',
+    probe_latency_lt: '输入毫秒数，如: 500',
+    probe_assertion_all: '无需填写',
+    probe_status_code: '输入状态码，如: 200'
+  }
+
+  if (probeAssertionPlaceholders[assertionType]) {
+    return probeAssertionPlaceholders[assertionType]
+  }
+
+  // 其他类型
+  if (executionType === 'promql') {
+    return '断言值（数值）'
+  }
+
+  return '断言值'
+}
+
+// 判断断言值输入框是否禁用
+const isAssertionValueDisabled = (assertionType: string) => {
+  // probe_success 和 probe_assertion_all 不需要断言值
+  return assertionType === 'probe_success' || assertionType === 'probe_assertion_all'
+}
+
+// 获取断言配置的额外说明文本
+const getAssertionExtraText = (executionType: string, assertionType: string) => {
+  if (executionType === 'probe') {
+    if (assertionType === 'probe_success') {
+      return '验证拨测是否执行成功'
+    } else if (assertionType === 'probe_latency_lt') {
+      return '验证响应时间是否小于指定阈值（毫秒）'
+    } else if (assertionType === 'probe_assertion_all') {
+      return '验证拨测配置中的原始断言是否全部通过'
+    } else if (assertionType === 'probe_status_code') {
+      return '验证 HTTP 状态码是否等于期望值'
+    }
+    return '对拨测结果进行二次断言验证'
+  } else if (executionType === 'promql') {
+    return 'PromQL 查询结果将自动提取指标值进行数值比较'
+  }
+  return '对执行结果进行断言验证'
+}
+
 
 const toggleLogDetails = (index: number) => {
   if (testLogs.value[index]) {

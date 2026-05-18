@@ -10,7 +10,17 @@ import (
 	"github.com/ydcloud-dy/opshub/pkg/utils"
 )
 
-// VariableResolver 变量解析器，负责合并三个来源的变量
+// VariableResolver 变量解析器，负责合并多个来源的变量
+//
+// 四级变量优先级体系（从高到低）：
+// 1. 任务调度变量（runtimeVars）- 任务执行时传入的自定义变量
+// 2. 巡检组自定义变量 - 巡检组配置的环境变量
+// 3. 拨测配置变量 - 拨测管理中配置的变量（存储在 ProbeVariable 表）
+// 4. 全局环境变量 - 系统级全局变量（存储在 ProbeVariable 表）
+// 5. 系统预置变量 - 系统自动生成（timestamp、random_*、exec_node_ip 等）
+//
+// 注意：当前实现中，拨测配置变量和全局环境变量都存储在 ProbeVariable 表中，
+// 通过 GroupIDs 字段区分作用域。未来可考虑将拨测配置变量独立存储以实现更清晰的优先级。
 type VariableResolver struct {
 	variableRepo inspectionbiz.ProbeVariableRepo
 	groupRepo    inspectionmgmtdata.GroupRepository
@@ -24,8 +34,20 @@ func NewVariableResolver(variableRepo inspectionbiz.ProbeVariableRepo, groupRepo
 	}
 }
 
-// ResolveVariables 解析变量，合并四个来源：预置变量、全局变量、巡检组自定义变量、运行时提取的变量
-// 优先级：运行时提取的变量 > 巡检组自定义变量 > 全局变量 > 预置变量
+// ResolveVariables 解析变量，合并多个来源的变量
+//
+// 变量优先级（从高到低）：
+// 1. 任务调度变量（runtimeVars）- 最高优先级，覆盖所有其他变量
+// 2. 巡检组自定义变量 - 覆盖全局变量和预置变量
+// 3. 全局环境变量（ProbeVariable 表）- 覆盖预置变量
+// 4. 系统预置变量 - 最低优先级
+//
+// 参数：
+//   - groupID: 巡检组 ID，用于加载巡检组自定义变量
+//   - runtimeVars: 运行时变量（包含任务调度变量），最高优先级
+//   - hostIP: 主机 IP，用于生成 exec_node_ip 等预置变量
+//
+// 返回：合并后的变量 Map
 func (r *VariableResolver) ResolveVariables(ctx context.Context, groupID uint, runtimeVars map[string]string, hostIP string) (map[string]string, error) {
 	result := make(map[string]string)
 

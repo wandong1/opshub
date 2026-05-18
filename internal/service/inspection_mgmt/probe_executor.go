@@ -12,6 +12,68 @@ import (
 	inspectionmgmtbiz "github.com/ydcloud-dy/opshub/internal/biz/inspection_mgmt"
 )
 
+// ProbeDetails 拨测详细信息（用于二次断言和前端展示）
+type ProbeDetails struct {
+	// 基础信息
+	ProbeType string `json:"probe_type"` // ping/tcp/udp/http/https/websocket/workflow
+	Target    string `json:"target"`     // 解析后的目标地址
+	Port      string `json:"port,omitempty"`
+
+	// 性能指标
+	LatencyMs float64 `json:"latency_ms"` // 响应时间（毫秒）
+	Success   bool    `json:"success"`    // 拨测是否成功
+
+	// HTTP/HTTPS 专属
+	StatusCode       int    `json:"status_code,omitempty"`        // HTTP 状态码
+	Method           string `json:"method,omitempty"`             // HTTP 方法
+	URL              string `json:"url,omitempty"`                // 完整 URL
+	RequestHeaders   string `json:"request_headers,omitempty"`   // 请求头（JSON）
+	RequestBody      string `json:"request_body,omitempty"`      // 请求体
+	ResponseBody     string `json:"response_body,omitempty"`     // 响应体
+	ContentLength    int64  `json:"content_length,omitempty"`    // 响应体大小
+
+	// 断言结果
+	AssertionResults []AssertionResult `json:"assertion_results,omitempty"` // 原始断言详情
+	AssertionPass    int               `json:"assertion_pass"`              // 断言通过数量
+	AssertionFail    int               `json:"assertion_fail"`              // 断言失败数量
+
+	// HTTP 性能分解
+	DNSLookupTime       float64 `json:"dns_lookup_time,omitempty"`       // DNS 查询时间（毫秒）
+	TCPConnectTime      float64 `json:"tcp_connect_time,omitempty"`      // TCP 连接时间（毫秒）
+	TLSHandshakeTime    float64 `json:"tls_handshake_time,omitempty"`    // TLS 握手时间（毫秒）
+	TTFB                float64 `json:"ttfb,omitempty"`                  // 首字节时间（毫秒）
+	ContentTransferTime float64 `json:"content_transfer_time,omitempty"` // 内容传输时间（毫秒）
+
+	// Ping 专属
+	PacketLoss     float64 `json:"packet_loss,omitempty"`      // 丢包率（%）
+	PingRttAvg     float64 `json:"ping_rtt_avg,omitempty"`     // 平均 RTT（毫秒）
+	PingRttMin     float64 `json:"ping_rtt_min,omitempty"`     // 最小 RTT（毫秒）
+	PingRttMax     float64 `json:"ping_rtt_max,omitempty"`     // 最大 RTT（毫秒）
+	PingPacketsSent int    `json:"ping_packets_sent,omitempty"` // 发送包数
+	PingPacketsRecv int    `json:"ping_packets_recv,omitempty"` // 接收包数
+
+	// TCP/UDP 专属
+	TCPConnectTimeMs float64 `json:"tcp_connect_time_ms,omitempty"` // TCP 连接时间（毫秒）
+	UDPWriteTimeMs   float64 `json:"udp_write_time_ms,omitempty"`   // UDP 写入时间（毫秒）
+	UDPReadTimeMs    float64 `json:"udp_read_time_ms,omitempty"`    // UDP 读取时间（毫秒）
+
+	// Workflow 专属
+	TotalSteps  int                  `json:"total_steps,omitempty"`  // 总步骤数
+	StepResults []map[string]interface{} `json:"step_results,omitempty"` // 步骤结果
+
+	// 错误信息
+	Error string `json:"error,omitempty"` // 错误信息
+}
+
+// AssertionResult 断言结果
+type AssertionResult struct {
+	Name    string `json:"name"`              // 断言名称
+	Success bool   `json:"success"`           // 是否通过
+	Actual  string `json:"actual"`            // 实际值
+	Error   string `json:"error,omitempty"`   // 错误信息
+}
+
+
 // ProbeExecutor 拨测执行器，用于在巡检项中执行拨测配置
 type ProbeExecutor struct {
 	probeConfigRepo  inspectionbiz.ProbeConfigRepo
@@ -27,6 +89,19 @@ func NewProbeExecutor(probeConfigRepo inspectionbiz.ProbeConfigRepo, variableRes
 }
 
 // Execute 执行拨测配置并返回巡检兼容的结果
+//
+// 参数：
+//   - probeConfigID: 拨测配置 ID
+//   - timeout: 超时时间（秒），0 表示使用配置中的默认值
+//   - extraVars: 外部变量（包含任务调度变量和巡检组变量），用于覆盖拨测配置中的变量
+//
+// 变量优先级（从高到低）：
+// 1. extraVars（任务调度变量 + 巡检组变量）- 最高优先级
+// 2. 拨测配置变量（ProbeVariable 表，按分组过滤）
+// 3. 全局环境变量（ProbeVariable 表）
+// 4. 系统预置变量 - 最低优先级
+//
+// 返回：ExecuteResult 包含执行结果、输出、错误和耗时
 func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout int, extraVars map[string]string) *inspectionmgmtbiz.ExecuteResult {
 	startTime := time.Now()
 
@@ -61,15 +136,32 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 	// 根据拨测类型执行
 	var output string
 	var execErr error
+	var probeDetails *ProbeDetails
 
 	switch config.Type {
 	case "ping":
 		prober := &probers.PingProber{}
 		result := prober.Probe(config.Target, 0, config.Timeout, config.Count, config.PacketSize)
-		output = e.formatPingResult(result)
-		if !result.Success {
+
+		// 构建 ProbeDetails
+		probeDetails = &ProbeDetails{
+			ProbeType:       "ping",
+			Target:          config.Target,
+			LatencyMs:       result.Latency,
+			Success:         result.Success,
+			PacketLoss:      result.PacketLoss,
+			PingRttAvg:      result.PingRttAvg,
+			PingRttMin:      result.PingRttMin,
+			PingRttMax:      result.PingRttMax,
+			PingPacketsSent: result.PingPacketsSent,
+			PingPacketsRecv: result.PingPacketsRecv,
+		}
+		if result.Error != "" {
+			probeDetails.Error = result.Error
 			execErr = fmt.Errorf(result.Error)
 		}
+
+		output = e.formatPingResult(result)
 
 	case "tcp":
 		prober := &probers.TCPProber{}
@@ -81,10 +173,22 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 			}
 		}
 		result := prober.Probe(config.Target, port, config.Timeout, 0, 0)
-		output = e.formatTCPResult(result)
-		if !result.Success {
+
+		// 构建 ProbeDetails
+		probeDetails = &ProbeDetails{
+			ProbeType:        "tcp",
+			Target:           config.Target,
+			Port:             config.Port,
+			LatencyMs:        result.Latency,
+			Success:          result.Success,
+			TCPConnectTimeMs: result.TCPConnectTime,
+		}
+		if result.Error != "" {
+			probeDetails.Error = result.Error
 			execErr = fmt.Errorf(result.Error)
 		}
+
+		output = e.formatTCPResult(result)
 
 	case "udp":
 		prober := &probers.UDPProber{}
@@ -96,36 +200,131 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 			}
 		}
 		result := prober.Probe(config.Target, port, config.Timeout, 0, 0)
-		output = e.formatUDPResult(result)
-		if !result.Success {
+
+		// 构建 ProbeDetails
+		probeDetails = &ProbeDetails{
+			ProbeType:      "udp",
+			Target:         config.Target,
+			Port:           config.Port,
+			LatencyMs:      result.Latency,
+			Success:        result.Success,
+			UDPWriteTimeMs: result.UDPWriteTime,
+			UDPReadTimeMs:  result.UDPReadTime,
+		}
+		if result.Error != "" {
+			probeDetails.Error = result.Error
 			execErr = fmt.Errorf(result.Error)
 		}
+
+		output = e.formatUDPResult(result)
 
 	case "http", "https":
 		prober := &probers.HTTPProber{}
 		appConfig := e.buildAppConfig(config)
 		result := prober.ProbeApp(appConfig)
-		output = e.formatHTTPResult(result)
-		if !result.Success {
+
+		// 构建断言结果
+		var assertionResults []AssertionResult
+		assertionPass := 0
+		assertionFail := 0
+		if result.AssertionResults != nil {
+			for _, ar := range result.AssertionResults {
+				assertionResults = append(assertionResults, AssertionResult{
+					Name:    ar.Name,
+					Success: ar.Success,
+					Actual:  ar.Actual,
+					Error:   ar.Error,
+				})
+				if ar.Success {
+					assertionPass++
+				} else {
+					assertionFail++
+				}
+			}
+		}
+
+		// 构建 ProbeDetails
+		probeDetails = &ProbeDetails{
+			ProbeType:           config.Type,
+			Target:              config.Target,
+			LatencyMs:           result.Latency,
+			Success:             result.Success,
+			StatusCode:          result.HTTPStatusCode,
+			Method:              config.Method,
+			URL:                 config.URL,
+			RequestHeaders:      config.Headers,
+			RequestBody:         config.Body,
+			ResponseBody:        result.ResponseBody,
+			ContentLength:       result.HTTPContentLength,
+			AssertionResults:    assertionResults,
+			AssertionPass:       assertionPass,
+			AssertionFail:       assertionFail,
+			DNSLookupTime:       result.DNSLookupTime,
+			TCPConnectTime:      result.TCPConnectTime,
+			TLSHandshakeTime:    result.TLSHandshakeTime,
+			TTFB:                result.TTFB,
+			ContentTransferTime: result.ContentTransferTime,
+		}
+		if result.Error != "" {
+			probeDetails.Error = result.Error
 			execErr = fmt.Errorf(result.Error)
 		}
+
+		output = e.formatHTTPResult(result)
 
 	case "websocket":
 		prober := &probers.WebSocketProber{}
 		appConfig := e.buildAppConfig(config)
 		result := prober.ProbeApp(appConfig)
-		output = e.formatWebSocketResult(result)
-		if !result.Success {
+
+		// 构建 ProbeDetails
+		probeDetails = &ProbeDetails{
+			ProbeType:     "websocket",
+			Target:        config.Target,
+			URL:           config.URL,
+			LatencyMs:     result.Latency,
+			Success:       result.Success,
+			RequestBody:   config.WSMessage,
+			ResponseBody:  result.ResponseBody,
+		}
+		if result.Error != "" {
+			probeDetails.Error = result.Error
 			execErr = fmt.Errorf(result.Error)
 		}
+
+		output = e.formatWebSocketResult(result)
 
 	case "workflow":
 		// workflow 类型执行
 		wfResult := inspectionbiz.ExecuteWorkflowProbe(ctx, config, nil, nil, false)
-		output = e.formatWorkflowResult(wfResult)
-		if !wfResult.Success {
+
+		// 转换 StepResults 为 map 格式
+		var stepResults []map[string]interface{}
+		for _, step := range wfResult.StepResults {
+			stepMap := map[string]interface{}{
+				"step_name": step.StepName,
+				"success":   step.Success,
+				"latency":   step.Latency,
+				"error":     step.Error,
+			}
+			stepResults = append(stepResults, stepMap)
+		}
+
+		// 构建 ProbeDetails
+		probeDetails = &ProbeDetails{
+			ProbeType:   "workflow",
+			Target:      config.Target,
+			LatencyMs:   wfResult.TotalLatency,
+			Success:     wfResult.Success,
+			TotalSteps:  len(wfResult.StepResults),
+			StepResults: stepResults,
+		}
+		if wfResult.Error != "" {
+			probeDetails.Error = wfResult.Error
 			execErr = fmt.Errorf(wfResult.Error)
 		}
+
+		output = e.formatWorkflowResult(wfResult)
 
 	default:
 		return &inspectionmgmtbiz.ExecuteResult{
@@ -137,10 +336,26 @@ func (e *ProbeExecutor) Execute(ctx context.Context, probeConfigID uint, timeout
 
 	fmt.Printf("[ProbeExecutor] Probe execution completed: success=%v, duration=%.2fs\n", execErr == nil, time.Since(startTime).Seconds())
 
+	// 将 ProbeDetails 序列化为 JSON 作为 Output
+	// 这样断言验证器可以解析 ProbeDetails 进行二次断言
+	var finalOutput string
+	if probeDetails != nil {
+		detailsJSON, err := json.Marshal(probeDetails)
+		if err == nil {
+			finalOutput = string(detailsJSON)
+		} else {
+			// 如果序列化失败，使用原始 output
+			finalOutput = output
+		}
+	} else {
+		finalOutput = output
+	}
+
 	return &inspectionmgmtbiz.ExecuteResult{
-		Output:   output,
-		Error:    execErr,
-		Duration: time.Since(startTime).Seconds(),
+		Output:       finalOutput,
+		Error:        execErr,
+		Duration:     time.Since(startTime).Seconds(),
+		ProbeDetails: probeDetails,
 	}
 }
 

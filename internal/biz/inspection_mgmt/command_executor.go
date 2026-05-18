@@ -37,6 +37,9 @@ type ExecuteResult struct {
 	Output   string
 	Error    error
 	Duration float64 // 秒
+
+	// 拨测详细信息（仅拨测类型时有值）
+	ProbeDetails interface{} `json:"probe_details,omitempty"`
 }
 
 // ScriptExecuteRequest 脚本执行请求
