@@ -234,7 +234,8 @@
         <a-form-item label="自定义变量">
           <div style="width: 100%;">
             <div v-for="(item, index) in customVariablesList" :key="index"
-              style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+              style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;"
+              :class="{ 'newly-extracted': newlyExtractedKeys.has(item.key) }">
               <a-input v-model="item.key" placeholder="变量名（如：api_host）" style="flex: 1;" />
               <a-input v-model="item.value" placeholder="变量值" style="flex: 2;" />
               <a-button type="text" status="danger" size="small" @click="removeCustomVariable(index)">
@@ -244,6 +245,16 @@
             <a-button type="dashed" long size="small" @click="addCustomVariable">
               <template #icon><icon-plus /></template>
               添加变量
+            </a-button>
+            <a-button
+              type="outline"
+              long
+              size="small"
+              @click="handleExtractVariables"
+              style="margin-top: 8px;"
+            >
+              <template #icon><icon-code /></template>
+              从配置中提取变量
             </a-button>
           </div>
           <template #extra>
@@ -814,7 +825,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
-import { IconSchedule, IconSearch, IconRefresh, IconPlus, IconEdit, IconDelete, IconPoweroff, IconPlayArrow, IconStop, IconEye, IconCheckCircleFill, IconExclamationCircleFill, IconSettings } from '@arco-design/web-vue/es/icon'
+import { IconSchedule, IconSearch, IconRefresh, IconPlus, IconEdit, IconDelete, IconPoweroff, IconPlayArrow, IconStop, IconEye, IconCheckCircleFill, IconExclamationCircleFill, IconSettings, IconCode } from '@arco-design/web-vue/es/icon'
 import { getTaskList, createTask, updateTask, deleteTask, toggleTask, getTaskResults, getProbeList, getPushgatewayList, PROBE_CATEGORIES, CATEGORY_LABEL_MAP } from '@/api/networkProbe'
 import { getAllInspectionGroups, getInspectionItems, getInspectionGroup } from '@/api/inspectionManagement'
 import { getInspectionTasks, createInspectionTask, updateInspectionTask, deleteInspectionTask, toggleInspectionTask, getInspectionTaskResults, runInspectionTask, stopInspectionTask, runInspectionTaskSync, type ItemAssertionOverride, type GroupBusinessGroupOverride } from '@/api/inspectionTask'
@@ -823,6 +834,7 @@ import { getHostList } from '@/api/host'
 import { getAgentStatuses } from '@/api/agent'
 import { getDataSources } from '@/api/alert'
 import { useRouter } from 'vue-router'
+import { extractFromProbeConfigs, extractFromInspectionItems, mergeVariables } from '@/utils/variableExtractor'
 
 // 数据源覆盖类型定义
 interface GroupDataSourceOverride {
@@ -877,11 +889,84 @@ const groupDataSourceOverrides = ref<Record<number, number>>({})
 // 需求四：自定义变量键值对列表
 const customVariablesList = ref<Array<{ key: string; value: string }>>([])
 
+// 跟踪新提取的变量（用于高亮显示）
+const newlyExtractedKeys = ref<Set<string>>(new Set())
+
 const addCustomVariable = () => {
   customVariablesList.value.push({ key: '', value: '' })
 }
 const removeCustomVariable = (index: number) => {
   customVariablesList.value.splice(index, 1)
+}
+
+// 从配置中提取变量
+const handleExtractVariables = async () => {
+  let extractedVars: string[] = []
+
+  if (formData.taskType === 'probe') {
+    // 从拨测配置中提取变量
+    const probeConfigs = probeOptions.value.filter((p: any) =>
+      formData.probeConfigIds.includes(p.id)
+    )
+    extractedVars = extractFromProbeConfigs(probeConfigs)
+  } else if (formData.taskType === 'inspection') {
+    // 从巡检项中提取变量
+    const items = inspectionItemOptions.value.filter((item: any) =>
+      formData.inspectionItemIds.length > 0
+        ? formData.inspectionItemIds.includes(item.id)
+        : formData.inspectionGroupIds.includes(item.groupId)
+    )
+
+    // 先提取巡检项自身的变量
+    extractedVars = extractFromInspectionItems(items)
+
+    // 对于 probe 类型的巡检项，额外提取关联的拨测配置变量
+    const probeTypeItems = items.filter((item: any) => item.executionType === 'probe')
+    if (probeTypeItems.length > 0) {
+      // 收集所有拨测配置 ID
+      const probeConfigIds = probeTypeItems
+        .map((item: any) => item.probeConfigId)
+        .filter((id: number) => id > 0)
+
+      if (probeConfigIds.length > 0) {
+        // 从已加载的拨测配置中查找
+        const probeConfigs = probeOptions.value.filter((p: any) =>
+          probeConfigIds.includes(p.id)
+        )
+
+        // 提取拨测配置中的变量并合并
+        const probeVars = extractFromProbeConfigs(probeConfigs)
+        extractedVars = Array.from(new Set([...extractedVars, ...probeVars])).sort()
+      }
+    }
+  }
+
+  if (extractedVars.length === 0) {
+    Message.info('未找到可提取的变量')
+    return
+  }
+
+  // 跟踪哪些变量是新的
+  const existingKeys = new Set(customVariablesList.value.map(v => v.key))
+  const newKeys = extractedVars.filter(name => !existingKeys.has(name))
+
+  if (newKeys.length === 0) {
+    Message.info('所有变量已存在，无需提取')
+    return
+  }
+
+  // 合并到现有变量列表
+  customVariablesList.value = mergeVariables(customVariablesList.value, extractedVars)
+
+  // 高亮显示新提取的变量
+  newlyExtractedKeys.value = new Set(newKeys)
+
+  // 3秒后清除高亮
+  setTimeout(() => {
+    newlyExtractedKeys.value.clear()
+  }, 3000)
+
+  Message.success(`成功提取 ${newKeys.length} 个新变量`)
 }
 // 将键值对列表序列化为 JSON 字符串
 const serializeCustomVariables = (): string => {
@@ -1913,6 +1998,21 @@ onMounted(() => { loadData(); loadOptions() })
 .drawer-resize-handle:active {
   background: var(--ops-primary);
   opacity: 0.8;
+}
+
+/* 新提取变量高亮动画 */
+.newly-extracted {
+  animation: highlight-fade 3s ease-out;
+}
+
+@keyframes highlight-fade {
+  0% {
+    background-color: rgba(22, 93, 255, 0.15);
+    border-radius: 4px;
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 /* 断言覆盖配置样式 */
