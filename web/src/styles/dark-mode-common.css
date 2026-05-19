@@ -1,0 +1,340 @@
+/**
+ * 深色模式通用适配规则
+ * 用于适配所有自定义组件和页面级样式
+ */
+
+/* ===== 通用页面容器 ===== */
+body[arco-theme='dark'] .page-container,
+body[arco-theme='dark'] .page-wrapper,
+body[arco-theme='dark'] .content-wrapper,
+body[arco-theme='dark'] .main-container,
+body[arco-theme='dark'] .app-container {
+  background-color: transparent !important;
+}
+
+/* 内容区域 */
+body[arco-theme='dark'] .content,
+body[arco-theme='dark'] .main-content,
+body[arco-theme='dark'] .page-content {
+  background-color: transparent !important;
+}
+
+/* ===== 通用卡片和面板 ===== */
+body[arco-theme='dark'] .card,
+body[arco-theme='dark'] .panel,
+body[arco-theme='dark'] .box,
+body[arco-theme='dark'] .section,
+body[arco-theme='dark'] .widget,
+body[arco-theme='dark'] .block {
+  background-color: #232324 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* ===== 统计卡片 ===== */
+body[arco-theme='dark'] .stat-card,
+body[arco-theme='dark'] .stats-card,
+body[arco-theme='dark'] .metric-card,
+body[arco-theme='dark'] .info-card {
+  background-color: #232324;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== 筛选栏和工具栏 ===== */
+body[arco-theme='dark'] .filter-bar,
+body[arco-theme='dark'] .toolbar,
+body[arco-theme='dark'] .action-bar,
+body[arco-theme='dark'] .search-bar,
+body[arco-theme='dark'] .query-bar {
+  background-color: #232324 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ===== 侧边栏和导航 ===== */
+body[arco-theme='dark'] .sidebar,
+body[arco-theme='dark'] .side-panel,
+body[arco-theme='dark'] .nav-panel,
+body[arco-theme='dark'] .left-panel,
+body[arco-theme='dark'] .right-panel {
+  background-color: #232324 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ===== 表格容器 ===== */
+body[arco-theme='dark'] .table-container,
+body[arco-theme='dark'] .table-wrapper,
+body[arco-theme='dark'] .data-table,
+body[arco-theme='dark'] .table-panel {
+  background-color: #232324 !important;
+}
+
+/* ===== 表单容器 ===== */
+body[arco-theme='dark'] .form-container,
+body[arco-theme='dark'] .form-wrapper,
+body[arco-theme='dark'] .form-panel,
+body[arco-theme='dark'] .form-box {
+  background-color: #232324 !important;
+}
+
+/* ===== 列表项 ===== */
+body[arco-theme='dark'] .list-item,
+body[arco-theme='dark'] .item,
+body[arco-theme='dark'] .row-item {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+body[arco-theme='dark'] .list-item:hover,
+body[arco-theme='dark'] .item:hover,
+body[arco-theme='dark'] .row-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== 头部和标题 ===== */
+body[arco-theme='dark'] .header,
+body[arco-theme='dark'] .page-header,
+body[arco-theme='dark'] .section-header {
+  color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+body[arco-theme='dark'] .page-title-group {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body[arco-theme='dark'] .page-title-icon {
+  color: var(--ops-primary) !important;
+}
+
+body[arco-theme='dark'] .title,
+body[arco-theme='dark'] .page-title,
+body[arco-theme='dark'] .section-title,
+body[arco-theme='dark'] h1,
+body[arco-theme='dark'] h2,
+body[arco-theme='dark'] h3 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body[arco-theme='dark'] .subtitle,
+body[arco-theme='dark'] .page-subtitle,
+body[arco-theme='dark'] .description {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+body[arco-theme='dark'] .header-actions {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* ===== 标签和徽章 ===== */
+body[arco-theme='dark'] .label,
+body[arco-theme='dark'] .badge {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ===== 分隔线 ===== */
+body[arco-theme='dark'] .divider,
+body[arco-theme='dark'] .separator {
+  border-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ===== 按钮组 ===== */
+body[arco-theme='dark'] .button-group,
+body[arco-theme='dark'] .btn-group {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ===== 空状态 ===== */
+body[arco-theme='dark'] .empty-state,
+body[arco-theme='dark'] .no-data {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ===== 加载状态 ===== */
+body[arco-theme='dark'] .loading,
+body[arco-theme='dark'] .spinner {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ===== 代码块 ===== */
+body[arco-theme='dark'] .code-block,
+body[arco-theme='dark'] pre,
+body[arco-theme='dark'] code {
+  background-color: #17171a;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== 信息提示 ===== */
+body[arco-theme='dark'] .info-box,
+body[arco-theme='dark'] .tip-box,
+body[arco-theme='dark'] .notice-box {
+  background-color: rgba(64, 128, 255, 0.15);
+  border-color: rgba(64, 128, 255, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== 警告提示 ===== */
+body[arco-theme='dark'] .warning-box,
+body[arco-theme='dark'] .alert-box {
+  background-color: rgba(255, 154, 46, 0.15);
+  border-color: rgba(255, 154, 46, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== 错误提示 ===== */
+body[arco-theme='dark'] .error-box,
+body[arco-theme='dark'] .danger-box {
+  background-color: rgba(245, 63, 63, 0.15);
+  border-color: rgba(245, 63, 63, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== 成功提示 ===== */
+body[arco-theme='dark'] .success-box {
+  background-color: rgba(35, 195, 67, 0.15);
+  border-color: rgba(35, 195, 67, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== 模态框和抽屉 ===== */
+body[arco-theme='dark'] .modal-content,
+body[arco-theme='dark'] .drawer-content {
+  background-color: #232324;
+}
+
+/* ===== 下拉菜单 ===== */
+body[arco-theme='dark'] .dropdown-menu,
+body[arco-theme='dark'] .context-menu {
+  background-color: #232324;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body[arco-theme='dark'] .dropdown-item,
+body[arco-theme='dark'] .menu-item {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+body[arco-theme='dark'] .dropdown-item:hover,
+body[arco-theme='dark'] .menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== 工具提示 ===== */
+body[arco-theme='dark'] .tooltip,
+body[arco-theme='dark'] .popover {
+  background-color: #232324;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== 进度条 ===== */
+body[arco-theme='dark'] .progress-bar {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ===== 滚动条 ===== */
+body[arco-theme='dark'] ::-webkit-scrollbar {
+  background-color: #17171a;
+}
+
+body[arco-theme='dark'] ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+body[arco-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ===== 选中状态 ===== */
+body[arco-theme='dark'] .selected,
+body[arco-theme='dark'] .active {
+  background-color: rgba(64, 128, 255, 0.15);
+  color: #4080ff;
+}
+
+/* ===== 禁用状态 ===== */
+body[arco-theme='dark'] .disabled,
+body[arco-theme='dark'] [disabled] {
+  color: rgba(255, 255, 255, 0.3);
+  opacity: 0.5;
+}
+
+/* ===== 链接 ===== */
+body[arco-theme='dark'] a {
+  color: #4080ff;
+}
+
+body[arco-theme='dark'] a:hover {
+  color: #5a94ff;
+}
+
+/* ===== 文本颜色类 ===== */
+body[arco-theme='dark'] .text-primary {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+body[arco-theme='dark'] .text-secondary {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+body[arco-theme='dark'] .text-tertiary {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+body[arco-theme='dark'] .text-muted {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ===== 背景颜色类 ===== */
+body[arco-theme='dark'] .bg-white {
+  background-color: #232324 !important;
+}
+
+body[arco-theme='dark'] .bg-gray {
+  background-color: #17171a !important;
+}
+
+body[arco-theme='dark'] .bg-light {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 强制覆盖所有可能的白色背景 */
+body[arco-theme='dark'] [style*="background: #fff"],
+body[arco-theme='dark'] [style*="background:#fff"],
+body[arco-theme='dark'] [style*="background: white"],
+body[arco-theme='dark'] [style*="background:white"],
+body[arco-theme='dark'] [style*="background-color: #fff"],
+body[arco-theme='dark'] [style*="background-color:#fff"],
+body[arco-theme='dark'] [style*="background-color: white"],
+body[arco-theme='dark'] [style*="background-color:white"],
+body[arco-theme='dark'] [style*="background-color: rgb(255, 255, 255)"],
+body[arco-theme='dark'] [style*="background: rgb(255, 255, 255)"] {
+  background-color: #232324 !important;
+  background: #232324 !important;
+}
+
+/* ===== 边框颜色类 ===== */
+body[arco-theme='dark'] .border {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[arco-theme='dark'] .border-top {
+  border-top-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[arco-theme='dark'] .border-bottom {
+  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[arco-theme='dark'] .border-left {
+  border-left-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[arco-theme='dark'] .border-right {
+  border-right-color: rgba(255, 255, 255, 0.15) !important;
+}

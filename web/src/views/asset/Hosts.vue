@@ -3228,6 +3228,24 @@ const loadStatistics = async () => {
   min-height: 120px;
 }
 
+/* 深色模式适配 */
+body[arco-theme='dark'] .stat-card-modern {
+  background: #232324;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+body[arco-theme='dark'] .stat-card-modern:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+body[arco-theme='dark'] .stat-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+body[arco-theme='dark'] .stat-value {
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .stat-card-modern::before {
   content: '';
   position: absolute;
@@ -3406,6 +3424,24 @@ const loadStatistics = async () => {
   transition: width 0.3s ease, min-width 0.3s ease;
 }
 
+/* 深色模式适配 */
+body[arco-theme='dark'] .left-panel {
+  background: #232324;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+body[arco-theme='dark'] .collapse-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[arco-theme='dark'] .collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
 .left-panel.panel-collapsed {
   width: 48px;
   min-width: 48px;
@@ -3571,6 +3607,32 @@ const loadStatistics = async () => {
   border-bottom: 1px solid var(--ops-border-color);
 }
 
+/* 深色模式适配 */
+body[arco-theme='dark'] .filter-bar {
+  background: #232324;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+body[arco-theme='dark'] .reset-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+body[arco-theme='dark'] .reset-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+body[arco-theme='dark'] .selected-group-bar {
+  background: rgba(64, 128, 255, 0.15);
+}
+
+body[arco-theme='dark'] .table-wrapper {
+  background: #232324;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
 .filter-inputs {
   display: flex;
   gap: 12px;
@@ -3625,6 +3687,8 @@ const loadStatistics = async () => {
   display: flex;
   flex-direction: column;
 }
+
+/* 深色模式适配已在上面定义 */
 
 .modern-table {
   flex: 1;

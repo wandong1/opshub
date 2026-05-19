@@ -88,11 +88,48 @@
       <a-layout-header class="ops-header">
         <div class="header-left">
           <a-breadcrumb class="header-breadcrumb">
-            <a-breadcrumb-item @click="$router.push('/')">首页</a-breadcrumb-item>
-            <a-breadcrumb-item v-if="currentRoute.meta.title">{{ currentRoute.meta.title }}</a-breadcrumb-item>
+            <a-breadcrumb-item>
+              <icon-apps />
+            </a-breadcrumb-item>
+            <a-breadcrumb-item v-if="currentRoute.matched.length > 1">
+              {{ getParentMenuName() }}
+            </a-breadcrumb-item>
+            <a-breadcrumb-item v-if="currentRoute.meta.title">
+              {{ currentRoute.meta.title }}
+            </a-breadcrumb-item>
           </a-breadcrumb>
         </div>
         <div class="header-right">
+          <!-- 全局搜索 -->
+          <a-input-search
+            v-model="searchKeyword"
+            placeholder="搜索菜单..."
+            class="header-search"
+            @search="handleSearch"
+            @focus="showSearchResults = true"
+            @blur="handleSearchBlur"
+          >
+            <template #prefix>
+              <icon-search />
+            </template>
+          </a-input-search>
+
+          <!-- 搜索结果下拉 -->
+          <div v-if="showSearchResults && filteredMenus.length > 0" class="search-results">
+            <div
+              v-for="menu in filteredMenus"
+              :key="menu.path"
+              class="search-result-item"
+              @mousedown.prevent="handleMenuSelect(menu)"
+            >
+              <component :is="getArcoIcon(menu.icon)" class="result-icon" />
+              <div class="result-content">
+                <div class="result-title">{{ menu.name }}</div>
+                <div class="result-path">{{ menu.parentName }}</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 主题切换按钮 -->
           <a-button type="text" class="theme-toggle-btn" @click="showThemeSettings = true">
             <icon-sun v-if="appStore.theme === 'light'" />
@@ -137,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, type Component } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useSystemStore } from '@/stores/system'
@@ -240,6 +277,9 @@ const currentRoute = computed(() => route)
 
 const menuList = ref<any[]>([])
 const hasNoPermission = ref(false)
+const searchKeyword = ref('')
+const showSearchResults = ref(false)
+const filteredMenus = ref<any[]>([])
 
 const buildPluginMenus = async (authorizedPaths: Set<string>) => {
   const pluginMenus: any[] = []
@@ -454,6 +494,87 @@ const handleUserCommand = (value: string | number | Record<string, any> | undefi
   }
 }
 
+// 获取父级菜单名称
+const getParentMenuName = () => {
+  const currentPath = route.path
+
+  // 遍历菜单树查找当前路径的父级菜单
+  const findParentMenu = (menus: any[], path: string): string | null => {
+    for (const menu of menus) {
+      if (menu.children && menu.children.length > 0) {
+        // 检查子菜单中是否包含当前路径
+        const hasChild = menu.children.some((child: any) => child.path === path)
+        if (hasChild) {
+          return menu.name
+        }
+        // 递归查找
+        const result = findParentMenu(menu.children, path)
+        if (result) return result
+      }
+    }
+    return null
+  }
+
+  const parentName = findParentMenu(menuList.value, currentPath)
+  return parentName || '首页'
+}
+
+// 全局搜索功能
+const handleSearch = (value: string) => {
+  if (!value.trim()) {
+    filteredMenus.value = []
+    return
+  }
+
+  const keyword = value.toLowerCase()
+  const results: any[] = []
+
+  const searchInMenus = (menus: any[], parentName = '') => {
+    menus.forEach(menu => {
+      // 只搜索页面菜单（type=2），不搜索按钮权限（type=3）
+      if (menu.type === 2 && menu.name.toLowerCase().includes(keyword)) {
+        results.push({
+          ...menu,
+          parentName: parentName || '首页'
+        })
+      }
+      if (menu.children && menu.children.length > 0) {
+        searchInMenus(menu.children, menu.name)
+      }
+    })
+  }
+
+  searchInMenus(menuList.value)
+  filteredMenus.value = results.slice(0, 8) // 最多显示8个结果
+}
+
+const handleMenuSelect = (menu: any) => {
+  if (menu.path) {
+    router.push(menu.path)
+  }
+  searchKeyword.value = ''
+  showSearchResults.value = false
+  filteredMenus.value = []
+}
+
+const handleSearchBlur = () => {
+  // 延迟关闭，以便点击事件能够触发
+  setTimeout(() => {
+    showSearchResults.value = false
+  }, 200)
+}
+
+// 监听搜索关键词变化
+watch(searchKeyword, (newVal) => {
+  if (newVal.trim()) {
+    handleSearch(newVal)
+    showSearchResults.value = true
+  } else {
+    filteredMenus.value = []
+    showSearchResults.value = false
+  }
+})
+
 const handlePluginChange = () => { loadMenu() }
 
 onUnmounted(() => {
@@ -497,13 +618,13 @@ onMounted(async () => {
 
 /* Logo */
 .sider-logo {
-  height: 56px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   padding: 0 16px;
-  border-bottom: 1px solid var(--ops-border-color);
+  border-bottom: none;
   flex-shrink: 0;
 }
 
@@ -644,11 +765,109 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+.header-breadcrumb :deep(.arco-breadcrumb-item) {
+  color: var(--ops-text-secondary);
+  font-weight: 400;
+}
+
+.header-breadcrumb :deep(.arco-breadcrumb-item:last-child) {
+  color: var(--ops-text-primary);
+  font-weight: 500;
+}
+
+.header-breadcrumb :deep(.arco-icon) {
+  font-size: 16px;
+}
+
 .header-right {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  position: relative;
+}
+
+/* 全局搜索 */
+.header-search {
+  width: 240px;
+  transition: width 0.3s;
+}
+
+.header-search:focus-within {
+  width: 320px;
+}
+
+.header-search :deep(.arco-input-wrapper) {
+  border-radius: 20px;
+  background: var(--ops-content-bg);
+  border: 1px solid transparent;
+  transition: all 0.3s;
+}
+
+.header-search :deep(.arco-input-wrapper:hover),
+.header-search :deep(.arco-input-wrapper:focus-within) {
+  background: var(--ops-header-bg);
+  border-color: var(--ops-primary);
+  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.1);
+}
+
+/* 搜索结果下拉 */
+.search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 200px;
+  width: 320px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--ops-header-bg);
+  border: 1px solid var(--ops-border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid var(--ops-border-color);
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  background: var(--ops-content-bg);
+}
+
+.result-icon {
+  font-size: 18px;
+  color: var(--ops-primary);
+  flex-shrink: 0;
+}
+
+.result-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ops-text-primary);
+  margin-bottom: 4px;
+}
+
+.result-path {
+  font-size: 12px;
+  color: var(--ops-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .theme-toggle-btn {

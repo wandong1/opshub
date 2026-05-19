@@ -5,7 +5,7 @@
       <div class="page-header">
         <div class="page-title-group">
           <div class="page-title-icon">
-            <icon-file-search />
+            <icon-search />
           </div>
           <div>
             <h2 class="page-title">集群巡检</h2>
@@ -69,7 +69,7 @@
     <a-card v-if="!inspecting && !inspectionResult" class="empty-card">
       <div class="empty-content">
         <div class="empty-icon">
-          <icon-file-search />
+          <icon-search />
         </div>
         <h3 class="empty-title">开始集群健康巡检</h3>
         <p class="empty-desc">选择一个 Kubernetes 集群，执行全面的健康检查，包括节点状态、工作负载、网络、存储、安全配置等多个维度</p>
@@ -95,7 +95,7 @@
             <span>安全配置</span>
           </div>
           <div class="feature-item">
-            <icon-line-chart />
+            <icon-bar-chart />
             <span>容量规划</span>
           </div>
         </div>
@@ -127,7 +127,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-icon stat-icon-blue">
-            <icon-file-search />
+            <icon-search />
           </div>
           <div class="stat-content">
             <div class="stat-label">检查项目</div>
@@ -683,7 +683,6 @@ const tableColumns = [
 
 import { ref, onMounted, computed, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconLineChart } from '@arco-design/web-vue/es/icon'
 import { getClusterList, type Cluster } from '@/api/kubernetes'
 import {
   startInspection,

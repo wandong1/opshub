@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><DataLine /></el-icon>
+          <icon-bar-chart />
         </div>
         <div>
           <h2 class="page-title">数据日志</h2>
@@ -12,150 +12,149 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="black-button" @click="handleSearch">
-          <el-icon style="margin-right: 6px;"><Search /></el-icon>
+        <a-button type="primary" @click="handleSearch">
+          <template #icon><icon-search /></template>
           查询
-        </el-button>
-        <el-button class="black-button" @click="handleReset">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-button>
+        <a-button @click="handleReset">
+          <template #icon><icon-refresh /></template>
           重置
-        </el-button>
-        <el-button v-permission="'data-logs:batch-delete'" class="black-button danger" @click="handleBatchDelete" :disabled="selectedIds.length === 0">
-          <el-icon style="margin-right: 6px;"><Delete /></el-icon>
+        </a-button>
+        <a-button v-permission="'data-logs:batch-delete'" status="danger" @click="handleBatchDelete" :disabled="selectedIds.length === 0">
+          <template #icon><icon-delete /></template>
           批量删除
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 筛选栏 -->
     <div class="filter-bar">
-      <el-input
+      <a-input
         v-model="searchForm.username"
         placeholder="搜索用户名..."
-        clearable
+        allow-clear
         class="filter-input"
       >
         <template #prefix>
-          <el-icon class="filter-icon"><User /></el-icon>
+          <icon-user />
         </template>
-      </el-input>
-      <el-select
+      </a-input>
+      <a-select
         v-model="searchForm.tableName"
         placeholder="数据表"
-        clearable
+        allow-clear
         class="filter-select"
       >
-        <el-option label="用户表" value="sys_user" />
-        <el-option label="角色表" value="sys_role" />
-        <el-option label="部门表" value="sys_department" />
-        <el-option label="菜单表" value="sys_menu" />
-        <el-option label="岗位表" value="sys_position" />
-      </el-select>
-      <el-select
+        <a-option label="用户表" value="sys_user" />
+        <a-option label="角色表" value="sys_role" />
+        <a-option label="部门表" value="sys_department" />
+        <a-option label="菜单表" value="sys_menu" />
+        <a-option label="岗位表" value="sys_position" />
+      </a-select>
+      <a-select
         v-model="searchForm.action"
         placeholder="操作类型"
-        clearable
+        allow-clear
         class="filter-select"
       >
-        <el-option label="创建" value="create" />
-        <el-option label="更新" value="update" />
-        <el-option label="删除" value="delete" />
-      </el-select>
-      <el-date-picker
+        <a-option label="创建" value="create" />
+        <a-option label="更新" value="update" />
+        <a-option label="删除" value="delete" />
+      </a-select>
+      <a-range-picker
         v-model="dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="YYYY-MM-DD"
+        format="YYYY-MM-DD"
         class="filter-date"
       />
     </div>
 
     <!-- 数据表格 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="logList"
-        v-loading="loading"
+        :loading="loading"
+        :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: false }"
         @selection-change="handleSelectionChange"
+        :pagination="false"
         class="modern-table"
-        size="default"
       >
-        <el-table-column type="selection" width="55" />
-        <el-table-column label="ID" prop="id" width="80" align="center">
-          <template #default="{ row }">
-            <span class="id-text">#{{ row.id }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作用户" prop="username" min-width="140">
-          <template #default="{ row }">
-            <div class="user-cell">
-              <el-icon class="user-icon"><User /></el-icon>
-              <span>{{ row.realName || row.username }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="数据表" prop="tableName" width="140">
-          <template #default="{ row }">
-            <el-tag size="small" type="info">{{ row.tableName }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="记录ID" prop="recordId" width="90" align="center">
-          <template #default="{ row }">
-            <span class="id-text">{{ row.recordId }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" prop="action" width="80">
-          <template #default="{ row }">
-            <el-tag :type="getActionType(row.action)" size="small">
-              {{ getActionLabel(row.action) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="变更字段" prop="diffFields" min-width="150" show-overflow-tooltip />
-        <el-table-column label="数据变更" width="100" align="center">
-          <template #default="{ row }">
-            <el-button link class="detail-btn" @click="showDataDiff(row)">
-              查看详情
-            </el-button>
-          </template>
-        </el-table-column>
-        <el-table-column label="IP地址" prop="ip" width="130" />
-        <el-table-column label="操作时间" prop="createdAt" width="170" />
-        <el-table-column label="操作" width="80" fixed="right" align="center">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'data-logs:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+        <template #columns>
+          <a-table-column title="ID" data-index="id" :width="80" align="center">
+            <template #cell="{ record }">
+              <span class="id-text">#{{ record.id }}</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="操作用户" data-index="username" :width="140">
+            <template #cell="{ record }">
+              <div class="user-cell">
+                <icon-user class="user-icon" />
+                <span>{{ record.realName || record.username }}</span>
+              </div>
+            </template>
+          </a-table-column>
+          <a-table-column title="数据表" data-index="tableName" :width="140">
+            <template #cell="{ record }">
+              <a-tag color="blue">{{ record.tableName }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="记录ID" data-index="recordId" :width="90" align="center">
+            <template #cell="{ record }">
+              <span class="id-text">{{ record.recordId }}</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="操作" data-index="action" :width="80">
+            <template #cell="{ record }">
+              <a-tag :color="getActionColor(record.action)">
+                {{ getActionLabel(record.action) }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="变更字段" data-index="diffFields" :width="150" :ellipsis="true" :tooltip="true" />
+          <a-table-column title="数据变更" :width="100" align="center">
+            <template #cell="{ record }">
+              <a-button type="text" @click="showDataDiff(record)">
+                查看详情
+              </a-button>
+            </template>
+          </a-table-column>
+          <a-table-column title="IP地址" data-index="ip" :width="130" />
+          <a-table-column title="操作时间" data-index="createdAt" :width="170" />
+          <a-table-column title="操作" :width="80" fixed="right" align="center">
+            <template #cell="{ record }">
+              <div class="action-buttons">
+                <a-tooltip content="删除">
+                  <a-button v-permission="'data-logs:delete'" type="text" status="danger" @click="handleDelete(record)">
+                    <template #icon><icon-delete /></template>
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
+        <a-pagination
+          v-model:current="pagination.page"
           v-model:page-size="pagination.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
           :total="pagination.total"
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadLogList"
-          @current-change="loadLogList"
+          :page-size-options="[10, 20, 50, 100]"
+          show-total
+          show-page-size
+          @change="loadLogList"
+          @page-size-change="loadLogList"
         />
       </div>
     </div>
 
     <!-- 数据变更详情对话框 -->
-    <el-dialog
-      v-model="detailDialogVisible"
+    <a-modal
+      v-model:visible="detailDialogVisible"
       title="数据变更详情"
       width="700px"
-      class="detail-dialog"
-      :close-on-click-modal="false"
+      :footer="false"
+      unmount-on-close
     >
       <div v-if="currentRow" class="detail-content">
         <div class="detail-info">
@@ -165,7 +164,7 @@
           </div>
           <div class="info-item">
             <span class="info-label">数据表:</span>
-            <el-tag size="small" type="info">{{ currentRow.tableName }}</el-tag>
+            <a-tag color="blue">{{ currentRow.tableName }}</a-tag>
           </div>
           <div class="info-item">
             <span class="info-label">记录ID:</span>
@@ -173,9 +172,9 @@
           </div>
           <div class="info-item">
             <span class="info-label">操作类型:</span>
-            <el-tag :type="getActionType(currentRow.action)" size="small">
+            <a-tag :color="getActionColor(currentRow.action)">
               {{ getActionLabel(currentRow.action) }}
-            </el-tag>
+            </a-tag>
           </div>
         </div>
 
@@ -191,7 +190,7 @@
           <pre class="json-data">{{ formatJson(currentRow.newData) }}</pre>
           <div v-if="currentRow.diffFields" class="diff-section">
             <h4 class="section-title">变更字段</h4>
-            <el-tag type="warning" size="small">{{ currentRow.diffFields }}</el-tag>
+            <a-tag color="orange">{{ currentRow.diffFields }}</a-tag>
           </div>
         </div>
 
@@ -202,16 +201,22 @@
       </div>
 
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <a-button @click="detailDialogVisible = false">关闭</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { DataLine, Delete, Search, Refresh, User } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import {
+  IconBarChart,
+  IconDelete,
+  IconSearch,
+  IconRefresh,
+  IconUser
+} from '@arco-design/web-vue/es/icon'
 import { getDataLogList, deleteDataLog, deleteDataLogsBatch } from '@/api/audit'
 
 // 搜索表单
@@ -224,7 +229,7 @@ const searchForm = reactive({
 })
 
 // 日期范围
-const dateRange = ref<[string, string]>([])
+const dateRange = ref<[string, string]>()
 
 // 监听日期范围变化
 watch(dateRange, (newVal) => {
@@ -267,7 +272,7 @@ const loadLogList = async () => {
     logList.value = res.list || []
     pagination.total = res.total || 0
   } catch (error) {
-    ElMessage.error('获取日志列表失败')
+    Message.error('获取日志列表失败')
   } finally {
     loading.value = false
   }
@@ -286,49 +291,49 @@ const handleReset = () => {
   searchForm.action = ''
   searchForm.startTime = ''
   searchForm.endTime = ''
-  dateRange.value = []
+  dateRange.value = undefined
   pagination.page = 1
   loadLogList()
 }
 
 // 删除
 const handleDelete = (row: any) => {
-  ElMessageBox.confirm('确定要删除这条日志吗?', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteDataLog(row.id)
-      ElMessage.success('删除成功')
-      loadLogList()
-    } catch (error) {
-      ElMessage.error('删除失败')
+  Modal.confirm({
+    title: '提示',
+    content: '确定要删除这条日志吗?',
+    onOk: async () => {
+      try {
+        await deleteDataLog(row.id)
+        Message.success('删除成功')
+        loadLogList()
+      } catch (error) {
+        Message.error('删除失败')
+      }
     }
   })
 }
 
 // 批量删除
 const handleBatchDelete = () => {
-  ElMessageBox.confirm(`确定要删除选中的 ${selectedIds.value.length} 条日志吗?`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteDataLogsBatch(selectedIds.value)
-      ElMessage.success('删除成功')
-      selectedIds.value = []
-      loadLogList()
-    } catch (error) {
-      ElMessage.error('删除失败')
+  Modal.confirm({
+    title: '提示',
+    content: `确定要删除选中的 ${selectedIds.value.length} 条日志吗?`,
+    onOk: async () => {
+      try {
+        await deleteDataLogsBatch(selectedIds.value)
+        Message.success('删除成功')
+        selectedIds.value = []
+        loadLogList()
+      } catch (error) {
+        Message.error('删除失败')
+      }
     }
   })
 }
 
 // 选择变化
-const handleSelectionChange = (selection: any[]) => {
-  selectedIds.value = selection.map(item => item.id)
+const handleSelectionChange = (rowKeys: (string | number)[]) => {
+  selectedIds.value = rowKeys as number[]
 }
 
 // 显示数据差异
@@ -337,14 +342,14 @@ const showDataDiff = (row: any) => {
   detailDialogVisible.value = true
 }
 
-// 获取操作类型标签样式
-const getActionType = (action: string) => {
+// 获取操作类型标签颜色
+const getActionColor = (action: string) => {
   const map: Record<string, string> = {
-    'create': 'success',
-    'update': 'warning',
-    'delete': 'danger'
+    'create': 'green',
+    'update': 'orange',
+    'delete': 'red'
   }
-  return map[action] || 'info'
+  return map[action] || 'blue'
 }
 
 // 获取操作类型标签
@@ -391,7 +396,7 @@ onMounted(() => {
   align-items: flex-start;
   margin-bottom: 16px;
   padding: 16px 20px;
-  background: #fff;
+  background: var(--ops-header-bg);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
@@ -405,29 +410,28 @@ onMounted(() => {
 .page-title-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, var(--ops-primary) 0%, var(--ops-primary-light) 100%);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-secondary);
   line-height: 1.4;
 }
 
@@ -437,39 +441,11 @@ onMounted(() => {
   align-items: center;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.black-button.danger {
-  background-color: #f56c6c !important;
-  border-color: #f56c6c !important;
-}
-
-.black-button.danger:hover {
-  background-color: #f78989 !important;
-}
-
-.black-button:disabled {
-  background-color: #c0c4cc !important;
-  border-color: #c0c4cc !important;
-}
-
 /* 筛选栏 */
 .filter-bar {
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--ops-header-bg);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   display: flex;
@@ -489,13 +465,9 @@ onMounted(() => {
   width: 260px;
 }
 
-.filter-icon {
-  color: #d4af37;
-}
-
 /* 表格容器 */
 .table-wrapper {
-  background: #fff;
+  background: var(--ops-header-bg);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   overflow: hidden;
@@ -505,27 +477,10 @@ onMounted(() => {
   width: 100%;
 }
 
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row td) {
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
 .id-text {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
 }
 
 .user-cell {
@@ -535,16 +490,8 @@ onMounted(() => {
 }
 
 .user-icon {
-  color: #d4af37;
+  color: var(--ops-primary);
   font-size: 16px;
-}
-
-.detail-btn {
-  color: #d4af37;
-}
-
-.detail-btn:hover {
-  color: #bfa13f;
 }
 
 /* 操作按钮 */
@@ -554,46 +501,16 @@ onMounted(() => {
   justify-content: center;
 }
 
-.action-btn {
-  color: #d4af37;
-  padding: 4px;
-}
-
-.action-btn:hover {
-  color: #bfa13f;
-}
-
-.action-btn.danger {
-  color: #f56c6c;
-}
-
-.action-btn.danger:hover {
-  color: #f78989;
-}
-
 /* 分页 */
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  background: var(--ops-header-bg);
+  border-top: 1px solid var(--ops-border-color);
 }
 
 /* 详情对话框 */
-.detail-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: #d4af37;
-  border-radius: 8px 8px 0 0;
-  padding: 20px 24px;
-}
-
-.detail-dialog :deep(.el-dialog__title) {
-  color: #d4af37;
-  font-size: 16px;
-  font-weight: 600;
-}
-
 .detail-content {
   display: flex;
   flex-direction: column;
@@ -605,9 +522,9 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 20px;
   padding: 16px;
-  background: #f8fafc;
+  background: var(--ops-content-bg);
   border-radius: 8px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--ops-border-color);
 }
 
 .info-item {
@@ -617,14 +534,14 @@ onMounted(() => {
 }
 
 .info-label {
-  color: #606266;
+  color: var(--ops-text-secondary);
   font-weight: 600;
   font-size: 14px;
   min-width: 70px;
 }
 
 .info-value {
-  color: #303133;
+  color: var(--ops-text-primary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -636,7 +553,7 @@ onMounted(() => {
 .section-title {
   margin: 16px 0 8px 0;
   font-size: 14px;
-  color: #606266;
+  color: var(--ops-text-secondary);
   font-weight: 600;
 }
 
@@ -646,7 +563,7 @@ onMounted(() => {
 
 .json-data {
   background: #1a1a1a;
-  color: #d4af37;
+  color: #4ade80;
   padding: 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -654,6 +571,13 @@ onMounted(() => {
   max-height: 300px;
   overflow-y: auto;
   margin: 0;
-  border: 1px solid #d4af37;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+/* 深色模式适配 */
+body[arco-theme='dark'] .json-data {
+  background: #0a0a0a;
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.2);
 }
 </style>

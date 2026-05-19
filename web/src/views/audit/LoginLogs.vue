@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="page-title-group">
         <div class="page-title-icon">
-          <el-icon><CircleCheck /></el-icon>
+          <icon-check-circle />
         </div>
         <div>
           <h2 class="page-title">登录日志</h2>
@@ -12,137 +12,136 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button v-permission="'login-logs:search'" class="black-button" @click="handleSearch">
-          <el-icon style="margin-right: 6px;"><Search /></el-icon>
+        <a-button v-permission="'login-logs:search'" type="primary" @click="handleSearch">
+          <template #icon><icon-search /></template>
           查询
-        </el-button>
-        <el-button class="black-button" @click="handleReset">
-          <el-icon style="margin-right: 6px;"><Refresh /></el-icon>
+        </a-button>
+        <a-button @click="handleReset">
+          <template #icon><icon-refresh /></template>
           重置
-        </el-button>
-        <el-button v-permission="'login-logs:batch-delete'" class="black-button danger" @click="handleBatchDelete" :disabled="selectedIds.length === 0">
-          <el-icon style="margin-right: 6px;"><Delete /></el-icon>
+        </a-button>
+        <a-button v-permission="'login-logs:batch-delete'" status="danger" @click="handleBatchDelete" :disabled="selectedIds.length === 0">
+          <template #icon><icon-delete /></template>
           批量删除
-        </el-button>
+        </a-button>
       </div>
     </div>
 
     <!-- 筛选栏 -->
     <div class="filter-bar">
-      <el-input
+      <a-input
         v-model="searchForm.username"
         placeholder="搜索用户名..."
-        clearable
+        allow-clear
         class="filter-input"
       >
         <template #prefix>
-          <el-icon class="filter-icon"><User /></el-icon>
+          <icon-user />
         </template>
-      </el-input>
-      <el-select
+      </a-input>
+      <a-select
         v-model="searchForm.loginType"
         placeholder="登录类型"
-        clearable
+        allow-clear
         class="filter-select"
       >
-        <el-option label="Web" value="web" />
-        <el-option label="SSH" value="ssh" />
-        <el-option label="API" value="api" />
-      </el-select>
-      <el-select
+        <a-option label="Web" value="web" />
+        <a-option label="SSH" value="ssh" />
+        <a-option label="API" value="api" />
+      </a-select>
+      <a-select
         v-model="searchForm.loginStatus"
         placeholder="登录状态"
-        clearable
+        allow-clear
         class="filter-select"
       >
-        <el-option label="成功" value="success" />
-        <el-option label="失败" value="failed" />
-      </el-select>
-      <el-date-picker
+        <a-option label="成功" value="success" />
+        <a-option label="失败" value="failed" />
+      </a-select>
+      <a-range-picker
         v-model="dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="YYYY-MM-DD"
+        format="YYYY-MM-DD"
         class="filter-date"
       />
     </div>
 
     <!-- 数据表格 -->
     <div class="table-wrapper">
-      <el-table
+      <a-table
         :data="logList"
-        v-loading="loading"
+        :loading="loading"
+        :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: false }"
         @selection-change="handleSelectionChange"
+        :pagination="false"
         class="modern-table"
-        size="default"
       >
-        <el-table-column type="selection" width="55" />
-        <el-table-column label="ID" prop="id" width="80" align="center">
-          <template #default="{ row }">
-            <span class="id-text">#{{ row.id }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="用户名" prop="username" min-width="140">
-          <template #default="{ row }">
-            <div class="user-cell">
-              <el-icon class="user-icon"><User /></el-icon>
-              <span>{{ row.realName || row.username }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="登录类型" prop="loginType" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getLoginTypeTag(row.loginType)" size="small">
-              {{ row.loginType.toUpperCase() }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" prop="loginStatus" width="80" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.loginStatus === 'success' ? 'success' : 'danger'" size="small">
-              {{ row.loginStatus === 'success' ? '成功' : '失败' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="登录时间" prop="loginTime" width="170" />
-        <el-table-column label="登出时间" prop="logoutTime" width="170">
-          <template #default="{ row }">
-            <span>{{ row.logoutTime || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="IP地址" prop="ip" width="130" />
-        <el-table-column label="登录地点" prop="location" min-width="120" show-overflow-tooltip />
-        <el-table-column label="失败原因" prop="failReason" min-width="150" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.loginStatus === 'failed'" class="fail-reason">{{ row.failReason || '未知错误' }}</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right" align="center">
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-tooltip content="删除" placement="top">
-                <el-button v-permission="'login-logs:delete'" link class="action-btn danger" @click="handleDelete(row)">
-                  <el-icon :size="18"><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+        <template #columns>
+          <a-table-column title="ID" data-index="id" :width="80" align="center">
+            <template #cell="{ record }">
+              <span class="id-text">#{{ record.id }}</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="用户名" data-index="username" :width="140">
+            <template #cell="{ record }">
+              <div class="user-cell">
+                <icon-user class="user-icon" />
+                <span>{{ record.realName || record.username }}</span>
+              </div>
+            </template>
+          </a-table-column>
+          <a-table-column title="登录类型" data-index="loginType" :width="100">
+            <template #cell="{ record }">
+              <a-tag :color="getLoginTypeColor(record.loginType)">
+                {{ record.loginType.toUpperCase() }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="状态" data-index="loginStatus" :width="80" align="center">
+            <template #cell="{ record }">
+              <a-tag :color="record.loginStatus === 'success' ? 'green' : 'red'">
+                {{ record.loginStatus === 'success' ? '成功' : '失败' }}
+              </a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="登录时间" data-index="loginTime" :width="170" />
+          <a-table-column title="登出时间" data-index="logoutTime" :width="170">
+            <template #cell="{ record }">
+              <span>{{ record.logoutTime || '-' }}</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="IP地址" data-index="ip" :width="130" />
+          <a-table-column title="登录地点" data-index="location" :width="120" :ellipsis="true" :tooltip="true" />
+          <a-table-column title="失败原因" data-index="failReason" :width="150" :ellipsis="true" :tooltip="true">
+            <template #cell="{ record }">
+              <span v-if="record.loginStatus === 'failed'" class="fail-reason">{{ record.failReason || '未知错误' }}</span>
+              <span v-else>-</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="操作" :width="80" fixed="right" align="center">
+            <template #cell="{ record }">
+              <div class="action-buttons">
+                <a-tooltip content="删除">
+                  <a-button v-permission="'login-logs:delete'" type="text" status="danger" @click="handleDelete(record)">
+                    <template #icon><icon-delete /></template>
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
 
       <!-- 分页 -->
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
+        <a-pagination
+          v-model:current="pagination.page"
           v-model:page-size="pagination.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
           :total="pagination.total"
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadLogList"
-          @current-change="loadLogList"
+          :page-size-options="[10, 20, 50, 100]"
+          show-total
+          show-page-size
+          @change="loadLogList"
+          @page-size-change="loadLogList"
         />
       </div>
     </div>
@@ -151,8 +150,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck, Delete, Search, Refresh, User } from '@element-plus/icons-vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import {
+  IconCheckCircle,
+  IconDelete,
+  IconSearch,
+  IconRefresh,
+  IconUser
+} from '@arco-design/web-vue/es/icon'
 import { getLoginLogList, deleteLoginLog, deleteLoginLogsBatch } from '@/api/audit'
 
 // 搜索表单
@@ -165,7 +170,7 @@ const searchForm = reactive({
 })
 
 // 日期范围
-const dateRange = ref<[string, string]>([])
+const dateRange = ref<[string, string]>()
 
 // 监听日期范围变化
 watch(dateRange, (newVal) => {
@@ -204,7 +209,7 @@ const loadLogList = async () => {
     logList.value = res.list || []
     pagination.total = res.total || 0
   } catch (error) {
-    ElMessage.error('获取日志列表失败')
+    Message.error('获取日志列表失败')
   } finally {
     loading.value = false
   }
@@ -223,59 +228,59 @@ const handleReset = () => {
   searchForm.loginStatus = ''
   searchForm.startTime = ''
   searchForm.endTime = ''
-  dateRange.value = []
+  dateRange.value = undefined
   pagination.page = 1
   loadLogList()
 }
 
 // 删除
 const handleDelete = (row: any) => {
-  ElMessageBox.confirm('确定要删除这条日志吗?', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteLoginLog(row.id)
-      ElMessage.success('删除成功')
-      loadLogList()
-    } catch (error) {
-      ElMessage.error('删除失败')
+  Modal.confirm({
+    title: '提示',
+    content: '确定要删除这条日志吗?',
+    onOk: async () => {
+      try {
+        await deleteLoginLog(row.id)
+        Message.success('删除成功')
+        loadLogList()
+      } catch (error) {
+        Message.error('删除失败')
+      }
     }
   })
 }
 
 // 批量删除
 const handleBatchDelete = () => {
-  ElMessageBox.confirm(`确定要删除选中的 ${selectedIds.value.length} 条日志吗?`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteLoginLogsBatch(selectedIds.value)
-      ElMessage.success('删除成功')
-      selectedIds.value = []
-      loadLogList()
-    } catch (error) {
-      ElMessage.error('删除失败')
+  Modal.confirm({
+    title: '提示',
+    content: `确定要删除选中的 ${selectedIds.value.length} 条日志吗?`,
+    onOk: async () => {
+      try {
+        await deleteLoginLogsBatch(selectedIds.value)
+        Message.success('删除成功')
+        selectedIds.value = []
+        loadLogList()
+      } catch (error) {
+        Message.error('删除失败')
+      }
     }
   })
 }
 
 // 选择变化
-const handleSelectionChange = (selection: any[]) => {
-  selectedIds.value = selection.map(item => item.id)
+const handleSelectionChange = (rowKeys: (string | number)[]) => {
+  selectedIds.value = rowKeys as number[]
 }
 
-// 获取登录类型标签样式
-const getLoginTypeTag = (type: string) => {
+// 获取登录类型标签颜色
+const getLoginTypeColor = (type: string) => {
   const map: Record<string, string> = {
-    'web': 'success',
-    'ssh': 'warning',
-    'api': 'info'
+    'web': 'green',
+    'ssh': 'orange',
+    'api': 'blue'
   }
-  return map[type] || 'info'
+  return map[type] || 'blue'
 }
 
 // 实时搜索
@@ -302,7 +307,7 @@ onMounted(() => {
   align-items: flex-start;
   margin-bottom: 16px;
   padding: 16px 20px;
-  background: #fff;
+  background: var(--ops-header-bg);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
@@ -316,29 +321,28 @@ onMounted(() => {
 .page-title-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, var(--ops-primary) 0%, var(--ops-primary-light) 100%);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d4af37;
+  color: #fff;
   font-size: 22px;
   flex-shrink: 0;
-  border: 1px solid #d4af37;
 }
 
 .page-title {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ops-text-primary);
   line-height: 1.3;
 }
 
 .page-subtitle {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--ops-text-secondary);
   line-height: 1.4;
 }
 
@@ -348,39 +352,11 @@ onMounted(() => {
   align-items: center;
 }
 
-.black-button {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  border-color: #000000 !important;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 500;
-}
-
-.black-button:hover {
-  background-color: #333333 !important;
-  border-color: #333333 !important;
-}
-
-.black-button.danger {
-  background-color: #f56c6c !important;
-  border-color: #f56c6c !important;
-}
-
-.black-button.danger:hover {
-  background-color: #f78989 !important;
-}
-
-.black-button:disabled {
-  background-color: #c0c4cc !important;
-  border-color: #c0c4cc !important;
-}
-
 /* 筛选栏 */
 .filter-bar {
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--ops-header-bg);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   display: flex;
@@ -400,13 +376,9 @@ onMounted(() => {
   width: 260px;
 }
 
-.filter-icon {
-  color: #d4af37;
-}
-
 /* 表格容器 */
 .table-wrapper {
-  background: #fff;
+  background: var(--ops-header-bg);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   overflow: hidden;
@@ -416,27 +388,10 @@ onMounted(() => {
   width: 100%;
 }
 
-.modern-table :deep(.el-table__body-wrapper) {
-  border-radius: 0 0 12px 12px;
-}
-
-.modern-table :deep(.el-table__row) {
-  transition: background-color 0.2s ease;
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row td) {
-  height: 56px !important;
-}
-
-.modern-table :deep(.el-table__row:hover) {
-  background-color: #f8fafc !important;
-}
-
 .id-text {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 12px;
-  color: #909399;
+  color: var(--ops-text-tertiary);
 }
 
 .user-cell {
@@ -446,12 +401,12 @@ onMounted(() => {
 }
 
 .user-icon {
-  color: #d4af37;
+  color: var(--ops-primary);
   font-size: 16px;
 }
 
 .fail-reason {
-  color: #f56c6c;
+  color: var(--ops-danger);
 }
 
 /* 操作按钮 */
@@ -461,29 +416,12 @@ onMounted(() => {
   justify-content: center;
 }
 
-.action-btn {
-  color: #d4af37;
-  padding: 4px;
-}
-
-.action-btn:hover {
-  color: #bfa13f;
-}
-
-.action-btn.danger {
-  color: #f56c6c;
-}
-
-.action-btn.danger:hover {
-  color: #f78989;
-}
-
 /* 分页 */
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  background: var(--ops-header-bg);
+  border-top: 1px solid var(--ops-border-color);
 }
 </style>
