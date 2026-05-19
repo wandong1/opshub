@@ -74,27 +74,27 @@ type GroupExportData struct {
 
 // ItemExportData 巡检项导出数据
 type ItemExportData struct {
-	Name              string   `json:"name" yaml:"name"`
-	Description       string   `json:"description,omitempty" yaml:"description,omitempty"`
-	ExecutionType     string   `json:"executionType" yaml:"executionType"`
-	ExecutionStrategy string   `json:"executionStrategy" yaml:"executionStrategy"`
-	Command           string   `json:"command,omitempty" yaml:"command,omitempty"`
-	ScriptType        string   `json:"scriptType,omitempty" yaml:"scriptType,omitempty"`
-	ScriptContent     string   `json:"scriptContent,omitempty" yaml:"scriptContent,omitempty"`
-	ScriptFile        string   `json:"scriptFile,omitempty" yaml:"scriptFile,omitempty"`
-	ScriptArgs        string   `json:"scriptArgs,omitempty" yaml:"scriptArgs,omitempty"`
-	PromQLQuery       string   `json:"promqlQuery,omitempty" yaml:"promqlQuery,omitempty"`
-	HostMatchType     string   `json:"hostMatchType,omitempty" yaml:"hostMatchType,omitempty"`
-	HostTags          []string `json:"hostTags,omitempty" yaml:"hostTags,omitempty"`
-	HostIDs           []uint   `json:"hostIds,omitempty" yaml:"hostIds,omitempty"`
-	AssertionType     string   `json:"assertionType,omitempty" yaml:"assertionType,omitempty"`
-	AssertionValue    string   `json:"assertionValue,omitempty" yaml:"assertionValue,omitempty"`
-	VariableName      string   `json:"variableName,omitempty" yaml:"variableName,omitempty"`
-	VariableRegex     string   `json:"variableRegex,omitempty" yaml:"variableRegex,omitempty"`
-	InspectionLevel   string   `json:"inspectionLevel,omitempty" yaml:"inspectionLevel,omitempty"`
-	RiskLevel         string   `json:"riskLevel,omitempty" yaml:"riskLevel,omitempty"`
-	Timeout           int      `json:"timeout" yaml:"timeout"`
-	Status            string   `json:"status" yaml:"status"`
+	Name              string                   `json:"name" yaml:"name"`
+	Description       string                   `json:"description,omitempty" yaml:"description,omitempty"`
+	ExecutionType     string                   `json:"executionType" yaml:"executionType"`
+	ExecutionStrategy string                   `json:"executionStrategy" yaml:"executionStrategy"`
+	Command           string                   `json:"command,omitempty" yaml:"command,omitempty"`
+	ScriptType        string                   `json:"scriptType,omitempty" yaml:"scriptType,omitempty"`
+	ScriptContent     string                   `json:"scriptContent,omitempty" yaml:"scriptContent,omitempty"`
+	ScriptFile        string                   `json:"scriptFile,omitempty" yaml:"scriptFile,omitempty"`
+	ScriptArgs        string                   `json:"scriptArgs,omitempty" yaml:"scriptArgs,omitempty"`
+	PromQLQuery       string                   `json:"promqlQuery,omitempty" yaml:"promqlQuery,omitempty"`
+	HostMatchType     string                   `json:"hostMatchType,omitempty" yaml:"hostMatchType,omitempty"`
+	HostTags          []string                 `json:"hostTags,omitempty" yaml:"hostTags,omitempty"`
+	HostIDs           []uint                   `json:"hostIds,omitempty" yaml:"hostIds,omitempty"`
+	Assertions        []map[string]interface{} `json:"assertions,omitempty" yaml:"assertions,omitempty"`
+	AssertionLogic    string                   `json:"assertionLogic,omitempty" yaml:"assertionLogic,omitempty"`
+	VariableName      string                   `json:"variableName,omitempty" yaml:"variableName,omitempty"`
+	VariableRegex     string                   `json:"variableRegex,omitempty" yaml:"variableRegex,omitempty"`
+	InspectionLevel   string                   `json:"inspectionLevel,omitempty" yaml:"inspectionLevel,omitempty"`
+	RiskLevel         string                   `json:"riskLevel,omitempty" yaml:"riskLevel,omitempty"`
+	Timeout           int                      `json:"timeout" yaml:"timeout"`
+	Status            string                   `json:"status" yaml:"status"`
 }
 
 // GroupImportRequest 巡检组导入请求

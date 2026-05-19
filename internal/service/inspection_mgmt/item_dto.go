@@ -22,8 +22,8 @@ type ItemCreateRequest struct {
 	HostMatchType     string `json:"hostMatchType"`
 	HostTags          string `json:"hostTags"`
 	HostIDs           string `json:"hostIds"`
-	AssertionType     string `json:"assertionType"`
-	AssertionValue    string `json:"assertionValue"`
+	Assertions        string `json:"assertions"`
+	AssertionLogic    string `json:"assertionLogic"`
 	VariableName      string `json:"variableName"`
 	VariableRegex     string `json:"variableRegex"`
 	Timeout           int    `json:"timeout"`
@@ -52,8 +52,8 @@ type ItemUpdateRequest struct {
 	HostMatchType     string `json:"hostMatchType"`
 	HostTags          string `json:"hostTags"`
 	HostIDs           string `json:"hostIds"`
-	AssertionType     string `json:"assertionType"`
-	AssertionValue    string `json:"assertionValue"`
+	Assertions        string `json:"assertions"`
+	AssertionLogic    string `json:"assertionLogic"`
 	VariableName      string `json:"variableName"`
 	VariableRegex     string `json:"variableRegex"`
 	Timeout           int    `json:"timeout"`
@@ -92,8 +92,8 @@ type ItemResponse struct {
 	HostMatchType     string `json:"hostMatchType"`
 	HostTags          string `json:"hostTags"`
 	HostIDs           string `json:"hostIds"`
-	AssertionType     string `json:"assertionType"`
-	AssertionValue    string `json:"assertionValue"`
+	Assertions        string `json:"assertions"`
+	AssertionLogic    string `json:"assertionLogic"`
 	VariableName      string `json:"variableName"`
 	VariableRegex     string `json:"variableRegex"`
 	Timeout           int    `json:"timeout"`

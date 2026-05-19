@@ -354,11 +354,15 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 			}
 
 			// 获取该巡检项的有效断言配置（覆盖后）
-			effectiveAssertionType := itm.AssertionType
-			effectiveAssertionValue := itm.AssertionValue
+			effectiveAssertions := itm.Assertions
+			effectiveAssertionLogic := itm.AssertionLogic
 			if itemOverride != nil {
-				effectiveAssertionType = itemOverride.AssertionType
-				effectiveAssertionValue = itemOverride.AssertionValue
+				if itemOverride.Assertions != "" {
+					effectiveAssertions = itemOverride.Assertions
+				}
+				if itemOverride.AssertionLogic != "" {
+					effectiveAssertionLogic = itemOverride.AssertionLogic
+				}
 			}
 
 			mu.Lock()
@@ -380,8 +384,8 @@ func (e *InspectionExecutor) Execute(ctx context.Context, task scheduler.Task) e
 					Command:            itm.Command,
 					ScriptType:         itm.ScriptType,
 					ScriptContent:      itm.ScriptContent,
-					AssertionType:      effectiveAssertionType,
-					AssertionValue:     effectiveAssertionValue,
+					Assertions:         effectiveAssertions,
+					AssertionLogic:     effectiveAssertionLogic,
 					// 巡检级别和风险等级（快照）
 					InspectionLevel:    itm.InspectionLevel,
 					RiskLevel:          itm.RiskLevel,
@@ -692,8 +696,8 @@ type RunSyncItemDetail struct {
 	Command          string   `json:"command,omitempty"`
 	ScriptType       string   `json:"script_type,omitempty"`
 	ScriptContent    string   `json:"script_content,omitempty"`
-	AssertionType    string   `json:"assertion_type,omitempty"`
-	AssertionValue   string   `json:"assertion_value,omitempty"`
+	Assertions       string   `json:"assertions,omitempty"`
+	AssertionLogic   string   `json:"assertion_logic,omitempty"`
 	InspectionLevel  string   `json:"inspectionLevel,omitempty"`
 	RiskLevel        string   `json:"riskLevel,omitempty"`
 	// PromQL 相关字段
@@ -913,11 +917,15 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 				group, _ := e.groupRepo.GetByID(ctx, itm.GroupID)
 
 				// 计算实际使用的断言配置（应用覆盖）
-				effectiveAssertionType := itm.AssertionType
-				effectiveAssertionValue := itm.AssertionValue
+				effectiveAssertions := itm.Assertions
+				effectiveAssertionLogic := itm.AssertionLogic
 				if itemOverride != nil {
-					effectiveAssertionType = itemOverride.AssertionType
-					effectiveAssertionValue = itemOverride.AssertionValue
+					if itemOverride.Assertions != "" {
+						effectiveAssertions = itemOverride.Assertions
+					}
+					if itemOverride.AssertionLogic != "" {
+						effectiveAssertionLogic = itemOverride.AssertionLogic
+					}
 				}
 
 				d := RunSyncItemDetail{
@@ -935,8 +943,8 @@ func (e *InspectionExecutor) ExecuteSync(ctx context.Context, taskID uint) (*Run
 					Command:          itm.Command,
 					ScriptType:       itm.ScriptType,
 					ScriptContent:    itm.ScriptContent,
-					AssertionType:    effectiveAssertionType,
-					AssertionValue:   effectiveAssertionValue,
+					Assertions:       effectiveAssertions,
+					AssertionLogic:   effectiveAssertionLogic,
 					InspectionLevel:  itm.InspectionLevel,
 					RiskLevel:        itm.RiskLevel,
 					// 执行结果

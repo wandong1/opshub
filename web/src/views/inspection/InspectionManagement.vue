@@ -606,54 +606,107 @@
                   </a-form-item>
                 </template>
 
-                <!-- 断言配置 -->
+                <!-- 断言配置（多条断言支持） -->
                 <a-form-item label="断言规则" :label-col-flex="'100px'">
-                  <a-row :gutter="8">
-                    <a-col :span="10">
-                      <a-select v-model="item.assertionType" placeholder="选择断言类型" allow-clear>
-                        <!-- 拨测类型显示拨测专用断言 -->
-                        <template v-if="item.executionType === 'probe'">
-                          <a-optgroup label="拨测专用">
-                            <a-option value="probe_success">拨测是否成功</a-option>
-                            <a-option value="probe_latency_lt">响应时间小于（毫秒）</a-option>
-                            <a-option value="probe_assertion_all">原始断言全部通过</a-option>
-                            <a-option value="probe_status_code">HTTP状态码等于</a-option>
-                          </a-optgroup>
-                        </template>
-                        <!-- PromQL 类型只显示数值比较 -->
-                        <template v-else-if="item.executionType === 'promql'">
-                          <a-option value="gt">大于 (&gt;)</a-option>
-                          <a-option value="gte">大于等于 (&gt;=)</a-option>
-                          <a-option value="lt">小于 (&lt;)</a-option>
-                          <a-option value="lte">小于等于 (&lt;=)</a-option>
-                          <a-option value="eq">等于 (==)</a-option>
-                          <a-option value="neq">不等于 (!=)</a-option>
-                        </template>
-                        <!-- 命令和脚本类型显示所有断言 -->
-                        <template v-else>
-                          <a-option value="gt">大于 (&gt;)</a-option>
-                          <a-option value="gte">大于等于 (&gt;=)</a-option>
-                          <a-option value="lt">小于 (&lt;)</a-option>
-                          <a-option value="lte">小于等于 (&lt;=)</a-option>
-                          <a-option value="eq">等于 (==)</a-option>
-                          <a-option value="contains">包含</a-option>
-                          <a-option value="not_contains">不包含</a-option>
-                          <a-option value="regex">正则匹配</a-option>
-                          <a-option value="not_regex">反正则匹配</a-option>
-                        </template>
-                      </a-select>
-                    </a-col>
-                    <a-col :span="14">
-                      <a-input
-                        v-model="item.assertionValue"
-                        :placeholder="getAssertionPlaceholder(item.assertionType, item.executionType)"
-                        :disabled="!item.assertionType || isAssertionValueDisabled(item.assertionType)"
-                      />
-                    </a-col>
-                  </a-row>
+                  <div class="assertion-config">
+                    <!-- 断言逻辑选择 -->
+                    <div class="assertion-logic" v-if="item.assertionList && item.assertionList.length > 1">
+                      <span class="logic-label">断言逻辑:</span>
+                      <a-radio-group v-model="item.assertionLogic" type="button" size="small">
+                        <a-radio value="and">AND（所有通过）</a-radio>
+                        <a-radio value="or">OR（任一通过）</a-radio>
+                      </a-radio-group>
+                    </div>
+
+                    <!-- 断言列表 -->
+                    <div class="assertion-list">
+                      <div
+                        v-for="(assertion, index) in item.assertionList"
+                        :key="index"
+                        class="assertion-item"
+                      >
+                        <div class="assertion-header">
+                          <span class="assertion-label">断言 {{ index + 1 }}:</span>
+                          <a-button
+                            type="text"
+                            status="danger"
+                            size="small"
+                            @click="removeAssertion(item, index)"
+                          >
+                            <template #icon><icon-delete /></template>
+                            删除
+                          </a-button>
+                        </div>
+
+                        <a-row :gutter="8">
+                          <a-col :span="10">
+                            <a-select
+                              v-model="assertion.type"
+                              placeholder="选择断言类型"
+                              allow-clear
+                              @change="onAssertionTypeChange(item, index)"
+                            >
+                              <!-- 拨测类型显示拨测专用断言 -->
+                              <template v-if="item.executionType === 'probe'">
+                                <a-optgroup label="拨测专用">
+                                  <a-option value="probe_success">拨测是否成功</a-option>
+                                  <a-option value="probe_latency_lt">响应时间小于（毫秒）</a-option>
+                                  <a-option value="probe_assertion_all">原始断言全部通过</a-option>
+                                  <a-option value="probe_status_code">HTTP状态码等于</a-option>
+                                </a-optgroup>
+                              </template>
+
+                              <!-- PromQL 类型只显示数值比较 -->
+                              <template v-else-if="item.executionType === 'promql'">
+                                <a-option value="gt">大于 (&gt;)</a-option>
+                                <a-option value="gte">大于等于 (&gt;=)</a-option>
+                                <a-option value="lt">小于 (&lt;)</a-option>
+                                <a-option value="lte">小于等于 (&lt;=)</a-option>
+                                <a-option value="eq">等于 (==)</a-option>
+                                <a-option value="neq">不等于 (!=)</a-option>
+                              </template>
+
+                              <!-- 命令和脚本类型显示所有断言 -->
+                              <template v-else>
+                                <a-option value="gt">大于 (&gt;)</a-option>
+                                <a-option value="gte">大于等于 (&gt;=)</a-option>
+                                <a-option value="lt">小于 (&lt;)</a-option>
+                                <a-option value="lte">小于等于 (&lt;=)</a-option>
+                                <a-option value="eq">等于 (==)</a-option>
+                                <a-option value="contains">包含</a-option>
+                                <a-option value="not_contains">不包含</a-option>
+                                <a-option value="regex">正则匹配</a-option>
+                                <a-option value="not_regex">反正则匹配</a-option>
+                              </template>
+                            </a-select>
+                          </a-col>
+
+                          <a-col :span="14">
+                            <a-input
+                              v-model="assertion.value"
+                              :placeholder="getAssertionPlaceholder(assertion.type, item.executionType)"
+                              :disabled="!assertion.type || isAssertionValueDisabled(assertion.type)"
+                            />
+                          </a-col>
+                        </a-row>
+                      </div>
+
+                      <!-- 添加断言按钮 -->
+                      <a-button
+                        type="dashed"
+                        @click="addAssertion(item)"
+                        :disabled="item.assertionList && item.assertionList.length >= 10"
+                        style="width: 100%; margin-top: 8px;"
+                      >
+                        <template #icon><icon-plus /></template>
+                        添加断言 {{ item.assertionList && item.assertionList.length > 0 ? `(${item.assertionList.length}/10)` : '(最多10条)' }}
+                      </a-button>
+                    </div>
+                  </div>
+
                   <template #extra>
                     <span style="color: var(--ops-text-tertiary); font-size: 12px;">
-                      {{ getAssertionExtraText(item.executionType, item.assertionType) }}
+                      {{ getAssertionExtraText(item) }}
                     </span>
                   </template>
                 </a-form-item>
@@ -792,24 +845,49 @@
                   <span class="detail-label">超时时间:</span>
                   <span class="detail-value">{{ log.details.timeout }}s</span>
                 </div>
-                <div v-if="log.details.assertionType" class="detail-item">
-                  <span class="detail-label">断言类型:</span>
-                  <span class="detail-value">{{ getAssertionTypeText(log.details.assertionType) }}</span>
-                </div>
-                <div v-if="log.details.assertionValue" class="detail-item">
-                  <span class="detail-label">断言阈值:</span>
-                  <span class="detail-value">{{ log.details.assertionValue }}</span>
+
+                <!-- 多条断言显示 -->
+                <div v-if="log.details.assertions && log.details.assertions.length > 0" class="detail-item">
+                  <span class="detail-label">断言规则:</span>
+                  <div class="assertion-rules">
+                    <div class="assertion-logic-tag">
+                      <a-tag size="small" :color="log.details.assertionLogic === 'and' ? 'blue' : 'orange'">
+                        {{ log.details.assertionLogic === 'and' ? 'AND（所有通过）' : 'OR（任一通过）' }}
+                      </a-tag>
+                    </div>
+                    <div v-for="(assertion, idx) in log.details.assertions" :key="idx" class="assertion-rule-item">
+                      <span class="assertion-index">{{ idx + 1 }}.</span>
+                      <span class="assertion-type">{{ getAssertionTypeText(assertion.type) }}</span>
+                      <span v-if="assertion.value" class="assertion-value">{{ assertion.value }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div class="log-output">
                 <pre>{{ log.output || log.errorMessage }}</pre>
               </div>
+
+              <!-- 多条断言结果显示 -->
               <div v-if="log.assertionResult" class="log-assertion">
                 <a-tag :color="log.assertionResult === 'pass' ? 'green' : log.assertionResult === 'skip' ? 'gray' : 'red'">
                   断言: {{ log.assertionResult === 'pass' ? '通过' : log.assertionResult === 'skip' ? '跳过' : '失败' }}
                 </a-tag>
-                <span v-if="log.assertionDetails">{{ log.assertionDetails.message }}</span>
+
+                <!-- 显示断言详情 -->
+                <div v-if="log.assertionDetails && log.assertionDetails.details" class="assertion-details-list">
+                  <div v-for="(detail, idx) in log.assertionDetails.details" :key="idx" class="assertion-detail-item">
+                    <a-tag size="small" :color="detail.pass ? 'green' : 'red'">
+                      断言{{ idx + 1 }}
+                    </a-tag>
+                    <span class="assertion-detail-text">{{ detail.message }}</span>
+                  </div>
+                </div>
+
+                <!-- 显示总体消息 -->
+                <span v-if="log.assertionDetails && log.assertionDetails.message" class="assertion-message">
+                  {{ log.assertionDetails.message }}
+                </span>
               </div>
             </div>
             <a-empty v-if="testLogs.length === 0 && !testRunning" description="暂无执行日志" />
@@ -1131,23 +1209,91 @@ const isAssertionValueDisabled = (assertionType: string) => {
 }
 
 // 获取断言配置的额外说明文本
-const getAssertionExtraText = (executionType: string, assertionType: string) => {
-  if (executionType === 'probe') {
-    if (assertionType === 'probe_success') {
-      return '验证拨测是否执行成功'
-    } else if (assertionType === 'probe_latency_lt') {
-      return '验证响应时间是否小于指定阈值（毫秒）'
-    } else if (assertionType === 'probe_assertion_all') {
-      return '验证拨测配置中的原始断言是否全部通过'
-    } else if (assertionType === 'probe_status_code') {
-      return '验证 HTTP 状态码是否等于期望值'
-    }
-    return '对拨测结果进行二次断言验证'
-  } else if (executionType === 'promql') {
-    return 'PromQL 查询结果将自动提取指标值进行数值比较'
+const getAssertionExtraText = (item: any) => {
+  if (!item.assertionList || item.assertionList.length === 0) {
+    return '对执行结果进行断言验证'
   }
-  return '对执行结果进行断言验证'
+
+  const logic = item.assertionLogic || 'and'
+  const count = item.assertionList.length
+
+  if (logic === 'and') {
+    return `AND逻辑 - 所有断言（${count}条）必须全部通过才算成功`
+  } else {
+    return `OR逻辑 - 任一断言（${count}条）通过即算成功`
+  }
 }
+
+// 添加断言
+const addAssertion = (item: any) => {
+  if (!item.assertionList) {
+    item.assertionList = []
+  }
+
+  // 限制最多10条
+  if (item.assertionList.length >= 10) {
+    Message.warning('最多只能添加10条断言')
+    return
+  }
+
+  item.assertionList.push({
+    type: '',
+    value: '',
+    description: ''
+  })
+
+  // 默认断言逻辑为 AND
+  if (!item.assertionLogic) {
+    item.assertionLogic = 'and'
+  }
+}
+
+// 删除断言
+const removeAssertion = (item: any, index: number) => {
+  if (item.assertionList && item.assertionList.length > index) {
+    item.assertionList.splice(index, 1)
+  }
+}
+
+// 断言类型变化时自动生成描述
+const onAssertionTypeChange = (item: any, index: number) => {
+  const assertion = item.assertionList[index]
+  if (assertion && assertion.type) {
+    assertion.description = getAssertionTypeText(assertion.type)
+  }
+}
+
+// 保存时序列化断言列表
+const serializeAssertions = (item: any) => {
+  if (item.assertionList && item.assertionList.length > 0) {
+    // 过滤掉空的断言
+    const validAssertions = item.assertionList.filter((a: any) => a.type)
+    if (validAssertions.length > 0) {
+      return JSON.stringify(validAssertions)
+    }
+  }
+  return ''
+}
+
+// 加载时反序列化断言列表
+const deserializeAssertions = (item: any) => {
+  if (item.assertions && item.assertions !== '[]') {
+    try {
+      item.assertionList = JSON.parse(item.assertions)
+    } catch (e) {
+      console.error('Failed to parse assertions:', e)
+      item.assertionList = []
+    }
+  } else {
+    item.assertionList = []
+  }
+
+  // 设置默认断言逻辑
+  if (!item.assertionLogic) {
+    item.assertionLogic = 'and'
+  }
+}
+
 
 
 const toggleLogDetails = (index: number) => {
@@ -1309,8 +1455,9 @@ const handleEdit = async (record: any) => {
         probeCategory: item.probeCategory || '',
         probeType: item.probeType || '',
         probeConfigId: item.probeConfigId || undefined,
-        assertionType: item.assertionType || '',
-        assertionValue: item.assertionValue || '',
+        assertions: item.assertions || '',
+        assertionLogic: item.assertionLogic || 'and',
+        assertionList: [], // 将在下面反序列化
         variableName: item.variableName || '',
         variableRegex: item.variableRegex || '',
         timeout: item.timeout || 60,
@@ -1322,6 +1469,11 @@ const handleEdit = async (record: any) => {
         inspectionLevel: item.inspectionLevel || 'medium',
         riskLevel: item.riskLevel || 'medium'
       }
+    })
+
+    // 反序列化断言列表
+    inspectionItems.value.forEach(item => {
+      deserializeAssertions(item)
     })
 
     console.log('解析后的巡检项列表:', inspectionItems.value)
@@ -1555,13 +1707,31 @@ const handleTestRun = async (record: any) => {
             details.timeout = item.timeout
             hasDetails = true
           }
-          if (item.assertionType) {
-            details.assertionType = item.assertionType
-            hasDetails = true
+
+          // 处理断言列表
+          if (item.assertions) {
+            try {
+              const assertions = typeof item.assertions === 'string'
+                ? JSON.parse(item.assertions)
+                : item.assertions
+              if (assertions && assertions.length > 0) {
+                details.assertions = assertions
+                details.assertionLogic = item.assertionLogic || 'and'
+                hasDetails = true
+              }
+            } catch (e) {
+              console.error('解析断言失败:', e)
+            }
           }
-          if (item.assertionValue) {
-            details.assertionValue = item.assertionValue
-            hasDetails = true
+        }
+
+        // 处理断言详情
+        let assertionDetails = result.assertionDetails
+        if (typeof assertionDetails === 'string') {
+          try {
+            assertionDetails = JSON.parse(assertionDetails)
+          } catch (e) {
+            console.error('解析断言详情失败:', e)
           }
         }
 
@@ -1575,7 +1745,7 @@ const handleTestRun = async (record: any) => {
           errorMessage: result.errorMessage,
           duration: Math.round(result.duration * 1000),
           assertionResult: result.assertionResult,
-          assertionDetails: result.assertionDetails,
+          assertionDetails: assertionDetails,
           inspectionLevel: result.inspectionLevel || item?.inspectionLevel,
           riskLevel: result.riskLevel || item?.riskLevel,
           details: hasDetails ? details : null,
@@ -1635,13 +1805,19 @@ const handleTestRunItem = async (itemIndex: number) => {
     // 准备巡检项数据（不保存到数据库）
     console.log('[TestRun] item.scriptContent:', JSON.stringify(item.scriptContent))
     console.log('[TestRun] item.executionType:', item.executionType)
+
+    // 序列化断言列表
+    const assertions = serializeAssertions(item)
+
     const itemData = {
       ...item,
       groupId: groupId,
       sort: itemIndex,
       executionStrategy: 'concurrent',
       hostTags: JSON.stringify(item.hostTags || []),
-      hostIds: JSON.stringify(item.hostIds || [])
+      hostIds: JSON.stringify(item.hostIds || []),
+      assertions: assertions,
+      assertionLogic: item.assertionLogic || 'and'
     }
 
     // 使用新的不保存数据的测试 API
@@ -1676,31 +1852,42 @@ const handleTestRunItem = async (itemIndex: number) => {
         details.timeout = item.timeout
         hasDetails = true
       }
-      if (item.assertionType) {
-        details.assertionType = item.assertionType
-        hasDetails = true
-      }
-      if (item.assertionValue) {
-        details.assertionValue = item.assertionValue
+
+      // 处理断言列表
+      if (item.assertionList && item.assertionList.length > 0) {
+        details.assertions = item.assertionList
+        details.assertionLogic = item.assertionLogic || 'and'
         hasDetails = true
       }
 
-      testLogs.value = res.results.map((result: any) => ({
-        status: result.status,
-        itemName: result.itemName || item.name || '未命名巡检项',
-        executionType: item.executionType || 'command',
-        hostName: result.hostName,
-        hostIp: result.hostIp || '',
-        output: result.output,
-        errorMessage: result.errorMessage,
-        duration: Math.round(result.duration * 1000),
-        assertionResult: result.assertionResult,
-        assertionDetails: result.assertionDetails,
-        inspectionLevel: result.inspectionLevel || item.inspectionLevel,
-        riskLevel: result.riskLevel || item.riskLevel,
-        details: hasDetails ? details : null,
-        detailsExpanded: false
-      }))
+      // 处理断言详情
+      testLogs.value = res.results.map((result: any) => {
+        let assertionDetails = result.assertionDetails
+        if (typeof assertionDetails === 'string') {
+          try {
+            assertionDetails = JSON.parse(assertionDetails)
+          } catch (e) {
+            console.error('解析断言详情失败:', e)
+          }
+        }
+
+        return {
+          status: result.status,
+          itemName: result.itemName || item.name || '未命名巡检项',
+          executionType: item.executionType || 'command',
+          hostName: result.hostName,
+          hostIp: result.hostIp || '',
+          output: result.output,
+          errorMessage: result.errorMessage,
+          duration: Math.round(result.duration * 1000),
+          assertionResult: result.assertionResult,
+          assertionDetails: assertionDetails,
+          inspectionLevel: result.inspectionLevel || item.inspectionLevel,
+          riskLevel: result.riskLevel || item.riskLevel,
+          details: hasDetails ? details : null,
+          detailsExpanded: false
+        }
+      })
       Message.success(`测试执行完成`)
     }
   } catch (error: any) {
@@ -1800,13 +1987,18 @@ const handleSubmit = async () => {
     // 保存巡检项
     if (inspectionItems.value.length > 0) {
       const items = inspectionItems.value.map((item, index) => {
+        // 序列化断言列表
+        const assertions = serializeAssertions(item)
+
         const itemData = {
           ...item,
           groupId: groupId,
           sort: index,
           executionStrategy: 'concurrent', // 默认并发执行
           hostTags: JSON.stringify(item.hostTags || []),
-          hostIds: JSON.stringify(item.hostIds || [])
+          hostIds: JSON.stringify(item.hostIds || []),
+          assertions: assertions,
+          assertionLogic: item.assertionLogic || 'and'
         }
         console.log(`巡检项 ${index + 1} 数据:`, itemData)
         console.log(`  - hostMatchType: ${item.hostMatchType}`)
@@ -1814,6 +2006,8 @@ const handleSubmit = async () => {
         console.log(`  - hostTags (序列化):`, itemData.hostTags)
         console.log(`  - hostIds (原始):`, item.hostIds)
         console.log(`  - hostIds (序列化):`, itemData.hostIds)
+        console.log(`  - assertions (序列化):`, itemData.assertions)
+        console.log(`  - assertionLogic:`, itemData.assertionLogic)
         return itemData
       })
       await batchSaveInspectionItems(groupId, items)
@@ -1969,8 +2163,9 @@ const addInspectionItem = () => {
     probeCategory: '',
     probeType: '',
     probeConfigId: undefined,
-    assertionType: '',
-    assertionValue: '',
+    assertions: '',
+    assertionLogic: 'and',
+    assertionList: [],
     variableName: '',
     variableRegex: '',
     timeout: 60,
@@ -2389,6 +2584,50 @@ onMounted(() => {
   padding: 20px;
 }
 
+/* 断言配置样式 */
+.assertion-config {
+  width: 100%;
+}
+
+.assertion-logic {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f7f8fa;
+  border-radius: 4px;
+}
+
+.logic-label {
+  font-weight: 500;
+  color: var(--ops-text-primary);
+}
+
+.assertion-list {
+  width: 100%;
+}
+
+.assertion-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  background: #fafafa;
+  border: 1px solid var(--ops-border-color);
+  border-radius: 4px;
+}
+
+.assertion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.assertion-label {
+  font-weight: 500;
+  color: var(--ops-text-primary);
+}
+
 .label-input-area {
   width: 100%;
   padding: 8px 10px;
@@ -2652,11 +2891,74 @@ onMounted(() => {
 
 .log-assertion {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   margin-top: 8px;
   font-size: 12px;
   color: var(--ops-text-secondary);
+}
+
+.assertion-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  background: #f7f8fa;
+  border-radius: 4px;
+}
+
+.assertion-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assertion-detail-text {
+  font-size: 12px;
+  color: var(--ops-text-secondary);
+}
+
+.assertion-message {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ops-text-secondary);
+}
+
+.assertion-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.assertion-logic-tag {
+  margin-bottom: 4px;
+}
+
+.assertion-rule-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #fff;
+  border: 1px solid var(--ops-border-color);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.assertion-index {
+  font-weight: 500;
+  color: var(--ops-text-primary);
+}
+
+.assertion-type {
+  color: var(--ops-text-secondary);
+}
+
+.assertion-value {
+  color: var(--ops-primary);
+  font-family: monospace;
 }
 
 .upload-area {

@@ -69,8 +69,8 @@ type InspectionExecutionDetail struct {
 	Command         string `gorm:"type:text" json:"command"`            // 执行的命令
 	ScriptType      string `gorm:"size:50" json:"scriptType"`           // shell/python/etc
 	ScriptContent   string `gorm:"type:text" json:"scriptContent"`      // 脚本内容
-	AssertionType   string `gorm:"size:50" json:"assertionType"`        // 断言类型
-	AssertionValue  string `gorm:"type:text" json:"assertionValue"`     // 断言值
+	Assertions      string `gorm:"type:json" json:"assertions"`         // 断言规则列表（JSON）
+	AssertionLogic  string `gorm:"size:10" json:"assertionLogic"`       // 断言逻辑：and/or
 
 	// 执行结果
 	Status       string  `gorm:"size:20;not null;index:idx_status" json:"status"` // success/failed

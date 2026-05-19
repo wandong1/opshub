@@ -309,14 +309,13 @@ func (s *GroupService) buildExportData(group *inspectionmgmtdata.InspectionGroup
 			ScriptFile:        item.ScriptFile,
 			PromQLQuery:       item.PromQLQuery,
 			HostMatchType:     item.HostMatchType,
-			AssertionType:     item.AssertionType,
-			AssertionValue:    item.AssertionValue,
 			VariableName:      item.VariableName,
 			VariableRegex:     item.VariableRegex,
 			InspectionLevel:   item.InspectionLevel,
 			RiskLevel:         item.RiskLevel,
 			Timeout:           item.Timeout,
 			Status:            item.Status,
+			AssertionLogic:    item.AssertionLogic,
 		}
 
 		// 解析 HostTags
@@ -332,6 +331,14 @@ func (s *GroupService) buildExportData(group *inspectionmgmtdata.InspectionGroup
 			var hostIDs []uint
 			if err := json.Unmarshal([]byte(item.HostIDs), &hostIDs); err == nil {
 				itemData.HostIDs = hostIDs
+			}
+		}
+
+		// 解析 Assertions
+		if item.Assertions != "" && item.Assertions != "[]" {
+			var assertions []map[string]interface{}
+			if err := json.Unmarshal([]byte(item.Assertions), &assertions); err == nil {
+				itemData.Assertions = assertions
 			}
 		}
 
@@ -450,6 +457,13 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 			hostIDsJSON = string(hostIDsBytes)
 		}
 
+		// 序列化 Assertions
+		assertionsJSON := ""
+		if len(itemData.Assertions) > 0 {
+			assertionsBytes, _ := json.Marshal(itemData.Assertions)
+			assertionsJSON = string(assertionsBytes)
+		}
+
 		itemReq := &ItemCreateRequest{
 			Name:              itemData.Name,
 			Description:       itemData.Description,
@@ -466,8 +480,8 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 			HostMatchType:     itemData.HostMatchType,
 			HostTags:          hostTagsJSON,
 			HostIDs:           hostIDsJSON,
-			AssertionType:     itemData.AssertionType,
-			AssertionValue:    itemData.AssertionValue,
+			Assertions:        assertionsJSON,
+			AssertionLogic:    itemData.AssertionLogic,
 			VariableName:      itemData.VariableName,
 			VariableRegex:     itemData.VariableRegex,
 			Timeout:           itemData.Timeout,
@@ -493,8 +507,8 @@ func (s *GroupService) importSingleGroup(ctx context.Context, exportData GroupEx
 			HostMatchType:     itemReq.HostMatchType,
 			HostTags:          itemReq.HostTags,
 			HostIDs:           itemReq.HostIDs,
-			AssertionType:     itemReq.AssertionType,
-			AssertionValue:    itemReq.AssertionValue,
+			Assertions:        itemReq.Assertions,
+			AssertionLogic:    itemReq.AssertionLogic,
 			VariableName:      itemReq.VariableName,
 			VariableRegex:     itemReq.VariableRegex,
 			Timeout:           itemReq.Timeout,

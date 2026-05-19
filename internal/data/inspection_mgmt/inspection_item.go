@@ -46,9 +46,9 @@ type InspectionItem struct {
 	HostTags      string `gorm:"type:text" json:"host_tags"`                   // JSON 数组，用于标签或主机名关键词
 	HostIDs       string `gorm:"type:text" json:"host_ids"`                    // JSON 数组 [1,2,3]
 
-	// 断言规则
-	AssertionType  string `gorm:"size:30" json:"assertion_type"`  // gt/gte/lt/lte/eq/contains/not_contains/regex/not_regex
-	AssertionValue string `gorm:"size:500" json:"assertion_value"`
+	// 断言规则（多条断言支持）
+	Assertions     string `gorm:"type:json" json:"assertions"`                      // 断言规则列表（JSON 数组）
+	AssertionLogic string `gorm:"size:10;default:'and'" json:"assertion_logic"`     // 断言逻辑：and/or
 
 	// 变量提取
 	VariableName  string `gorm:"size:50" json:"variable_name"`

@@ -40,8 +40,8 @@ export interface InspectionItem {
   hostMatchType: string
   hostTags?: string[]
   hostIds?: number[]
-  assertionType?: string
-  assertionValue?: string
+  assertions?: string  // JSON 字符串
+  assertionLogic?: 'and' | 'or'
   variableName?: string
   variableRegex?: string
   timeout: number
@@ -49,6 +49,13 @@ export interface InspectionItem {
   sort: number
   createdAt?: string
   updatedAt?: string
+}
+
+// 断言规则
+export interface AssertionRule {
+  type: string
+  value: string
+  description?: string
 }
 
 export interface InspectionRecord {

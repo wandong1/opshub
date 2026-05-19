@@ -15,9 +15,9 @@ import (
 
 // ItemAssertionOverride 巡检项断言覆盖结构
 type ItemAssertionOverride struct {
-	ItemID         uint   `json:"item_id"`
-	AssertionType  string `json:"assertion_type"`
-	AssertionValue string `json:"assertion_value"`
+	ItemID          uint   `json:"item_id"`
+	Assertions      string `json:"assertions"`       // 断言规则列表（JSON）
+	AssertionLogic  string `json:"assertion_logic"`  // 断言逻辑：and/or
 }
 
 type ItemService struct {
@@ -97,8 +97,8 @@ func (s *ItemService) Create(ctx context.Context, req *ItemCreateRequest) (uint,
 		HostMatchType:     req.HostMatchType,
 		HostTags:          req.HostTags,
 		HostIDs:           req.HostIDs,
-		AssertionType:     req.AssertionType,
-		AssertionValue:    req.AssertionValue,
+		Assertions:        req.Assertions,
+		AssertionLogic:    req.AssertionLogic,
 		VariableName:      req.VariableName,
 		VariableRegex:     req.VariableRegex,
 		Timeout:           req.Timeout,
@@ -205,8 +205,8 @@ func (s *ItemService) Update(ctx context.Context, id uint, req *ItemUpdateReques
 	// 修复：即使是空字符串也要更新
 	item.HostTags = req.HostTags
 	item.HostIDs = req.HostIDs
-	item.AssertionType = req.AssertionType
-	item.AssertionValue = req.AssertionValue
+	item.Assertions = req.Assertions
+	item.AssertionLogic = req.AssertionLogic
 	item.VariableName = req.VariableName
 	item.VariableRegex = req.VariableRegex
 	if req.Timeout > 0 {
@@ -367,8 +367,8 @@ func (s *ItemService) TestRunWithoutSave(ctx context.Context, groupID uint, item
 			HostMatchType:     itemReq.HostMatchType,
 			HostTags:          itemReq.HostTags,
 			HostIDs:           itemReq.HostIDs,
-			AssertionType:     itemReq.AssertionType,
-			AssertionValue:    itemReq.AssertionValue,
+			Assertions:        itemReq.Assertions,
+			AssertionLogic:    itemReq.AssertionLogic,
 			VariableName:      itemReq.VariableName,
 			VariableRegex:     itemReq.VariableRegex,
 			Timeout:           itemReq.Timeout,
@@ -618,17 +618,46 @@ func (s *ItemService) executeItem(
 	fmt.Printf("[ItemService] Execution success - output length: %d\n", len(execResult.Output))
 
 	// 应用断言覆盖（如果提供）
-	effectiveAssertionType := item.AssertionType
-	effectiveAssertionValue := item.AssertionValue
+	effectiveAssertions := item.Assertions
+	effectiveAssertionLogic := item.AssertionLogic
 	if assertionOverride != nil {
-		effectiveAssertionType = assertionOverride.AssertionType
-		effectiveAssertionValue = assertionOverride.AssertionValue
-		fmt.Printf("[ItemService] 应用断言覆盖 - item_id: %d, override_type: %s, override_value: %s\n",
-			item.ID, effectiveAssertionType, effectiveAssertionValue)
+		// 任务调度级断言覆盖
+		if assertionOverride.Assertions != "" {
+			effectiveAssertions = assertionOverride.Assertions
+		}
+		if assertionOverride.AssertionLogic != "" {
+			effectiveAssertionLogic = assertionOverride.AssertionLogic
+		}
+		fmt.Printf("[ItemService] 应用断言覆盖 - item_id: %d, assertions: %s, logic: %s\n",
+			item.ID, effectiveAssertions, effectiveAssertionLogic)
 	}
 
-	// 断言校验
-	assertionResult := s.validator.Validate(effectiveAssertionType, effectiveAssertionValue, execResult.Output)
+	// 执行断言校验
+	var assertionResult *inspectionmgmtbiz.AssertionResult
+
+	if effectiveAssertions != "" && effectiveAssertions != "[]" {
+		// 解析断言列表
+		var assertions []inspectionmgmtbiz.AssertionRule
+		if err := json.Unmarshal([]byte(effectiveAssertions), &assertions); err == nil && len(assertions) > 0 {
+			// 使用多条断言验证
+			assertionResult = s.validator.ValidateMultiple(assertions, effectiveAssertionLogic, execResult.Output)
+		} else {
+			// JSON 解析失败
+			assertionResult = &inspectionmgmtbiz.AssertionResult{
+				Pass:    false,
+				Message: fmt.Sprintf("断言配置解析失败: %v", err),
+			}
+		}
+	} else {
+		// 无断言配置
+		assertionResult = &inspectionmgmtbiz.AssertionResult{
+			Pass:    true,
+			Message: "无断言规则，跳过校验",
+			Skip:    true,
+		}
+	}
+
+	// 处理断言结果
 	if assertionResult.Skip {
 		// 无断言规则，跳过校验
 		result.AssertionResult = "skip"
@@ -854,8 +883,8 @@ func (s *ItemService) toResponse(item *inspectionmgmtdata.InspectionItem) *ItemR
 		HostMatchType:     item.HostMatchType,
 		HostTags:          item.HostTags,
 		HostIDs:           item.HostIDs,
-		AssertionType:     item.AssertionType,
-		AssertionValue:    item.AssertionValue,
+		Assertions:        item.Assertions,
+		AssertionLogic:    item.AssertionLogic,
 		VariableName:      item.VariableName,
 		VariableRegex:     item.VariableRegex,
 		Timeout:           item.Timeout,
@@ -908,8 +937,8 @@ func (s *ItemService) BatchSave(ctx context.Context, groupID uint, items []ItemC
 				HostMatchType:     req.HostMatchType,
 				HostTags:          req.HostTags,
 				HostIDs:           req.HostIDs,
-				AssertionType:     req.AssertionType,
-				AssertionValue:    req.AssertionValue,
+				Assertions:        req.Assertions,
+				AssertionLogic:    req.AssertionLogic,
 				VariableName:      req.VariableName,
 				VariableRegex:     req.VariableRegex,
 				Timeout:           req.Timeout,

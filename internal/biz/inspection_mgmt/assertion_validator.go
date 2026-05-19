@@ -379,3 +379,93 @@ func (v *AssertionValidator) validateProbeStatusCode(details *ProbeDetailsForAss
 	}
 }
 
+// ==================== 多条断言支持 ====================
+
+// AssertionRule 断言规则
+type AssertionRule struct {
+	Type        string `json:"type"`
+	Value       string `json:"value"`
+	Description string `json:"description"`
+}
+
+// ValidateMultiple 执行多条断言校验
+// logic: "and" 表示所有断言必须通过，"or" 表示任一断言通过即可
+func (v *AssertionValidator) ValidateMultiple(assertions []AssertionRule, logic string, output string) *AssertionResult {
+	if len(assertions) == 0 {
+		return &AssertionResult{Pass: true, Message: "无断言规则，跳过校验", Skip: true}
+	}
+
+	// 限制断言数量
+	if len(assertions) > 10 {
+		return &AssertionResult{
+			Pass:    false,
+			Message: "断言数量超过限制（最多10条）",
+		}
+	}
+
+	var passedAssertions []string
+	var failedAssertions []string
+	var skippedCount int
+
+	for i, rule := range assertions {
+		result := v.Validate(rule.Type, rule.Value, output)
+
+		desc := rule.Description
+		if desc == "" {
+			desc = fmt.Sprintf("断言%d", i+1)
+		}
+
+		if result.Skip {
+			skippedCount++
+			continue
+		}
+
+		if result.Pass {
+			passedAssertions = append(passedAssertions, fmt.Sprintf("✓ %s: %s", desc, result.Message))
+		} else {
+			failedAssertions = append(failedAssertions, fmt.Sprintf("✗ %s: %s", desc, result.Message))
+		}
+	}
+
+	totalAssertions := len(assertions) - skippedCount
+	passedCount := len(passedAssertions)
+	failedCount := len(failedAssertions)
+
+	// AND 逻辑：所有断言必须通过
+	if logic == "and" || logic == "" {
+		if failedCount == 0 && passedCount > 0 {
+			return &AssertionResult{
+				Pass:    true,
+				Message: fmt.Sprintf("所有断言通过 (%d/%d)\n%s", passedCount, totalAssertions, strings.Join(passedAssertions, "\n")),
+			}
+		}
+
+		allMessages := append(failedAssertions, passedAssertions...)
+		return &AssertionResult{
+			Pass:    false,
+			Message: fmt.Sprintf("断言失败 (%d/%d)\n%s", failedCount, totalAssertions, strings.Join(allMessages, "\n")),
+		}
+	}
+
+	// OR 逻辑：任一断言通过即可
+	if logic == "or" {
+		if passedCount > 0 {
+			return &AssertionResult{
+				Pass:    true,
+				Message: fmt.Sprintf("断言通过 (%d/%d)\n%s", passedCount, totalAssertions, strings.Join(passedAssertions, "\n")),
+			}
+		}
+
+		return &AssertionResult{
+			Pass:    false,
+			Message: fmt.Sprintf("所有断言失败 (%d/%d)\n%s", failedCount, totalAssertions, strings.Join(failedAssertions, "\n")),
+		}
+	}
+
+	return &AssertionResult{
+		Pass:    false,
+		Message: fmt.Sprintf("未知的断言逻辑: %s", logic),
+	}
+}
+
+

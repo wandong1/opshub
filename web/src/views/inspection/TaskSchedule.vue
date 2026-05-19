@@ -336,40 +336,106 @@
     </a-modal>
 
     <!-- 断言覆盖详细配置弹窗（嵌套弹窗） -->
-    <a-modal v-model:visible="assertionOverrideModalVisible" :title="`断言覆盖配置 - ${currentGroupName}`" :width="900" @ok="handleSaveAssertionOverrides" @cancel="assertionOverrideModalVisible = false">
+    <a-modal v-model:visible="assertionOverrideModalVisible" :title="`断言覆盖配置 - ${currentGroupName}`" :width="1200" @ok="handleSaveAssertionOverrides" @cancel="assertionOverrideModalVisible = false">
       <a-table :data="itemsForOverride" :pagination="false" :bordered="{ cell: true }">
         <template #columns>
-          <a-table-column title="巡检项" data-index="name" :width="200" />
+          <a-table-column title="巡检项" data-index="name" :width="180" />
 
-          <a-table-column title="原始断言" :width="250">
+          <a-table-column title="原始断言" :width="200">
             <template #cell="{ record }">
-              <span v-if="record.assertionType">
-                {{ getAssertionTypeLabel(record.assertionType) }} : {{ record.assertionValue }}
+              <span v-if="record.assertions && record.assertions !== '[]'" style="color: var(--ops-text-secondary);">
+                已配置 {{ parseAssertionCount(record.assertions) }} 条断言
               </span>
               <span v-else style="color: var(--ops-text-tertiary);">无断言</span>
             </template>
           </a-table-column>
 
-          <a-table-column title="覆盖类型" :width="180">
+          <a-table-column title="覆盖配置" :width="700">
             <template #cell="{ record }">
-              <a-select v-model="assertionOverrides[record.id].type" placeholder="不覆盖" allow-clear size="small">
-                <a-option value="">禁用断言</a-option>
-                <a-option value="gt">大于 (>)</a-option>
-                <a-option value="gte">大于等于 (>=)</a-option>
-                <a-option value="lt">小于 (<)</a-option>
-                <a-option value="lte">小于等于 (<=)</a-option>
-                <a-option value="eq">等于 (==)</a-option>
-                <a-option value="contains">包含</a-option>
-                <a-option value="not_contains">不包含</a-option>
-                <a-option value="regex">正则匹配</a-option>
-                <a-option value="not_regex">正则不匹配</a-option>
-              </a-select>
-            </template>
-          </a-table-column>
+              <div class="assertion-override-config">
+                <!-- 断言逻辑选择 -->
+                <div v-if="assertionOverrides[record.id]?.assertionList?.length > 1" class="assertion-logic-row">
+                  <span class="logic-label">断言逻辑:</span>
+                  <a-radio-group v-model="assertionOverrides[record.id].assertionLogic" type="button" size="small">
+                    <a-radio value="and">AND（所有通过）</a-radio>
+                    <a-radio value="or">OR（任一通过）</a-radio>
+                  </a-radio-group>
+                </div>
 
-          <a-table-column title="覆盖值">
-            <template #cell="{ record }">
-              <a-input v-model="assertionOverrides[record.id].value" placeholder="断言值" size="small" :disabled="!assertionOverrides[record.id].type" />
+                <!-- 断言列表 -->
+                <div class="assertion-list">
+                  <div
+                    v-for="(assertion, index) in assertionOverrides[record.id]?.assertionList || []"
+                    :key="index"
+                    class="assertion-item"
+                  >
+                    <span class="assertion-index">{{ index + 1 }}.</span>
+                    <a-select
+                      v-model="assertion.type"
+                      placeholder="选择断言类型"
+                      size="small"
+                      style="width: 200px;"
+                      @change="onAssertionTypeChange(assertion)"
+                    >
+                      <!-- 根据巡检项执行类型显示不同的断言选项 -->
+                      <template v-if="record.executionType === 'probe'">
+                        <a-optgroup label="拨测专用">
+                          <a-option value="probe_success">拨测是否成功</a-option>
+                          <a-option value="probe_latency_lt">响应时间小于（毫秒）</a-option>
+                          <a-option value="probe_assertion_all">原始断言全部通过</a-option>
+                          <a-option value="probe_status_code">HTTP状态码等于</a-option>
+                        </a-optgroup>
+                      </template>
+                      <template v-else-if="record.executionType === 'promql'">
+                        <a-option value="gt">大于 (&gt;)</a-option>
+                        <a-option value="gte">大于等于 (&gt;=)</a-option>
+                        <a-option value="lt">小于 (&lt;)</a-option>
+                        <a-option value="lte">小于等于 (&lt;=)</a-option>
+                        <a-option value="eq">等于 (==)</a-option>
+                        <a-option value="neq">不等于 (!=)</a-option>
+                      </template>
+                      <template v-else>
+                        <a-option value="gt">大于 (&gt;)</a-option>
+                        <a-option value="gte">大于等于 (&gt;=)</a-option>
+                        <a-option value="lt">小于 (&lt;)</a-option>
+                        <a-option value="lte">小于等于 (&lt;=)</a-option>
+                        <a-option value="eq">等于 (==)</a-option>
+                        <a-option value="contains">包含</a-option>
+                        <a-option value="not_contains">不包含</a-option>
+                        <a-option value="regex">正则匹配</a-option>
+                        <a-option value="not_regex">反正则匹配</a-option>
+                      </template>
+                    </a-select>
+                    <a-input
+                      v-model="assertion.value"
+                      :placeholder="getAssertionPlaceholder(assertion.type, record.executionType)"
+                      size="small"
+                      style="flex: 1;"
+                      :disabled="isAssertionValueDisabled(assertion.type)"
+                    />
+                    <a-button
+                      type="text"
+                      status="danger"
+                      size="small"
+                      @click="removeAssertion(record.id, index)"
+                    >
+                      <template #icon><icon-delete /></template>
+                    </a-button>
+                  </div>
+
+                  <!-- 添加断言按钮 -->
+                  <a-button
+                    type="dashed"
+                    size="small"
+                    @click="addAssertion(record.id)"
+                    :disabled="(assertionOverrides[record.id]?.assertionList?.length || 0) >= 10"
+                    style="width: 100%; margin-top: 8px;"
+                  >
+                    <template #icon><icon-plus /></template>
+                    添加断言 ({{ assertionOverrides[record.id]?.assertionList?.length || 0 }}/10)
+                  </a-button>
+                </div>
+              </div>
             </template>
           </a-table-column>
         </template>
@@ -786,8 +852,19 @@ const selectedGroups = ref<any[]>([])
 const currentGroupForConfig = ref<number | null>(null)
 
 // 断言覆盖状态
+interface AssertionRule {
+  type: string
+  value: string
+  description?: string
+}
+
+interface ItemAssertionOverride {
+  assertionList: AssertionRule[]
+  assertionLogic: 'and' | 'or'
+}
+
 const itemsForOverride = ref<any[]>([])
-const assertionOverrides = ref<Record<number, { type: string; value: string }>>({})
+const assertionOverrides = ref<Record<number, ItemAssertionOverride>>({})
 const assertionOverrideModalVisible = ref(false)
 const currentGroupName = ref('')
 
@@ -1067,10 +1144,13 @@ const loadItemsForGroup = async (groupId: number) => {
     const res = await getInspectionItems({ groupId, pageSize: 1000, status: 'enabled' })
     itemsForOverride.value = res.list || []
 
-    // 初始化断言覆盖对象
+    // 初始化断言覆盖对象（新格式）
     for (const item of itemsForOverride.value) {
       if (!assertionOverrides.value[item.id]) {
-        assertionOverrides.value[item.id] = { type: '', value: '' }
+        assertionOverrides.value[item.id] = {
+          assertionList: [],
+          assertionLogic: 'and'
+        }
       }
     }
 
@@ -1106,14 +1186,110 @@ const handleSaveAssertionOverrides = () => {
   Message.success('断言覆盖配置已保存')
 }
 
+// 添加断言
+const addAssertion = (itemId: number) => {
+  if (!assertionOverrides.value[itemId]) {
+    assertionOverrides.value[itemId] = {
+      assertionList: [],
+      assertionLogic: 'and'
+    }
+  }
+
+  if (assertionOverrides.value[itemId].assertionList.length >= 10) {
+    Message.warning('最多只能添加10条断言')
+    return
+  }
+
+  assertionOverrides.value[itemId].assertionList.push({
+    type: '',
+    value: '',
+    description: ''
+  })
+}
+
+// 删除断言
+const removeAssertion = (itemId: number, index: number) => {
+  if (assertionOverrides.value[itemId]?.assertionList) {
+    assertionOverrides.value[itemId].assertionList.splice(index, 1)
+  }
+}
+
+// 断言类型变化时自动生成描述
+const onAssertionTypeChange = (assertion: AssertionRule) => {
+  if (assertion.type) {
+    assertion.description = getAssertionTypeText(assertion.type)
+  }
+}
+
+// 获取断言类型文本
+const getAssertionTypeText = (type: string) => {
+  const map: Record<string, string> = {
+    eq: '等于',
+    neq: '不等于',
+    gt: '大于',
+    gte: '大于等于',
+    lt: '小于',
+    lte: '小于等于',
+    contains: '包含',
+    not_contains: '不包含',
+    regex: '正则匹配',
+    not_regex: '反正则匹配',
+    probe_success: '拨测是否成功',
+    probe_latency_lt: '响应时间小于',
+    probe_assertion_all: '原始断言全部通过',
+    probe_status_code: 'HTTP状态码等于'
+  }
+  return map[type] || type
+}
+
+// 获取断言值输入框的占位符
+const getAssertionPlaceholder = (assertionType: string, executionType: string) => {
+  if (!assertionType) return '请先选择断言类型'
+
+  const probeAssertionPlaceholders: Record<string, string> = {
+    probe_success: '无需填写',
+    probe_latency_lt: '输入毫秒数，如: 500',
+    probe_assertion_all: '无需填写',
+    probe_status_code: '输入状态码，如: 200'
+  }
+
+  if (probeAssertionPlaceholders[assertionType]) {
+    return probeAssertionPlaceholders[assertionType]
+  }
+
+  if (executionType === 'promql') {
+    return '断言值（数值）'
+  }
+
+  return '断言值'
+}
+
+// 判断断言值输入框是否禁用
+const isAssertionValueDisabled = (assertionType: string) => {
+  return assertionType === 'probe_success' || assertionType === 'probe_assertion_all'
+}
+
+// 解析断言数量（用于显示原始断言）
+const parseAssertionCount = (assertions: string) => {
+  try {
+    const list = JSON.parse(assertions)
+    return Array.isArray(list) ? list.length : 0
+  } catch {
+    return 0
+  }
+}
+
 // 获取指定巡检组的断言覆盖数量
 const getAssertionOverrideCountForGroup = (groupId: number) => {
   let count = 0
   for (const item of itemsForOverride.value) {
     if (item.groupId === groupId) {
       const override = assertionOverrides.value[item.id]
-      if (override && override.type) {
-        count++
+      if (override?.assertionList && override.assertionList.length > 0) {
+        const validAssertions = override.assertionList.filter(a => a.type)
+        if (validAssertions.length > 0) {
+          count++
+        }
       }
     }
   }
@@ -1208,15 +1384,25 @@ const handleEdit = async (row: any) => {
   // 需求四：反序列化变量为键值对列表
   deserializeCustomVariables(row.customVariables || '')
 
-  // 解析断言覆盖
+  // 解析断言覆盖（新格式）
   assertionOverrides.value = {}
   if (row.itemAssertionOverrides) {
     try {
       const overrides = JSON.parse(row.itemAssertionOverrides)
       for (const o of overrides) {
+        // 解析 assertions 字段（JSON 字符串）
+        let assertionList: AssertionRule[] = []
+        if (o.assertions) {
+          try {
+            assertionList = JSON.parse(o.assertions)
+          } catch (e) {
+            console.error('解析断言列表失败:', e)
+          }
+        }
+
         assertionOverrides.value[o.item_id] = {
-          type: o.assertion_type,
-          value: o.assertion_value
+          assertionList: assertionList,
+          assertionLogic: o.assertion_logic || 'and'
         }
       }
     } catch (e) {
@@ -1281,15 +1467,25 @@ const handleCopy = async (row: any) => {
   // 需求四：反序列化变量为键值对列表
   deserializeCustomVariables(row.customVariables || '')
 
-  // 复制断言覆盖
+  // 复制断言覆盖（新格式）
   assertionOverrides.value = {}
   if (row.itemAssertionOverrides) {
     try {
       const overrides = JSON.parse(row.itemAssertionOverrides)
       for (const o of overrides) {
+        // 解析 assertions 字段（JSON 字符串）
+        let assertionList: AssertionRule[] = []
+        if (o.assertions) {
+          try {
+            assertionList = JSON.parse(o.assertions)
+          } catch (e) {
+            console.error('解析断言列表失败:', e)
+          }
+        }
+
         assertionOverrides.value[o.item_id] = {
-          type: o.assertion_type,
-          value: o.assertion_value
+          assertionList: assertionList,
+          assertionLogic: o.assertion_logic || 'and'
         }
       }
     } catch (e) {
@@ -1375,15 +1571,19 @@ const handleSubmit = async () => {
     requestData.business_group_ids = formData.businessGroupIds.length > 0 ? JSON.stringify(formData.businessGroupIds) : ''
     requestData.custom_variables = serializeCustomVariables()
 
-    // 构建断言覆盖数组
-    const assertionOverridesArray: ItemAssertionOverride[] = []
+    // 构建断言覆盖数组（新格式）
+    const assertionOverridesArray: any[] = []
     for (const [itemIdStr, override] of Object.entries(assertionOverrides.value)) {
-      if (override.type !== undefined && override.type !== null && override.type !== '') {
-        assertionOverridesArray.push({
-          item_id: Number(itemIdStr),
-          assertion_type: override.type,
-          assertion_value: override.value
-        })
+      if (override.assertionList && override.assertionList.length > 0) {
+        // 过滤掉空的断言
+        const validAssertions = override.assertionList.filter(a => a.type)
+        if (validAssertions.length > 0) {
+          assertionOverridesArray.push({
+            item_id: Number(itemIdStr),
+            assertions: JSON.stringify(validAssertions),
+            assertion_logic: override.assertionLogic || 'and'
+          })
+        }
       }
     }
 
@@ -1713,5 +1913,46 @@ onMounted(() => { loadData(); loadOptions() })
 .drawer-resize-handle:active {
   background: var(--ops-primary);
   opacity: 0.8;
+}
+
+/* 断言覆盖配置样式 */
+.assertion-override-config {
+  width: 100%;
+}
+
+.assertion-logic-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f7f8fa;
+  border-radius: 4px;
+}
+
+.logic-label {
+  font-weight: 500;
+  color: var(--ops-text-primary);
+}
+
+.assertion-list {
+  width: 100%;
+}
+
+.assertion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #fafafa;
+  border: 1px solid var(--ops-border-color);
+  border-radius: 4px;
+}
+
+.assertion-index {
+  font-weight: 500;
+  color: var(--ops-text-primary);
+  min-width: 24px;
 }
 </style>
