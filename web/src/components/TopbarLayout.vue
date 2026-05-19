@@ -1,97 +1,56 @@
 <template>
-  <!-- 根据布局模式渲染不同的布局组件 -->
-  <TopbarLayout v-if="appStore.layout === 'topbar'" />
-
-  <!-- 侧边栏布局 -->
-  <a-layout v-else class="ops-layout">
-    <a-layout-sider
-      v-if="!hideSidebar"
-      class="ops-sider"
-      :width="220"
-      :collapsed-width="48"
-      collapsible
-      hide-trigger
-      breakpoint="xl"
-      v-model:collapsed="appStore.sidebarCollapsed"
-    >
-      <!-- Logo -->
-      <div class="sider-logo" :class="{ 'sider-logo--collapsed': appStore.sidebarCollapsed }">
-        <template v-if="!appStore.sidebarCollapsed">
+  <a-layout class="ops-layout topbar-layout">
+    <!-- 顶部导航栏 -->
+    <a-layout-header class="ops-header topbar-header">
+      <div class="header-container">
+        <!-- Logo 区域 -->
+        <div class="header-logo">
           <img v-if="systemStore.systemLogo" :src="systemStore.systemLogo" alt="Logo" class="logo-image" />
           <span class="logo-text">
             <span class="logo-first">{{ systemNameFirst }}</span>
             <span class="logo-second">{{ systemNameSecond }}</span>
           </span>
-        </template>
-        <template v-else>
-          <img v-if="systemStore.systemLogo" :src="systemStore.systemLogo" alt="Logo" class="logo-image-collapsed" />
-          <span v-else class="logo-icon">{{ systemNameFirst.charAt(0) }}</span>
-        </template>
-      </div>
+        </div>
 
-      <!-- Menu -->
-      <div class="sider-menu-wrap">
-        <a-menu
-          :selected-keys="[activeMenu]"
-          :open-keys="openKeys"
-          :theme="appStore.isDark ? 'dark' : 'light'"
-          :auto-open-selected="true"
-          @menu-item-click="handleMenuClick"
-          @sub-menu-click="handleSubMenuClick"
-        >
-          <template v-for="menu in menuList" :key="menu.ID">
-            <!-- 有子菜单 -->
-            <a-sub-menu
-              v-if="menu.children && menu.children.filter((m: any) => m.type !== 3).length > 0"
-              :key="String(menu.ID)"
-            >
-              <template #icon><component :is="getArcoIcon(menu.icon)" /></template>
-              <template #title>{{ menu.name }}</template>
-              <a-menu-item
-                v-for="sub in menu.children.filter((m: any) => m.type !== 3)"
-                :key="sub.path"
-                :disabled="sub.status === 0"
+        <!-- 水平菜单 -->
+        <div class="header-menu">
+          <a-menu
+            mode="horizontal"
+            :selected-keys="[activeMenu]"
+            @menu-item-click="handleMenuClick"
+          >
+            <template v-for="menu in menuList" :key="menu.ID">
+              <!-- 有子菜单 -->
+              <a-sub-menu
+                v-if="menu.children && menu.children.filter((m: any) => m.type !== 3).length > 0"
+                :key="String(menu.ID)"
               >
-                <template #icon><component :is="getArcoIcon(sub.icon)" /></template>
-                {{ sub.name }}
+                <template #icon><component :is="getArcoIcon(menu.icon)" /></template>
+                <template #title>{{ menu.name }}</template>
+                <a-menu-item
+                  v-for="sub in menu.children.filter((m: any) => m.type !== 3)"
+                  :key="sub.path"
+                  :disabled="sub.status === 0"
+                >
+                  <template #icon><component :is="getArcoIcon(sub.icon)" /></template>
+                  {{ sub.name }}
+                </a-menu-item>
+              </a-sub-menu>
+
+              <!-- 无子菜单 -->
+              <a-menu-item
+                v-else
+                :key="menu.path || String(menu.ID)"
+                :disabled="menu.status === 0"
+              >
+                <template #icon><component :is="getArcoIcon(menu.icon)" /></template>
+                {{ menu.name }}
               </a-menu-item>
-            </a-sub-menu>
-
-            <!-- 无子菜单 -->
-            <a-menu-item
-              v-else
-              :key="menu.path || String(menu.ID)"
-              :disabled="menu.status === 0"
-            >
-              <template #icon><component :is="getArcoIcon(menu.icon)" /></template>
-              {{ menu.name }}
-            </a-menu-item>
-          </template>
-        </a-menu>
-      </div>
-
-      <!-- 底部系统信息 + 折叠按钮 -->
-      <div class="sider-footer">
-        <div v-if="!appStore.sidebarCollapsed" class="sider-footer-info">
-          <div class="sider-footer-desc" v-if="systemStore.systemDescription">{{ systemStore.systemDescription }}</div>
-          <div class="sider-footer-ver" v-if="systemStore.version">{{ systemStore.version }}</div>
+            </template>
+          </a-menu>
         </div>
-        <div class="sider-footer-toggle" @click="appStore.toggleSidebar()">
-          <icon-menu-unfold v-if="appStore.sidebarCollapsed" />
-          <icon-menu-fold v-else />
-        </div>
-      </div>
-    </a-layout-sider>
 
-    <a-layout>
-      <!-- Header -->
-      <a-layout-header class="ops-header">
-        <div class="header-left">
-          <a-breadcrumb class="header-breadcrumb">
-            <a-breadcrumb-item @click="$router.push('/')">首页</a-breadcrumb-item>
-            <a-breadcrumb-item v-if="currentRoute.meta.title">{{ currentRoute.meta.title }}</a-breadcrumb-item>
-          </a-breadcrumb>
-        </div>
+        <!-- 右侧工具栏 -->
         <div class="header-right">
           <!-- 主题切换按钮 -->
           <a-button type="text" class="theme-toggle-btn" @click="showThemeSettings = true">
@@ -122,14 +81,14 @@
             </template>
           </a-dropdown>
         </div>
-      </a-layout-header>
+      </div>
+    </a-layout-header>
 
-      <!-- Content -->
-      <a-layout-content class="ops-content" :class="{ 'ops-content--full': currentRoute.meta?.fullContent }">
-        <NoPermission v-if="hasNoPermission" />
-        <router-view v-else />
-      </a-layout-content>
-    </a-layout>
+    <!-- 内容区 -->
+    <a-layout-content class="ops-content" :class="{ 'ops-content--full': currentRoute.meta?.fullContent }">
+      <NoPermission v-if="hasNoPermission" />
+      <router-view v-else />
+    </a-layout-content>
 
     <!-- 主题设置抽屉 -->
     <ThemeSettings v-model:visible="showThemeSettings" />
@@ -145,15 +104,13 @@ import { useAppStore } from '@/stores/app'
 import { Message } from '@arco-design/web-vue'
 import NoPermission from '@/views/NoPermission.vue'
 import ThemeSettings from '@/components/ThemeSettings.vue'
-import TopbarLayout from '@/components/TopbarLayout.vue'
 import {
   IconHome, IconUser, IconUserGroup, IconSettings, IconMenu,
   IconDesktop, IconFile, IconTool, IconDashboard, IconFolder,
   IconStorage, IconLock, IconApps, IconCloud, IconList,
   IconCommon, IconComputer, IconCode, IconCommand, IconRobot,
   IconSchedule, IconSafe, IconThunderbolt, IconNotification,
-  IconDown, IconExport, IconMenuFold, IconMenuUnfold,
-  IconSun, IconMoon
+  IconDown, IconExport, IconSun, IconMoon
 } from '@arco-design/web-vue/es/icon'
 import { getUserMenu } from '@/api/menu'
 import { pluginManager } from '@/plugins/manager'
@@ -166,7 +123,6 @@ const systemStore = useSystemStore()
 const appStore = useAppStore()
 
 const showThemeSettings = ref(false)
-const openKeys = ref<string[]>([])
 
 // Element Plus 图标名 → Arco 图标组件映射
 const arcoIconMap: Record<string, Component> = {
@@ -226,8 +182,6 @@ const activeMenu = computed(() => {
   return route.path
 })
 
-const hideSidebar = computed(() => route.meta?.hideSidebar === true || false)
-
 const avatarUrl = computed(() => {
   const avatar = userStore.userInfo?.avatar || ''
   if (!avatar) return ''
@@ -241,6 +195,7 @@ const currentRoute = computed(() => route)
 const menuList = ref<any[]>([])
 const hasNoPermission = ref(false)
 
+// 复用 Layout.vue 的菜单构建逻辑
 const buildPluginMenus = async (authorizedPaths: Set<string>) => {
   const pluginMenus: any[] = []
   const allPlugins = pluginManager.getAll()
@@ -434,15 +389,10 @@ const loadMenu = async () => {
   }
 }
 
-// Arco menu-item-click 回调：key 就是 menu-item 的 key（即 path）
 const handleMenuClick = (key: string) => {
   if (key && key.startsWith('/')) {
     router.push(key)
   }
-}
-
-const handleSubMenuClick = (key: string, openedKeys: string[]) => {
-  openKeys.value = openedKeys
 }
 
 const handleUserCommand = (value: string | number | Record<string, any> | undefined) => {
@@ -473,55 +423,38 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.ops-layout {
+.ops-layout.topbar-layout {
   height: 100vh;
 }
 
-/* ===== Sidebar ===== */
-.ops-sider {
-  background: var(--ops-sidebar-bg, #232324);
-  height: 100vh;
-  overflow: hidden;
+/* ===== 顶部导航栏 ===== */
+.topbar-header {
+  height: var(--ops-header-height, 60px);
+  background: var(--ops-header-bg, #fff);
+  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
-.ops-sider :deep(.arco-layout-sider-children) {
+.header-container {
+  height: 100%;
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--ops-sidebar-bg, #232324);
-}
-
-.ops-sider:deep(.arco-layout-sider-trigger) {
-  background: var(--ops-sidebar-bg, #232324);
+  align-items: center;
+  padding: 0 20px;
+  gap: 20px;
 }
 
 /* Logo */
-.sider-logo {
-  height: 56px;
+.header-logo {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--ops-border-color);
   flex-shrink: 0;
-}
-
-.sider-logo--collapsed {
-  padding: 0;
-  gap: 0;
 }
 
 .logo-image {
   width: 32px;
   height: 32px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.logo-image-collapsed {
-  width: 28px;
-  height: 28px;
   object-fit: contain;
 }
 
@@ -539,111 +472,29 @@ onMounted(async () => {
   color: var(--ops-primary, #165dff);
 }
 
-.logo-icon {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ops-primary, #165dff);
-}
-
-/* Menu wrap */
-.sider-menu-wrap {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.sider-menu-wrap::-webkit-scrollbar {
-  width: 4px;
-}
-
-.sider-menu-wrap::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
-}
-
-/* Sidebar footer */
-.sider-footer {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  border-top: 1px solid var(--ops-border-color);
-  flex-shrink: 0;
-}
-
-.sider-footer-info {
+/* 水平菜单 */
+.header-menu {
   flex: 1;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.sider-footer-desc {
-  color: var(--ops-text-tertiary);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.4;
+.header-menu::-webkit-scrollbar {
+  height: 0;
 }
 
-.sider-footer-ver {
-  color: var(--ops-text-disabled);
-  font-size: 11px;
-  font-family: monospace;
-  line-height: 1.4;
+.header-menu :deep(.arco-menu-horizontal) {
+  background: transparent;
+  border-bottom: none;
 }
 
-.sider-footer-toggle {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  color: var(--ops-text-tertiary);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 16px;
+.header-menu :deep(.arco-menu-item),
+.header-menu :deep(.arco-menu-pop-header) {
+  padding: 0 16px;
 }
 
-.sider-footer-toggle:hover {
-  background: var(--ops-primary-bg);
-  color: var(--ops-primary);
-}
-
-/* Hide default trigger (custom toggle in footer) */
-.ops-sider :deep(.arco-layout-sider-trigger) {
-  display: none;
-}
-
-/* ===== Header ===== */
-.ops-header {
-  height: var(--ops-header-height, 60px);
-  background: var(--ops-header-bg, #fff);
-  border-bottom: 1px solid var(--ops-border-color, #e5e6eb);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: 1;
-}
-
-.header-logo-img {
-  max-height: 36px;
-  max-width: 200px;
-  object-fit: contain;
-}
-
-.header-breadcrumb {
-  font-size: 14px;
-}
-
+/* 右侧工具栏 */
 .header-right {
   display: flex;
   align-items: center;
@@ -653,12 +504,12 @@ onMounted(async () => {
 
 .theme-toggle-btn {
   font-size: 18px;
-  color: var(--ops-text-secondary, #86909c);
+  color: var(--ops-text-secondary);
   transition: color 0.2s;
 }
 
 .theme-toggle-btn:hover {
-  color: var(--ops-primary, #165dff);
+  color: var(--ops-primary);
 }
 
 .header-user {
@@ -672,12 +523,16 @@ onMounted(async () => {
 }
 
 .header-user:hover {
-  background-color: #f2f3f5;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+body[arco-theme='dark'] .header-user:hover {
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .header-user-name {
   font-size: 14px;
-  color: var(--ops-text-primary, #1d2129);
+  color: var(--ops-text-primary);
   font-weight: 500;
   max-width: 120px;
   white-space: nowrap;
@@ -686,11 +541,11 @@ onMounted(async () => {
 }
 
 .header-arrow {
-  color: var(--ops-text-tertiary, #86909c);
+  color: var(--ops-text-tertiary);
   font-size: 12px;
 }
 
-/* ===== Content ===== */
+/* ===== 内容区 ===== */
 .ops-content {
   background: var(--ops-content-bg, #f7f8fa);
   padding: 20px;

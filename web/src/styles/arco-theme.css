@@ -11,7 +11,7 @@
   --ops-primary-bg: #e8f0ff;
 
   /* ===== 布局 ===== */
-  --ops-sidebar-bg: #232324;
+  --ops-sidebar-bg: #ffffff;
   --ops-sidebar-width: 220px;
   --ops-sidebar-collapsed-width: 48px;
   --ops-header-height: 60px;
@@ -41,10 +41,10 @@
 /* 侧边栏菜单深色主题 */
 .ops-sider {
   background: var(--ops-sidebar-bg);
+  border-right: 1px solid var(--ops-border-color);
 }
 
 .ops-sider.arco-layout-sider {
-  border-right: none;
   box-shadow: none;
   background: var(--ops-sidebar-bg);
 }
@@ -67,14 +67,60 @@
   background: transparent;
 }
 
+/* 深色侧边栏菜单样式 */
 .ops-sider .arco-menu-dark .arco-menu-item:hover,
 .ops-sider .arco-menu-dark .arco-menu-inline-header:hover {
   background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .ops-sider .arco-menu-dark .arco-menu-item.arco-menu-selected {
   background-color: var(--ops-primary);
   color: #fff;
+}
+
+.ops-sider .arco-menu-dark .arco-menu-item {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ops-sider .arco-menu-dark .arco-menu-inline-header {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ops-sider .arco-menu-dark .arco-menu-item .arco-icon {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ops-sider .arco-menu-dark .arco-menu-inline-header .arco-icon {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ops-sider .arco-menu-dark .arco-menu-item:hover .arco-icon,
+.ops-sider .arco-menu-dark .arco-menu-inline-header:hover .arco-icon {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ops-sider .arco-menu-dark .arco-menu-item.arco-menu-selected .arco-icon {
+  color: #fff;
+}
+
+/* 浅色侧边栏菜单样式 */
+.ops-sider .arco-menu-light .arco-menu-item:hover,
+.ops-sider .arco-menu-light .arco-menu-inline-header:hover {
+  background-color: var(--ops-primary-bg);
+}
+
+.ops-sider .arco-menu-light .arco-menu-item.arco-menu-selected {
+  background-color: var(--ops-primary);
+  color: #fff;
+}
+
+.ops-sider .arco-menu-light .arco-menu-item {
+  color: var(--ops-text-primary);
+}
+
+.ops-sider .arco-menu-light .arco-menu-inline-header {
+  color: var(--ops-text-primary);
 }
 
 /* 顶栏 */
@@ -97,4 +143,375 @@
 /* 表格统一风格 */
 .arco-table-border .arco-table-container {
   border-radius: var(--ops-border-radius-sm);
+}
+
+/* ===== 深色主题 ===== */
+body[arco-theme='dark'] {
+  /* 品牌色（深色模式下稍微调亮） */
+  --ops-primary: #4080ff;
+  --ops-primary-light: #5a94ff;
+  --ops-primary-lighter: #7aa8ff;
+  --ops-primary-bg: rgba(64, 128, 255, 0.15);
+
+  /* 布局 */
+  --ops-sidebar-bg: #17171a;
+  --ops-header-bg: #232324;
+  --ops-content-bg: #17171a;
+
+  /* 边框 */
+  --ops-border-color: rgba(255, 255, 255, 0.15);
+
+  /* 文字 */
+  --ops-text-primary: rgba(255, 255, 255, 0.9);
+  --ops-text-secondary: rgba(255, 255, 255, 0.6);
+  --ops-text-tertiary: rgba(255, 255, 255, 0.4);
+  --ops-text-disabled: rgba(255, 255, 255, 0.3);
+
+  /* 功能色 */
+  --ops-success: #23c343;
+  --ops-warning: #ff9a2e;
+  --ops-danger: #f76965;
+  --ops-info: rgba(255, 255, 255, 0.4);
+}
+
+/* 深色模式下的侧边栏 */
+body[arco-theme='dark'] .ops-sider {
+  background: var(--ops-sidebar-bg);
+}
+
+body[arco-theme='dark'] .ops-sider .arco-menu-dark .arco-menu-item:hover,
+body[arco-theme='dark'] .ops-sider .arco-menu-dark .arco-menu-inline-header:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+body[arco-theme='dark'] .ops-sider .arco-menu-dark .arco-menu-item.arco-menu-selected {
+  background-color: var(--ops-primary);
+  color: #fff;
+}
+
+/* 深色模式下侧边栏 Logo 文字颜色 */
+body[arco-theme='dark'] .logo-first {
+  color: #fff;
+}
+
+/* 深色模式下侧边栏底部信息颜色 */
+body[arco-theme='dark'] .sider-footer-desc {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+body[arco-theme='dark'] .sider-footer-ver {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+body[arco-theme='dark'] .sider-footer-toggle {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+body[arco-theme='dark'] .sider-footer-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* 深色模式下的顶栏 */
+body[arco-theme='dark'] .ops-header {
+  background: var(--ops-header-bg);
+  border-bottom-color: var(--ops-border-color);
+}
+
+body[arco-theme='dark'] .header-user:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+body[arco-theme='dark'] .header-user-name {
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的内容区 */
+body[arco-theme='dark'] .ops-content {
+  background: var(--ops-content-bg);
+}
+
+/* 深色模式下的卡片 */
+body[arco-theme='dark'] .arco-card {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+/* 深色模式下的表格 */
+body[arco-theme='dark'] .arco-table {
+  background-color: #232324;
+}
+
+body[arco-theme='dark'] .arco-table-th {
+  background-color: #2a2a2b;
+}
+
+/* 深色模式下的表单 */
+body[arco-theme='dark'] .arco-input,
+body[arco-theme='dark'] .arco-textarea,
+body[arco-theme='dark'] .arco-select-view,
+body[arco-theme='dark'] .arco-picker {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+  color: var(--ops-text-primary);
+}
+
+body[arco-theme='dark'] .arco-input::placeholder,
+body[arco-theme='dark'] .arco-textarea::placeholder {
+  color: var(--ops-text-tertiary);
+}
+
+/* 深色模式下的下拉菜单 */
+body[arco-theme='dark'] .arco-select-dropdown,
+body[arco-theme='dark'] .arco-dropdown,
+body[arco-theme='dark'] .arco-picker-container {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+body[arco-theme='dark'] .arco-select-option,
+body[arco-theme='dark'] .arco-dropdown-option {
+  color: var(--ops-text-primary);
+}
+
+body[arco-theme='dark'] .arco-select-option:hover,
+body[arco-theme='dark'] .arco-dropdown-option:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 深色模式下的对话框 */
+body[arco-theme='dark'] .arco-modal,
+body[arco-theme='dark'] .arco-drawer {
+  background-color: #232324;
+}
+
+body[arco-theme='dark'] .arco-modal-header,
+body[arco-theme='dark'] .arco-drawer-header {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+body[arco-theme='dark'] .arco-modal-footer,
+body[arco-theme='dark'] .arco-drawer-footer {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+/* 深色模式下的分页 */
+body[arco-theme='dark'] .arco-pagination-item {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+  color: var(--ops-text-primary);
+}
+
+body[arco-theme='dark'] .arco-pagination-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+body[arco-theme='dark'] .arco-pagination-item-active {
+  background-color: var(--ops-primary);
+  border-color: var(--ops-primary);
+  color: #fff;
+}
+
+/* 深色模式下的标签页 */
+body[arco-theme='dark'] .arco-tabs-nav {
+  background-color: transparent;
+}
+
+body[arco-theme='dark'] .arco-tabs-tab {
+  color: var(--ops-text-secondary);
+}
+
+body[arco-theme='dark'] .arco-tabs-tab:hover {
+  color: var(--ops-text-primary);
+}
+
+body[arco-theme='dark'] .arco-tabs-tab-active {
+  color: var(--ops-primary);
+}
+
+/* 深色模式下的面包屑 */
+body[arco-theme='dark'] .arco-breadcrumb-item {
+  color: var(--ops-text-secondary);
+}
+
+body[arco-theme='dark'] .arco-breadcrumb-item:last-child {
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的标签 */
+body[arco-theme='dark'] .arco-tag {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--ops-border-color);
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的开关 */
+body[arco-theme='dark'] .arco-switch {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* 深色模式下的单选框和复选框 */
+body[arco-theme='dark'] .arco-radio,
+body[arco-theme='dark'] .arco-checkbox {
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的分割线 */
+body[arco-theme='dark'] .arco-divider {
+  border-color: var(--ops-border-color);
+}
+
+/* 深色模式下的空状态 */
+body[arco-theme='dark'] .arco-empty {
+  color: var(--ops-text-secondary);
+}
+
+/* 深色模式下的加载中 */
+body[arco-theme='dark'] .arco-spin {
+  color: var(--ops-text-secondary);
+}
+
+/* 深色模式下的树形控件 */
+body[arco-theme='dark'] .arco-tree-node {
+  color: var(--ops-text-primary);
+}
+
+body[arco-theme='dark'] .arco-tree-node:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 深色模式下的折叠面板 */
+body[arco-theme='dark'] .arco-collapse-item {
+  border-color: var(--ops-border-color);
+}
+
+body[arco-theme='dark'] .arco-collapse-item-header {
+  background-color: #232324;
+  color: var(--ops-text-primary);
+}
+
+body[arco-theme='dark'] .arco-collapse-item-content {
+  background-color: #17171a;
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的步骤条 */
+body[arco-theme='dark'] .arco-steps-item-title {
+  color: var(--ops-text-primary);
+}
+
+body[arco-theme='dark'] .arco-steps-item-description {
+  color: var(--ops-text-secondary);
+}
+
+/* 深色模式下的时间轴 */
+body[arco-theme='dark'] .arco-timeline-item-content {
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的描述列表 */
+body[arco-theme='dark'] .arco-descriptions-item-label {
+  color: var(--ops-text-secondary);
+}
+
+body[arco-theme='dark'] .arco-descriptions-item-value {
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的统计数值 */
+body[arco-theme='dark'] .arco-statistic {
+  color: var(--ops-text-primary);
+}
+
+/* 深色模式下的徽标 */
+body[arco-theme='dark'] .arco-badge-text {
+  background-color: var(--ops-primary);
+}
+
+/* 深色模式下的进度条 */
+body[arco-theme='dark'] .arco-progress-line-wrapper {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* 深色模式下的滑块 */
+body[arco-theme='dark'] .arco-slider-track {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* 深色模式下的评分 */
+body[arco-theme='dark'] .arco-rate-character {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* 深色模式下的穿梭框 */
+body[arco-theme='dark'] .arco-transfer-view {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+body[arco-theme='dark'] .arco-transfer-view-header {
+  background-color: #2a2a2b;
+  border-color: var(--ops-border-color);
+}
+
+/* 深色模式下的级联选择器 */
+body[arco-theme='dark'] .arco-cascader-panel {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+/* 深色模式下的颜色选择器 */
+body[arco-theme='dark'] .arco-color-picker-panel {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+/* 深色模式下的提及 */
+body[arco-theme='dark'] .arco-mentions-dropdown {
+  background-color: #232324;
+  border-color: var(--ops-border-color);
+}
+
+/* ===== 视觉优化 ===== */
+
+/* 卡片阴影 */
+.arco-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.3s ease;
+}
+
+.arco-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 12px -1px rgba(0, 0, 0, 0.04);
+}
+
+body[arco-theme='dark'] .arco-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 6px -1px rgba(0, 0, 0, 0.15);
+}
+
+body[arco-theme='dark'] .arco-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 12px -1px rgba(0, 0, 0, 0.2);
+}
+
+/* 主题切换过渡动画 */
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.ops-sider,
+.ops-header,
+.ops-content,
+.arco-card,
+.arco-table {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+/* 统一间距 */
+.ops-content > .arco-card {
+  margin-bottom: 20px;
+}
+
+.ops-content > .arco-card:last-child {
+  margin-bottom: 0;
 }
